@@ -1,0 +1,15 @@
+python -m src.generate \
+    --model_name bigscience/bloom-560m \
+    --model_class AutoModelForCausalLM \
+    --training_inference_type prompt_tuning \
+    --prompt_tuning_init TEXT \
+    --prompt_tuning_init_text $'Classify the sentiment of the sentence:' \
+    --num_virtual_tokens 8 \
+    --data_class JSONLinesDataset \
+    --input_format $'\n__input__\nSentiment:' \
+    --output_format $' __output__' \
+    --load_path checkpoints/prompt_tuning/global_step4000 \
+    --output_file output/prompt_tuning.jsonl \
+    --batch_size 8 \
+    --dtype bfloat16 \
+    --data_path data
