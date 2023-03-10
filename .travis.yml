@@ -1,0 +1,12 @@
+language: minimal
+
+services:
+  - docker
+
+env:
+  global:
+    - DEEPSPEED_IMAGE_TAG=0.0.0
+    - BUILD_DEEPSPEED_IMAGE=true
+
+install:
+  - sh scripts/travis_build.sh

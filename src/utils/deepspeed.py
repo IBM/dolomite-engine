@@ -66,9 +66,9 @@ def get_deepspeed_config(args: Namespace) -> dict:
 
     # mixed precision options
     if args.dtype == torch.bfloat16:
-        config["bf16"] = {"enabled": True, "auto_cast": True}
+        config["bf16"] = {"enabled": True}
     elif args.dtype == torch.float16:
-        config["fp16"] = {"enabled": True}
+        config["fp16"] = {"enabled": True, "auto_cast": True}
 
     if args.cpu_offload:
         config["zero_optimization"]["offload_param"] = {"device": "cpu", "pin_memory": True}
