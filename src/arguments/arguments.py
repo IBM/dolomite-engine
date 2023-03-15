@@ -4,55 +4,9 @@ import torch
 import transformers
 from peft import PromptTuningInit
 
+import src.data as data_classes
+from src.arguments.checkers import verify_args
 from src.constants import LearningRateScheduler, Mode, TrainingInferenceType
-from src.dataset import DebugDataset, get_dataset_class
-from src.utils import is_debugging_enabled, warn_rank_0
-
-
-def verify_args(args: Namespace) -> None:
-    if args.training_inference_type == TrainingInferenceType.full_finetuning:
-        if args.prompt_tuning_init is not None:
-            raise Exception(
-                f"prompt_tuning_init '{args.prompt_tuning_init}' should not be specified with full_finetuning"
-            )
-        if args.prompt_tuning_init_text is not None:
-            raise Exception(
-                f"prompt_tuning_init_text '{args.prompt_tuning_init_text}' should not be specified with full_finetuning"
-            )
-        if args.num_virtual_tokens is not None:
-            raise Exception(
-                f"num_virtual_tokens '{args.num_virtual_tokens}' should not be specified with full_finetuning"
-            )
-    elif args.training_inference_type == TrainingInferenceType.prompt_tuning:
-        if args.prompt_tuning_init == PromptTuningInit.RANDOM and args.prompt_tuning_init_text is not None:
-            raise Exception(
-                f"prompt_tuning_init_text '{args.prompt_tuning_init_text}' was specified with RANDOM init method"
-            )
-        elif args.prompt_tuning_init == PromptTuningInit.TEXT and args.prompt_tuning_init_text is None:
-            raise Exception(f"prompt_tuning_init_text needs to be specified with TEXT init method")
-
-    if is_debugging_enabled():
-        if args.data_class != DebugDataset:
-            warn_rank_0(f"found data_class '{args.data_class}'. For debugging, DebugDataset is recommended")
-
-    if args.max_input_tokens is None:
-        warn_rank_0("max_input_tokens was not specified, setting to inf")
-
-    if args.max_output_tokens is None:
-        warn_rank_0("max_output_tokens was not specified, setting to inf")
-
-    if args.data_class == DebugDataset:
-        if args.input_format != "__input__":
-            warn_rank_0(
-                f"ignoring the specified input_format '{args.input_format}' and setting to the default value '__input__'"
-            )
-            args.input_format = "__input__"
-
-        if args.output_format != "__output__":
-            warn_rank_0(
-                f"ignoring the specified output_format '{args.output_format}' and setting to the default value '__output__'"
-            )
-            args.output_format = "__output__"
 
 
 def get_args(mode: Mode) -> Namespace:
@@ -80,13 +34,20 @@ def get_args(mode: Mode) -> Namespace:
 
     group = parser.add_argument_group("dataset")
     group.add_argument(
-        "--data_path", type=str, help="specific datapath that can be used inside data_class for reference"
+        "--data_sampling_proportion", type=int, default=[1], nargs="+", help="sampling proportion for the datasets"
     )
-    group.add_argument("--data_class", type=lambda x: get_dataset_class(x), help="specific dataclass to use")
-    group.add_argument("--input_format", type=str, default="__input__", help="format of input in examples")
-    group.add_argument("--output_format", type=str, default="__output__", help="format of output in examples")
-    group.add_argument("--max_input_tokens", type=int, help="max length for input")
-    group.add_argument("--max_output_tokens", type=int, help="max length for output")
+    group.add_argument("--data_path", type=str, nargs="+", help="list of datapaths")
+    group.add_argument(
+        "--data_class", type=lambda x: getattr(data_classes, x), nargs="+", help="list of dataclasses to use"
+    )
+    group.add_argument(
+        "--input_format", type=str, nargs="+", help="list of format of input in examples in the datasets"
+    )
+    group.add_argument(
+        "--output_format", type=str, nargs="+", help="list of format of output in examples in the datasets"
+    )
+    group.add_argument("--max_input_tokens", type=int, nargs="+", help="max length for input")
+    group.add_argument("--max_output_tokens", type=int, nargs="+", help="max length for output")
 
     group = parser.add_argument_group("miscellaneous")
     group.add_argument("--seed", type=int, default=42, help="random seed")

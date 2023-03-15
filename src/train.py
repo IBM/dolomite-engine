@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader
 from transformers import set_seed
 
 from src.arguments import get_args
-from src.constants import Mode
-from src.dataset import BaseDataset, DatasetSplit
+from src.constants import DatasetSplit, Mode
+from src.data import ConcatenatedDataSampler, ConcatenatedDatasets
 from src.model import Model, ModelCheckpointer
 from src.optimization import get_optimizer, get_scheduler_method
 from src.utils import (
@@ -166,7 +166,7 @@ def main() -> None:
     model = Model(args, mode)
 
     # non-sharded training dataset
-    train_dataset: BaseDataset = args.data_class(
+    train_dataset = ConcatenatedDatasets(
         args,
         split=DatasetSplit.train,
         mode=mode,
@@ -177,7 +177,7 @@ def main() -> None:
     # non-sharded validation dataset
     val_dataset = None
     if not args.no_eval:
-        val_dataset: BaseDataset = args.data_class(
+        val_dataset = ConcatenatedDatasets(
             args,
             split=DatasetSplit.val,
             mode=mode,
@@ -205,7 +205,12 @@ def main() -> None:
 
     # shard the model and the optimizer
     model, (train_dataset, val_dataset) = deepspeed_initialize(
-        args, model, optimizer, lr_scheduler, [train_dataset, val_dataset]
+        args,
+        model,
+        optimizer,
+        lr_scheduler,
+        [train_dataset, val_dataset],
+        ConcatenatedDataSampler(args, train_dataset),
     )
 
     experiments_tracker = ExperimentsTracker(__name__, args.experiment_name, args.aim_repo, args.disable_aim)

@@ -1,6 +1,9 @@
 from enum import Enum
 
 
+DUMMY = "<DUMMY>"
+
+
 class DatasetSplit(str, Enum):
     train = "train"
     val = "val"
@@ -24,6 +27,7 @@ class DatasetKeys(str, Enum):
     preprocessed_input = "preprocessed_input"
     preprocessed_output = "preprocessed_output"
     generated_text = "generated_text"
+    data_class_index = "data_class_index"
 
 
 class TrainingInferenceType(str, Enum):

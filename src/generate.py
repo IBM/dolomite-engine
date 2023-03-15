@@ -7,8 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.arguments import get_args
-from src.constants import DatasetKeys, Mode
-from src.dataset import BaseDataset, DatasetSplit
+from src.constants import DatasetKeys, DatasetSplit, Mode
+from src.data import ConcatenatedDatasets
 from src.model import Model
 from src.utils import ProgressBar, setup_debugging, setup_tf32
 
@@ -31,7 +31,7 @@ def flatten_batch(batch: dict) -> list:
         yield example
 
 
-def generate(args: Namespace, model: Model, test_dataset: BaseDataset, generate_kwargs: dict) -> None:
+def generate(args: Namespace, model: Model, test_dataset: DataLoader, generate_kwargs: dict) -> None:
     progress_bar = ProgressBar(0, len(test_dataset))
 
     output_dir = os.path.dirname(args.output_file)
@@ -74,7 +74,7 @@ def main() -> None:
     if args.load_path is not None:
         model.load_ds_checkpoint(args.load_path)
 
-    test_dataset: BaseDataset = args.data_class(
+    test_dataset = ConcatenatedDatasets(
         args,
         split=DatasetSplit.test,
         mode=mode,

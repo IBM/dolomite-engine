@@ -13,12 +13,27 @@ from src.constants import Mode, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, run_rank_n
 
 
+def pad(arrays: list, padding: int, max_length: int = None, side: str = "left"):
+    if max_length is None:
+        max_length = max(list(map(len, arrays)))
+
+    if side == "left":
+        inputs = [[padding] * (max_length - len(array)) + array for array in arrays]
+        masks = [[0] * (max_length - len(array)) + [1] * len(array) for array in arrays]
+    else:
+        inputs = [array + [padding] * (max_length - len(array)) for array in arrays]
+        masks = [[1] * len(array) + [0] * (max_length - len(array)) for array in arrays]
+
+    return inputs, masks
+
+
 class Model(torch.nn.Module):
     @register_profiler("initialize_model")
     @register_timer("initialize_model")
     def __init__(self, args: Namespace, mode: Mode):
         super().__init__()
 
+        self.mode = mode
         self.model_name = args.model_name
         self.config = AutoConfig.from_pretrained(self.model_name)
         self.is_encoder_decoder = self.config.is_encoder_decoder
@@ -62,7 +77,8 @@ class Model(torch.nn.Module):
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
     def forward(self, batch: dict) -> torch.Tensor:
-        batch = self.prepare_input_output_for_forward(batch)
+        inputs, outputs = self.prepare_input_output_for_forward(batch)
+        batch = self.get_input_ids(inputs, outputs)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -74,7 +90,8 @@ class Model(torch.nn.Module):
     @register_profiler("generate")
     @register_timer("generate")
     def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
-        batch = self.prepare_input_output_for_generate(batch)
+        inputs = self.prepare_input_output_for_generate(batch)
+        batch = self.get_input_ids(inputs)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -110,12 +127,46 @@ class Model(torch.nn.Module):
 
             self.load_state_dict(state)
 
+    @register_profiler("get_input_ids")
+    @register_timer("get_input_ids")
+    def get_input_ids(self, inputs: List[int], outputs: List[int] = None) -> dict:
+        result = {}
+
+        if self.mode == Mode.training:
+            assert outputs is not None, "outputs can't be None during training"
+
+            max_length = None
+            if not self.is_encoder_decoder:
+                max_length = max(list(map(len, inputs)))
+
+            input_ids, attention_mask = pad(
+                inputs, padding=self.tokenizer.pad_token_id, max_length=max_length, side=self.tokenizer.padding_side
+            )
+            labels, _ = pad(outputs, padding=-100, max_length=max_length, side=self.tokenizer.padding_side)
+
+            input_ids = torch.tensor(input_ids)
+            attention_mask = torch.tensor(attention_mask)
+            labels = torch.tensor(labels)
+
+            result["labels"] = labels
+        elif self.mode == Mode.inference:
+            input_ids, attention_mask = pad(
+                inputs, padding=self.tokenizer.pad_token_id, side=self.tokenizer.padding_side
+            )
+
+            input_ids = torch.tensor(input_ids)
+            attention_mask = torch.tensor(attention_mask)
+
+        result["input_ids"] = input_ids
+        result["attention_mask"] = attention_mask
+        return result
+
 
 class ModelCheckpointer:
     @classmethod
     @register_profiler("save_checkpoint")
     @register_timer("save_checkpoint")
-    def save_checkpoint(self, model: DeepSpeedEngine, path: str) -> None:
+    def save_checkpoint(cls, model: DeepSpeedEngine, path: str) -> None:
         model.save_checkpoint(path)
 
         # its a bit complicated to unwrap in fp32 during training, so we
@@ -134,3 +185,8 @@ class ModelCheckpointer:
                     torch.save(decoder_tensor, os.path.join(path, tag, "decoder.pt"))
                 else:
                     torch.save(tensor, os.path.join(path, tag, "decoder.pt"))
+
+    @classmethod
+    def ds_to_hf(cls, model: Model, save_path: str) -> None:
+        model.tokenizer.save_pretrained(save_path)
+        model.model.save_pretrained(save_path)

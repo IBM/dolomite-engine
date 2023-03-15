@@ -4,7 +4,7 @@ from typing import List, Tuple
 import deepspeed
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
 from src.utils.distributed import get_local_rank, get_world_size
 from src.utils.logging import print_rank_0
@@ -20,7 +20,12 @@ def init_distributed(dist_backend: str = "nccl") -> None:
 
 @register_timer("deepspeed_initialize")
 def deepspeed_initialize(
-    args: Namespace, model: torch.nn.Module, optimizer, lr_scheduler, datasets: List[Dataset]
+    args: Namespace,
+    model: torch.nn.Module,
+    optimizer,
+    lr_scheduler,
+    datasets: List[Dataset],
+    train_sampler: DistributedSampler,
 ) -> Tuple[deepspeed.DeepSpeedEngine, List[DataLoader]]:
     """
     Converts the model to a ZeRO-DP sharded model
@@ -34,16 +39,15 @@ def deepspeed_initialize(
     Returns:
         Tuple[torch.nn.Module, List[DataLoader]]: sharded model and datasets
     """
-    # first dataset should be training dataset and is sharded using a distributed random sampler
-    train_dataset = datasets[0]
-    model, _, train_dataset, _ = deepspeed.initialize(
+    model, _, _, _ = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
-        training_data=train_dataset,
         lr_scheduler=lr_scheduler,
         config=get_deepspeed_config(args),
     )
-    datasets[0] = train_dataset
+
+    # train dataset needs ConcatenatedDataSampler
+    datasets[0] = model.deepspeed_io(datasets[0], data_sampler=train_sampler)
 
     # other datasets only need a sequential sampler
     for i in range(1, len(datasets)):
