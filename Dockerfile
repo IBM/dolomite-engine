@@ -3,13 +3,12 @@ FROM nvidia/cuda:11.7.1-devel-ubuntu22.04 as base
 ENV HOME=/homedir \
     PYTHON_VERSION=3.9 \
     PATH=/opt/conda/envs/ai/bin:/opt/conda/bin:${PATH} \
-    AIM_UI_TELEMETRY_ENABLED=0 \
     BITSANDBYTES_NOWELCOME=1
 
 WORKDIR /app
 
 RUN apt-get -y update && \
-    apt-get install -y make git git-lfs curl wget libaio-dev && \
+    apt-get install -y make git git-lfs curl wget unzip libaio-dev && \
     apt-get -y clean
 
 # taken form pytorch's dockerfile
@@ -29,8 +28,8 @@ RUN conda install -c anaconda cmake -y
 
 # necessary stuff
 RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117 \
-    transformers==4.26.1 \
-    accelerate==0.16.0 \
+    transformers==4.27.1 \
+    accelerate==0.17.1 \
     bitsandbytes==0.37.0 \
     aim==3.16.2 \
     jsonlines \
@@ -43,7 +42,7 @@ RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.o
 RUN git clone https://github.com/NVIDIA/apex && \
     cd apex && \
     git checkout 22.03 && \
-    pip install --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" . && \
+    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" . && \
     cd .. && \
     rm -rf apex
 
@@ -51,7 +50,7 @@ RUN git clone https://github.com/NVIDIA/apex && \
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
     git checkout v0.8.2 && \
-    TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install --global-option="build_ext" --global-option="-j8" --no-cache-dir . && \
+    TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir . && \
     rm -rf DeepSpeed
 
 # peft
@@ -66,4 +65,4 @@ RUN conda clean -ya
 
 RUN mkdir -p ~/.cache ~/.local && \
     chmod -R g+w /app ~/.cache ~/.local && \
-    touch ~/.aim_profile && chmod g+w ~/.aim_profile
+    touch ~/.aim_profile && chmod g+w ~/.aim_profile && aim telemetry off

@@ -1,3 +1,6 @@
+# this will trigger the build only on main branch and on PRs
+if: branch = main
+
 language: minimal
 
 services:
@@ -5,8 +8,9 @@ services:
 
 env:
   global:
-    - DEEPSPEED_IMAGE_TAG=0.0.0
-    - BUILD_DEEPSPEED_IMAGE=true
+    - IMAGE_NAME=transformer-engine
+    - IMAGE_TAG=0.0.1
+    - BUILD_IMAGE=true
 
 install:
-  - sh scripts/travis_build.sh
+  - sh scripts/travis/build.sh
