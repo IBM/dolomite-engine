@@ -330,9 +330,6 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         return self.num_examples
 
     def __getitem__(self, index: int) -> dict:
-        if self.num_datasets == 1:
-            return self.datasets[0][index]
-
         dataset_index = self.num_datasets - 1
         for i in range(self.num_datasets):
             if index < self.start_indices[i]:

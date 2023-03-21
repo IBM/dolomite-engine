@@ -10,7 +10,7 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
 from src.constants import Mode, TrainingInferenceType
-from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, run_rank_n
+from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, run_rank_n, warn_rank_0
 
 
 def pad(arrays: list, padding: int, max_length: int = None, side: str = "left"):
@@ -69,6 +69,10 @@ class Model(torch.nn.Module):
             self.input_device = get_local_rank()
         else:
             self.input_device = 0
+            if not torch.cuda.is_available():
+                warn_rank_0("no CUDA device found, running on CPU")
+                self.input_device = "cpu"
+
             self.to(self.input_device)
 
         self.prepare_input_output_for_forward = lambda *args, **kwargs: None
