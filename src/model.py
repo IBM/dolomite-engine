@@ -10,7 +10,7 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
 from src.constants import Mode, TrainingInferenceType
-from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, run_rank_n, warn_rank_0
+from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
 
 
 def pad(arrays: list, padding: int, max_length: int = None, side: str = "left") -> Tuple[List[int], List[int]]:
@@ -235,23 +235,6 @@ class ModelCheckpointer:
         """
 
         model.save_checkpoint(path)
-
-        # its a bit complicated to unwrap in fp32 during training, so we
-        # recover from the saved sharded deepspeed checkpoint
-        if model.training_inference_type == TrainingInferenceType.prompt_tuning:
-            tag = f"global_step{model.global_steps}"
-            state_dict: dict = run_rank_n(get_fp32_state_dict_from_zero_checkpoint)(path, tag)
-
-            # effectively equivalent to run_rank_n
-            if state_dict is not None:
-                tensor = state_dict["model.prompt_encoder.embedding.weight"]
-
-                if model.is_encoder_decoder:
-                    encoder_tensor, decoder_tensor = torch.split(tensor, model.peft_config.num_virtual_tokens)
-                    torch.save(encoder_tensor, os.path.join(path, tag, "encoder.pt"))
-                    torch.save(decoder_tensor, os.path.join(path, tag, "decoder.pt"))
-                else:
-                    torch.save(tensor, os.path.join(path, tag, "decoder.pt"))
 
     @classmethod
     def save_hf_checkpoint(cls, model: Model, path: str) -> None:
