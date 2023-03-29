@@ -32,6 +32,17 @@ def track_train_metrics(
     loss_running_mean_tracker: RunningMean,
     progress_bar: ProgressBar,
 ) -> None:
+    """tracks metrics like training loss, learning rate etc
+
+    Args:
+        global_step (int): global step during training
+        train_loss_step (float): training loss at the current step
+        current_lr (float): learning rate at the current step
+        experiments_tracker (ExperimentsTracker): metrics tracker
+        loss_running_mean_tracker (RunningMean): running mean accumulator for loss
+        progress_bar (ProgressBar): progress bar for tracking training progress
+    """
+
     # update loss running mean
     loss_running_mean = loss_running_mean_tracker.add_loss(train_loss_step)
 
@@ -57,6 +68,14 @@ def track_train_metrics(
 
 
 def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker) -> None:
+    """tracks metrics like validation loss
+
+    Args:
+        global_step (int): global step during training
+        val_loss (float): validation loss for the validation data
+        experiments_tracker (ExperimentsTracker): metrics tracker
+    """
+
     print_rank_0(f"step = {global_step}, val_loss = {val_loss}")
     experiments_tracker.info(f"step = {global_step}, val_loss = {val_loss}")
     experiments_tracker.track(value=val_loss, name="loss", step=global_step, context={"subset": "val"})
@@ -65,6 +84,16 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
 @register_profiler("train_step")
 @register_timer("train_step")
 def train_step(model: DeepSpeedEngine, batch: dict) -> float:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model (DeepSpeedEngine): DeepSpeed sharded model
+        batch (dict): a batch of examples on each GPU
+
+    Returns:
+        float: loss at the current step
+    """
+
     loss = model(batch)
 
     # compute gradients
@@ -83,6 +112,16 @@ def train(
     model: DeepSpeedEngine,
     experiments_tracker: ExperimentsTracker,
 ) -> None:
+    """main training loop for the program
+
+    Args:
+        args (Namespace): training args
+        train_dataset (DataLoader): training dataloader
+        val_dataset (DataLoader): validation dataloader
+        model (DeepSpeedEngine): DeepSpeed sharded model
+        experiments_tracker (ExperimentsTracker): metrics tracker
+    """
+
     loss_running_mean_tracker = RunningMean()
     progress_bar = ProgressBar(0, args.num_training_steps)
     global_step = 0
@@ -126,6 +165,16 @@ def train(
 
 @register_profiler("evaluate_dataset")
 def evaluate(val_dataset: DataLoader, model: Model) -> float:
+    """main validation loop for the program
+
+    Args:
+        val_dataset (DataLoader): validation dataloader
+        model (DeepSpeedEngine): DeepSpeed sharded model
+
+    Returns:
+        float: loss at the current step
+    """
+
     if val_dataset is None:
         return
 
@@ -150,6 +199,8 @@ def evaluate(val_dataset: DataLoader, model: Model) -> float:
 
 
 def main() -> None:
+    """main program"""
+
     mode = Mode.training
 
     setup_tf32()
@@ -213,7 +264,9 @@ def main() -> None:
         ConcatenatedDataSampler(args, train_dataset),
     )
 
-    experiments_tracker = ExperimentsTracker(__name__, args.experiment_name, args.aim_repo, args.disable_aim)
+    experiments_tracker = ExperimentsTracker(
+        __name__, args.experiment_name, args.aim_repo, args.logdir, args.disable_aim
+    )
     # track all hyperparams in args
     experiments_tracker.log_args(args)
 

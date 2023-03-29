@@ -7,27 +7,17 @@ from transformers import AutoTokenizer
 
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data.dataset import BaseDataset, check_raw_example, generate_random_id
+from src.data.multidoc2dial.config import DineshChitChatConfig, YatinAnswerabilityConfig
 
 
-class YatinAnswerabilityDataset(BaseDataset):
+class DineshChitChatDataset(BaseDataset):
     def __init__(
-        self,
-        args: Namespace,
-        split: DatasetSplit,
-        mode: Mode,
-        tokenizer: AutoTokenizer,
-        is_encoder_decoder: bool,
-        filter: bool = True,
+        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
-        self.filter = filter
-        self.examples = self.prepare_examples()
 
-    def get_data_filename(self) -> str:
-        if self.split in [DatasetSplit.train, DatasetSplit.val]:
-            return f"md2d_subdocs_{self.split.value}_pos_neg.json"
-        elif self.split == DatasetSplit.test:
-            return f"md2d_document_{self.split.value}_pos_neg.json"
+        self.data_config = DineshChitChatConfig(**self.data_config)
+        self.examples = self.prepare_examples()
 
     def tokenize_untokenize(self, context: str, document: str) -> str:
         context = self.tokenizer(context, add_special_tokens=False)["input_ids"]
@@ -42,17 +32,12 @@ class YatinAnswerabilityDataset(BaseDataset):
 
     def prepare_examples(self) -> List[dict]:
         examples = []
-        data_file = os.path.join(self.data_path, self.get_data_filename())
+        data_file = os.path.join(self.data_path, self.data_config.files[self.split.value])
 
         with open(data_file, "r") as f:
             json_file = json.load(f)
 
             for raw_example in json_file:
-                if self.filter and (
-                    raw_example["neg_subtype"].lower() == "original" or raw_example["last_speaker"].lower() == "agent"
-                ):
-                    continue
-
                 check_raw_example(raw_example, self.mode)
 
                 result_example = {}
@@ -75,11 +60,25 @@ class YatinAnswerabilityDataset(BaseDataset):
         return examples
 
 
-class DineshChitChatDataset(YatinAnswerabilityDataset):
+class YatinAnswerabilityDataset(DineshChitChatDataset):
     def __init__(
         self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
     ) -> None:
-        super().__init__(args, split, mode, tokenizer, is_encoder_decoder, False)
+        BaseDataset.__init__(self, args, split, mode, tokenizer, is_encoder_decoder)
 
-    def get_data_filename(self) -> str:
-        return f"chitchat_subdocs_{self.split.value}.json"
+        self.data_config = YatinAnswerabilityConfig(**self.data_config)
+        self.examples = self.prepare_examples()
+
+    def prepare_examples(self) -> List[dict]:
+        examples = super().prepare_examples()
+
+        if not self.data_config.filter:
+            return examples
+
+        filtered_examples = []
+        for raw_example in examples:
+            if raw_example["neg_subtype"].lower() == "original" or raw_example["last_speaker"].lower() == "agent":
+                continue
+            filtered_examples.append(raw_example)
+
+        return filtered_examples

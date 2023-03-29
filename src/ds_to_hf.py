@@ -8,6 +8,12 @@ from src.model import Model, ModelCheckpointer
 
 
 def get_args() -> argparse.Namespace:
+    """arguments to use
+
+    Returns:
+        Namespace: arguments based on training / inference mode
+    """
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--load_path", type=str)
@@ -28,11 +34,13 @@ def get_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """main program"""
+
     args = get_args()
 
     model = Model(args, Mode.inference)
     model.load_ds_checkpoint(args.load_path)
-    ModelCheckpointer.ds_to_hf(model, args.save_path)
+    ModelCheckpointer.save_hf_checkpoint(model, args.save_path)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,20 @@ from src.utils import register_profiler, register_timer
 def get_optimizer(
     cpu_offload: bool, parameters: list, lr: float, weight_decay: float, betas: Tuple[float, float], eps: float
 ) -> Callable:
+    """setup optimizer for the model
+
+    Args:
+        cpu_offload (bool): whether to use CPU offloading
+        parameters (list): list of model parameters
+        lr (float): starting learning rate
+        weight_decay (float): weight decay parameter
+        betas (Tuple[float, float]): _description_
+        eps (float): epsilon
+
+    Returns:
+        Callable: Adam optimizer
+    """
+
     if cpu_offload:
         # DeepSpeedCPUAdam is faster with CPU offloading
         from deepspeed.ops.adam import DeepSpeedCPUAdam as Adam
@@ -28,6 +42,15 @@ def get_optimizer(
 
 
 def get_scheduler_method(schedule: LearningRateScheduler) -> Callable:
+    """setup learning rate scheduler
+
+    Args:
+        schedule (LearningRateScheduler): schedule type
+
+    Returns:
+        Callable: learning rate scheduler
+    """
+
     if schedule == LearningRateScheduler.linear:
         return get_linear_schedule_with_warmup
     elif schedule == LearningRateScheduler.cosine:

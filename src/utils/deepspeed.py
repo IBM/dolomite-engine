@@ -4,6 +4,8 @@ from typing import List, Tuple
 import deepspeed
 import numpy as np
 import torch
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
 from src.utils.distributed import get_local_rank, get_world_size
@@ -11,8 +13,13 @@ from src.utils.logging import print_rank_0
 from src.utils.monitoring import register_timer
 
 
-@register_timer("init_distributed")
 def init_distributed(dist_backend: str = "nccl") -> None:
+    """intialize distributed
+
+    Args:
+        dist_backend (str, optional): backend to use. Defaults to "nccl".
+    """
+
     deepspeed.init_distributed(dist_backend=dist_backend)
     torch.cuda.set_device(get_local_rank())
     print_rank_0(f"total GPUs = {get_world_size()}")
@@ -22,23 +29,25 @@ def init_distributed(dist_backend: str = "nccl") -> None:
 def deepspeed_initialize(
     args: Namespace,
     model: torch.nn.Module,
-    optimizer,
-    lr_scheduler,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
     datasets: List[Dataset],
     train_sampler: DistributedSampler,
 ) -> Tuple[deepspeed.DeepSpeedEngine, List[DataLoader]]:
-    """
-    Converts the model to a ZeRO-DP sharded model
+    """converts the model to a ZeRO-DP sharded model
 
     Args:
-        model (Model): any torch.nn.Module object
+        args (Namespace): arguments based on training / inference mode
+        model (torch.nn.Module): any torch.nn.Module object
         optimizer (Optimizer): an optimizer, preferably one that is supported by deepspeed
         lr_scheduler (LRScheduler): any learning rate scheduler
         datasets (List[Dataset]): a list of datasets in which the first element is the training dataset
+        train_sampler (DistributedSampler): data sampler to use for train split
 
     Returns:
-        Tuple[torch.nn.Module, List[DataLoader]]: sharded model and datasets
+        Tuple[deepspeed.DeepSpeedEngine, List[DataLoader]]: sharded model and datasets
     """
+
     model, _, _, _ = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
@@ -58,6 +67,15 @@ def deepspeed_initialize(
 
 
 def get_deepspeed_config(args: Namespace) -> dict:
+    """generate deepspeed config from the args
+
+    Args:
+        args (Namespace): arguments based on training / inference mode
+
+    Returns:
+        dict: deepspeed config
+    """
+
     config = {
         "zero_optimization": {
             "stage": args.stage,
@@ -74,12 +92,14 @@ def get_deepspeed_config(args: Namespace) -> dict:
     elif args.dtype == torch.float16:
         config["fp16"] = {"enabled": True, "auto_cast": True}
 
+    # cpu offload
     if args.cpu_offload:
         config["zero_optimization"]["offload_param"] = {"device": "cpu", "pin_memory": True}
         config["zero_optimization"]["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
 
     from src.utils.monitoring import is_debugging_enabled
 
+    # debugging stuff
     config["steps_per_print"] = np.inf
     if is_debugging_enabled():
         config["steps_per_print"] = args.steps_per_print
@@ -88,5 +108,11 @@ def get_deepspeed_config(args: Namespace) -> dict:
 
 
 def setup_tf32(use_tf32: bool = True) -> None:
+    """whether to use tf32 instead of fp32
+
+    Args:
+        use_tf32 (bool, optional): Defaults to True.
+    """
+
     torch.backends.cuda.matmul.allow_tf32 = use_tf32
     torch.backends.cudnn.allow_tf32 = use_tf32

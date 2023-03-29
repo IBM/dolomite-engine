@@ -5,22 +5,30 @@ DUMMY = "<DUMMY>"
 
 
 class DatasetSplit(str, Enum):
+    """dataset split"""
+
     train = "train"
     val = "val"
     test = "test"
 
 
 class Mode(str, Enum):
+    """training / inference mode"""
+
     training = "training"
     inference = "inference"
 
 
 class LearningRateScheduler(str, Enum):
+    """learning rate schedule"""
+
     linear = "linear"
     cosine = "cosine"
 
 
 class DatasetKeys(str, Enum):
+    """standard keys in the dataset"""
+
     id = "id"
     input = "input"
     output = "output"
@@ -31,5 +39,7 @@ class DatasetKeys(str, Enum):
 
 
 class TrainingInferenceType(str, Enum):
+    """training method"""
+
     full_finetuning = "full_finetuning"
     prompt_tuning = "prompt_tuning"

@@ -25,8 +25,7 @@ jbsub -q x86_24h -cores 2x8+4 -mem 128G -require a100_80gb -err err.log -out out
 Note that the `blaunch.sh` script here (provided by CCC) executes the command `sh scripts/prompt_tuning/train_ccc.sh` on both the nodes.
 
 ### Training on DIPC Openshift cluster
-<!-- TODO write instructions -->
-
+Take a look at https://github.ibm.com/Mayank-Mishra1/dipc-openshift for launching jobs.
 
 ## Arguments for training
 The training script currently supports the following arguments:
@@ -42,23 +41,27 @@ checkpointing:
                         path to save checkpoints
 
 dataset:
-  --data_path DATA_PATH
-                        specific datapath that can be used inside data_class for reference
-  --data_class DATA_CLASS
-                        specific dataclass to use
-  --input_format INPUT_FORMAT
-                        format of input in examples
-  --output_format OUTPUT_FORMAT
-                        format of output in examples
-  --max_input_tokens MAX_INPUT_TOKENS
+  --data_sampling_proportion DATA_SAMPLING_PROPORTION [DATA_SAMPLING_PROPORTION ...]
+                        sampling proportion for the datasets
+  --data_path DATA_PATH [DATA_PATH ...]
+                        list of datapaths
+  --data_class DATA_CLASS [DATA_CLASS ...]
+                        list of dataclasses to use
+  --data_config DATA_CONFIG [DATA_CONFIG ...]
+                        list of data configs to use
+  --input_format INPUT_FORMAT [INPUT_FORMAT ...]
+                        list of format of input in examples in the datasets
+  --output_format OUTPUT_FORMAT [OUTPUT_FORMAT ...]
+                        list of format of output in examples in the datasets
+  --max_input_tokens MAX_INPUT_TOKENS [MAX_INPUT_TOKENS ...]
                         max length for input
-  --max_output_tokens MAX_OUTPUT_TOKENS
+  --max_output_tokens MAX_OUTPUT_TOKENS [MAX_OUTPUT_TOKENS ...]
                         max length for output
 
 miscellaneous:
   --seed SEED           random seed
   --dtype {torch.float32,torch.float16,torch.bfloat16}
-                        dtype to use for training/inference
+                        dtype to use for training / inference
 
 prompt tuning initialization:
   --prompt_tuning_init PROMPT_TUNING_INIT
@@ -72,6 +75,8 @@ training inference:
 training:
   --num_training_steps NUM_TRAINING_STEPS
                         number of training steps
+  --gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS
+                        gradient accumulation steps
   --eval_and_save_interval EVAL_AND_SAVE_INTERVAL
                         interval for evaluation and checkpointing
   --batch_size_per_gpu BATCH_SIZE_PER_GPU
@@ -84,6 +89,9 @@ parallelism:
   --contiguous_gradients
                         use contiguous buffers for gradients, requires more memory if enabled
   --cpu_offload         train with CPU offloading to save GPU memory
+
+logging:
+  --logdir LOGDIR       logging directory for experiments
 
 aim:
   --disable_aim         disable aim logging
@@ -119,23 +127,27 @@ checkpointing:
                         path to load checkpoints
 
 dataset:
-  --data_path DATA_PATH
-                        specific datapath that can be used inside data_class for reference
-  --data_class DATA_CLASS
-                        specific dataclass to use
-  --input_format INPUT_FORMAT
-                        format of input in examples
-  --output_format OUTPUT_FORMAT
-                        format of output in examples
-  --max_input_tokens MAX_INPUT_TOKENS
+  --data_sampling_proportion DATA_SAMPLING_PROPORTION [DATA_SAMPLING_PROPORTION ...]
+                        sampling proportion for the datasets
+  --data_path DATA_PATH [DATA_PATH ...]
+                        list of datapaths
+  --data_class DATA_CLASS [DATA_CLASS ...]
+                        list of dataclasses to use
+  --data_config DATA_CONFIG [DATA_CONFIG ...]
+                        list of data configs to use
+  --input_format INPUT_FORMAT [INPUT_FORMAT ...]
+                        list of format of input in examples in the datasets
+  --output_format OUTPUT_FORMAT [OUTPUT_FORMAT ...]
+                        list of format of output in examples in the datasets
+  --max_input_tokens MAX_INPUT_TOKENS [MAX_INPUT_TOKENS ...]
                         max length for input
-  --max_output_tokens MAX_OUTPUT_TOKENS
+  --max_output_tokens MAX_OUTPUT_TOKENS [MAX_OUTPUT_TOKENS ...]
                         max length for output
 
 miscellaneous:
   --seed SEED           random seed
   --dtype {torch.float32,torch.float16,torch.bfloat16}
-                        dtype to use for training/inference
+                        dtype to use for training / inference
 
 prompt tuning initialization:
   --prompt_tuning_init PROMPT_TUNING_INIT

@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from typing import List
+from typing import List, Tuple
 
 import torch
 from deepspeed import DeepSpeedEngine
@@ -13,7 +13,19 @@ from src.constants import Mode, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, run_rank_n, warn_rank_0
 
 
-def pad(arrays: list, padding: int, max_length: int = None, side: str = "left"):
+def pad(arrays: list, padding: int, max_length: int = None, side: str = "left") -> Tuple[List[int], List[int]]:
+    """pads the arrays with the specified padding value
+
+    Args:
+        arrays (list): token ids
+        padding (int): token id to pad with
+        max_length (int, optional): length to pad to. Defaults to None. If None, pads to the longest sequence
+        side (str, optional): padding side, "left" is recommended. Defaults to "left".
+
+    Returns:
+        Tuple[List[int], List[int]]: token ids and the corresponding attention masks
+    """
+
     if max_length is None:
         max_length = max(list(map(len, arrays)))
 
@@ -28,9 +40,18 @@ def pad(arrays: list, padding: int, max_length: int = None, side: str = "left"):
 
 
 class Model(torch.nn.Module):
+    """Model class which wraps any HuggingFace model"""
+
     @register_profiler("initialize_model")
     @register_timer("initialize_model")
     def __init__(self, args: Namespace, mode: Mode):
+        """initializes a Model wrapper for a HuggingFace model
+
+        Args:
+            args (Namespace): arguments based on training / inference mode
+            mode (Mode): training / inference mode for running the program
+        """
+
         super().__init__()
 
         self.mode = mode
@@ -81,8 +102,17 @@ class Model(torch.nn.Module):
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
     def forward(self, batch: dict) -> torch.Tensor:
+        """forward function for a batch
+
+        Args:
+            batch (dict): a dict of key, value pairs for a batch
+
+        Returns:
+            torch.Tensor: loss tensor
+        """
+
         inputs, outputs = self.prepare_input_output_for_forward(batch)
-        batch = self.get_input_ids(inputs, outputs)
+        batch = self.prepare_batch(inputs, outputs)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -94,8 +124,18 @@ class Model(torch.nn.Module):
     @register_profiler("generate")
     @register_timer("generate")
     def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
+        """generate function for a batch
+
+        Args:
+            batch (dict): a dict of key, value pairs for a batch
+            generate_kwargs (dict): generate kwargs for the batch
+
+        Returns:
+            List[str]: list of generated text. input is trimmed from the generated text
+        """
+
         inputs = self.prepare_input_output_for_generate(batch)
-        batch = self.get_input_ids(inputs)
+        batch = self.prepare_batch(inputs)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -112,6 +152,12 @@ class Model(torch.nn.Module):
     @register_profiler("load_ds_checkpoint")
     @register_timer("load_ds_checkpoint")
     def load_ds_checkpoint(self, path: str) -> None:
+        """loads the deepspeed checkpoint saved during training
+
+        Args:
+            path (str): path to load the deepspeed checkpoint from
+        """
+
         checkpoint_dir = os.path.dirname(path)
         tag = os.path.basename(path)
         state = get_fp32_state_dict_from_zero_checkpoint(checkpoint_dir, tag)
@@ -131,9 +177,19 @@ class Model(torch.nn.Module):
 
             self.load_state_dict(state)
 
-    @register_profiler("get_input_ids")
-    @register_timer("get_input_ids")
-    def get_input_ids(self, inputs: List[int], outputs: List[int] = None) -> dict:
+    @register_profiler("prepare_batch")
+    @register_timer("prepare_batch")
+    def prepare_batch(self, inputs: List[int], outputs: List[int] = None) -> dict:
+        """prepares the batch with padding to pass into the forward function of the HuggingFace model
+
+        Args:
+            inputs (List[int]): input tokens
+            outputs (List[int], optional): output tokens, optional when running generation but required for training. Defaults to None.
+
+        Returns:
+            dict: dict containing input_ids, attention_mask and labels if outputs is specified
+        """
+
         result = {}
 
         if self.mode == Mode.training:
@@ -171,6 +227,13 @@ class ModelCheckpointer:
     @register_profiler("save_checkpoint")
     @register_timer("save_checkpoint")
     def save_checkpoint(cls, model: DeepSpeedEngine, path: str) -> None:
+        """save deepspeed checkpoint during training
+
+        Args:
+            model (DeepSpeedEngine): model to save
+            path (str): save location on disk
+        """
+
         model.save_checkpoint(path)
 
         # its a bit complicated to unwrap in fp32 during training, so we
@@ -191,6 +254,13 @@ class ModelCheckpointer:
                     torch.save(tensor, os.path.join(path, tag, "decoder.pt"))
 
     @classmethod
-    def ds_to_hf(cls, model: Model, save_path: str) -> None:
-        model.tokenizer.save_pretrained(save_path)
-        model.model.save_pretrained(save_path)
+    def save_hf_checkpoint(cls, model: Model, path: str) -> None:
+        """save the model as a hf checkpoint
+
+        Args:
+            model (DeepSpeedEngine): model to save
+            path (str): save location on disk
+        """
+
+        model.tokenizer.save_pretrained(path)
+        model.model.save_pretrained(path)

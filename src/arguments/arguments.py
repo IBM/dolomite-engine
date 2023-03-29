@@ -10,11 +10,16 @@ from src.constants import LearningRateScheduler, Mode, TrainingInferenceType
 
 
 def get_args(mode: Mode) -> Namespace:
-    parser = ArgumentParser()
+    """arguments to use based on the program mode
 
-    if mode == Mode.training:
-        group = parser.add_argument_group("deepspeed")
-        group.add_argument("--local_rank", type=int, help="argument passed by deepspeed")
+    Args:
+        mode (Mode): training / inference mode for running the program
+
+    Returns:
+        Namespace: arguments based on training / inference mode
+    """
+
+    parser = ArgumentParser()
 
     group = parser.add_argument_group("model")
     group.add_argument("--model_name", type=str, required=True, help="model name on huggingface hub")
@@ -40,6 +45,7 @@ def get_args(mode: Mode) -> Namespace:
     group.add_argument(
         "--data_class", type=lambda x: getattr(data_classes, x), nargs="+", help="list of dataclasses to use"
     )
+    group.add_argument("--data_config", type=str, nargs="+", help="list of data configs to use")
     group.add_argument(
         "--input_format", type=str, nargs="+", help="list of format of input in examples in the datasets"
     )
@@ -55,7 +61,7 @@ def get_args(mode: Mode) -> Namespace:
         "--dtype",
         type=lambda x: getattr(torch, x),
         choices=[torch.float32, torch.float16, torch.bfloat16],
-        help="dtype to use for training/inference",
+        help="dtype to use for training / inference",
     )
 
     # prompt tuning args
@@ -93,6 +99,9 @@ def get_args(mode: Mode) -> Namespace:
             help="use contiguous buffers for gradients, requires more memory if enabled",
         )
         group.add_argument("--cpu_offload", action="store_true", help="train with CPU offloading to save GPU memory")
+
+        group = parser.add_argument_group("logging")
+        group.add_argument("--logdir", type=str, default="logs", help="logging directory for experiments")
 
         group = parser.add_argument_group("aim")
         group.add_argument("--disable_aim", action="store_true", help="disable aim logging")

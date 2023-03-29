@@ -9,6 +9,8 @@ from src.data.dataset import ConcatenatedDatasets
 
 
 class ConcatenatedDataSampler(DistributedSampler):
+    """Data sampler used for training on multiple datasets according to the specified sampling proportions"""
+
     def __init__(
         self,
         args: Namespace,
