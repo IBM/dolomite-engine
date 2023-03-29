@@ -92,12 +92,16 @@ class ProgressBar:
 class AimTracker:
     """aim tracker for training"""
 
-    def __init__(self, experiment: str, repo: str, disable: bool = False) -> None:
-        if disable:
-            self.run = None
-        else:
+    def __init__(self, experiment: str, repo: str) -> None:
+        self.tracking_enabled = self.is_tracking_enabled(experiment, repo)
+
+        if self.tracking_enabled:
             run_rank_n(os.makedirs)(repo, exist_ok=True)
             self.run: Run = run_rank_n(Run)(experiment=experiment, repo=repo)
+
+    @classmethod
+    def is_tracking_enabled(cls, experiment: str, repo: str) -> bool:
+        return experiment is not None and repo is not None
 
     @run_rank_n
     def log_hyperparam(self, name: str, value: Any) -> None:
@@ -108,13 +112,11 @@ class AimTracker:
             value (Any): value of the hyperparameter
         """
 
-        if self.run is None:
-            return
-
-        try:
-            self.run[name] = value
-        except TypeError:
-            self.run[name] = str(value)
+        if self.tracking_enabled:
+            try:
+                self.run[name] = value
+            except TypeError:
+                self.run[name] = str(value)
 
     @run_rank_n
     def log_args(self, args: Namespace) -> None:
@@ -124,11 +126,9 @@ class AimTracker:
             args (Namespace): arguments based on training / inference mode
         """
 
-        if self.run is None:
-            return
-
-        for k, v in vars(args).items():
-            self.log_hyperparam(k, v)
+        if self.tracking_enabled:
+            for k, v in vars(args).items():
+                self.log_hyperparam(k, v)
 
     @run_rank_n
     def track(
@@ -144,10 +144,8 @@ class AimTracker:
             context (AimObject, optional): context for tracking. Defaults to None.
         """
 
-        if self.run is None:
-            return
-
-        self.run.track(value=value, name=name, step=step, epoch=epoch, context=context)
+        if self.tracking_enabled:
+            self.run.track(value=value, name=name, step=step, epoch=epoch, context=context)
 
 
 class Logger:
@@ -162,57 +160,68 @@ class Logger:
         # format: str = "%(asctime)s - [%(levelname)s] - (%(filename)s:%(lineno)d): %(message)s",
         disable_stdout: bool = False,
     ) -> None:
-        dirname = os.path.dirname(logfile)
-        if dirname is not None and dirname not in ["", "."]:
-            run_rank_n(os.makedirs)(dirname, exist_ok=True)
+        self.logging_enabled = self.is_logging_enabled(logfile)
 
-        # for writing to file
-        handlers = [run_rank_n(logging.FileHandler)(logfile, "a")]
-        # for writing to stdout
-        if not disable_stdout:
-            handlers.append(run_rank_n(logging.StreamHandler)())
+        if self.logging_enabled:
+            dirname = os.path.dirname(logfile)
+            if dirname is not None and dirname not in ["", "."]:
+                run_rank_n(os.makedirs)(dirname, exist_ok=True)
 
-        run_rank_n(logging.basicConfig)(level=level, handlers=handlers, format=format)
+            # for writing to file
+            handlers = [run_rank_n(logging.FileHandler)(logfile, "a")]
+            # for writing to stdout
+            if not disable_stdout:
+                handlers.append(run_rank_n(logging.StreamHandler)())
 
-        self.logger: logging.Logger = run_rank_n(logging.getLogger)(name)
-        self.stacklevel = 3
+            run_rank_n(logging.basicConfig)(level=level, handlers=handlers, format=format)
+
+            self.logger: logging.Logger = run_rank_n(logging.getLogger)(name)
+            self.stacklevel = 3
+
+    @classmethod
+    def is_logging_enabled(cls, logfile: str) -> bool:
+        return logfile is not None
 
     @run_rank_n
     def info(self, msg) -> None:
-        self.logger.info(msg, stacklevel=self.stacklevel)
+        if self.logging_enabled:
+            self.logger.info(msg, stacklevel=self.stacklevel)
 
     @run_rank_n
     def debug(self, msg) -> None:
-        self.logger.debug(msg, stacklevel=self.stacklevel)
+        if self.logging_enabled:
+            self.logger.debug(msg, stacklevel=self.stacklevel)
 
     @run_rank_n
     def critical(self, msg) -> None:
-        self.logger.critical(msg, stacklevel=self.stacklevel)
+        if self.logging_enabled:
+            self.logger.critical(msg, stacklevel=self.stacklevel)
 
     @run_rank_n
     def error(self, msg) -> None:
-        self.logger.error(msg, stacklevel=self.stacklevel)
+        if self.logging_enabled:
+            self.logger.error(msg, stacklevel=self.stacklevel)
 
     @run_rank_n
     def warn(self, msg) -> None:
-        self.logger.warn(msg, stacklevel=self.stacklevel)
+        if self.logging_enabled:
+            self.logger.warn(msg, stacklevel=self.stacklevel)
 
 
 class ExperimentsTracker(Logger, AimTracker):
-    """_summary_
+    """a class with functionality of both Logger and AimTracker"""
 
-    Args:
-        Logger (_type_): _description_
-        AimTracker (_type_): _description_
-    """
+    def __init__(self, logger_name: str, experiment_name: str, aim_repo: str, logdir: str) -> None:
+        logfile = None
+        if logdir is not None:
+            logfile = os.path.join(logdir, f"{experiment_name}.log")
 
-    def __init__(
-        self,
-        logger_name: str,
-        experiment_name: str,
-        aim_repo: str,
-        logdir: str,
-        disable_aim: bool,
-    ) -> None:
-        Logger.__init__(self, logger_name, os.path.join(logdir, f"{experiment_name}.log"), disable_stdout=True)
-        AimTracker.__init__(self, experiment_name, aim_repo, disable_aim)
+        if not Logger.is_logging_enabled(logfile):
+            warn_rank_0("Logger is disabled since logdir was not specified")
+
+        Logger.__init__(self, logger_name, logfile, disable_stdout=True)
+
+        if not AimTracker.is_tracking_enabled(experiment_name, aim_repo):
+            warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
+
+        AimTracker.__init__(self, experiment_name, aim_repo)

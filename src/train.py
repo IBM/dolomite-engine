@@ -264,9 +264,7 @@ def main() -> None:
         ConcatenatedDataSampler(args, train_dataset),
     )
 
-    experiments_tracker = ExperimentsTracker(
-        __name__, args.experiment_name, args.aim_repo, args.logdir, args.disable_aim
-    )
+    experiments_tracker = ExperimentsTracker(__name__, args.experiment_name, args.aim_repo, args.logdir)
     # track all hyperparams in args
     experiments_tracker.log_args(args)
 

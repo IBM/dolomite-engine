@@ -101,12 +101,11 @@ def get_args(mode: Mode) -> Namespace:
         group.add_argument("--cpu_offload", action="store_true", help="train with CPU offloading to save GPU memory")
 
         group = parser.add_argument_group("logging")
-        group.add_argument("--logdir", type=str, default="logs", help="logging directory for experiments")
+        group.add_argument("--logdir", type=str, help="logging directory for experiments")
 
         group = parser.add_argument_group("aim")
-        group.add_argument("--disable_aim", action="store_true", help="disable aim logging")
-        group.add_argument("--aim_repo", type=str, default="aim_repo", help="aim repo, experiment logs are saved here")
-        group.add_argument("--experiment_name", type=str, required=True, help="name of the experiment")
+        group.add_argument("--aim_repo", type=str, help="aim repo, experiment logs are saved here")
+        group.add_argument("--experiment_name", type=str, help="name of the experiment")
 
         group = parser.add_argument_group("optimizer and scheduler")
         group.add_argument("--learning_rate", type=float, default=1e-5)

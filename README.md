@@ -94,7 +94,6 @@ logging:
   --logdir LOGDIR       logging directory for experiments
 
 aim:
-  --disable_aim         disable aim logging
   --aim_repo AIM_REPO   aim repo, experiment logs are saved here
   --experiment_name EXPERIMENT_NAME
                         name of the experiment
