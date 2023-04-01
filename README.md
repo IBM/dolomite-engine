@@ -1,4 +1,4 @@
-[paper]: https://img.shields.io/static/v1?label=&message=Paper&color=blueviolet
+[![Build Status](https://travis.ibm.com/conversational-ai/transformer-engine.svg?token=WfYJYyWqkPKchbvxR6xs&branch=main)](https://travis.ibm.com/conversational-ai/transformer-engine)
 
 
 # Distributed finetuning
