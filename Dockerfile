@@ -28,10 +28,11 @@ RUN conda install -c anaconda cmake -y
 
 # necessary stuff
 RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117 \
-    transformers==4.27.1 \
-    accelerate==0.17.1 \
-    bitsandbytes==0.37.0 \
-    aim==3.16.2 \
+    transformers==4.27.4 \
+    accelerate==0.18.0 \
+    bitsandbytes==0.37.2 \
+    aim==3.17.2 \
+    peft==0.2.0 \
     pydantic \
     jsonlines \
     datasets \
@@ -53,13 +54,6 @@ RUN git clone https://github.com/microsoft/DeepSpeed && \
     git checkout v0.8.3 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir . && \
     rm -rf DeepSpeed
-
-# peft
-RUN git clone https://github.com/huggingface/peft && \
-    cd peft && \
-    pip install . --no-cache-dir && \
-    cd .. && \
-    rm -rf peft
 
 # clean conda env
 RUN conda clean -ya

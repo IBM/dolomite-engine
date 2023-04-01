@@ -95,6 +95,8 @@ class Model(torch.nn.Module):
             self.to(self.input_device)
 
     def post_init(self) -> None:
+        """a port init method for expanding word embeddings"""
+
         self.model.resize_token_embeddings(len(self.tokenizer))
 
     @register_profiler("forward_pass")

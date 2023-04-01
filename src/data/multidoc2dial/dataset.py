@@ -40,28 +40,51 @@ class YatinAnswerabilityDataset(BaseDataset):
             warn_rank_0("ignoring max_document_length in the config since max_input_tokens was not specified")
 
         if self.data_config.dataset_type == YatinDineshDatasetType.TOKEN_GUIDED_EVIDENCE_RESPONSE:
-            self.max_input_tokens -= 1
-
+            self.evidence_marker_token = "[evidence]"
             self.evidence_task_token = "<evidence>"
             self.response_task_token = "<response>"
 
-            special_tokens = {"additional_special_tokens": [self.evidence_task_token, self.response_task_token]}
+            special_tokens = {
+                "additional_special_tokens": [
+                    self.evidence_marker_token,
+                    self.evidence_task_token,
+                    self.response_task_token,
+                ]
+            }
             self.tokenizer.add_special_tokens(special_tokens)
 
         self.examples = self.prepare_examples(filter_allowed=filter_allowed, static_evidence=static_evidence)
 
-    def construct_input_from_format(self, context: str, document: str, special_token: str = None) -> str:
+    def construct_input_from_format(
+        self, context: str, document: str, evidence: str = None, special_token: str = None
+    ) -> str:
         context = self.tokenizer(context, add_special_tokens=False)["input_ids"]
         document = self.tokenizer(document, add_special_tokens=False)["input_ids"]
 
         if self.max_input_tokens is not None:
             context = context[-(self.max_input_tokens - self.data_config.max_document_length) :]
-            document = document[: self.data_config.max_document_length]
+            document = document[: self.data_config.max_document_length - 1]
 
-        input = document + context
+            if (
+                self.data_config.dataset_type == YatinDineshDatasetType.TOKEN_GUIDED_EVIDENCE_RESPONSE
+                and evidence is not None
+            ):
+                document = document[: -self.data_config.max_evidence_length - 1]
+
+                evidence = self.tokenizer(evidence, add_special_tokens=False)["input_ids"]
+                evidence = evidence[: self.data_config.max_evidence_length]
+
+                evidence_marker_token_id = self.tokenizer.convert_tokens_to_ids(self.evidence_marker_token)
+                input = [evidence_marker_token_id] + evidence
+            else:
+                input = []
+
+            input = document + context + input
+
         if special_token is not None:
             special_token_id = self.tokenizer.convert_tokens_to_ids(special_token)
             input = [special_token_id] + input
+
         return input
 
     def construct_output_from_format(self, output: str) -> str:
@@ -95,6 +118,17 @@ class YatinAnswerabilityDataset(BaseDataset):
                 context = raw_example["context"]
                 document = raw_example["document"]
 
+                if self.data_config.dataset_type != YatinDineshDatasetType.NO_EVIDENCE:
+                    if static_evidence is None:
+                        if raw_example["type"] == "positive":
+                            evidence = raw_example["evidence_20_50"]
+                        elif raw_example["type"] == "negative":
+                            evidence = "unanswerable"
+                        else:
+                            raise ValueError(f"unexpected 'type' {raw_example['type']} found in one of the examples")
+                    else:
+                        evidence = static_evidence
+
                 task_token = None
                 if self.data_config.dataset_type == YatinDineshDatasetType.TOKEN_GUIDED_EVIDENCE_RESPONSE:
                     task_token = self.evidence_task_token
@@ -106,19 +140,6 @@ class YatinAnswerabilityDataset(BaseDataset):
                 # construct output
                 if self.mode == Mode.training:
                     response = raw_example["response"]
-
-                    if self.data_config.dataset_type != YatinDineshDatasetType.NO_EVIDENCE:
-                        if static_evidence is None:
-                            if raw_example["type"] == "positive":
-                                evidence = raw_example["evidence_20_50"]
-                            elif raw_example["type"] == "negative":
-                                evidence = "unanswerable"
-                            else:
-                                raise ValueError(
-                                    f"unexpected 'type' {raw_example['type']} found in one of the examples"
-                                )
-                        else:
-                            evidence = static_evidence
 
                     if self.data_config.dataset_type == YatinDineshDatasetType.NO_EVIDENCE:
                         output = response
@@ -144,7 +165,7 @@ class YatinAnswerabilityDataset(BaseDataset):
                     result_example = {}
 
                     result_example[DatasetKeys.preprocessed_input.value] = self.construct_input_from_format(
-                        context, document, special_token=self.response_task_token
+                        context, document, evidence=evidence, special_token=self.response_task_token
                     )
 
                     if self.mode == Mode.training:

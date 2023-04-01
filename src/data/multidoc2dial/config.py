@@ -14,6 +14,7 @@ class YatinDineshDatasetType(Enum):
 
 class DineshChitChatConfig(BaseModel):
     max_document_length: int = 700
+    max_evidence_length: int = 100
     files: dict = {
         DatasetSplit.train.value: "chitchat_subdocs_train.json",
         DatasetSplit.val.value: "chitchat_subdocs_val.json",
