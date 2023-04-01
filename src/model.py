@@ -65,11 +65,9 @@ class Model(torch.nn.Module):
 
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
             if mode == Mode.training:
-                deepspeed_config = get_deepspeed_config(args)
                 # this tells from_pretrained to instantiate directly on gpus
                 # this only instantiates a single instance of the model across the ranks
-                dschf = HfDeepSpeedConfig(deepspeed_config)
-
+                self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
                 self.model = args.model_class.from_pretrained(self.model_name)
             else:
                 self.model = args.model_class.from_pretrained(self.model_name, torch_dtype=self.dtype)
@@ -96,12 +94,12 @@ class Model(torch.nn.Module):
 
             self.to(self.input_device)
 
-        self.prepare_input_output_for_forward = lambda *args, **kwargs: None
-        self.prepare_input_output_for_generate = lambda *args, **kwargs: None
+    def post_init(self) -> None:
+        self.model.resize_token_embeddings(len(self.tokenizer))
 
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: Tuple[List[int]]) -> torch.Tensor:
         """forward function for a batch
 
         Args:
@@ -111,8 +109,7 @@ class Model(torch.nn.Module):
             torch.Tensor: loss tensor
         """
 
-        inputs, outputs = self.prepare_input_output_for_forward(batch)
-        batch = self.prepare_batch(inputs, outputs)
+        batch = self.prepare_batch(batch)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -123,7 +120,7 @@ class Model(torch.nn.Module):
 
     @register_profiler("generate")
     @register_timer("generate")
-    def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
+    def generate(self, batch: Tuple[List[int]], generate_kwargs: dict) -> List[str]:
         """generate function for a batch
 
         Args:
@@ -134,8 +131,7 @@ class Model(torch.nn.Module):
             List[str]: list of generated text. input is trimmed from the generated text
         """
 
-        inputs = self.prepare_input_output_for_generate(batch)
-        batch = self.prepare_batch(inputs)
+        batch = self.prepare_batch(batch)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -179,7 +175,7 @@ class Model(torch.nn.Module):
 
     @register_profiler("prepare_batch")
     @register_timer("prepare_batch")
-    def prepare_batch(self, inputs: List[int], outputs: List[int] = None) -> dict:
+    def prepare_batch(self, batch: Tuple[List[int]]) -> dict:
         """prepares the batch with padding to pass into the forward function of the HuggingFace model
 
         Args:
@@ -189,6 +185,11 @@ class Model(torch.nn.Module):
         Returns:
             dict: dict containing input_ids, attention_mask and labels if outputs is specified
         """
+
+        if self.mode == Mode.training:
+            inputs, outputs = batch
+        else:
+            inputs = batch
 
         result = {}
 
@@ -224,7 +225,6 @@ class Model(torch.nn.Module):
 
 class ModelCheckpointer:
     @classmethod
-    @register_profiler("save_checkpoint")
     @register_timer("save_checkpoint")
     def save_checkpoint(cls, model: DeepSpeedEngine, path: str) -> None:
         """save deepspeed checkpoint during training
@@ -237,6 +237,7 @@ class ModelCheckpointer:
         model.save_checkpoint(path)
 
     @classmethod
+    @register_timer("save_hf_checkpoint")
     def save_hf_checkpoint(cls, model: Model, path: str) -> None:
         """save the model as a hf checkpoint
 

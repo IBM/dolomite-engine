@@ -58,12 +58,13 @@ class AlpacaDataset(BaseDataset):
                     self.prompt_format["prompt_no_input"].format_map(raw_example).strip()
                 )
 
-            result_example[DatasetKeys.preprocessed_output.value] = raw_example["output"].strip()
+            if self.mode == Mode.training:
+                result_example[DatasetKeys.preprocessed_output.value] = raw_example["output"].strip()
 
-            if not self.is_encoder_decoder:
-                result_example[DatasetKeys.preprocessed_output.value] = (
-                    " " + result_example[DatasetKeys.preprocessed_output.value]
-                )
+                if not self.is_encoder_decoder:
+                    result_example[DatasetKeys.preprocessed_output.value] = (
+                        " " + result_example[DatasetKeys.preprocessed_output.value]
+                    )
 
             if DatasetKeys.id.value not in raw_example:
                 result_example[DatasetKeys.id.value] = generate_random_id(self.__class__)

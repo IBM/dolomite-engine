@@ -2,7 +2,7 @@ import glob
 import os
 from argparse import Namespace
 from copy import deepcopy
-from typing import List, Set, Tuple, Type
+from typing import List, Set, Tuple, Type, Union
 from uuid import uuid4
 
 import jsonlines
@@ -15,7 +15,7 @@ from src.utils import print_rank_0, register_timer
 
 
 def check_raw_example(raw_example: dict, mode: Mode) -> None:
-    """checks whether the dataset
+    """checks whether the dataset has conflicting fields
 
     Args:
         raw_example (dict): example to check
@@ -28,6 +28,9 @@ def check_raw_example(raw_example: dict, mode: Mode) -> None:
     assert (
         DatasetKeys.preprocessed_output.value not in raw_example
     ), "preprocessed_output found in the dataset, please drop this field"
+    assert (
+        DatasetKeys.data_class_index.value not in raw_example
+    ), "data_class_index found in the dataset, please drop this field"
 
     if mode == Mode.inference:
         assert (
@@ -65,7 +68,8 @@ class BaseDataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.is_encoder_decoder = is_encoder_decoder
 
-        self.data_config = args.data_config
+        self.data_config: dict = args.data_config
+        self.pre_tokenized = False
 
         self.examples = []
 
@@ -97,61 +101,49 @@ class BaseDataset(torch.utils.data.Dataset):
             return self.output_format.replace("__output__", output, 1)
         return output
 
-    def prepare_input_output_for_forward(self, batch: dict) -> Tuple[List[int], List[int]]:
+    def collate_fn(self, batch: List[dict]) -> Union[List[List[int]], Tuple[List[List[int]]]]:
         """prepares the inputs and outputs for forward function depending on whther the model is decoder only or encoder-decoder
 
         Args:
-            batch (dict): batch of examples
+            batch (List[dict]): batch of examples
 
         Returns:
-            Tuple[List[int], List[int]]: batch of token ids
+            Union[List[List[int]], Tuple[List[List[int]]]]: batch of token ids
         """
 
         inputs = []
         outputs = []
 
-        for p, r in zip(batch[DatasetKeys.preprocessed_input.value], batch[DatasetKeys.preprocessed_output.value]):
-            p: List[int] = self.tokenizer(p, add_special_tokens=False)["input_ids"]
-            r: List[int] = self.tokenizer(r, add_special_tokens=False)["input_ids"]
-
+        for example in batch:
+            p: Union[str, List[int]] = example[DatasetKeys.preprocessed_input.value]
+            if not self.pre_tokenized:
+                p = self.tokenizer(p, add_special_tokens=False)["input_ids"]
             p = p[: self.max_input_tokens]
-            r = r[: self.max_output_tokens]
 
-            r.append(self.tokenizer.eos_token_id)
-            outputs.append(r)
+            if self.mode == Mode.training:
+                r: Union[str, List[int]] = example[DatasetKeys.preprocessed_output.value]
+                if not self.pre_tokenized:
+                    r = self.tokenizer(r, add_special_tokens=False)["input_ids"]
+                r = r[: self.max_output_tokens]
 
-            if self.is_encoder_decoder:
-                p.append(self.tokenizer.eos_token_id)
-                inputs.append(p)
+                r.append(self.tokenizer.eos_token_id)
+                outputs.append(r)
+
+                if self.is_encoder_decoder:
+                    p.append(self.tokenizer.eos_token_id)
+                    inputs.append(p)
+                else:
+                    inputs.append(p + r)
             else:
-                pr = p + r
-                inputs.append(pr)
+                if self.is_encoder_decoder:
+                    p.append(self.tokenizer.eos_token_id)
 
-        return inputs, outputs
+                inputs.append(p)
 
-    def prepare_input_output_for_generate(self, batch: dict) -> List[int]:
-        """prepares the inputs for generate function depending on whther the model is decoder only or encoder-decoder
-
-        Args:
-            batch (dict): batch of examples
-
-        Returns:
-            List[int]: batch of token ids
-        """
-
-        inputs = []
-
-        for p in batch[DatasetKeys.preprocessed_input.value]:
-            p: List[int] = self.tokenizer(p, add_special_tokens=False)["input_ids"]
-
-            p = p[: self.max_input_tokens]
-
-            if self.is_encoder_decoder:
-                p.append(self.tokenizer.eos_token_id)
-
-            inputs.append(p)
-
-        return inputs
+        if self.mode == Mode.training:
+            return inputs, outputs
+        else:
+            return inputs
 
     def __getitem__(self, index: int) -> dict:
         return self.examples[index]
@@ -177,12 +169,16 @@ class DebugDataset(BaseDataset):
             DatasetKeys.input.value: " Hello" * self.max_input_tokens,
             DatasetKeys.output.value: " Hello" * self.max_output_tokens,
         }
+
         example[DatasetKeys.preprocessed_input.value] = self.construct_input_from_format(
             example[DatasetKeys.input.value]
         )
-        example[DatasetKeys.preprocessed_output.value] = self.construct_output_from_format(
-            example[DatasetKeys.output.value]
-        )
+
+        if self.mode == Mode.training:
+            example[DatasetKeys.preprocessed_output.value] = self.construct_output_from_format(
+                example[DatasetKeys.output.value]
+            )
+
         return example
 
     def __len__(self) -> int:
@@ -278,6 +274,8 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         super().__init__()
 
         self.split = split
+        self.mode = mode
+
         self.datasets = self.get_datasets_list(args, split, mode, tokenizer, is_encoder_decoder)
         self.num_examples = sum([len(dataset) for dataset in self.datasets])
         self.start_indices = np.cumsum([0] + [len(dataset) for dataset in self.datasets[:-1]]).tolist()
@@ -354,87 +352,52 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
             datasets.append(dataset)
         return datasets
 
-    @register_timer("prepare_input_output_for_forward")
-    def prepare_input_output_for_forward(self, batch: dict) -> Tuple[List[int], List[int]]:
-        """applies prepare_input_output_for_forward to each example depending on which dataset they come from
+    @register_timer("collate_fn")
+    def collate_fn(self, batch: List[dict]) -> Union[List[List[int]], Tuple[List[List[int]]]]:
+        """applies collate_fn to each example depending on which dataset they come from
 
         Args:
             batch (dict): batch of examples
 
         Returns:
-            Tuple[List[int], List[int]]: batch of token ids
+            Union[List[List[int]], Tuple[List[List[int]]]]: batch of token ids
         """
 
         batch_subset = {}
         batch_mapping = []
 
-        for p, r, ind in zip(
-            batch[DatasetKeys.preprocessed_input.value],
-            batch[DatasetKeys.preprocessed_output.value],
-            batch[DatasetKeys.data_class_index.value],
-        ):
-            if ind not in batch_subset:
-                batch_subset[ind] = {
-                    DatasetKeys.preprocessed_input.value: [],
-                    DatasetKeys.preprocessed_output.value: [],
-                }
+        for example in batch:
+            ind: str = example[DatasetKeys.data_class_index.value]
 
-            position = len(batch_subset[ind][DatasetKeys.preprocessed_input.value])
+            if ind not in batch_subset:
+                batch_subset[ind] = []
+
+            position = len(batch_subset[ind])
             batch_mapping.append((ind, position))
-            batch_subset[ind][DatasetKeys.preprocessed_input.value].append(p)
-            batch_subset[ind][DatasetKeys.preprocessed_output.value].append(r)
+            batch_subset[ind].append(example)
 
         for ind in batch_subset:
             dataset_index = int(ind.split(":")[1])
-            input_, output_ = self.datasets[dataset_index].prepare_input_output_for_forward(batch_subset[ind])
-            batch_subset[ind][DatasetKeys.preprocessed_input.value] = input_
-            batch_subset[ind][DatasetKeys.preprocessed_output.value] = output_
+            batch_subset[ind] = self.datasets[dataset_index].collate_fn(batch_subset[ind])
 
         inputs = []
         outputs = []
 
         for ind, position in batch_mapping:
-            input_ = batch_subset[ind][DatasetKeys.preprocessed_input.value][position]
-            output_ = batch_subset[ind][DatasetKeys.preprocessed_output.value][position]
-            inputs.append(input_)
-            outputs.append(output_)
+            if self.mode == Mode.training:
+                input = batch_subset[ind][0][position]
+                output = batch_subset[ind][1][position]
 
-        return inputs, outputs
+                outputs.append(output)
+            else:
+                input = batch_subset[ind][position]
 
-    @register_timer("prepare_input_output_for_generate")
-    def prepare_input_output_for_generate(self, batch: dict) -> List[int]:
-        """applies prepare_input_output_for_generate to each example depending on which dataset they come from
+            inputs.append(input)
 
-        Args:
-            batch (dict): batch of examples
-
-        Returns:
-            List[int]: batch of token ids
-        """
-
-        batch_subset = {}
-        batch_mapping = []
-
-        for p, ind in zip(batch[DatasetKeys.preprocessed_input.value], batch[DatasetKeys.data_class_index.value]):
-            if ind not in batch_subset:
-                batch_subset[ind] = {DatasetKeys.preprocessed_input.value: []}
-
-            position = len(batch_subset[ind][DatasetKeys.preprocessed_input.value])
-            batch_mapping.append((ind, position))
-            batch_subset[ind][DatasetKeys.preprocessed_input.value].append(p)
-
-        for ind in batch_subset:
-            dataset_index = int(ind.split(":")[1])
-            input_ = self.datasets[dataset_index].prepare_input_output_for_generate(batch_subset[ind])
-            batch_subset[ind][DatasetKeys.preprocessed_input.value] = input_
-
-        inputs = []
-
-        for ind, position in batch_mapping:
-            input_ = batch_subset[ind][DatasetKeys.preprocessed_input.value][position]
-            inputs.append(input_)
-
-        return inputs
+        if self.mode == Mode.training:
+            return inputs, outputs
+        else:
+            return inputs
 
     def __len__(self) -> int:
         return self.num_examples

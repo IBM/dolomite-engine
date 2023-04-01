@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader, Dataset, DistributedSampler
+from torch.utils.data import DataLoader, Dataset
 
 from src.utils.distributed import get_local_rank, get_world_size
 from src.utils.logging import print_rank_0
@@ -32,7 +32,6 @@ def deepspeed_initialize(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     datasets: List[Dataset],
-    train_sampler: DistributedSampler,
 ) -> Tuple[deepspeed.DeepSpeedEngine, List[DataLoader]]:
     """converts the model to a ZeRO-DP sharded model
 
@@ -55,15 +54,27 @@ def deepspeed_initialize(
         config=get_deepspeed_config(args),
     )
 
+    dataloaders = []
+
+    from src.data.sampler import ConcatenatedDataSampler
+
     # train dataset needs ConcatenatedDataSampler
-    datasets[0] = model.deepspeed_io(datasets[0], data_sampler=train_sampler)
+    train_dataset = datasets[0]
+    train_sampler = ConcatenatedDataSampler(args, train_dataset)
+    train_dataloader = model.deepspeed_io(
+        train_dataset, data_sampler=train_sampler, collate_fn=train_dataset.collate_fn
+    )
+    dataloaders.append(train_dataloader)
 
     # other datasets only need a sequential sampler
-    for i in range(1, len(datasets)):
-        if datasets[i] is not None:
-            datasets[i] = model.deepspeed_io(datasets[i], route="eval")
+    for dataset in datasets[1:]:
+        dataloader = None
+        if dataset is not None:
+            dataloader = model.deepspeed_io(dataset, route="eval", collate_fn=dataset.collate_fn)
 
-    return model, datasets
+        dataloaders.append(dataloader)
+
+    return model, dataloaders
 
 
 def get_deepspeed_config(args: Namespace) -> dict:

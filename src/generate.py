@@ -2,9 +2,9 @@ import json
 import os
 import sys
 from argparse import Namespace
+from typing import List, Tuple
 
 import torch
-from torch.utils.data import DataLoader
 
 from src.arguments import get_args
 from src.constants import DatasetKeys, DatasetSplit, Mode
@@ -13,7 +13,7 @@ from src.model import Model
 from src.utils import ProgressBar, setup_debugging, setup_tf32
 
 
-def flatten_batch(batch: dict) -> list:
+def flatten_batch(batch: Tuple[List[int]]) -> list:
     for any_key in batch.keys():
         break
     batch_size = len(batch[any_key])
@@ -31,7 +31,16 @@ def flatten_batch(batch: dict) -> list:
         yield example
 
 
-def generate(args: Namespace, model: Model, test_dataset: DataLoader, generate_kwargs: dict) -> None:
+def generate(args: Namespace, model: Model, test_dataset: ConcatenatedDatasets, generate_kwargs: dict) -> None:
+    """main generation loop
+
+    Args:
+        args (Namespace): inference args
+        model (Model): non-sharded model
+        test_dataset (ConcatenatedDatasets): test dataset
+        generate_kwargs (dict): generation arguments
+    """
+
     progress_bar = ProgressBar(0, len(test_dataset))
 
     output_dir = os.path.dirname(args.output_file)
@@ -39,21 +48,31 @@ def generate(args: Namespace, model: Model, test_dataset: DataLoader, generate_k
         os.makedirs(output_dir, exist_ok=True)
 
     output_file = open(args.output_file, "w")
+    raw_batch = []
 
-    for batch in test_dataset:
-        generated_text = model.generate(batch, generate_kwargs)
+    for index, example in enumerate(test_dataset):
+        raw_batch.append(example)
 
-        flat_batch = flatten_batch(batch)
+        if len(raw_batch) == args.batch_size or index == len(test_dataset) - 1:
+            batch = test_dataset.collate_fn(raw_batch)
+            generated_text = model.generate(batch, generate_kwargs)
 
-        for example, text in zip(flat_batch, generated_text):
-            example[DatasetKeys.generated_text.value] = text
-            output_file.write(json.dumps(example) + "\n")
+            for example, generated_text_ in zip(raw_batch, generated_text):
+                example[DatasetKeys.generated_text.value] = generated_text_
 
-        sys.stdout.flush()
+                del example[DatasetKeys.preprocessed_input.value]
+
+                output_file.write(json.dumps(example) + "\n")
+                sys.stdout.flush()
+
+            raw_batch = []
+
         progress_bar.update()
 
 
 def main() -> None:
+    """main program"""
+
     mode = Mode.inference
 
     setup_tf32()
@@ -82,10 +101,7 @@ def main() -> None:
         is_encoder_decoder=model.is_encoder_decoder,
     )
 
-    # setup model's prepare_input_output_for_generate method from the dataset's implementation
-    model.prepare_input_output_for_generate = test_dataset.prepare_input_output_for_generate
-
-    test_dataset = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    model.post_init()
 
     generate(args, model, test_dataset, generate_kwargs)
 
