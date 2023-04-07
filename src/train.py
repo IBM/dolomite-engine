@@ -8,7 +8,7 @@ from transformers import set_seed
 
 from src.arguments import get_args
 from src.constants import DatasetSplit, Mode
-from src.data import ConcatenatedDataSampler, ConcatenatedDatasets
+from src.data import ConcatenatedDatasets
 from src.model import Model, ModelCheckpointer
 from src.optimization import get_optimizer, get_scheduler_method
 from src.utils import (

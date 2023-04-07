@@ -2,33 +2,12 @@ import json
 import os
 import sys
 from argparse import Namespace
-from typing import List, Tuple
-
-import torch
 
 from src.arguments import get_args
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data import ConcatenatedDatasets
 from src.model import Model
 from src.utils import ProgressBar, setup_debugging, setup_tf32
-
-
-def flatten_batch(batch: Tuple[List[int]]) -> list:
-    for any_key in batch.keys():
-        break
-    batch_size = len(batch[any_key])
-
-    for i in range(batch_size):
-        example = {}
-
-        for key in batch.keys():
-            if key not in [DatasetKeys.id.value, DatasetKeys.preprocessed_input.value]:
-                value = batch[key][i]
-                if isinstance(value, torch.Tensor):
-                    value = value.item()
-                example[key] = value
-
-        yield example
 
 
 def generate(args: Namespace, model: Model, test_dataset: ConcatenatedDatasets, generate_kwargs: dict) -> None:
@@ -55,10 +34,13 @@ def generate(args: Namespace, model: Model, test_dataset: ConcatenatedDatasets, 
 
         if len(raw_batch) == args.batch_size or index == len(test_dataset) - 1:
             batch = test_dataset.collate_fn(raw_batch)
-            generated_text = model.generate(batch, generate_kwargs)
+            generated_text, num_generated_tokens = model.generate(batch, generate_kwargs)
 
-            for example, generated_text_ in zip(raw_batch, generated_text):
+            for example, generated_text_, num_generated_tokens_ in zip(
+                raw_batch, generated_text, num_generated_tokens
+            ):
                 example[DatasetKeys.generated_text.value] = generated_text_
+                example[DatasetKeys.num_generated_tokens.value] = num_generated_tokens_
 
                 del example[DatasetKeys.preprocessed_input.value]
 
@@ -90,8 +72,6 @@ def main() -> None:
     }
 
     model = Model(args, mode)
-    if args.load_path is not None:
-        model.load_ds_checkpoint(args.load_path)
 
     test_dataset = ConcatenatedDatasets(
         args,
@@ -102,6 +82,8 @@ def main() -> None:
     )
 
     model.post_init()
+    if args.load_path is not None:
+        model.load_ds_checkpoint(args.load_path)
 
     generate(args, model, test_dataset, generate_kwargs)
 

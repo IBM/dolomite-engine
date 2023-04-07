@@ -62,6 +62,7 @@ class Model(torch.nn.Module):
         self.dtype = args.dtype
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.original_vocab_size = len(self.tokenizer)
 
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
             if mode == Mode.training:
@@ -95,9 +96,10 @@ class Model(torch.nn.Module):
             self.to(self.input_device)
 
     def post_init(self) -> None:
-        """a port init method for expanding word embeddings"""
+        """a post init method for expanding word embeddings"""
 
-        self.model.resize_token_embeddings(len(self.tokenizer))
+        if len(self.tokenizer) != self.original_vocab_size:
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
@@ -143,9 +145,10 @@ class Model(torch.nn.Module):
         if not self.is_encoder_decoder:
             generated = generated[:, batch["input_ids"].shape[1] :]
 
+        num_generated_tokens = (generated != self.tokenizer.pad_token_id).sum(dim=-1).tolist()
         generated_text = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
 
-        return generated_text
+        return generated_text, num_generated_tokens
 
     @register_profiler("load_ds_checkpoint")
     @register_timer("load_ds_checkpoint")

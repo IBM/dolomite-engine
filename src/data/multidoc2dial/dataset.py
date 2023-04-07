@@ -65,21 +65,22 @@ class YatinAnswerabilityDataset(BaseDataset):
             context = context[-(self.max_input_tokens - self.data_config.max_document_length) :]
             document = document[: self.data_config.max_document_length - 1]
 
-            if (
-                self.data_config.dataset_type == YatinDineshDatasetType.TOKEN_GUIDED_EVIDENCE_RESPONSE
-                and evidence is not None
-            ):
-                document = document[: -self.data_config.max_evidence_length - 1]
+        if (
+            self.data_config.dataset_type == YatinDineshDatasetType.TOKEN_GUIDED_EVIDENCE_RESPONSE
+            and evidence is not None
+        ):
+            evidence = self.tokenizer(evidence, add_special_tokens=False)["input_ids"]
 
-                evidence = self.tokenizer(evidence, add_special_tokens=False)["input_ids"]
+            if self.max_input_tokens is not None:
+                document = document[: -self.data_config.max_evidence_length - 1]
                 evidence = evidence[: self.data_config.max_evidence_length]
 
-                evidence_marker_token_id = self.tokenizer.convert_tokens_to_ids(self.evidence_marker_token)
-                input = [evidence_marker_token_id] + evidence
-            else:
-                input = []
+            evidence_marker_token_id = self.tokenizer.convert_tokens_to_ids(self.evidence_marker_token)
+            input = [evidence_marker_token_id] + evidence
+        else:
+            input = []
 
-            input = document + context + input
+        input = document + context + input
 
         if special_token is not None:
             special_token_id = self.tokenizer.convert_tokens_to_ids(special_token)
