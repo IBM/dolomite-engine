@@ -265,7 +265,9 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         self.split = split
         self.mode = mode
 
-        self.datasets = self.get_datasets_list(args, split, mode, tokenizer, is_encoder_decoder)
+        self.datasets, self.data_sampling_proportion = self.get_datasets_list(
+            args, split, mode, tokenizer, is_encoder_decoder
+        )
 
         num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
         self.num_examples = sum(num_examples_in_each_dataset)
@@ -300,7 +302,7 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
     @classmethod
     def get_datasets_list(
         cls, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
-    ) -> List[BaseDataset]:
+    ) -> Tuple[List[BaseDataset], List[int]]:
         """prepare all the datasets
 
         Args:
@@ -311,10 +313,12 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
             is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
 
         Returns:
-            List[BaseDataset]: list of all datasets
+            Tuple[List[BaseDataset], List[int]]: list of all datasets, data sampling proportion
         """
 
         datasets = []
+        data_sampling_proportion = []
+
         for data_config in args.dataset_configs_json:
             args_copy = deepcopy(args)
             args_copy.data_config = deepcopy(data_config)
@@ -323,8 +327,12 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
             dataset = args_copy.data_config[DatasetConfigKeys.data_class.value](
                 args_copy, split, mode, tokenizer, is_encoder_decoder
             )
-            datasets.append(dataset)
-        return datasets
+
+            if len(dataset) > 0:
+                datasets.append(dataset)
+                data_sampling_proportion.append(data_config[DatasetConfigKeys.data_sampling_proportion.value])
+
+        return datasets, data_sampling_proportion
 
     @register_timer("collate_fn")
     def collate_fn(self, batch: List[dict]) -> Union[List[List[int]], Tuple[List[List[int]]]]:
