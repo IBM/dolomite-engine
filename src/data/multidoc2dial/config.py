@@ -43,9 +43,9 @@ class DineshChitChatConfig(DatasetConfig):
 class YatinAnswerabilityConfig(DineshChitChatConfig):
     # files for the dataset
     files: dict = {
-        DatasetSplit.train.value: f"md2d_subdocs_train_pos_neg.json",
-        DatasetSplit.val.value: f"md2d_subdocs_val_pos_neg.json",
-        DatasetSplit.test.value: f"md2d_document_test_pos_neg.json",
+        DatasetSplit.train.value: "md2d_subdocs_train_pos_neg.json",
+        DatasetSplit.val.value: "md2d_subdocs_val_pos_neg.json",
+        DatasetSplit.test.value: "md2d_document_test_pos_neg.json",
     }
     # whether to turn on some filtering for the dataset
     filter_allowed: bool = True

@@ -1,11 +1,11 @@
+import json
 from argparse import ArgumentParser, Namespace
 
 import torch
 import transformers
 from peft import PromptTuningInit
 
-import src.data as data_classes
-from src.arguments.checkers import verify_args
+from src.arguments.checkers import check_dataset_configs_json, check_training_inference_type
 from src.constants import LearningRateScheduler, Mode, TrainingInferenceType
 
 
@@ -38,28 +38,13 @@ def get_args(mode: Mode) -> Namespace:
         group.add_argument("--load_path", type=str, help="path to load checkpoints")
 
     group = parser.add_argument_group("dataset")
-    group.add_argument(
-        "--data_sampling_proportion", type=int, default=[1], nargs="+", help="sampling proportion for the datasets"
-    )
+    group.add_argument("--dataset_configs_json", type=lambda x: json.load(open(x, "r")), help="dataset config path")
     if mode == Mode.training:
         group.add_argument(
             "--ignore_sampling_proportion_for_validation",
             action="store_true",
             help="whether to use sequential sampler for validation",
         )
-    group.add_argument("--data_path", type=str, nargs="+", help="list of datapaths")
-    group.add_argument(
-        "--data_class", type=lambda x: getattr(data_classes, x), nargs="+", help="list of dataclasses to use"
-    )
-    group.add_argument("--data_config", type=str, nargs="+", help="list of data configs to use")
-    group.add_argument(
-        "--input_format", type=str, nargs="+", help="list of format of input in examples in the datasets"
-    )
-    group.add_argument(
-        "--output_format", type=str, nargs="+", help="list of format of output in examples in the datasets"
-    )
-    group.add_argument("--max_input_tokens", type=int, nargs="+", help="max length for input")
-    group.add_argument("--max_output_tokens", type=int, nargs="+", help="max length for output")
 
     group = parser.add_argument_group("miscellaneous")
     group.add_argument("--seed", type=int, default=42, help="random seed")
@@ -143,6 +128,7 @@ def get_args(mode: Mode) -> Namespace:
 
     args = parser.parse_args()
 
-    verify_args(args)
+    check_training_inference_type(args)
+    check_dataset_configs_json(args.dataset_configs_json)
 
     return args

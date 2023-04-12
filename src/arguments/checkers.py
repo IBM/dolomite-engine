@@ -1,11 +1,10 @@
-import json
 from argparse import Namespace
+from typing import List
 
 from peft import PromptTuningInit
 
-from src.constants import TrainingInferenceType
-from src.data import DebugDataset
-from src.utils import is_debugging_enabled, warn_rank_0
+import src.data as data_classes
+from src.constants import DatasetConfigKeys, TrainingInferenceType
 
 
 def check_training_inference_type(args: Namespace) -> None:
@@ -36,106 +35,25 @@ def check_training_inference_type(args: Namespace) -> None:
             ), f"prompt_tuning_init_text needs to be specified with TEXT init method"
 
 
-def set_input_defaults(args: Namespace) -> None:
-    """set input default values for dataset
+def check_dataset_configs_json(dataset_configs_json: List[dict]) -> None:
+    """checks whether the arguments specified in the config are valid
 
     Args:
-        args (Namespace): arguments based on training / inference mode
+        dataset_configs_json (List[dict]): loaded json config
     """
 
-    if args.max_input_tokens is None:
-        args.max_input_tokens = [None] * len(args.data_sampling_proportion)
-        warn_rank_0("max_input_tokens was not specified, setting to the default value 'inf' for all the datasets")
-
-    if args.input_format is None:
-        args.input_format = ["__input__"] * len(args.data_sampling_proportion)
-        warn_rank_0(f"input_format was not specified, setting to the default value '__input__' for all the datasets")
-
-    if args.data_config is None:
-        args.data_config = [{}] * len(args.data_sampling_proportion)
-        warn_rank_0("data_config was not specified, setting to the default value '{}' for all the datasets")
-    else:
-        args.data_config = [json.loads(x) for x in args.data_config]
-
-
-def set_output_defaults(args: Namespace) -> None:
-    """set output default values for dataset
-
-    Args:
-        args (Namespace): arguments based on training / inference mode
-    """
-
-    if args.max_output_tokens is None:
-        args.max_output_tokens = [None] * len(args.data_sampling_proportion)
-        warn_rank_0("max_output_tokens was not specified, setting to the default value 'inf' for all the datasets")
-
-    if args.output_format is None:
-        args.output_format = ["__output__"] * len(args.data_sampling_proportion)
-        warn_rank_0(f"output_format was not specified, setting to the default value '__output__' for all the datasets")
-
-
-def check_dataset_args(args: Namespace) -> None:
-    """check whether all dataset args are specified for all datasets
-
-    Args:
-        args (Namespace): arguments based on training / inference mode
-    """
-
-    data_args_to_check = [
-        "data_sampling_proportion",
-        "data_path",
-        "data_class",
-        "data_config",
-        "input_format",
-        "output_format",
-        "max_input_tokens",
-        "max_output_tokens",
-    ]
-    for i in range(1, len(data_args_to_check)):
-        l1 = len(getattr(args, data_args_to_check[0]))
-        l2 = len(getattr(args, data_args_to_check[i]))
+    for i, data_config in enumerate(dataset_configs_json):
         assert (
-            l1 == l2
-        ), f"{data_args_to_check[0]} and {data_args_to_check[i]} are lists of different lengths {l1} and {l2} respectively"
+            DatasetConfigKeys.data_class.value in data_config
+        ), f"{DatasetConfigKeys.data_class.value} is not specified for dataset at index {i}"
+        # convert to string to the actual class type
+        data_config[DatasetConfigKeys.data_class.value] = getattr(
+            data_classes, data_config[DatasetConfigKeys.data_class.value]
+        )
 
-
-def check_debugging_args(args: Namespace) -> None:
-    """check whether arguments are specified with correct debugging arguments
-
-    Args:
-        args (Namespace): arguments based on training / inference mode
-    """
-
-    if is_debugging_enabled():
-        if args.data_class != DebugDataset:
-            warn_rank_0(f"found data_class '{args.data_class}'. For debugging, DebugDataset is recommended")
-
-    if args.data_class == DebugDataset:
-        if args.input_format != ["__input__"] * len(args.data_sampling_proportion):
-            warn_rank_0(
-                f"ignoring the specified input_format '{args.input_format}' and setting to the default value '__input__'"
-            )
-            args.input_format = ["__input__"] * len(args.data_sampling_proportion)
-
-        if args.output_format != ["__output__"] * len(args.data_sampling_proportion):
-            warn_rank_0(
-                f"ignoring the specified output_format '{args.output_format}' and setting to the default value '__output__'"
-            )
-            args.output_format = ["__output__"] * len(args.data_sampling_proportion)
-
-
-def verify_args(args: Namespace) -> None:
-    """verify and set default arguments
-
-    Args:
-        args (Namespace): arguments based on training / inference mode
-    """
-
-    check_training_inference_type(args)
-
-    set_input_defaults(args)
-    set_output_defaults(args)
-
-    check_dataset_args(args)
-
-    check_debugging_args(args)
+        # check data_sampling_proportion
+        assert (
+            DatasetConfigKeys.data_sampling_proportion.value in data_config
+            and isinstance(data_config[DatasetConfigKeys.data_sampling_proportion.value], int)
+            and data_config[DatasetConfigKeys.data_sampling_proportion.value] > 0
+        ), f"{DatasetConfigKeys.data_sampling_proportion.value} is not specified for dataset at index {i}"

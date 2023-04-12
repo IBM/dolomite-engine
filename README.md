@@ -41,24 +41,10 @@ checkpointing:
                         path to save checkpoints
 
 dataset:
-  --data_sampling_proportion DATA_SAMPLING_PROPORTION [DATA_SAMPLING_PROPORTION ...]
-                        sampling proportion for the datasets
+  --dataset_configs_json DATASET_CONFIGS_JSON
+                        dataset config path
   --ignore_sampling_proportion_for_validation
                         whether to use sequential sampler for validation
-  --data_path DATA_PATH [DATA_PATH ...]
-                        list of datapaths
-  --data_class DATA_CLASS [DATA_CLASS ...]
-                        list of dataclasses to use
-  --data_config DATA_CONFIG [DATA_CONFIG ...]
-                        list of data configs to use
-  --input_format INPUT_FORMAT [INPUT_FORMAT ...]
-                        list of format of input in examples in the datasets
-  --output_format OUTPUT_FORMAT [OUTPUT_FORMAT ...]
-                        list of format of output in examples in the datasets
-  --max_input_tokens MAX_INPUT_TOKENS [MAX_INPUT_TOKENS ...]
-                        max length for input
-  --max_output_tokens MAX_OUTPUT_TOKENS [MAX_OUTPUT_TOKENS ...]
-                        max length for output
 
 miscellaneous:
   --seed SEED           random seed
@@ -128,22 +114,8 @@ checkpointing:
                         path to load checkpoints
 
 dataset:
-  --data_sampling_proportion DATA_SAMPLING_PROPORTION [DATA_SAMPLING_PROPORTION ...]
-                        sampling proportion for the datasets
-  --data_path DATA_PATH [DATA_PATH ...]
-                        list of datapaths
-  --data_class DATA_CLASS [DATA_CLASS ...]
-                        list of dataclasses to use
-  --data_config DATA_CONFIG [DATA_CONFIG ...]
-                        list of data configs to use
-  --input_format INPUT_FORMAT [INPUT_FORMAT ...]
-                        list of format of input in examples in the datasets
-  --output_format OUTPUT_FORMAT [OUTPUT_FORMAT ...]
-                        list of format of output in examples in the datasets
-  --max_input_tokens MAX_INPUT_TOKENS [MAX_INPUT_TOKENS ...]
-                        max length for input
-  --max_output_tokens MAX_OUTPUT_TOKENS [MAX_OUTPUT_TOKENS ...]
-                        max length for output
+  --dataset_configs_json DATASET_CONFIGS_JSON
+                        dataset config path
 
 miscellaneous:
   --seed SEED           random seed

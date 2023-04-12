@@ -10,10 +10,8 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer
 
-from src.constants import DUMMY, DatasetKeys, DatasetSplit, Mode, TrainingInferenceType
-from src.data.utils import get_num_samples_by_dataset
+from src.constants import DUMMY, DatasetConfigKeys, DatasetKeys, DatasetSplit, Mode, TrainingInferenceType
 from src.utils import print_rank_0, register_timer
-from src.utils.distributed import get_world_size
 
 
 class BaseDataset(torch.utils.data.Dataset):
@@ -24,29 +22,42 @@ class BaseDataset(torch.utils.data.Dataset):
     ) -> None:
         super().__init__()
 
-        self.data_path: str = args.data_path
         self.split = split
         self.mode = mode
 
-        self.input_format: str = args.input_format
-        self.output_format: str = args.output_format
-
-        # if format is __input__ and __output__, formatting is a no-op
-        self.do_format_input = self.input_format != "__input__"
-        self.do_format_output = self.output_format != "__output__"
-
-        # length to use for trimming
-        self.max_input_tokens = get_max_input_length(args, is_encoder_decoder)
-        self.max_output_tokens = get_max_output_length(args, is_encoder_decoder)
+        self.tokenizer = tokenizer
+        self.is_encoder_decoder = is_encoder_decoder
 
         self.training_inference_type: TrainingInferenceType = args.training_inference_type
         # used for prompt tuning
         self.num_virtual_tokens: int = args.num_virtual_tokens
 
-        self.tokenizer = tokenizer
-        self.is_encoder_decoder = is_encoder_decoder
+        data_config: dict = args.data_config
 
-        self.data_config: dict = args.data_config
+        self.data_path: str = data_config.get(DatasetConfigKeys.data_path.value)
+
+        self.input_format: str = data_config.get(DatasetConfigKeys.input_format.value, "__input__")
+        self.output_format: str = data_config.get(DatasetConfigKeys.output_format.value, "__output__")
+
+        # if format is __input__ or __output__ formatting is a no-op
+        self.do_format_input = self.input_format != "__input__"
+        self.do_format_output = self.output_format != "__output__"
+
+        # length to use for trimming
+        self.max_input_tokens = get_max_input_length(
+            data_config.get(DatasetConfigKeys.max_input_tokens.value),
+            self.training_inference_type,
+            self.num_virtual_tokens,
+            self.is_encoder_decoder,
+        )
+        self.max_output_tokens = get_max_output_length(
+            data_config.get(DatasetConfigKeys.max_output_tokens.value),
+            self.training_inference_type,
+            self.num_virtual_tokens,
+            self.is_encoder_decoder,
+        )
+
+        self.data_config: dict = drop_common_args(deepcopy(data_config))
         self.pre_tokenized = False
 
         self.examples = []
@@ -304,18 +315,14 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         """
 
         datasets = []
-        for i in range(len(args.data_path)):
+        for data_config in args.dataset_configs_json:
             args_copy = deepcopy(args)
+            args_copy.data_config = deepcopy(data_config)
+            del args_copy.dataset_configs_json
 
-            args_copy.data_path = args.data_path[i]
-            args_copy.data_class = args.data_class[i]
-            args_copy.data_config = args.data_config[i]
-            args_copy.input_format = args.input_format[i]
-            args_copy.output_format = args.output_format[i]
-            args_copy.max_input_tokens = args.max_input_tokens[i]
-            args_copy.max_output_tokens = args.max_output_tokens[i]
-
-            dataset = args_copy.data_class(args_copy, split, mode, tokenizer, is_encoder_decoder)
+            dataset = args_copy.data_config[DatasetConfigKeys.data_class.value](
+                args_copy, split, mode, tokenizer, is_encoder_decoder
+            )
             datasets.append(dataset)
         return datasets
 
@@ -452,53 +459,67 @@ def get_data_class_index(data_class: Type[BaseDataset], index: int) -> str:
     return f"{data_class.__name__}:{index}"
 
 
-def get_max_input_length(args: Namespace, is_encoder_decoder: bool) -> int:
+def get_max_input_length(
+    max_input_tokens_specified: int,
+    training_inference_type: TrainingInferenceType,
+    num_virtual_tokens: int,
+    is_encoder_decoder: bool,
+) -> int:
     """max input length for the model, depends on the training / inference type and whether the model is decoder-only or encoder-decoder
 
     Args:
-        args (Namespace): arguments based on training / inference mode
+        max_input_tokens_specified (int): maximum number of specified input tokens
+        training_inference_type (TrainingInferenceType): full finetuning / prompt tuning
+        num_virtual_tokens (int): virtual tokens for prompt tuning
         is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
 
     Returns:
         int: max input length
     """
 
-    if args.max_input_tokens is None:
+    if max_input_tokens_specified is None:
         return None
 
     if is_encoder_decoder:
-        if args.training_inference_type == TrainingInferenceType.full_finetuning:
-            return args.max_input_tokens - 1
-        elif args.training_inference_type == TrainingInferenceType.prompt_tuning:
-            return args.max_input_tokens - args.num_virtual_tokens - 1
+        if training_inference_type == TrainingInferenceType.full_finetuning:
+            return max_input_tokens_specified - 1
+        elif training_inference_type == TrainingInferenceType.prompt_tuning:
+            return max_input_tokens_specified - num_virtual_tokens - 1
     else:
-        if args.training_inference_type == TrainingInferenceType.full_finetuning:
-            return args.max_input_tokens
-        elif args.training_inference_type == TrainingInferenceType.prompt_tuning:
-            return args.max_input_tokens - args.num_virtual_tokens
+        if training_inference_type == TrainingInferenceType.full_finetuning:
+            return max_input_tokens_specified
+        elif training_inference_type == TrainingInferenceType.prompt_tuning:
+            return max_input_tokens_specified - num_virtual_tokens
 
 
-def get_max_output_length(args: Namespace, is_encoder_decoder: bool) -> int:
+def get_max_output_length(
+    max_output_tokens_specified: int,
+    training_inference_type: TrainingInferenceType,
+    num_virtual_tokens: int,
+    is_encoder_decoder: bool,
+) -> int:
     """max output length for the model, depends on the training / inference type and whether the model is decoder-only or encoder-decoder
 
     Args:
-        args (Namespace): arguments based on training / inference mode
+        max_output_tokens_specified (int): maximum number of specified output tokens
+        training_inference_type (TrainingInferenceType): full finetuning / prompt tuning
+        num_virtual_tokens (int): virtual tokens for prompt tuning
         is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
 
     Returns:
         int: max output length
     """
 
-    if args.max_output_tokens is None:
+    if max_output_tokens_specified is None:
         return None
 
     if is_encoder_decoder:
-        if args.training_inference_type == TrainingInferenceType.full_finetuning:
-            return args.max_output_tokens - 1
-        elif args.training_inference_type == TrainingInferenceType.prompt_tuning:
-            return args.max_output_tokens - args.num_virtual_tokens - 1
+        if training_inference_type == TrainingInferenceType.full_finetuning:
+            return max_output_tokens_specified - 1
+        elif training_inference_type == TrainingInferenceType.prompt_tuning:
+            return max_output_tokens_specified - num_virtual_tokens - 1
     else:
-        return args.max_output_tokens - 1
+        return max_output_tokens_specified - 1
 
 
 def check_raw_example(raw_example: dict, mode: Mode) -> None:
@@ -523,3 +544,11 @@ def check_raw_example(raw_example: dict, mode: Mode) -> None:
         assert (
             DatasetKeys.generated_text.value not in raw_example
         ), "generated_text found in the dataset, please drop this field"
+
+
+def drop_common_args(data_config: dict) -> dict:
+    for key in DatasetConfigKeys:
+        if key.value in data_config:
+            del data_config[key]
+
+    return data_config

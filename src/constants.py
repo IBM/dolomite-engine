@@ -26,6 +26,18 @@ class LearningRateScheduler(str, Enum):
     cosine = "cosine"
 
 
+class DatasetConfigKeys(str, Enum):
+    """standard keys in the dataset"""
+
+    data_class = "data_class"
+    data_path = "data_path"
+    data_sampling_proportion = "data_sampling_proportion"
+    max_input_tokens = "max_input_tokens"
+    max_output_tokens = "max_output_tokens"
+    input_format = "input_format"
+    output_format = "output_format"
+
+
 class DatasetKeys(str, Enum):
     """standard keys in the dataset"""
 

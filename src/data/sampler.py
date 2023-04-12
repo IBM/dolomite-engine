@@ -1,11 +1,11 @@
 import math
 from argparse import Namespace
-from typing import Iterator, List
+from typing import Iterator
 
 import torch
 from torch.utils.data import DistributedSampler
 
-from src.constants import DatasetSplit, Mode
+from src.constants import DatasetConfigKeys, DatasetSplit, Mode
 from src.data.dataset import ConcatenatedDatasets
 from src.data.utils import get_num_samples_by_dataset
 from src.utils.distributed import get_world_size
@@ -35,7 +35,11 @@ class ConcatenatedDataSampler(DistributedSampler):
         if args.ignore_sampling_proportion_for_validation and self.dataset.split == DatasetSplit.val:
             self.num_samples_by_dataset = self.num_examples_in_each_dataset
         else:
-            self.num_samples_by_dataset = get_num_samples_by_dataset(args.data_sampling_proportion, len(dataset))
+            data_sampling_proportion = [
+                data_config[DatasetConfigKeys.data_sampling_proportion.value]
+                for data_config in args.dataset_configs_json
+            ]
+            self.num_samples_by_dataset = get_num_samples_by_dataset(data_sampling_proportion, len(dataset))
 
         self.print_sampler_stats(
             args.batch_size_per_gpu if self.dataset.mode == Mode.training else args.batch_size, args.num_training_steps

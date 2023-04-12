@@ -93,6 +93,9 @@ class YatinAnswerabilityDataset(BaseDataset):
 
     def prepare_examples(self) -> List[dict]:
         examples = []
+        if self.split.value not in self.data_config.files:
+            return examples
+
         data_file = os.path.join(self.data_path, self.data_config.files[self.split.value])
 
         with open(data_file, "r") as f:
@@ -115,14 +118,12 @@ class YatinAnswerabilityDataset(BaseDataset):
                 if self.data_config.dataset_type != YatinDineshDatasetType.NO_EVIDENCE:
                     if self.data_config.static_evidence is None:
                         if raw_example["type"] == "positive":
-                            evidence = raw_example["evidence_20_50"]
-                        elif raw_example["type"] == "negative":
+                            evidence = raw_example["evidence"]
+                        else:
                             if self.data_config.combine_no_evidence:
                                 evidence = "NA"
                             else:
                                 evidence = "unanswerable"
-                        else:
-                            raise ValueError(f"unexpected 'type' {raw_example['type']} found in one of the examples")
                     else:
                         evidence = self.data_config.static_evidence
 
