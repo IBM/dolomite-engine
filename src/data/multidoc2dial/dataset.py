@@ -21,8 +21,6 @@ class YatinAnswerabilityDataset(BaseDataset):
         tokenizer: AutoTokenizer,
         is_encoder_decoder: bool,
         config_class: Type[BaseModel] = YatinAnswerabilityConfig,
-        filter_allowed: bool = True,
-        static_evidence: str = None,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
@@ -53,7 +51,7 @@ class YatinAnswerabilityDataset(BaseDataset):
             }
             self.tokenizer.add_special_tokens(special_tokens)
 
-        self.examples = self.prepare_examples(filter_allowed=filter_allowed, static_evidence=static_evidence)
+        self.examples = self.prepare_examples()
 
     def construct_input_from_format(
         self, context: str, document: str, evidence: str = None, special_token: str = None
@@ -93,7 +91,7 @@ class YatinAnswerabilityDataset(BaseDataset):
         output = output[: self.max_output_tokens]
         return output
 
-    def prepare_examples(self, filter_allowed: bool = True, static_evidence: str = None) -> List[dict]:
+    def prepare_examples(self) -> List[dict]:
         examples = []
         data_file = os.path.join(self.data_path, self.data_config.files[self.split.value])
 
@@ -101,13 +99,8 @@ class YatinAnswerabilityDataset(BaseDataset):
             json_file = json.load(f)
 
             for raw_example in json_file:
-                if (
-                    filter_allowed
-                    and self.data_config.filter
-                    and (
-                        raw_example["neg_subtype"].lower() == "original"
-                        or raw_example["last_speaker"].lower() == "agent"
-                    )
+                if self.data_config.filter_allowed and (
+                    raw_example["neg_subtype"].lower() == "original" or raw_example["last_speaker"].lower() == "agent"
                 ):
                     continue
 
@@ -120,15 +113,18 @@ class YatinAnswerabilityDataset(BaseDataset):
                 document = raw_example["document"]
 
                 if self.data_config.dataset_type != YatinDineshDatasetType.NO_EVIDENCE:
-                    if static_evidence is None:
+                    if self.data_config.static_evidence is None:
                         if raw_example["type"] == "positive":
                             evidence = raw_example["evidence_20_50"]
                         elif raw_example["type"] == "negative":
-                            evidence = "unanswerable"
+                            if self.data_config.combine_no_evidence:
+                                evidence = "NA"
+                            else:
+                                evidence = "unanswerable"
                         else:
                             raise ValueError(f"unexpected 'type' {raw_example['type']} found in one of the examples")
                     else:
-                        evidence = static_evidence
+                        evidence = self.data_config.static_evidence
 
                 task_token = None
                 if self.data_config.dataset_type == YatinDineshDatasetType.TOKEN_GUIDED_EVIDENCE_RESPONSE:
@@ -190,13 +186,4 @@ class DineshChitChatDataset(YatinAnswerabilityDataset):
     def __init__(
         self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
     ) -> None:
-        super().__init__(
-            args,
-            split,
-            mode,
-            tokenizer,
-            is_encoder_decoder,
-            config_class=DineshChitChatConfig,
-            filter_allowed=False,
-            static_evidence="chit-chat",
-        )
+        super().__init__(args, split, mode, tokenizer, is_encoder_decoder, config_class=DineshChitChatConfig)

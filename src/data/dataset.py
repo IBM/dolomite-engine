@@ -11,31 +11,9 @@ import torch
 from transformers import AutoTokenizer
 
 from src.constants import DUMMY, DatasetKeys, DatasetSplit, Mode, TrainingInferenceType
+from src.data.utils import get_num_samples_by_dataset
 from src.utils import print_rank_0, register_timer
-
-
-def check_raw_example(raw_example: dict, mode: Mode) -> None:
-    """checks whether the dataset has conflicting fields
-
-    Args:
-        raw_example (dict): example to check
-        mode (Mode): training / inference mode for running the program
-    """
-
-    assert (
-        DatasetKeys.preprocessed_input.value not in raw_example
-    ), "preprocessed_input found in the dataset, please drop this field"
-    assert (
-        DatasetKeys.preprocessed_output.value not in raw_example
-    ), "preprocessed_output found in the dataset, please drop this field"
-    assert (
-        DatasetKeys.data_class_index.value not in raw_example
-    ), "data_class_index found in the dataset, please drop this field"
-
-    if mode == Mode.inference:
-        assert (
-            DatasetKeys.generated_text.value not in raw_example
-        ), "generated_text found in the dataset, please drop this field"
+from src.utils.distributed import get_world_size
 
 
 class BaseDataset(torch.utils.data.Dataset):
@@ -277,25 +255,14 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         self.mode = mode
 
         self.datasets = self.get_datasets_list(args, split, mode, tokenizer, is_encoder_decoder)
-        self.num_examples = sum([len(dataset) for dataset in self.datasets])
-        self.start_indices = np.cumsum([0] + [len(dataset) for dataset in self.datasets[:-1]]).tolist()
-        self.num_datasets = len(self.datasets)
+
+        num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
+        self.num_examples = sum(num_examples_in_each_dataset)
+        self.start_indices = np.cumsum([0] + num_examples_in_each_dataset[:-1]).tolist()
+
         self.datasets_key_value_to_add = self.get_dataset_keys()
 
-        self.print_stats()
-
-    def print_stats(self) -> None:
-        """prints the statistics of all the datasets"""
-
-        print_rank_0("-" * 25 + self.split.value + "-" * 25)
-        print_rank_0("number of datasets =", self.num_datasets)
-
-        total_examples = 0
-        for dataset in self.datasets:
-            print_rank_0(len(dataset), "examples in", dataset.__class__.__name__)
-            total_examples += len(dataset)
-
-        print_rank_0(total_examples, "examples in total")
+        self.print_dataset_stats()
 
     def get_dataset_keys(self) -> Set[str]:
         """gets the combined set of keys in each dataset
@@ -399,13 +366,33 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         else:
             return inputs
 
+    def get_num_datasets(self) -> int:
+        """returns the number of datasets in the mixture
+
+        Returns:
+            int: number of datasets in the mixture
+        """
+
+        return len(self.datasets)
+
+    def get_num_examples_in_each_dataset(self) -> List[int]:
+        """returns the number of examples in each dataset component
+
+        Returns:
+            List[int]: the number of examples in each dataset component
+        """
+
+        return [len(dataset) for dataset in self.datasets]
+
     def __len__(self) -> int:
         return self.num_examples
 
     def __getitem__(self, index: int) -> dict:
+        num_datasets = self.get_num_datasets()
+
         # get the dataset the example belongs to
-        dataset_index = self.num_datasets - 1
-        for i in range(self.num_datasets):
+        dataset_index = num_datasets - 1
+        for i in range(num_datasets):
             if index < self.start_indices[i]:
                 dataset_index = i - 1
                 break
@@ -423,6 +410,19 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         example.update(self.datasets_key_value_to_add[dataset_index])
 
         return example
+
+    def print_dataset_stats(self) -> None:
+        """prints the statistics of all the datasets"""
+
+        print_rank_0(f"{'-' * 25} {self.split.value} {'-' * 25}")
+
+        print_rank_0(f"number of datasets = {self.get_num_datasets()}")
+        print_rank_0(f"total examples in the entire dataset mixture = {len(self)}\n")
+
+        for dataset in self.datasets:
+            print_rank_0(f"examples in {dataset.__class__.__name__} = {len(dataset)}")
+
+        print_rank_0("-" * 50)
 
 
 def generate_random_id(data_class: Type[BaseDataset]) -> str:
@@ -499,3 +499,27 @@ def get_max_output_length(args: Namespace, is_encoder_decoder: bool) -> int:
             return args.max_output_tokens - args.num_virtual_tokens - 1
     else:
         return args.max_output_tokens - 1
+
+
+def check_raw_example(raw_example: dict, mode: Mode) -> None:
+    """checks whether the dataset has conflicting fields
+
+    Args:
+        raw_example (dict): example to check
+        mode (Mode): training / inference mode for running the program
+    """
+
+    assert (
+        DatasetKeys.preprocessed_input.value not in raw_example
+    ), "preprocessed_input found in the dataset, please drop this field"
+    assert (
+        DatasetKeys.preprocessed_output.value not in raw_example
+    ), "preprocessed_output found in the dataset, please drop this field"
+    assert (
+        DatasetKeys.data_class_index.value not in raw_example
+    ), "data_class_index found in the dataset, please drop this field"
+
+    if mode == Mode.inference:
+        assert (
+            DatasetKeys.generated_text.value not in raw_example
+        ), "generated_text found in the dataset, please drop this field"

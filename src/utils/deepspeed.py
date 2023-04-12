@@ -53,24 +53,27 @@ def deepspeed_initialize(
         lr_scheduler=lr_scheduler,
         config=get_deepspeed_config(args),
     )
+    model: deepspeed.DeepSpeedEngine
 
     dataloaders = []
 
+    from src.data.dataset import ConcatenatedDatasets
     from src.data.sampler import ConcatenatedDataSampler
 
-    # train dataset needs ConcatenatedDataSampler
     train_dataset = datasets[0]
-    train_sampler = ConcatenatedDataSampler(args, train_dataset)
     train_dataloader = model.deepspeed_io(
-        train_dataset, data_sampler=train_sampler, collate_fn=train_dataset.collate_fn
+        train_dataset, data_sampler=ConcatenatedDataSampler(args, train_dataset), collate_fn=train_dataset.collate_fn
     )
     dataloaders.append(train_dataloader)
 
-    # other datasets only need a sequential sampler
     for dataset in datasets[1:]:
         dataloader = None
         if dataset is not None:
-            dataloader = model.deepspeed_io(dataset, route="eval", collate_fn=dataset.collate_fn)
+            dataloader = model.deepspeed_io(
+                dataset,
+                data_sampler=ConcatenatedDataSampler(args, dataset, shuffle=False),
+                collate_fn=dataset.collate_fn,
+            )
 
         dataloaders.append(dataloader)
 

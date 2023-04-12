@@ -41,6 +41,12 @@ def get_args(mode: Mode) -> Namespace:
     group.add_argument(
         "--data_sampling_proportion", type=int, default=[1], nargs="+", help="sampling proportion for the datasets"
     )
+    if mode == Mode.training:
+        group.add_argument(
+            "--ignore_sampling_proportion_for_validation",
+            action="store_true",
+            help="whether to use sequential sampler for validation",
+        )
     group.add_argument("--data_path", type=str, nargs="+", help="list of datapaths")
     group.add_argument(
         "--data_class", type=lambda x: getattr(data_classes, x), nargs="+", help="list of dataclasses to use"

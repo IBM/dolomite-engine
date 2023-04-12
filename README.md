@@ -43,6 +43,8 @@ checkpointing:
 dataset:
   --data_sampling_proportion DATA_SAMPLING_PROPORTION [DATA_SAMPLING_PROPORTION ...]
                         sampling proportion for the datasets
+  --ignore_sampling_proportion_for_validation
+                        whether to use sequential sampler for validation
   --data_path DATA_PATH [DATA_PATH ...]
                         list of datapaths
   --data_class DATA_CLASS [DATA_CLASS ...]

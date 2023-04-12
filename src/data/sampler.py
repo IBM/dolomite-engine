@@ -5,7 +5,11 @@ from typing import Iterator, List
 import torch
 from torch.utils.data import DistributedSampler
 
+from src.constants import DatasetSplit, Mode
 from src.data.dataset import ConcatenatedDatasets
+from src.data.utils import get_num_samples_by_dataset
+from src.utils.distributed import get_world_size
+from src.utils.logging import print_rank_0
 
 
 class ConcatenatedDataSampler(DistributedSampler):
@@ -23,18 +27,29 @@ class ConcatenatedDataSampler(DistributedSampler):
     ) -> None:
         super().__init__(dataset, num_replicas, rank, shuffle, seed, drop_last)
 
-        self.data_sampling_proportion: List[int] = args.data_sampling_proportion
-        self.num_datasets = dataset.num_datasets
+        self.dataset: ConcatenatedDatasets
 
-    def get_indices_in_data_subset(self, num_samples: int, subset_size: int, seed: int) -> torch.Tensor:
+        self.num_examples_in_each_dataset = self.dataset.get_num_examples_in_each_dataset()
+        self.num_datasets = dataset.get_num_datasets()
+
+        if args.ignore_sampling_proportion_for_validation and self.dataset.split == DatasetSplit.val:
+            self.num_samples_by_dataset = self.num_examples_in_each_dataset
+        else:
+            self.num_samples_by_dataset = get_num_samples_by_dataset(args.data_sampling_proportion, len(dataset))
+
+        self.print_sampler_stats(
+            args.batch_size_per_gpu if self.dataset.mode == Mode.training else args.batch_size, args.num_training_steps
+        )
+
+    def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int, seed: int) -> torch.Tensor:
         g = torch.Generator()
         g.manual_seed(seed)
 
-        if num_samples < subset_size:
-            sampler = torch.randperm(num_samples, generator=g)
+        if num_samples_in_subset < subset_size:
+            sampler = torch.randperm(num_samples_in_subset, generator=g)
         else:
-            num_concats = num_samples // subset_size
-            padding = num_samples - num_concats * subset_size
+            num_concats = num_samples_in_subset // subset_size
+            padding = num_samples_in_subset - num_concats * subset_size
             sampler = list(range(subset_size)) * num_concats
             sampler = torch.tensor(sampler)
 
@@ -47,18 +62,15 @@ class ConcatenatedDataSampler(DistributedSampler):
 
     def __iter__(self) -> Iterator[int]:
         if self.shuffle:
-            num_data_samples = torch.tensor(self.data_sampling_proportion)
-            num_data_samples = num_data_samples / num_data_samples.sum() * len(self.dataset)
-            num_data_samples = num_data_samples.to(torch.long)
-            num_data_samples[-1] = len(self.dataset) - num_data_samples[:-1].sum()
-
             data_samples = []
+
             for i in range(self.num_datasets):
-                start_index = self.dataset.start_indices[i]
                 sampler = self.get_indices_in_data_subset(
-                    num_data_samples[i].item(), len(self.dataset.datasets[i]), self.seed + (self.epoch + 1) * (i + 1)
+                    self.num_samples_by_dataset[i],
+                    self.num_examples_in_each_dataset[i],
+                    self.seed + (self.epoch + 1) * (i + 1),
                 )
-                sampler += start_index
+                sampler += self.dataset.start_indices[i]
 
                 data_samples.extend(sampler.tolist())
 
@@ -89,3 +101,32 @@ class ConcatenatedDataSampler(DistributedSampler):
                 yield data_samples[i]
             else:
                 yield i
+
+    def print_sampler_stats(self, batch_size_per_gpu: int, num_training_steps: int) -> None:
+        """prints the statistics of the program"""
+
+        if self.dataset.mode == Mode.training and self.dataset.split == DatasetSplit.train:
+            num_steps = num_training_steps
+        elif self.dataset.mode == Mode.inference or self.dataset.split != DatasetSplit.train:
+            examples_per_step = batch_size_per_gpu * get_world_size()
+
+            num_steps = len(self.dataset) // examples_per_step
+            if len(self.dataset) % examples_per_step != 0:
+                num_steps = (len(self.dataset) // examples_per_step) + 1
+
+        print_rank_0(f"{'*' * 25} {self.dataset.split.value} {'*' * 25}")
+
+        print_rank_0(f"total samples in 1 epoch of the dataset mixture = {len(self.dataset)}")
+        print_rank_0(
+            f"total epochs for the dataset mixture = {num_steps * batch_size_per_gpu * get_world_size() / len(self.dataset)}"
+        )
+
+        for i, dataset in enumerate(self.dataset.datasets):
+            print_rank_0(
+                f"\nnumber of samples of {dataset.__class__.__name__} in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i]}"
+            )
+            print_rank_0(
+                f"number of epochs of {dataset.__class__.__name__} in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i] / len(dataset)}"
+            )
+
+        print_rank_0("*" * 50)
