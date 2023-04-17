@@ -29,10 +29,10 @@ class YatinAnswerabilityDataset(BaseDataset):
         self.data_config = config_class(**self.data_config)
 
         if self.do_format_input:
-            raise NotImplementedError(f"{self.__class__.__name__} doesn't support input_format argument")
+            raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
 
         if self.do_format_output:
-            raise NotImplementedError(f"{self.__class__.__name__} doesn't support output_format argument")
+            raise ValueError(f"output_format for {self.__class__.__name__} should be '__output__'")
 
         if self.max_input_tokens is None:
             warn_rank_0("ignoring max_document_length in the config since max_input_tokens was not specified")
