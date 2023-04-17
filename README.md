@@ -28,6 +28,7 @@ Note that the `blaunch.sh` script here (provided by CCC) executes the command `s
 Take a look at https://github.ibm.com/Mayank-Mishra1/dipc-openshift for launching jobs.
 
 ## Arguments for training
+Training and inference requires a `dataset_configs_json` to be passed to the program. Look [here](configs/) for some examples.
 The training script currently supports the following arguments:
 ```shell
 model:

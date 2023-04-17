@@ -1,0 +1,10 @@
+[
+    {
+        "data_class": "JSONLinesDataset",
+        "input_format": "\n__input__\nSentiment:",
+        "output_format": " __output__",
+        "data_sampling_proportion": 1,
+        "max_input_tokens": 1024,
+        "max_output_tokens": 128
+    }
+]

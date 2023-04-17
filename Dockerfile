@@ -51,7 +51,7 @@ RUN git clone https://github.com/NVIDIA/apex && \
 # deepspeed
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
-    git checkout v0.8.3 && \
+    git checkout v0.9.0 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir . && \
     rm -rf DeepSpeed
 

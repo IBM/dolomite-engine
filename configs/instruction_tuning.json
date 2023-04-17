@@ -1,0 +1,17 @@
+[
+    {
+        "data_class": "AlpacaDataset",
+        "data_path": "../stanford_alpaca",
+        "data_sampling_proportion": 1
+    },
+    {
+        "data_class": "DollyDataset",
+        "data_path": "../dolly/data",
+        "data_sampling_proportion": 1
+    },
+    {
+        "data_class": "VicunaDataset",
+        "data_path": "../ShareGPT_Vicuna_unfiltered",
+        "data_sampling_proportion": 1
+    }
+]

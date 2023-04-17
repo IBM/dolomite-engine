@@ -169,13 +169,6 @@ class Model(torch.nn.Module):
             for key in state:
                 state[key] = state[key].to(self.dtype)
 
-            # tied weights are not loaded by DeepSpeed using the above method https://github.com/microsoft/DeepSpeed/issues/1896
-            if self.model_name.startswith("bigscience/bloom"):
-                state["model.lm_head.weight"] = state["model.transformer.word_embeddings.weight"]
-            elif self.model_name.startswith("google/flan"):
-                state["model.encoder.embed_tokens.weight"] = state["model.shared.weight"]
-                state["model.decoder.embed_tokens.weight"] = state["model.shared.weight"]
-
             self.load_state_dict(state)
 
     @register_profiler("prepare_batch")

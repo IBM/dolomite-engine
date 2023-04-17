@@ -14,11 +14,7 @@ torchrun --nnodes=$WORLD_SIZE \
     --model_name bigscience/bloom-560m \
     --model_class AutoModelForCausalLM \
     --training_inference_type full_finetuning \
-    --data_class JSONLinesDataset \
-    --input_format $'Classify the sentiment of the sentence:\n__input__\nSentiment:' \
-    --output_format $' __output__' \
-    --max_input_tokens 1024 \
-    --max_output_tokens 128 \
+    --dataset_configs_json configs/sst2-full_finetuning.json \
     --experiment_name sst2-bloom-560m-full_finetuning \
     --save_path checkpoints/full_finetuning \
     --num_training_steps 4000 \
@@ -26,5 +22,4 @@ torchrun --nnodes=$WORLD_SIZE \
     --batch_size_per_gpu 8 \
     --dtype bfloat16 \
     --learning_rate 1e-5 \
-    --lr_schedule cosine \
-    --data_path data
+    --lr_schedule cosine
