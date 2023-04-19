@@ -1,11 +1,11 @@
 import json
 import os
-from argparse import Namespace
-from typing import List, Type
+from typing import List, Type, Union
 
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
+from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data.dataset import BaseDataset, check_raw_example, generate_random_id
 from src.data.multidoc2dial.config import DineshChitChatConfig, YatinAnswerabilityConfig, YatinDineshDatasetType
@@ -15,7 +15,7 @@ from src.utils.logging import warn_rank_0
 class YatinAnswerabilityDataset(BaseDataset):
     def __init__(
         self,
-        args: Namespace,
+        args: Union[TrainingArgs, InferenceArgs],
         split: DatasetSplit,
         mode: Mode,
         tokenizer: AutoTokenizer,
@@ -185,6 +185,11 @@ class YatinAnswerabilityDataset(BaseDataset):
 
 class DineshChitChatDataset(YatinAnswerabilityDataset):
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder, config_class=DineshChitChatConfig)

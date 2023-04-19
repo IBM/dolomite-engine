@@ -15,138 +15,19 @@ For pre-training from scratch or finetuning on huge amount of data, check out [M
 
 # Usage
 
-Please note that the training scripts need to be launched on all nodes parallely for multinode training. For training and inference, take a look at [scripts](scripts).
+Please note that the training scripts need to be launched on all nodes parallely for multinode training. For training and inference, take a look at [scripts](scripts/) to train on sst2.
 
 ### Training on CCC
 For example, for using 2 nodes with 4 GPUs each (8 GPUs) on CCC, it can be done using:
 ```shell
-jbsub -q x86_24h -cores 2x8+4 -mem 128G -require a100_80gb -err err.log -out out.log blaunch.sh sh scripts/full_finetuning/train_ccc.sh
+jbsub -q x86_24h -cores 2x8+4 -mem 128G -require a100_80gb -err err.log -out out.log blaunch.sh sh scripts/train_ccc.sh
 ```
-Note that the `blaunch.sh` script here (provided by CCC) executes the command `sh scripts/prompt_tuning/train_ccc.sh` on both the nodes.
+Note that the `blaunch.sh` script here (provided by CCC) executes the command `sh scripts/train_ccc.sh` on both the nodes.
 
-### Training on DIPC Openshift cluster
+### Training on Vela cluster
 Take a look at https://github.ibm.com/Mayank-Mishra1/dipc-openshift for launching jobs.
 
-## Arguments for training
-Training and inference requires a `dataset_configs_json` to be passed to the program. Look [here](configs/) for some examples.
-The training script currently supports the following arguments:
-```shell
-model:
-  --model_name MODEL_NAME
-                        model name on huggingface hub
-  --model_class {<class 'transformers.models.auto.modeling_auto.AutoModelForCausalLM'>,<class 'transformers.models.auto.modeling_auto.AutoModelForSeq2SeqLM'>}
-                        model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
-
-checkpointing:
-  --save_path SAVE_PATH
-                        path to save checkpoints
-
-dataset:
-  --dataset_configs_json DATASET_CONFIGS_JSON
-                        dataset config path
-  --ignore_sampling_proportion_for_validation
-                        whether to use sequential sampler for validation
-
-miscellaneous:
-  --seed SEED           random seed
-  --dtype {torch.float32,torch.float16,torch.bfloat16}
-                        dtype to use for training / inference
-
-prompt tuning initialization:
-  --prompt_tuning_init PROMPT_TUNING_INIT
-  --prompt_tuning_init_text PROMPT_TUNING_INIT_TEXT
-  --num_virtual_tokens NUM_VIRTUAL_TOKENS
-
-training inference:
-  --training_inference_type {TrainingInferenceType.full_finetuning,TrainingInferenceType.prompt_tuning}
-                        type of tuning, full finetuning or PEFT
-
-training:
-  --num_training_steps NUM_TRAINING_STEPS
-                        number of training steps
-  --gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS
-                        gradient accumulation steps
-  --eval_and_save_interval EVAL_AND_SAVE_INTERVAL
-                        interval for evaluation and checkpointing
-  --batch_size_per_gpu BATCH_SIZE_PER_GPU
-                        batch size per GPU for ZeRO-DP
-  --no_eval             avoid evaluating val dataset during training
-
-parallelism:
-  --stage STAGE         deepspeed ZeRO stage
-  --overlap_comm        overlap communication with computation
-  --contiguous_gradients
-                        use contiguous buffers for gradients, requires more memory if enabled
-  --cpu_offload         train with CPU offloading to save GPU memory
-
-logging:
-  --logdir LOGDIR       logging directory for experiments
-
-aim:
-  --aim_repo AIM_REPO   aim repo, experiment logs are saved here
-  --experiment_name EXPERIMENT_NAME
-                        name of the experiment
-
-optimizer and scheduler:
-  --learning_rate LEARNING_RATE
-  --weight_decay WEIGHT_DECAY
-  --beta1 BETA1
-  --beta2 BETA2
-  --eps EPS
-  --warmup_steps WARMUP_STEPS
-  --lr_schedule {LearningRateScheduler.linear,LearningRateScheduler.cosine}
-                        learning rate schedule
-
-debug:
-  --steps_per_print STEPS_PER_PRINT
-                        steps per print
-```
-
-## Arguments for inference
-```shell
-model:
-  --model_name MODEL_NAME
-                        model name on huggingface hub
-  --model_class {<class 'transformers.models.auto.modeling_auto.AutoModelForCausalLM'>,<class 'transformers.models.auto.modeling_auto.AutoModelForSeq2SeqLM'>}
-                        model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
-
-checkpointing:
-  --load_path LOAD_PATH
-                        path to load checkpoints
-
-dataset:
-  --dataset_configs_json DATASET_CONFIGS_JSON
-                        dataset config path
-
-miscellaneous:
-  --seed SEED           random seed
-  --dtype {torch.float32,torch.float16,torch.bfloat16}
-                        dtype to use for training / inference
-
-prompt tuning initialization:
-  --prompt_tuning_init PROMPT_TUNING_INIT
-  --prompt_tuning_init_text PROMPT_TUNING_INIT_TEXT
-  --num_virtual_tokens NUM_VIRTUAL_TOKENS
-
-training inference:
-  --training_inference_type {TrainingInferenceType.full_finetuning,TrainingInferenceType.prompt_tuning}
-                        type of tuning, full finetuning or PEFT
-
-inference:
-  --batch_size BATCH_SIZE
-                        batch size
-  --do_sample           sample or greedy
-  --max_new_tokens MAX_NEW_TOKENS
-                        max new tokens
-  --temperature TEMPERATURE
-                        temperature
-  --top_k TOP_K         top k
-  --top_p TOP_P         top p
-
-output:
-  --output_file OUTPUT_FILE
-                        output file
-```
+Training and inference require a `config` to be passed to the program. Look [here](configs/) for some examples. Examples for both full finetuning and prompt tuning are given.
 
 ## Dataset
 The data directory should obey the following structure:

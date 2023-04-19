@@ -24,7 +24,7 @@ class DineshChitChatConfig(DatasetConfig):
     files: dict = {
         DatasetSplit.train.value: "chitchat_subdocs_train.json",
         DatasetSplit.val.value: "chitchat_subdocs_val.json",
-        DatasetSplit.test.value: "chitchat_subdocs_test.json",
+        DatasetSplit.test.value: "chitchat_document_test.json",
     }
     # dataset evidence type
     dataset_type: YatinDineshDatasetType = YatinDineshDatasetType.NO_EVIDENCE

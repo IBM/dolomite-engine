@@ -1,4 +1,3 @@
-from argparse import Namespace
 from typing import List, Tuple
 
 import deepspeed
@@ -8,6 +7,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 
+from src.arguments import TrainingArgs
 from src.utils.distributed import get_local_rank, get_world_size
 from src.utils.logging import print_rank_0
 from src.utils.monitoring import register_timer
@@ -27,7 +27,7 @@ def init_distributed(dist_backend: str = "nccl") -> None:
 
 @register_timer("deepspeed_initialize")
 def deepspeed_initialize(
-    args: Namespace,
+    args: TrainingArgs,
     model: torch.nn.Module,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
@@ -36,7 +36,7 @@ def deepspeed_initialize(
     """converts the model to a ZeRO-DP sharded model
 
     Args:
-        args (Namespace): arguments based on training / inference mode
+        args (TrainingArgs): arguments based on training mode
         model (torch.nn.Module): any torch.nn.Module object
         optimizer (Optimizer): an optimizer, preferably one that is supported by deepspeed
         lr_scheduler (LRScheduler): any learning rate scheduler
@@ -57,7 +57,6 @@ def deepspeed_initialize(
 
     dataloaders = []
 
-    from src.data.dataset import ConcatenatedDatasets
     from src.data.sampler import ConcatenatedDataSampler
 
     train_dataset = datasets[0]
@@ -80,11 +79,11 @@ def deepspeed_initialize(
     return model, dataloaders
 
 
-def get_deepspeed_config(args: Namespace) -> dict:
+def get_deepspeed_config(args: TrainingArgs) -> dict:
     """generate deepspeed config from the args
 
     Args:
-        args (Namespace): arguments based on training / inference mode
+        args (TrainingArgs): arguments based on training mode
 
     Returns:
         dict: deepspeed config

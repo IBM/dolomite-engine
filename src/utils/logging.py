@@ -1,6 +1,5 @@
 import logging
 import os
-from argparse import Namespace
 from typing import Any
 from warnings import warn
 
@@ -8,6 +7,7 @@ from aim import Run
 from aim.sdk.types import AimObject
 from tqdm import tqdm
 
+from src.arguments import TrainingArgs
 from src.utils.distributed import get_world_size, run_rank_n
 
 
@@ -104,31 +104,19 @@ class AimTracker:
         return experiment is not None and repo is not None
 
     @run_rank_n
-    def log_hyperparam(self, name: str, value: Any) -> None:
-        """for logging a single hyperparameter
-
-        Args:
-            name (str): name of the hyperparameter
-            value (Any): value of the hyperparameter
-        """
-
-        if self.tracking_enabled:
-            try:
-                self.run[name] = value
-            except TypeError:
-                self.run[name] = str(value)
-
-    @run_rank_n
-    def log_args(self, args: Namespace) -> None:
+    def log_args(self, args: TrainingArgs) -> None:
         """log args
 
         Args:
-            args (Namespace): arguments based on training / inference mode
+            args (TrainingArgs): arguments based on training mode
         """
 
         if self.tracking_enabled:
             for k, v in vars(args).items():
-                self.log_hyperparam(k, v)
+                try:
+                    self.run[k] = v
+                except TypeError:
+                    self.run[k] = str(v)
 
     @run_rank_n
     def track(
@@ -183,6 +171,18 @@ class Logger:
         return logfile is not None
 
     @run_rank_n
+    def log_args(self, args: TrainingArgs) -> None:
+        """log args
+
+        Args:
+            args (TrainingArgs): arguments based on training mode
+        """
+
+        if self.logging_enabled:
+            for k, v in vars(args).items():
+                self.info(f"{k} = {v}")
+
+    @run_rank_n
     def info(self, msg) -> None:
         if self.logging_enabled:
             self.logger.info(msg, stacklevel=self.stacklevel)
@@ -225,3 +225,7 @@ class ExperimentsTracker(Logger, AimTracker):
             warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
 
         AimTracker.__init__(self, experiment_name, aim_repo)
+
+    def log_args(self, args: TrainingArgs) -> None:
+        Logger.log_args(self, args)
+        AimTracker.log_args(self, args)

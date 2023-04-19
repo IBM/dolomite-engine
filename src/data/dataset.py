@@ -1,6 +1,5 @@
 import glob
 import os
-from argparse import Namespace
 from copy import deepcopy
 from typing import List, Set, Tuple, Type, Union
 from uuid import uuid4
@@ -10,6 +9,7 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer
 
+from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import DUMMY, DatasetConfigKeys, DatasetKeys, DatasetSplit, Mode, TrainingInferenceType
 from src.utils import print_rank_0, register_timer
 
@@ -18,7 +18,12 @@ class BaseDataset(torch.utils.data.Dataset):
     """BaseDataset class to be implemented by all the datasets"""
 
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__()
 
@@ -145,7 +150,12 @@ class DebugDataset(BaseDataset):
     """A dummy dataset for profiling and timing the code"""
 
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
@@ -178,7 +188,12 @@ class SST2Dataset(BaseDataset):
     """SST2 dataset for sentiment classification"""
 
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
@@ -217,7 +232,12 @@ class JSONLinesDataset(BaseDataset):
     """A dataset for loading JSON lines files"""
 
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
@@ -258,7 +278,12 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
     """Concatenated list of datasets for training or inference"""
 
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__()
 
@@ -301,12 +326,17 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
 
     @classmethod
     def get_datasets_list(
-        cls, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        cls,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> Tuple[List[BaseDataset], List[int]]:
         """prepare all the datasets
 
         Args:
-            args (Namespace): arguments based on training / inference mode
+            args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
             split (DatasetSplit): dataset split to use
             mode (Mode): training / inference mode
             tokenizer (AutoTokenizer): tokenizer to use
@@ -319,10 +349,10 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         datasets = []
         data_sampling_proportion = []
 
-        for data_config in args.dataset_configs_json:
+        for data_config in args.datasets:
             args_copy = deepcopy(args)
             args_copy.data_config = deepcopy(data_config)
-            del args_copy.dataset_configs_json
+            del args_copy.datasets
 
             dataset = args_copy.data_config[DatasetConfigKeys.data_class.value](
                 args_copy, split, mode, tokenizer, is_encoder_decoder
@@ -437,7 +467,7 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         for dataset in self.datasets:
             print_rank_0(f"examples in {dataset.__class__.__name__} = {len(dataset)}")
 
-        print_rank_0("-" * 50)
+        print_rank_0("-" * 57)
 
 
 def generate_random_id(data_class: Type[BaseDataset]) -> str:

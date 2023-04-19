@@ -1,20 +1,19 @@
 import json
 import os
 import sys
-from argparse import Namespace
 
-from src.arguments import get_args
+from src.arguments import InferenceArgs, get_args
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data import ConcatenatedDatasets
 from src.model import Model
 from src.utils import ProgressBar, setup_debugging, setup_tf32
 
 
-def generate(args: Namespace, model: Model, test_dataset: ConcatenatedDatasets, generate_kwargs: dict) -> None:
+def generate(args: InferenceArgs, model: Model, test_dataset: ConcatenatedDatasets, generate_kwargs: dict) -> None:
     """main generation loop
 
     Args:
-        args (Namespace): inference args
+        args (InferenceArgs): inference args
         model (Model): non-sharded model
         test_dataset (ConcatenatedDatasets): test dataset
         generate_kwargs (dict): generation arguments
@@ -59,7 +58,7 @@ def main() -> None:
 
     setup_tf32()
 
-    args = get_args(mode)
+    args: InferenceArgs = get_args(mode)
 
     setup_debugging()
 

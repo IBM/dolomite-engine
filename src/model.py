@@ -1,6 +1,5 @@
 import os
-from argparse import Namespace
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import torch
 from deepspeed import DeepSpeedEngine
@@ -9,6 +8,7 @@ from peft import PromptTuningConfig, TaskType, get_peft_model
 from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
+from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import Mode, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
 
@@ -44,11 +44,11 @@ class Model(torch.nn.Module):
 
     @register_profiler("initialize_model")
     @register_timer("initialize_model")
-    def __init__(self, args: Namespace, mode: Mode):
+    def __init__(self, args: Union[TrainingArgs, InferenceArgs], mode: Mode):
         """initializes a Model wrapper for a HuggingFace model
 
         Args:
-            args (Namespace): arguments based on training / inference mode
+            args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
             mode (Mode): training / inference mode for running the program
         """
 

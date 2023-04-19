@@ -1,11 +1,11 @@
 import json
 import os
-from argparse import Namespace
-from typing import List
+from typing import List, Union
 
 import jsonlines
 from transformers import AutoTokenizer
 
+from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data.dataset import BaseDataset, check_raw_example, generate_random_id
 from src.data.instructions.config import AlpacaConfig, DollyConfig, VicunaConfig
@@ -14,7 +14,12 @@ from src.data.utils import train_val_test_split
 
 class AlpacaDataset(BaseDataset):
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
         self.data_config = AlpacaConfig(**self.data_config)
@@ -60,7 +65,12 @@ class AlpacaDataset(BaseDataset):
 
 class DollyDataset(BaseDataset):
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
         self.data_config = DollyConfig(**self.data_config)
@@ -106,7 +116,12 @@ class DollyDataset(BaseDataset):
 
 class VicunaDataset(BaseDataset):
     def __init__(
-        self, args: Namespace, split: DatasetSplit, mode: Mode, tokenizer: AutoTokenizer, is_encoder_decoder: bool
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
         self.data_config = VicunaConfig(**self.data_config)

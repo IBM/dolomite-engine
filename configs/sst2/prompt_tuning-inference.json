@@ -1,0 +1,24 @@
+{
+    "datasets": [
+        {
+            "data_class": "SST2Dataset",
+            "input_format": "\n__input__\nSentiment:",
+            "output_format": " __output__",
+            "data_sampling_proportion": 1,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 128
+        }
+    ],
+    "model_name": "bigscience/bloom-560m",
+    "model_class": "AutoModelForCausalLM",
+    "training_inference_type": "prompt_tuning",
+    "prompt_tuning_init": "TEXT",
+    "prompt_tuning_init_text": "Classify the sentiment of the sentence:",
+    "num_virtual_tokens": 8,
+    "load_path": "checkpoints/prompt_tuning/global_step4000",
+    "batch_size": 8,
+    "dtype": "bfloat16",
+    "do_sample": false,
+    "max_new_tokens": 100,
+    "output_file": "output.jsonl"
+}

@@ -1,0 +1,24 @@
+{
+    "datasets": [
+        {
+            "data_class": "DollyDataset",
+            "data_path": "../dolly/data/",
+            "data_sampling_proportion": 1,
+            "output_format": " __output__",
+            "max_input_tokens": 1740,
+            "max_output_tokens": 308
+        }
+    ],
+    "model_name": "bigscience/bloom-3b",
+    "model_class": "AutoModelForCausalLM",
+    "training_inference_type": "full_finetuning",
+    "logdir": "../aim-repo",
+    "experiment_name": "gma-bloom-3b-dolly-0.0.2",
+    "save_path": "/cos/mayank/checkpoints/gma-bloom-3b-dolly-0.0.2",
+    "num_training_steps": 10000,
+    "eval_and_save_interval": 2000,
+    "batch_size_per_gpu": 2,
+    "dtype": "bfloat16",
+    "learning_rate": 1e-4,
+    "lr_schedule": "cosine"
+}

@@ -1,4 +1,3 @@
-from argparse import Namespace
 from typing import List, Tuple
 
 import torch
@@ -6,7 +5,7 @@ from deepspeed import DeepSpeedEngine
 from torch.utils.data import DataLoader
 from transformers import set_seed
 
-from src.arguments import get_args
+from src.arguments import TrainingArgs, get_args
 from src.constants import DatasetSplit, Mode
 from src.data import ConcatenatedDatasets
 from src.model import Model, ModelCheckpointer
@@ -107,7 +106,7 @@ def train_step(model: DeepSpeedEngine, batch: Tuple[List[int]]) -> float:
 
 
 def train(
-    args: Namespace,
+    args: TrainingArgs,
     train_dataloader: DataLoader,
     val_dataloader: DataLoader,
     model: DeepSpeedEngine,
@@ -116,7 +115,7 @@ def train(
     """main training loop for the program
 
     Args:
-        args (Namespace): training args
+        args (TrainingArgs): training args
         train_dataloader (DataLoader): training dataloader
         val_dataloader (DataLoader): validation dataloader
         model (DeepSpeedEngine): DeepSpeed sharded model
@@ -137,7 +136,7 @@ def train(
                 break
 
             if global_step % args.eval_and_save_interval == 0:
-                if not args.no_eval:
+                if args.eval_during_training:
                     val_loss = evaluate(val_dataloader, model)
                     track_val_metrics(global_step, val_loss, experiments_tracker)
 
@@ -157,7 +156,7 @@ def train(
             global_step += 1
             progress_bar.update()
 
-    if not args.no_eval:
+    if args.eval_during_training:
         val_loss = evaluate(val_dataloader, model)
         track_val_metrics(global_step, val_loss, experiments_tracker)
 
@@ -206,7 +205,7 @@ def main() -> None:
 
     setup_tf32()
 
-    args = get_args(mode)
+    args: TrainingArgs = get_args(mode)
 
     setup_debugging()
 
@@ -228,7 +227,7 @@ def main() -> None:
 
     # non-sharded validation dataset
     val_dataset = None
-    if not args.no_eval:
+    if args.eval_during_training:
         val_dataset = ConcatenatedDatasets(
             args,
             split=DatasetSplit.val,
@@ -246,7 +245,7 @@ def main() -> None:
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
         betas=(args.beta1, args.beta2),
-        eps=args.eps,
+        eps=args.epsilon,
     )
 
     # setup learning rate schedule

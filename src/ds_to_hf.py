@@ -1,4 +1,4 @@
-import argparse
+from argparse import ArgumentParser, Namespace
 
 import torch
 import transformers
@@ -7,14 +7,14 @@ from src.constants import Mode, TrainingInferenceType
 from src.model import Model, ModelCheckpointer
 
 
-def get_args() -> argparse.Namespace:
+def get_args() -> Namespace:
     """arguments to use
 
     Returns:
-        Namespace: arguments based on training / inference mode
+        Namespace: parsed arguments
     """
 
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
 
     parser.add_argument("--load_path", type=str)
     parser.add_argument("--save_path", type=str)

@@ -1,10 +1,10 @@
 import math
-from argparse import Namespace
 from typing import Iterator
 
 import torch
 from torch.utils.data import DistributedSampler
 
+from src.arguments import TrainingArgs
 from src.constants import DatasetSplit, Mode
 from src.data.dataset import ConcatenatedDatasets
 from src.data.utils import get_num_samples_by_dataset
@@ -17,7 +17,7 @@ class ConcatenatedDataSampler(DistributedSampler):
 
     def __init__(
         self,
-        args: Namespace,
+        args: TrainingArgs,
         dataset: ConcatenatedDatasets,
         num_replicas: int = None,
         rank: int = None,
@@ -28,6 +28,7 @@ class ConcatenatedDataSampler(DistributedSampler):
         super().__init__(dataset, num_replicas, rank, shuffle, seed, drop_last)
 
         self.dataset: ConcatenatedDatasets
+        assert self.dataset.mode == Mode.training, "only use sampler during training"
 
         self.num_examples_in_each_dataset = self.dataset.get_num_examples_in_each_dataset()
         self.num_datasets = dataset.get_num_datasets()
@@ -39,9 +40,7 @@ class ConcatenatedDataSampler(DistributedSampler):
                 self.dataset.data_sampling_proportion, len(dataset)
             )
 
-        self.print_sampler_stats(
-            args.batch_size_per_gpu if self.dataset.mode == Mode.training else args.batch_size, args.num_training_steps
-        )
+        self.print_sampler_stats(args.batch_size_per_gpu, args.num_training_steps)
 
     def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int, seed: int) -> torch.Tensor:
         g = torch.Generator()
@@ -131,4 +130,4 @@ class ConcatenatedDataSampler(DistributedSampler):
                 f"number of epochs of {dataset.__class__.__name__} in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i] / len(dataset)}"
             )
 
-        print_rank_0("*" * 50)
+        print_rank_0("*" * 57)
