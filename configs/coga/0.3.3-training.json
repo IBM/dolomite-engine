@@ -4,7 +4,7 @@
             "data_class": "DineshChitChatDataset",
             "data_name": "chitchat",
             "data_path": "../data/chitchat/chitchat_v2/",
-            "data_sampling_proportion": 1812,
+            "data_sampling_proportion": 6,
             "max_input_tokens": 1024,
             "max_output_tokens": 256,
             "dataset_type": "response_evidence",
@@ -19,7 +19,7 @@
             "data_class": "YatinAnswerabilityDataset",
             "data_name": "multidoc2dial",
             "data_path": "../data/md2d/contextual_unanswerable_classifier/",
-            "data_sampling_proportion": 4228,
+            "data_sampling_proportion": 14,
             "max_input_tokens": 1024,
             "max_output_tokens": 256,
             "dataset_type": "response_evidence",
@@ -34,7 +34,7 @@
             "data_class": "YatinAnswerabilityDataset",
             "data_name": "human 2 bot",
             "data_path": "../data/h2b/processed/",
-            "data_sampling_proportion": 223,
+            "data_sampling_proportion": 5,
             "max_input_tokens": 1024,
             "max_output_tokens": 256,
             "dataset_type": "response_evidence",
@@ -45,37 +45,21 @@
                 "val": "manually-cleaned-coga-internal_CONSOLE_test_all.json",
                 "test": "manually-cleaned-coga-internal_CONSOLE_test_all.json"
             }
-        },
-        {
-            "data_class": "YatinAnswerabilityDataset",
-            "data_name": "human 2 human",
-            "data_path": "../data/h2h/coga_internal_data_v1_processed/",
-            "data_sampling_proportion": 1287,
-            "max_input_tokens": 1024,
-            "max_output_tokens": 256,
-            "dataset_type": "response_evidence",
-            "combine_no_evidence": true,
-            "filter_allowed": false,
-            "files": {
-                "train": "internal_v1_train_all.json",
-                "val": "internal_v1_test_all.json",
-                "test": "internal_v1_test_all.json"
-            }
         }
     ],
     "model_name": "google/flan-t5-xl",
     "model_class": "AutoModelForSeq2SeqLM",
     "training_inference_type": "full_finetuning",
     "logdir": "/cos/mayank/aim-repo",
-    "experiment_name": "coga-3b-0.3.0",
-    "save_path": "/cos/mayank/checkpoints/coga-3b-0.3.0",
+    "experiment_name": "coga-3b-0.3.3",
+    "save_path": "/cos/mayank/checkpoints/coga-3b-0.3.3",
     "num_training_steps": 20000,
     "eval_and_save_interval": 4000,
     "batch_size_per_gpu": 2,
     "dtype": "bfloat16",
     "optimizer": {
         "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-4,
+        "lr": 1e-5,
         "weight_decay": 0.1,
         "betas": [0.9, 0.95],
         "eps": 1e-10

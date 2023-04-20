@@ -239,14 +239,7 @@ def main() -> None:
     model.post_init()
 
     # setup Adam optimizer
-    optimizer = get_optimizer(
-        args.cpu_offload,
-        model.parameters(),
-        lr=args.learning_rate,
-        weight_decay=args.weight_decay,
-        betas=(args.beta1, args.beta2),
-        eps=args.epsilon,
-    )
+    optimizer = get_optimizer(args, model.parameters())
 
     # setup learning rate schedule
     lr_scheduler = get_scheduler_method(args.lr_schedule)(

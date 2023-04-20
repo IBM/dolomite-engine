@@ -5,8 +5,6 @@
             "data_name": "chitchat",
             "data_path": "../data/chitchat/chitchat_v2/",
             "data_sampling_proportion": 1812,
-            "max_input_tokens": 1024,
-            "max_output_tokens": 256,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
             "files": {
@@ -20,8 +18,6 @@
             "data_name": "multidoc2dial",
             "data_path": "../data/md2d/contextual_unanswerable_classifier/",
             "data_sampling_proportion": 4228,
-            "max_input_tokens": 1024,
-            "max_output_tokens": 256,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
             "files": {
@@ -35,8 +31,6 @@
             "data_name": "human 2 bot",
             "data_path": "../data/h2b/processed/",
             "data_sampling_proportion": 223,
-            "max_input_tokens": 1024,
-            "max_output_tokens": 256,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
             "filter_allowed": false,
@@ -51,8 +45,6 @@
             "data_name": "human 2 human",
             "data_path": "../data/h2h/coga_internal_data_v1_processed/",
             "data_sampling_proportion": 1287,
-            "max_input_tokens": 1024,
-            "max_output_tokens": 256,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
             "filter_allowed": false,
@@ -66,19 +58,10 @@
     "model_name": "google/flan-t5-xl",
     "model_class": "AutoModelForSeq2SeqLM",
     "training_inference_type": "full_finetuning",
-    "logdir": "/cos/mayank/aim-repo",
-    "experiment_name": "coga-3b-0.3.0",
-    "save_path": "/cos/mayank/checkpoints/coga-3b-0.3.0",
-    "num_training_steps": 20000,
-    "eval_and_save_interval": 4000,
-    "batch_size_per_gpu": 2,
+    "load_path": "/cos/mayank/checkpoints/coga-3b-0.3.1/global_step20000",
+    "batch_size": 1,
     "dtype": "bfloat16",
-    "optimizer": {
-        "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-4,
-        "weight_decay": 0.1,
-        "betas": [0.9, 0.95],
-        "eps": 1e-10
-    },
-    "lr_schedule": "cosine"
+    "do_sample": false,
+    "max_new_tokens": 256,
+    "output_file": "/cos/mayank/output/coga-3b-0.3.1/global_step20000.jsonl"
 }

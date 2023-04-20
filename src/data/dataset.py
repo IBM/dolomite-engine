@@ -39,6 +39,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
         data_config: dict = args.data_config
 
+        self.data_name: str = data_config.get(DatasetConfigKeys.data_name.value)
         self.data_path: str = data_config.get(DatasetConfigKeys.data_path.value)
 
         self.input_format: str = data_config.get(DatasetConfigKeys.input_format.value, "__input__")
@@ -140,7 +141,10 @@ class BaseDataset(torch.utils.data.Dataset):
             return inputs
 
     def __getitem__(self, index: int) -> dict:
-        return self.examples[index]
+        example = self.examples[index]
+        if self.data_name is not None:
+            example[DatasetConfigKeys.data_name.value] = self.data_name
+        return example
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -207,7 +211,7 @@ class SST2Dataset(BaseDataset):
         print_rank_0(f"{len(self.examples)} examples in {self.split.value} split")
 
     def __getitem__(self, index: int) -> dict:
-        raw_example = self.examples[index]
+        raw_example = super().__getitem__(index)
 
         result_example = {
             # don't use uuid here since we want it to be same across epochs and this dataset creates examples on the fly
@@ -290,9 +294,10 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         self.split = split
         self.mode = mode
 
-        self.datasets, self.data_sampling_proportion = self.get_datasets_list(
-            args, split, mode, tokenizer, is_encoder_decoder
-        )
+        self.tokenizer = tokenizer
+        self.is_encoder_decoder = is_encoder_decoder
+
+        self.datasets, self.data_sampling_proportion = self.get_datasets_list(args)
 
         num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
         self.num_examples = sum(num_examples_in_each_dataset)
@@ -324,15 +329,7 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
 
         return dataset_key_value_to_add
 
-    @classmethod
-    def get_datasets_list(
-        cls,
-        args: Union[TrainingArgs, InferenceArgs],
-        split: DatasetSplit,
-        mode: Mode,
-        tokenizer: AutoTokenizer,
-        is_encoder_decoder: bool,
-    ) -> Tuple[List[BaseDataset], List[int]]:
+    def get_datasets_list(self, args: Union[TrainingArgs, InferenceArgs]) -> Tuple[List[BaseDataset], List[int]]:
         """prepare all the datasets
 
         Args:
@@ -355,7 +352,7 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
             del args_copy.datasets
 
             dataset = args_copy.data_config[DatasetConfigKeys.data_class.value](
-                args_copy, split, mode, tokenizer, is_encoder_decoder
+                args_copy, self.split, self.mode, self.tokenizer, self.is_encoder_decoder
             )
 
             if len(dataset) > 0:

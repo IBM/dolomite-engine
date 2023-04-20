@@ -8,7 +8,7 @@ from peft import PromptTuningInit
 from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from src.constants import DatasetConfigKeys, LearningRateScheduler, Mode, TrainingInferenceType
+from src.constants import DatasetConfigKeys, LearningRateScheduler, Mode, OptimizerKeys, TrainingInferenceType
 
 
 class BaseArgs(BaseModel):
@@ -34,11 +34,15 @@ class ModelArgs(BaseArgs):
         assert self.model_name is not None, "model_name cannot be None"
 
         # model_class
-        assert self.model_class is not None, "model_class cannot be None"
         self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(transformers, self.model_class)
+        assert self.model_class in [
+            AutoModelForCausalLM,
+            AutoModelForSeq2SeqLM,
+        ], f"unexpected model_class '{self.model_class}'"
 
         # dtype
         self.dtype = getattr(torch, self.dtype)
+        assert self.dtype in [torch.float32, torch.float16, torch.bfloat16], f"unexpected dtype '{self.dtype}'"
 
 
 class InitializationArgs(BaseArgs):
@@ -57,7 +61,6 @@ class InitializationArgs(BaseArgs):
 
     def _post_init(self) -> None:
         # training_inference_type
-        assert self.training_inference_type is not None, "training_inference_type cannot be None"
         self.training_inference_type = TrainingInferenceType(self.training_inference_type)
 
         # prompt_tuning_init
@@ -95,16 +98,14 @@ class DatasetArgs(BaseArgs):
     datasets: List[dict] = []
 
     def _post_init(self) -> None:
-        super()._post_init()
-
         # datasets
         assert self.datasets is not None and len(self.datasets) != 0, "datasets cannot be None or an empty list"
         self._check_each_dataset_and_set_defaults()
 
     def _check_each_dataset_and_set_defaults(self) -> None:
-        import src.data as data_classes
-
         """checks whether the arguments specified in the config are valid"""
+
+        import src.data as data_classes
 
         for i, data_config in enumerate(self.datasets):
             assert (
@@ -124,22 +125,27 @@ class DatasetArgs(BaseArgs):
 
 
 class OptimizationArgs(BaseArgs):
-    # learning rate
-    learning_rate: float = 1e-5
-    # weight decay
-    weight_decay: float = 0.1
-    # beta1
-    beta1: float = 0.9
-    # beta2
-    beta2: float = 0.95
-    # epsilon
-    epsilon: float = 1e-10
-    # warmup steps
-    warmup_steps: int = 200
+    # optimizer
+    optimizer: dict = {
+        "optimizer_class": "ApexFusedAdam",
+        "lr": 1e-5,
+        "weight_decay": 0.1,
+        "betas": [0.9, 0.95],
+        "eps": 1e-10,
+    }
     # learning rate schedule
     lr_schedule: str = "cosine"
+    # warmup steps
+    warmup_steps: int = 200
 
     def _post_init(self) -> None:
+        # optimizer
+        import src.optimization as optimizer_classes
+
+        self.optimizer[OptimizerKeys.optimizer_class.value] = getattr(
+            optimizer_classes, self.optimizer[OptimizerKeys.optimizer_class.value]
+        )
+
         # lr_schedule
         self.lr_schedule = LearningRateScheduler(self.lr_schedule)
 

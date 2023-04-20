@@ -1,6 +1,3 @@
-from enum import Enum
-
-from src.constants import DatasetSplit
 from src.data.config import DatasetConfig
 
 

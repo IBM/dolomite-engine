@@ -2,6 +2,7 @@
     "datasets": [
         {
             "data_class": "SST2Dataset",
+            "data_name": "sst2",
             "input_format": "Classify the sentiment of the sentence:\n__input__\nSentiment:",
             "output_format": " __output__",
             "data_sampling_proportion": 1,
@@ -19,5 +20,12 @@
     "batch_size_per_gpu": 8,
     "dtype": "bfloat16",
     "learning_rate": 1e-5,
+    "optimizer": {
+        "optimizer_class": "ApexFusedAdam",
+        "lr": 1e-5,
+        "weight_decay": 0.1,
+        "betas": [0.9, 0.95],
+        "eps": 1e-10
+    },
     "lr_schedule": "cosine"
 }

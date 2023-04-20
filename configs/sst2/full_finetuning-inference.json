@@ -2,6 +2,7 @@
     "datasets": [
         {
             "data_class": "SST2Dataset",
+            "data_name": "sst2",
             "input_format": "Classify the sentiment of the sentence:\n__input__\nSentiment:",
             "output_format": " __output__",
             "data_sampling_proportion": 1,

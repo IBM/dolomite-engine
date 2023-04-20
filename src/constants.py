@@ -19,6 +19,12 @@ class Mode(str, Enum):
     inference = "inference"
 
 
+class OptimizerKeys(str, Enum):
+    """standard keys in the optimizer"""
+
+    optimizer_class = "optimizer_class"
+
+
 class LearningRateScheduler(str, Enum):
     """learning rate schedule"""
 
@@ -30,6 +36,7 @@ class DatasetConfigKeys(str, Enum):
     """standard keys in the dataset"""
 
     data_class = "data_class"
+    data_name = "data_name"
     data_path = "data_path"
     data_sampling_proportion = "data_sampling_proportion"
     max_input_tokens = "max_input_tokens"

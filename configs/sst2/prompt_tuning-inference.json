@@ -2,6 +2,7 @@
     "datasets": [
         {
             "data_class": "SST2Dataset",
+            "data_name": "sst2",
             "input_format": "\n__input__\nSentiment:",
             "output_format": " __output__",
             "data_sampling_proportion": 1,
