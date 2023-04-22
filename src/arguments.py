@@ -8,7 +8,14 @@ from peft import PromptTuningInit
 from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from src.constants import DatasetConfigKeys, LearningRateScheduler, Mode, OptimizerKeys, TrainingInferenceType
+from src.constants import (
+    DatasetConfigKeys,
+    LearningRateScheduler,
+    Mode,
+    OptimizerKeys,
+    PaddingSide,
+    TrainingInferenceType,
+)
 
 
 class BaseArgs(BaseModel):
@@ -28,6 +35,8 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # dtype to use for training / inference
     dtype: str = "float32"
+    # padding side
+    padding_side: PaddingSide = None
 
     def _post_init(self) -> None:
         # model_name
@@ -49,9 +58,9 @@ class InitializationArgs(BaseArgs):
     # random seed
     seed: int = 42
     # type of tuning, full finetuning or PEFT
-    training_inference_type: str = None
+    training_inference_type: TrainingInferenceType = None
     # prompt tuning init method
-    prompt_tuning_init: str = None
+    prompt_tuning_init: PromptTuningInit = None
     # prompt tuning init text
     prompt_tuning_init_text: str = None
     # number of virtual tokens for PEFT
@@ -60,18 +69,7 @@ class InitializationArgs(BaseArgs):
     load_path: str = None
 
     def _post_init(self) -> None:
-        # training_inference_type
-        self.training_inference_type = TrainingInferenceType(self.training_inference_type)
-
-        # prompt_tuning_init
-        if self.training_inference_type == TrainingInferenceType.prompt_tuning:
-            self.prompt_tuning_init = PromptTuningInit(self.prompt_tuning_init)
-
-        self._check_training_inference_type()
-
-    def _check_training_inference_type(self) -> None:
-        """checks whether the arguments specified are valid for finetuning / prompt tuning"""
-
+        # check whether the arguments specified are valid for finetuning / prompt tuning
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
             assert (
                 self.prompt_tuning_init is None
@@ -134,7 +132,7 @@ class OptimizationArgs(BaseArgs):
         "eps": 1e-10,
     }
     # learning rate schedule
-    lr_schedule: str = "cosine"
+    lr_schedule: LearningRateScheduler = LearningRateScheduler.cosine
     # warmup steps
     warmup_steps: int = 200
 
@@ -145,9 +143,6 @@ class OptimizationArgs(BaseArgs):
         self.optimizer[OptimizerKeys.optimizer_class.value] = getattr(
             optimizer_classes, self.optimizer[OptimizerKeys.optimizer_class.value]
         )
-
-        # lr_schedule
-        self.lr_schedule = LearningRateScheduler(self.lr_schedule)
 
 
 class DeepSpeedArgs(BaseArgs):
@@ -213,9 +208,6 @@ class TrainingArgs(
 
         # batch_size_per_gpu
         assert self.batch_size_per_gpu is not None, "batch_size_per_gpu cannot be None"
-
-        # lr_schedule
-        self.lr_schedule = LearningRateScheduler(self.lr_schedule)
 
 
 class InferenceArgs(ModelArgs, InitializationArgs, DatasetArgs):

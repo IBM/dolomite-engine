@@ -179,8 +179,7 @@ class Logger:
         """
 
         if self.logging_enabled:
-            for k, v in vars(args).items():
-                self.info(f"{k} = {v}")
+            self.info(vars(args))
 
     @run_rank_n
     def info(self, msg) -> None:
