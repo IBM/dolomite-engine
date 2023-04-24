@@ -64,7 +64,6 @@ class BaseDataset(torch.utils.data.Dataset):
         )
 
         self.data_config: dict = drop_common_args(deepcopy(data_config))
-        self.pre_tokenized = False
 
         self.examples = []
 
@@ -111,15 +110,27 @@ class BaseDataset(torch.utils.data.Dataset):
 
         for example in batch:
             p: Union[str, List[int]] = example[DatasetKeys.preprocessed_input.value]
-            if not self.pre_tokenized:
+
+            # check if not pre-tokenized
+            if isinstance(p, str):
                 p = self.tokenizer(p, add_special_tokens=False)["input_ids"]
-            p = p[: self.max_input_tokens]
+
+            if self.max_input_tokens is not None:
+                if self.is_encoder_decoder:
+                    # eos needs to be added later
+                    p = p[: self.max_input_tokens - 1]
+                else:
+                    p = p[: self.max_input_tokens]
 
             if self.mode == Mode.training:
                 r: Union[str, List[int]] = example[DatasetKeys.preprocessed_output.value]
-                if not self.pre_tokenized:
+
+                # check if not pre-tokenized
+                if isinstance(r, str):
                     r = self.tokenizer(r, add_special_tokens=False)["input_ids"]
-                r = r[: self.max_output_tokens]
+
+                if self.max_output_tokens is not None:
+                    r = r[: self.max_output_tokens - 1]
 
                 r.append(self.tokenizer.eos_token_id)
                 outputs.append(r)

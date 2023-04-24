@@ -12,7 +12,7 @@ from src.data.instructions.config import AlpacaConfig, DollyConfig, VicunaConfig
 from src.data.utils import train_val_test_split
 
 
-class AlpacaDataset(BaseDataset):
+class BaseInstructionDataset(BaseDataset):
     def __init__(
         self,
         args: Union[TrainingArgs, InferenceArgs],
@@ -22,11 +22,40 @@ class AlpacaDataset(BaseDataset):
         is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
-        self.data_config = AlpacaConfig(**self.data_config)
 
         if self.do_format_input:
             raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
 
+    def construct_input_from_format(self, instruction: str, input: str) -> List[int]:
+        output_marker = "output:"
+        # this is computed everytime, but lets not worry for now since its pretty fast
+        output_marker_tokens = self.tokenizer(output_marker, add_special_tokens=False)["input_ids"]
+
+        input = instruction + "\n"
+        if input is None or input == "":
+            input += f"input: {input}\n"
+
+        input: List[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
+
+        if self.max_input_tokens is not None:
+            input = input[: self.max_input_tokens - len(output_marker_tokens)]
+        input += output_marker_tokens
+
+        return input
+
+
+class AlpacaDataset(BaseInstructionDataset):
+    def __init__(
+        self,
+        args: Union[TrainingArgs, InferenceArgs],
+        split: DatasetSplit,
+        mode: Mode,
+        tokenizer: AutoTokenizer,
+        is_encoder_decoder: bool,
+    ) -> None:
+        super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
+
+        self.data_config = AlpacaConfig(**self.data_config)
         self.examples = self.prepare_examples()
 
     def prepare_examples(self) -> List[dict]:
@@ -41,13 +70,9 @@ class AlpacaDataset(BaseDataset):
             check_raw_example(raw_example, mode=self.mode)
 
             result_example = {}
-
-            input = raw_example["instruction"] + "\n"
-            if raw_example.get("input", "") != "":
-                input += f"input: {raw_example['input']}\n"
-            input += "output:"
-
-            result_example[DatasetKeys.preprocessed_input.value] = input
+            result_example[DatasetKeys.preprocessed_input.value] = self.construct_input_from_format(
+                raw_example["instruction"], raw_example.get("input", "")
+            )
 
             if self.mode == Mode.training:
                 result_example[DatasetKeys.preprocessed_output.value] = self.construct_output_from_format(
@@ -63,7 +88,7 @@ class AlpacaDataset(BaseDataset):
         return examples
 
 
-class DollyDataset(BaseDataset):
+class DollyDataset(BaseInstructionDataset):
     def __init__(
         self,
         args: Union[TrainingArgs, InferenceArgs],
@@ -73,11 +98,8 @@ class DollyDataset(BaseDataset):
         is_encoder_decoder: bool,
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
+
         self.data_config = DollyConfig(**self.data_config)
-
-        if self.do_format_input:
-            raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
-
         self.examples = self.prepare_examples()
 
     def prepare_examples(self) -> List[dict]:
@@ -92,13 +114,9 @@ class DollyDataset(BaseDataset):
             check_raw_example(raw_example, mode=self.mode)
 
             result_example = {}
-
-            input = raw_example["instruction"] + "\n"
-            if raw_example.get("context", "") != "":
-                input += f"input: {raw_example['context']}\n"
-            input += "output:"
-
-            result_example[DatasetKeys.preprocessed_input.value] = input
+            result_example[DatasetKeys.preprocessed_input.value] = self.construct_input_from_format(
+                raw_example["instruction"], raw_example.get("context", "")
+            )
 
             if self.mode == Mode.training:
                 result_example[DatasetKeys.preprocessed_output.value] = self.construct_output_from_format(

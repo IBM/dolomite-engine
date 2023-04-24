@@ -8,14 +8,7 @@ from peft import PromptTuningInit
 from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from src.constants import (
-    DatasetConfigKeys,
-    LearningRateScheduler,
-    Mode,
-    OptimizerKeys,
-    PaddingSide,
-    TrainingInferenceType,
-)
+from src.constants import DatasetConfigKeys, LearningRateScheduler, Mode, OptimizerKeys, TrainingInferenceType
 
 
 class BaseArgs(BaseModel):
@@ -35,8 +28,6 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # dtype to use for training / inference
     dtype: str = "float32"
-    # padding side
-    padding_side: PaddingSide = None
 
     def _post_init(self) -> None:
         # model_name

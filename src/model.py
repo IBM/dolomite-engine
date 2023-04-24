@@ -9,7 +9,7 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
 from src.arguments import InferenceArgs, TrainingArgs
-from src.constants import Mode, PaddingSide, TrainingInferenceType
+from src.constants import Mode, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
 
 
@@ -29,14 +29,8 @@ def pad(arrays: list, padding: int, max_length: int = None, side: str = "left") 
     if max_length is None:
         max_length = max(list(map(len, arrays)))
 
-    if side == PaddingSide.left:
-        inputs = [[padding] * (max_length - len(array)) + array for array in arrays]
-        masks = [[0] * (max_length - len(array)) + [1] * len(array) for array in arrays]
-    elif side == PaddingSide.right:
-        inputs = [array + [padding] * (max_length - len(array)) for array in arrays]
-        masks = [[1] * len(array) + [0] * (max_length - len(array)) for array in arrays]
-    else:
-        raise ValueError("padding_side must be either left or right")
+    inputs = [[padding] * (max_length - len(array)) + array for array in arrays]
+    masks = [[0] * (max_length - len(array)) + [1] * len(array) for array in arrays]
 
     return inputs, masks
 
@@ -69,11 +63,6 @@ class Model(torch.nn.Module):
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-
-        if args.padding_side is None:
-            self.padding_side = PaddingSide(self.tokenizer.padding_side)
-        else:
-            self.padding_side = args.padding_side
 
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
             if mode == Mode.training:
@@ -209,10 +198,8 @@ class Model(torch.nn.Module):
             if not self.is_encoder_decoder:
                 max_length = max(list(map(len, inputs)))
 
-            input_ids, attention_mask = pad(
-                inputs, padding=self.tokenizer.pad_token_id, max_length=max_length, side=self.padding_side
-            )
-            labels, _ = pad(outputs, padding=-100, max_length=max_length, side=self.padding_side)
+            input_ids, attention_mask = pad(inputs, padding=self.tokenizer.pad_token_id, max_length=max_length)
+            labels, _ = pad(outputs, padding=-100, max_length=max_length)
 
             input_ids = torch.tensor(input_ids)
             attention_mask = torch.tensor(attention_mask)
@@ -220,7 +207,7 @@ class Model(torch.nn.Module):
 
             result["labels"] = labels
         elif self.mode == Mode.inference:
-            input_ids, attention_mask = pad(inputs, padding=self.tokenizer.pad_token_id, side=self.padding_side)
+            input_ids, attention_mask = pad(inputs, padding=self.tokenizer.pad_token_id)
 
             input_ids = torch.tensor(input_ids)
             attention_mask = torch.tensor(attention_mask)
