@@ -1,0 +1,41 @@
+{
+    "datasets": [
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "human 2 bot",
+            "data_path": "../data/h2b/processed/",
+            "data_sampling_proportion": 1,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "files": {
+                "train": "manually-cleaned-coga-internal_CONSOLE_train_all.json",
+                "val": "manually-cleaned-coga-internal_CONSOLE_test_all.json",
+                "test": "manually-cleaned-coga-internal_CONSOLE_test_all.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "human 2 human",
+            "data_path": "../data/h2h/coga_internal_data_v1_processed/",
+            "data_sampling_proportion": 1,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "files": {
+                "train": "internal_v1_train_all.json",
+                "val": "internal_v1_test_all.json",
+                "test": "internal_v1_test_all.json"
+            }
+        }
+    ],
+    "model_name": "google/flan-t5-xl",
+    "model_class": "AutoModelForSeq2SeqLM",
+    "training_inference_type": "full_finetuning",
+    "load_path": "/cos/mayank/checkpoints/coga-3b-0.3.2/global_step20000",
+    "batch_size": 1,
+    "dtype": "bfloat16",
+    "do_sample": false,
+    "max_new_tokens": 256,
+    "output_file": "/cos/mayank/output/coga-3b-0.3.2/global_step20000.jsonl"
+}

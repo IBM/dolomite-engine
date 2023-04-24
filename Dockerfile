@@ -27,11 +27,11 @@ RUN conda update -n base -c defaults conda -y
 RUN conda install -c anaconda cmake -y
 
 # necessary stuff
-RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117 \
-    transformers==4.27.4 \
+RUN pip install torch==2.0.0 \
+    transformers==4.28.1 \
     accelerate==0.18.0 \
-    bitsandbytes==0.37.2 \
-    aim==3.17.2 \
+    bitsandbytes==0.38.1 \
+    aim==3.17.3 \
     peft==0.2.0 \
     pydantic \
     jsonlines \
@@ -43,7 +43,7 @@ RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.o
 # apex
 RUN git clone https://github.com/NVIDIA/apex && \
     cd apex && \
-    git checkout 22.03 && \
+    git checkout b3e3bab && \
     pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" . && \
     cd .. && \
     rm -rf apex
@@ -51,9 +51,8 @@ RUN git clone https://github.com/NVIDIA/apex && \
 # deepspeed
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
-    git checkout v0.9.0 && \
-    TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir . && \
-    rm -rf DeepSpeed
+    git checkout v0.9.1 && \
+    TORCH_CUDA_ARCH_LIST=8.0 DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install . -v --global-option="build_ext" --global-option="-j8" --no-cache-dir
 
 # clean conda env
 RUN conda clean -ya

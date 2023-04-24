@@ -16,8 +16,8 @@
     "logdir": "/cos/mayank/aim-repo",
     "experiment_name": "gma-bloom-3b-dolly-0.0.1",
     "save_path": "/cos/mayank/checkpoints/gma-bloom-3b-dolly-0.0.1",
-    "num_training_steps": 10000,
-    "eval_and_save_interval": 2000,
+    "num_training_steps": 5000,
+    "eval_and_save_interval": 1000,
     "batch_size_per_gpu": 2,
     "dtype": "bfloat16",
     "optimizer": {

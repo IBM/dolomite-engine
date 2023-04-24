@@ -179,6 +179,7 @@ class Logger:
         """
 
         if self.logging_enabled:
+            self.info(f"total GPUs = {get_world_size()}")
             self.info(vars(args))
 
     @run_rank_n
