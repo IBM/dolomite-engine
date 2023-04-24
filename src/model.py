@@ -13,14 +13,13 @@ from src.constants import Mode, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
 
 
-def pad(arrays: list, padding: int, max_length: int = None, side: str = "left") -> Tuple[List[int], List[int]]:
+def pad(arrays: list, padding: int, max_length: int = None) -> Tuple[List[int], List[int]]:
     """pads the arrays with the specified padding value
 
     Args:
         arrays (list): token ids
         padding (int): token id to pad with
         max_length (int, optional): length to pad to. Defaults to None. If None, pads to the longest sequence
-        side (str, optional): padding side, "left" is recommended. Defaults to "left".
 
     Returns:
         Tuple[List[int], List[int]]: token ids and the corresponding attention masks
@@ -57,7 +56,7 @@ class Model(torch.nn.Module):
         self.training_inference_type = args.training_inference_type
         self.dtype = args.dtype
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, padding_side="left")
         self.original_vocab_size = len(self.tokenizer)
 
         if self.tokenizer.pad_token_id is None:
