@@ -124,41 +124,44 @@ def train(
 
     loss_running_mean_tracker = RunningMean()
     progress_bar = ProgressBar(0, args.num_training_steps)
-    global_step = 0
+    micro_step = 0
 
     model.train()
+    train_loss_step_accumulator = 0
 
     # to run on multiple epochs
-    while global_step < args.num_training_steps:
+    while micro_step < args.num_training_steps * args.gradient_accumulation_steps:
         for batch in train_dataloader:
             # this completes the job
-            if global_step == args.num_training_steps:
+            if micro_step == args.num_training_steps * args.gradient_accumulation_steps:
                 break
 
-            if global_step % args.eval_and_save_interval == 0:
-                if args.eval_during_training:
-                    val_loss = evaluate(val_dataloader, model)
-                    track_val_metrics(global_step, val_loss, experiments_tracker)
+            if args.eval_during_training and micro_step % (args.eval_interval * args.gradient_accumulation_steps) == 0:
+                val_loss = evaluate(val_dataloader, model)
+                track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
+            if micro_step % (args.save_interval * args.gradient_accumulation_steps) == 0:
                 ModelCheckpointer.save_checkpoint(model, args.save_path)
 
-            train_loss_step = train_step(model, batch)
+            train_loss_step_accumulator += train_step(model, batch)
+            micro_step += 1
 
-            track_train_metrics(
-                global_step=global_step,
-                train_loss_step=train_loss_step,
-                current_lr=model.lr_scheduler.get_lr()[0],
-                experiments_tracker=experiments_tracker,
-                loss_running_mean_tracker=loss_running_mean_tracker,
-                progress_bar=progress_bar,
-            )
+            if micro_step % args.gradient_accumulation_steps == 0:
+                track_train_metrics(
+                    global_step=micro_step // args.gradient_accumulation_steps,
+                    train_loss_step=train_loss_step_accumulator / args.gradient_accumulation_steps,
+                    current_lr=model.lr_scheduler.get_lr()[0],
+                    experiments_tracker=experiments_tracker,
+                    loss_running_mean_tracker=loss_running_mean_tracker,
+                    progress_bar=progress_bar,
+                )
 
-            global_step += 1
-            progress_bar.update()
+                train_loss_step_accumulator = 0
+                progress_bar.update()
 
     if args.eval_during_training:
         val_loss = evaluate(val_dataloader, model)
-        track_val_metrics(global_step, val_loss, experiments_tracker)
+        track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
     ModelCheckpointer.save_checkpoint(model, args.save_path)
 
@@ -181,17 +184,17 @@ def evaluate(val_dataloader: DataLoader, model: Model) -> float:
     model.eval()
 
     loss_sum = 0
-    global_step = 0
+    micro_step = 0
     progress_bar = ProgressBar(0, len(val_dataloader))
 
     with torch.inference_mode():
         for batch in val_dataloader:
             loss_value = model(batch).item()
             loss_sum += loss_value
-            global_step += 1
+            micro_step += 1
             progress_bar.update()
 
-    loss_mean = loss_sum / global_step
+    loss_mean = loss_sum / micro_step
 
     model.train()
 

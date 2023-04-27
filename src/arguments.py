@@ -172,8 +172,10 @@ class TrainingArgs(
     num_training_steps: int = None
     # gradient accumulation steps
     gradient_accumulation_steps: int = 1
-    # interval for evaluation and checkpointing
-    eval_and_save_interval: int = None
+    # interval for evaluation
+    eval_interval: int = None
+    # interval for checkpointing
+    save_interval: int = None
     # batch size per GPU for ZeRO-DP
     batch_size_per_gpu: int = None
     # whether to use val dataset for validation during training
@@ -194,8 +196,12 @@ class TrainingArgs(
         # num_training_steps
         assert self.num_training_steps is not None, "num_training_steps cannot be None"
 
-        # eval_and_save_interval
-        assert self.eval_and_save_interval is not None, "eval_and_save_interval cannot be None"
+        # save_interval
+        assert self.save_interval is not None, "save_interval cannot be None"
+
+        # eval_interval
+        if self.eval_during_training:
+            assert self.eval_interval is not None, "eval_interval cannot be None"
 
         # batch_size_per_gpu
         assert self.batch_size_per_gpu is not None, "batch_size_per_gpu cannot be None"

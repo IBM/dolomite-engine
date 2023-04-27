@@ -40,7 +40,7 @@ class ConcatenatedDataSampler(DistributedSampler):
                 self.dataset.data_sampling_proportion, len(dataset)
             )
 
-        self.print_sampler_stats(args.batch_size_per_gpu, args.num_training_steps)
+        self.print_sampler_stats(args.batch_size_per_gpu, args.num_training_steps, args.gradient_accumulation_steps)
 
     def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int, seed: int) -> torch.Tensor:
         g = torch.Generator()
@@ -103,24 +103,27 @@ class ConcatenatedDataSampler(DistributedSampler):
             else:
                 yield i
 
-    def print_sampler_stats(self, batch_size_per_gpu: int, num_training_steps: int) -> None:
+    def print_sampler_stats(
+        self, batch_size_per_gpu: int, num_training_steps: int, gradient_accumulation_steps: int
+    ) -> None:
         """prints the statistics of the program"""
 
-        if self.dataset.mode == Mode.training and self.dataset.split == DatasetSplit.train:
-            num_steps = num_training_steps
-        elif self.dataset.mode == Mode.inference or self.dataset.split != DatasetSplit.train:
-            examples_per_step = batch_size_per_gpu * get_world_size()
-
-            num_steps = len(self.dataset) // examples_per_step
-            if len(self.dataset) % examples_per_step != 0:
-                num_steps = (len(self.dataset) // examples_per_step) + 1
-
         print_rank_0(f"{'*' * 25} {self.dataset.split.value} {'*' * 25}")
-
         print_rank_0(f"total samples in 1 epoch of the dataset mixture = {len(self.dataset)}")
-        print_rank_0(
-            f"total epochs for the dataset mixture = {num_steps * batch_size_per_gpu * get_world_size() / len(self.dataset)}"
-        )
+
+        if self.dataset.mode == Mode.training and self.dataset.split == DatasetSplit.train:
+            total_samples_seen = (
+                num_training_steps * gradient_accumulation_steps * batch_size_per_gpu * get_world_size()
+            )
+        elif self.dataset.mode == Mode.inference or self.dataset.split != DatasetSplit.train:
+            if len(self.dataset) % (batch_size_per_gpu * get_world_size()) == 0:
+                num_steps = len(self.dataset) // (batch_size_per_gpu * get_world_size())
+            else:
+                num_steps = (len(self.dataset) // (batch_size_per_gpu * get_world_size())) + 1
+
+            total_samples_seen = num_steps * batch_size_per_gpu * get_world_size()
+
+        print_rank_0(f"total epochs for the dataset mixture = {total_samples_seen / len(self.dataset)}")
 
         for i, dataset in enumerate(self.dataset.datasets):
             print_rank_0(

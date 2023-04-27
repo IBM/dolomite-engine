@@ -6,27 +6,29 @@
             "data_path": "../dolly/data/",
             "data_sampling_proportion": 1,
             "output_format": " __output__",
-            "max_input_tokens": 1740,
-            "max_output_tokens": 308
+            "max_input_tokens": 896,
+            "max_output_tokens": 128
         }
     ],
-    "model_name": "bigscience/bloom-3b",
+    "model_name": "gpt2-xl",
     "model_class": "AutoModelForCausalLM",
     "training_inference_type": "full_finetuning",
     "logdir": "/cos/mayank/aim-repo",
-    "experiment_name": "gma-bloom-3b-dolly-0.0.0",
-    "save_path": "/cos/mayank/checkpoints/gma-bloom-3b-dolly-0.0.0",
-    "num_training_steps": 10000,
-    "eval_interval": 1000,
-    "save_interval": 2000,
+    "experiment_name": "gma-gpt2-xl-dolly-0.0.2",
+    "save_path": "/cos/mayank/checkpoints/gma-gpt2-xl-dolly-0.0.2",
+    "num_training_steps": 2000,
+    "eval_interval": 200,
+    "save_interval": 200,
     "batch_size_per_gpu": 2,
+    "gradient_accumulation_steps": 8,
     "dtype": "bfloat16",
     "optimizer": {
         "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-4,
+        "lr": 1e-5,
         "weight_decay": 0.1,
         "betas": [0.9, 0.95],
         "eps": 1e-10
     },
-    "lr_schedule": "cosine"
+    "warmup_steps": 25,
+    "lr_schedule": "linear"
 }

@@ -54,7 +54,8 @@
     "experiment_name": "coga-3b-0.3.2",
     "save_path": "/cos/mayank/checkpoints/coga-3b-0.3.2",
     "num_training_steps": 20000,
-    "eval_and_save_interval": 4000,
+    "eval_interval": 2000,
+    "save_interval": 4000,
     "batch_size_per_gpu": 2,
     "dtype": "bfloat16",
     "optimizer": {
