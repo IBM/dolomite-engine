@@ -27,21 +27,11 @@ class BaseInstructionDataset(BaseDataset):
             raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
 
     def construct_input_from_format(self, instruction: str, input: str) -> List[int]:
-        output_marker = "output:"
-        # this is computed everytime, but lets not worry for now since its pretty fast
-        output_marker_tokens = self.tokenizer(output_marker, add_special_tokens=False)["input_ids"]
-
-        input = instruction + "\n"
-        if input is None or input == "":
-            input += f"input: {input}\n"
-
-        input: List[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
-
-        if self.max_input_tokens is not None:
-            input = input[: self.max_input_tokens - len(output_marker_tokens)]
-        input += output_marker_tokens
-
-        return input
+        input_text = instruction + "\n"
+        if not (input is None or input == ""):
+            input_text += f"input: {input}\n"
+        input_text += "output:"
+        return input_text
 
 
 class AlpacaDataset(BaseInstructionDataset):
