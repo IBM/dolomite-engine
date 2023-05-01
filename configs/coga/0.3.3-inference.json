@@ -37,5 +37,5 @@
     "dtype": "bfloat16",
     "do_sample": false,
     "max_new_tokens": 256,
-    "output_file": "/cos/mayank/output/coga-3b-0.3.3/global_step20000.jsonl"
+    "output_dir": "/cos/mayank/output/coga-3b-0.3.3/global_step20000"
 }

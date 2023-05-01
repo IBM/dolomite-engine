@@ -39,12 +39,9 @@ def main() -> None:
     args = get_args()
 
     model = Model(args, Mode.inference)
-
     model.post_init()
-    if args.load_path is not None:
-        model.load_ds_checkpoint(args.load_path)
 
-    ModelCheckpointer.save_hf_checkpoint(model, args.save_path)
+    ModelCheckpointer.convert_deepspeed_to_huggingface_checkpoint(model, args.load_path, args.save_path)
 
 
 if __name__ == "__main__":

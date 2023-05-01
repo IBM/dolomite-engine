@@ -21,5 +21,5 @@
     "dtype": "bfloat16",
     "do_sample": false,
     "max_new_tokens": 100,
-    "output_file": "output.jsonl"
+    "output_dir": "outputs"
 }

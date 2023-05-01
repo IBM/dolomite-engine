@@ -27,7 +27,7 @@ class BaseInstructionDataset(BaseDataset):
             raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
 
     def construct_input_from_format(self, instruction: str, input: str) -> List[int]:
-        input_text = instruction + "\n"
+        input_text = instruction + "\n\n"
         if not (input is None or input == ""):
             input_text += f"input: {input}\n"
         input_text += "output:"

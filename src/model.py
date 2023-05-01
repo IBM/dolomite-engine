@@ -1,4 +1,6 @@
+import json
 import os
+from copy import deepcopy
 from typing import List, Tuple, Union
 
 import torch
@@ -9,8 +11,8 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
 from src.arguments import InferenceArgs, TrainingArgs
-from src.constants import Mode, TrainingInferenceType
-from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
+from src.constants import DatasetConfigKeys, Mode, OptimizerKeys, TrainingInferenceType
+from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, run_rank_n, warn_rank_0
 
 
 def pad(arrays: list, padding: int, max_length: int = None) -> Tuple[List[int], List[int]]:
@@ -149,27 +151,6 @@ class Model(torch.nn.Module):
 
         return generated_text, num_generated_tokens
 
-    @register_profiler("load_ds_checkpoint")
-    @register_timer("load_ds_checkpoint")
-    def load_ds_checkpoint(self, path: str) -> None:
-        """loads the deepspeed checkpoint saved during training
-
-        Args:
-            path (str): path to load the deepspeed checkpoint from
-        """
-
-        checkpoint_dir = os.path.dirname(path)
-        tag = os.path.basename(path)
-        state = get_fp32_state_dict_from_zero_checkpoint(checkpoint_dir, tag)
-
-        if self.training_inference_type == TrainingInferenceType.prompt_tuning:
-            self.load_state_dict(state, strict=False)
-        elif self.training_inference_type == TrainingInferenceType.full_finetuning:
-            for key in state:
-                state[key] = state[key].to(self.dtype)
-
-            self.load_state_dict(state)
-
     @register_profiler("prepare_batch")
     @register_timer("prepare_batch")
     def prepare_batch(self, batch: Tuple[List[int]]) -> dict:
@@ -217,27 +198,136 @@ class Model(torch.nn.Module):
 
 
 class ModelCheckpointer:
+    """class for loading and saving models"""
+
     @classmethod
-    @register_timer("save_checkpoint")
-    def save_checkpoint(cls, model: DeepSpeedEngine, path: str) -> None:
+    @register_timer("load_checkpoint_for_training")
+    def load_checkpoint_for_training(cls, model: DeepSpeedEngine, load_path: str) -> None:
+        """loads the deepspeed checkpoint saved for training
+
+        Args:
+            model (DeepSpeedEngine): loaded checkpoint is filled into this model
+            load_path (str): path to load the deepspeed checkpoint from
+        """
+
+        model.load_checkpoint(load_path)
+
+    @classmethod
+    @register_timer("save_deepspeed_checkpoint")
+    def save_deepspeed_checkpoint(cls, model: DeepSpeedEngine, args: TrainingArgs, save_path: str) -> None:
         """save deepspeed checkpoint during training
 
         Args:
             model (DeepSpeedEngine): model to save
-            path (str): save location on disk
+            args (InferenceArgs): arguments for training
+            save_path (str): save location on disk
         """
 
-        model.save_checkpoint(path)
+        model.save_checkpoint(save_path)
+        cls.save_training_args(
+            args, os.path.join(save_path, f"global_step{model.global_steps}", "training_config.json")
+        )
 
     @classmethod
-    @register_timer("save_hf_checkpoint")
-    def save_hf_checkpoint(cls, model: Model, path: str) -> None:
-        """save the model as a hf checkpoint
+    @register_timer("load_checkpoint_for_inference")
+    def load_checkpoint_for_inference(cls, model: Model, load_path: str) -> None:
+        """load deepspeed checkpoint for inference
 
         Args:
-            model (DeepSpeedEngine): model to save
-            path (str): save location on disk
+            model (Model): model to save
+            load_path (str): path to load the deepspeed checkpoint from
         """
 
-        model.tokenizer.save_pretrained(path)
-        model.model.save_pretrained(path)
+        checkpoint_dir = os.path.dirname(load_path)
+        tag = os.path.basename(load_path)
+        state = get_fp32_state_dict_from_zero_checkpoint(checkpoint_dir, tag)
+
+        if model.training_inference_type == TrainingInferenceType.prompt_tuning:
+            model.load_state_dict(state, strict=False)
+        elif model.training_inference_type == TrainingInferenceType.full_finetuning:
+            for key in state:
+                state[key] = state[key].to(model.dtype)
+
+            model.load_state_dict(state)
+
+    @classmethod
+    @register_timer("convert_deepspeed_to_huggingface_checkpoint")
+    def convert_deepspeed_to_huggingface_checkpoint(cls, model: Model, load_path: str, save_path: str) -> None:
+        """load the model as a deepspeed checkpoint, converts to huggingface and saves it
+
+        Args:
+            model (Model): model to save
+            load_path (str): path to load the deepspeed checkpoint from
+            save_path (str): save location on disk for huggingface checkpoint
+        """
+
+        cls.load_checkpoint_for_inference(model, load_path)
+
+        model.tokenizer.save_pretrained(save_path)
+        model.model.save_pretrained(save_path)
+
+        args = json.load(open(os.path.join(load_path, "training_config.json"), "r"))
+        json.dump(args, open(os.path.join(save_path, "training_config.json"), "w"), indent=4)
+
+    @classmethod
+    @run_rank_n
+    def save_training_args(cls, args: TrainingArgs, save_path: str) -> None:
+        """saves training args as a json
+
+        Args:
+            args (TrainingArgs): arguments for training
+            save_path (str): save location on disk
+        """
+
+        args = deepcopy(args)
+
+        # model_class
+        args.model_class = args.model_class.__name__
+        # dtype
+        args.dtype = str(args.dtype).split(".")[1]
+
+        # training_inference_type
+        args.training_inference_type = args.training_inference_type.value
+        # prompt_tuning_init
+        if args.prompt_tuning_init is not None:
+            args.training_inference_type = args.prompt_tuning_init.value
+
+        # datasets
+        for data_config in args.datasets:
+            data_config[DatasetConfigKeys.data_class.value] = data_config[DatasetConfigKeys.data_class.value].__name__
+
+        # optimizer
+        args.optimizer[OptimizerKeys.optimizer_class.value] = args.optimizer[
+            OptimizerKeys.optimizer_class.value
+        ].__name__
+
+        json.dump(vars(args), open(save_path, "w"), indent=4)
+
+    @classmethod
+    @run_rank_n
+    def save_inference_args(cls, args: InferenceArgs, save_path: str) -> None:
+        """saves inference args as a json
+
+        Args:
+            args (InferenceArgs): arguments for inference
+            save_path (str): save location on disk
+        """
+
+        args = deepcopy(args)
+
+        # model_class
+        args.model_class = args.model_class.__name__
+        # dtype
+        args.dtype = str(args.dtype).split(".")[1]
+
+        # training_inference_type
+        args.training_inference_type = args.training_inference_type.value
+        # prompt_tuning_init
+        if args.prompt_tuning_init is not None:
+            args.training_inference_type = args.prompt_tuning_init.value
+
+        # datasets
+        for data_config in args.datasets:
+            data_config[DatasetConfigKeys.data_class.value] = data_config[DatasetConfigKeys.data_class.value].__name__
+
+        json.dump(vars(args), open(save_path, "w"), indent=4)

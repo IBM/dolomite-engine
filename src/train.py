@@ -141,7 +141,7 @@ def train(
                 track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
             if micro_step % (args.save_interval * args.gradient_accumulation_steps) == 0:
-                ModelCheckpointer.save_checkpoint(model, args.save_path)
+                ModelCheckpointer.save_deepspeed_checkpoint(model, args, args.save_path)
 
             train_loss_step_accumulator += train_step(model, batch)
             micro_step += 1
@@ -163,7 +163,7 @@ def train(
         val_loss = evaluate(val_dataloader, model)
         track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
-    ModelCheckpointer.save_checkpoint(model, args.save_path)
+    ModelCheckpointer.save_deepspeed_checkpoint(model, args, args.save_path)
 
 
 @register_profiler("evaluate_dataset")
@@ -253,6 +253,9 @@ def main() -> None:
     model, (train_dataloader, val_dataloader) = deepspeed_initialize(
         args, model, optimizer, lr_scheduler, [train_dataset, val_dataset]
     )
+
+    if args.load_path is not None:
+        ModelCheckpointer.load_checkpoint_for_training(model, args.load_path)
 
     experiments_tracker = ExperimentsTracker(__name__, args.experiment_name, args.aim_repo, args.logdir)
     # track all hyperparams in args

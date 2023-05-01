@@ -60,6 +60,8 @@ class InitializationArgs(BaseArgs):
     load_path: str = None
 
     def _post_init(self) -> None:
+        assert self.training_inference_type is not None, "training_inference_type can't be None"
+
         # check whether the arguments specified are valid for finetuning / prompt tuning
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
             assert (
@@ -220,8 +222,8 @@ class InferenceArgs(ModelArgs, InitializationArgs, DatasetArgs):
     top_k: int = None
     # top p
     top_p: float = None
-    # output file
-    output_file: str = None
+    # output dir
+    output_dir: str = None
 
     def _post_init(self) -> None:
         ModelArgs._post_init(self)
@@ -240,8 +242,8 @@ class InferenceArgs(ModelArgs, InitializationArgs, DatasetArgs):
         # max_new_tokens
         assert self.max_new_tokens is not None, "max_new_tokens cannot be None"
 
-        # output_file
-        assert self.output_file is not None, "output_file cannot be None"
+        # output_dir
+        assert self.output_dir is not None, "output_dir cannot be None"
 
 
 def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs]:

@@ -6,8 +6,8 @@
             "data_path": "../dolly/data/",
             "data_sampling_proportion": 1,
             "output_format": " __output__",
-            "max_input_tokens": 750,
-            "max_output_tokens": 274
+            "max_input_tokens": 896,
+            "max_output_tokens": 128
         }
     ],
     "model_name": "gpt2-xl",
@@ -23,7 +23,7 @@
     "dtype": "bfloat16",
     "optimizer": {
         "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-4,
+        "lr": 1e-5,
         "weight_decay": 0.1,
         "betas": [0.9, 0.95],
         "eps": 1e-10

@@ -5,7 +5,7 @@ import sys
 from src.arguments import InferenceArgs, get_args
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data import ConcatenatedDatasets
-from src.model import Model
+from src.model import Model, ModelCheckpointer
 from src.utils import ProgressBar, setup_debugging, setup_tf32
 
 
@@ -21,11 +21,11 @@ def generate(args: InferenceArgs, model: Model, test_dataset: ConcatenatedDatase
 
     progress_bar = ProgressBar(0, len(test_dataset))
 
-    output_dir = os.path.dirname(args.output_file)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
 
-    output_file = open(args.output_file, "w")
+    ModelCheckpointer.save_inference_args(args, os.path.join(args.output_dir, "inference_config.json"))
+
+    output_file = open(os.path.join(args.output_dir, "output.jsonl"), "w")
     raw_batch = []
 
     for index, example in enumerate(test_dataset):
@@ -82,7 +82,7 @@ def main() -> None:
 
     model.post_init()
     if args.load_path is not None:
-        model.load_ds_checkpoint(args.load_path)
+        ModelCheckpointer.load_checkpoint_for_inference(model, args.load_path)
 
     generate(args, model, test_dataset, generate_kwargs)
 
