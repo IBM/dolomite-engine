@@ -14,12 +14,13 @@
     "model_class": "AutoModelForCausalLM",
     "training_inference_type": "full_finetuning",
     "logdir": "/cos/mayank/aim-repo",
-    "experiment_name": "gma-gpt2-xl-dolly-0.0.0",
-    "save_path": "/cos/mayank/checkpoints/gma-gpt2-xl-dolly-0.0.0",
-    "num_training_steps": 8000,
-    "eval_interval": 500,
-    "save_interval": 1000,
-    "batch_size_per_gpu": 4,
+    "experiment_name": "gma-gpt2-xl-dolly-0.0.2",
+    "save_path": "/cos/mayank/checkpoints/gma-gpt2-xl-dolly-0.0.2",
+    "num_training_steps": 2000,
+    "eval_interval": 200,
+    "save_interval": 200,
+    "batch_size_per_gpu": 2,
+    "gradient_accumulation_steps": 8,
     "dtype": "bfloat16",
     "optimizer": {
         "optimizer_class": "ApexFusedAdam",
@@ -28,5 +29,6 @@
         "betas": [0.9, 0.95],
         "eps": 1e-10
     },
-    "lr_schedule": "cosine"
+    "warmup_steps": 25,
+    "lr_schedule": "linear"
 }

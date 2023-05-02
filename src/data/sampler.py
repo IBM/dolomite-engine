@@ -108,9 +108,6 @@ class ConcatenatedDataSampler(DistributedSampler):
     ) -> None:
         """prints the statistics of the program"""
 
-        print_rank_0(f"{'*' * 25} {self.dataset.split.value} {'*' * 25}")
-        print_rank_0(f"total samples in 1 epoch of the dataset mixture = {len(self.dataset)}")
-
         if self.dataset.mode == Mode.training and self.dataset.split == DatasetSplit.train:
             total_samples_seen = (
                 num_training_steps * gradient_accumulation_steps * batch_size_per_gpu * get_world_size()
@@ -123,6 +120,9 @@ class ConcatenatedDataSampler(DistributedSampler):
 
             total_samples_seen = num_steps * batch_size_per_gpu * get_world_size()
 
+        print_rank_0(f"{'*' * 25} {self.dataset.split.value} {'*' * 25}")
+        print_rank_0(f"total samples seen = {total_samples_seen}")
+        print_rank_0(f"total samples in 1 epoch of the dataset mixture = {len(self.dataset)}")
         print_rank_0(f"total epochs for the dataset mixture = {total_samples_seen / len(self.dataset)}")
 
         for i, dataset in enumerate(self.dataset.datasets):
