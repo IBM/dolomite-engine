@@ -101,9 +101,13 @@ class Model(torch.nn.Module):
                 # this tells from_pretrained to instantiate directly on gpus
                 # this only instantiates a single instance of the model across the ranks
                 self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
+
                 self.model = args.model_class.from_pretrained(
                     self.model_name, trust_remote_code=args.trust_remote_code
                 )
+
+                if args.gradient_checkpointing:
+                    self.model.gradient_checkpointing_enable()
             else:
                 self.model = args.model_class.from_pretrained(
                     self.model_name, torch_dtype=self.dtype, trust_remote_code=args.trust_remote_code
@@ -120,6 +124,10 @@ class Model(torch.nn.Module):
             self.model = args.model_class.from_pretrained(
                 self.model_name, torch_dtype=self.dtype, trust_remote_code=args.trust_remote_code
             )
+
+            if args.gradient_checkpointing:
+                self.model.gradient_checkpointing_enable()
+
             self.model = get_peft_model(self.model, self.peft_config)
 
         if mode == Mode.training:

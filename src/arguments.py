@@ -184,6 +184,8 @@ class TrainingArgs(
     batch_size_per_gpu: int = None
     # whether to use val dataset for validation during training
     eval_during_training: bool = True
+    # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
+    gradient_checkpointing: bool = False
 
     def _post_init(self) -> None:
         ModelArgs._post_init(self)
