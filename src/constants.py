@@ -19,6 +19,13 @@ class Mode(str, Enum):
     inference = "inference"
 
 
+class PaddingSide(str, Enum):
+    """padding side for the tokenizer"""
+
+    left = "left"
+    right = "right"
+
+
 class OptimizerKeys(str, Enum):
     """standard keys in the optimizer"""
 

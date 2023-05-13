@@ -1,10 +1,36 @@
 {
     "datasets": [
         {
+            "data_class": "DineshChitChatDataset",
+            "data_name": "chitchat",
+            "data_path": "../data/chitchat/chitchat_v2/",
+            "data_sampling_proportion": 1812,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "files": {
+                "train": "chitchat_subdocs_train.json",
+                "val": "chitchat_subdocs_val.json",
+                "test": "chitchat_document_test.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "multidoc2dial",
+            "data_path": "../data/md2d/contextual_unanswerable_classifier/",
+            "data_sampling_proportion": 4228,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "files": {
+                "train": "md2d_subdocs_train_pos_neg.json",
+                "val": "md2d_subdocs_val_pos_neg.json",
+                "test": "md2d_document_test_pos_neg.json"
+            }
+        },
+        {
             "data_class": "YatinAnswerabilityDataset",
             "data_name": "human 2 bot",
             "data_path": "../data/h2b/processed/",
-            "data_sampling_proportion": 1,
+            "data_sampling_proportion": 223,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
             "filter_allowed": false,
@@ -18,7 +44,7 @@
             "data_class": "YatinAnswerabilityDataset",
             "data_name": "human 2 human",
             "data_path": "../data/h2h/coga_internal_data_v1_processed/",
-            "data_sampling_proportion": 1,
+            "data_sampling_proportion": 1287,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
             "filter_allowed": false,

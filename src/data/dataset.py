@@ -174,14 +174,16 @@ class DebugDataset(BaseDataset):
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
-        self.max_input_tokens: int = args.max_input_tokens
-        self.max_output_tokens: int = args.max_output_tokens
+        if self.do_format_input:
+            raise ValueError("DebugDataset does not support input formatting")
+        if self.do_format_output:
+            raise ValueError("DebugDataset does not support output formatting")
 
     def __getitem__(self, index: int) -> dict:
         example = {
             DatasetKeys.id.value: generate_random_id(self.__class__),
-            DatasetKeys.input.value: " Hello" * self.max_input_tokens,
-            DatasetKeys.output.value: " Hello" * self.max_output_tokens,
+            DatasetKeys.input.value: [self.tokenizer.eos_token_id] * self.max_input_tokens,
+            DatasetKeys.output.value: [self.tokenizer.eos_token_id] * self.max_output_tokens,
         }
 
         example[DatasetKeys.preprocessed_input.value] = self.construct_input_from_format(

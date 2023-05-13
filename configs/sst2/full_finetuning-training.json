@@ -1,32 +1,24 @@
 {
     "datasets": [
         {
-            "data_class": "SST2Dataset",
-            "data_name": "sst2",
-            "input_format": "Classify the sentiment of the sentence:\n__input__\nSentiment:",
-            "output_format": " __output__",
+            "data_class": "DebugDataset",
             "data_sampling_proportion": 1,
             "max_input_tokens": 1024,
             "max_output_tokens": 128
         }
     ],
-    "model_name": "bigscience/bloom-560m",
-    "model_class": "AutoModelForCausalLM",
+    "model_name": "google/flan-t5-xxl",
+    "model_class": "AutoModelForSeq2SeqLM",
     "training_inference_type": "full_finetuning",
-    "experiment_name": "sst2-bloom-560m-full_finetuning",
-    "save_path": "checkpoints/full_finetuning",
-    "num_training_steps": 4000,
-    "eval_interval": 500,
-    "save_interval": 500,
-    "batch_size_per_gpu": 8,
+    "experiment_name": "gma-gpt2-xl-dolly",
+    "save_path": "/cos/mayank/checkpoints/tmp",
+    "num_training_steps": 1000,
+    "eval_interval": 1600,
+    "save_interval": 1600,
+    "batch_size_per_gpu": 2,
     "dtype": "bfloat16",
+    "eval_during_training": true,
+    "gradient_accumulation_steps": 8,
     "learning_rate": 1e-5,
-    "optimizer": {
-        "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-5,
-        "weight_decay": 0.1,
-        "betas": [0.9, 0.95],
-        "eps": 1e-10
-    },
-    "lr_schedule": "cosine"
+    "lr_schedule": "linear"
 }

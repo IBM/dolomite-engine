@@ -28,6 +28,8 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # dtype to use for training / inference
     dtype: str = "float32"
+    # trust remote code for models that are not directly supported by HuggingFace yet
+    trust_remote_code: bool = False
 
     def _post_init(self) -> None:
         # model_name

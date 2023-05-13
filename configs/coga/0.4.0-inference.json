@@ -55,13 +55,14 @@
             }
         }
     ],
-    "model_name": "google/flan-t5-xl",
-    "model_class": "AutoModelForSeq2SeqLM",
+    "model_name": "mosaicml/mpt-7b",
+    "model_class": "AutoModelForCausalLM",
+    "trust_remote_code": true,
     "training_inference_type": "full_finetuning",
-    "load_path": "/cos/mayank/checkpoints/coga-3b-0.3.2/global_step20000",
+    "load_path": "/cos/mayank/checkpoints/coga-7b-0.4.0/global_step20000",
     "batch_size": 1,
     "dtype": "bfloat16",
     "do_sample": false,
     "max_new_tokens": 256,
-    "output_dir": "/cos/mayank/output/coga-3b-0.3.2/global_step20000"
+    "output_dir": "/cos/mayank/output/coga-7b-0.4.0/global_step20000"
 }

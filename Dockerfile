@@ -38,6 +38,8 @@ RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.o
     datasets \
     py-cpuinfo \
     pynvml \
+    einops \
+    packaging \
     --no-cache-dir
 
 # apex
@@ -53,6 +55,9 @@ RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
     git checkout v0.9.1 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
+
+# flash attention
+RUN pip install flash-attn==1.0.4 --no-cache-dir
 
 # clean conda env
 RUN conda clean -ya
