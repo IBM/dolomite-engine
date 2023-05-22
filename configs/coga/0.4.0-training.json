@@ -9,6 +9,7 @@
             "max_output_tokens": 256,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
+            "output_format": " __output__",
             "files": {
                 "train": "chitchat_subdocs_train.json",
                 "val": "chitchat_subdocs_val.json",
@@ -24,6 +25,7 @@
             "max_output_tokens": 256,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
+            "output_format": " __output__",
             "files": {
                 "train": "md2d_subdocs_train_pos_neg.json",
                 "val": "md2d_subdocs_val_pos_neg.json",

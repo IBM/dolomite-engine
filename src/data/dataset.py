@@ -475,7 +475,7 @@ class ConcatenatedDatasets(torch.utils.data.Dataset):
         print_rank_0(f"total examples in the entire dataset mixture = {len(self)}\n")
 
         for dataset in self.datasets:
-            print_rank_0(f"examples in {dataset.__class__.__name__} = {len(dataset)}")
+            print_rank_0(f"examples in {dataset.__class__.__name__} ({dataset.data_name}) = {len(dataset)}")
 
         print_rank_0("-" * 57)
 

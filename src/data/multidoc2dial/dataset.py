@@ -24,15 +24,11 @@ class YatinAnswerabilityDataset(BaseDataset):
     ) -> None:
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
-        self.pre_tokenized = True
         self.data_config["dataset_type"] = YatinDineshDatasetType(self.data_config.get("dataset_type", "no_evidence"))
         self.data_config = config_class(**self.data_config)
 
         if self.do_format_input:
             raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
-
-        if self.do_format_output:
-            raise ValueError(f"output_format for {self.__class__.__name__} should be '__output__'")
 
         if self.max_input_tokens is None:
             warn_rank_0("ignoring max_document_length in the config since max_input_tokens was not specified")
@@ -87,6 +83,7 @@ class YatinAnswerabilityDataset(BaseDataset):
         return input
 
     def construct_output_from_format(self, output: str) -> str:
+        output = super().construct_output_from_format(output)
         output = self.tokenizer(output, add_special_tokens=False)["input_ids"]
         output = output[: self.max_output_tokens]
         return output
@@ -107,13 +104,26 @@ class YatinAnswerabilityDataset(BaseDataset):
                 ):
                     continue
 
+                if (
+                    self.data_config.allowed_data_type is not None
+                    and self.data_config.allowed_data_type not in raw_example["data_types"]
+                ):
+                    continue
+
                 check_raw_example(raw_example, self.mode)
 
                 result_example = {}
 
                 # construct input
-                context = raw_example["context"]
-                document = raw_example["document"]
+                context: str = raw_example["context"]
+                document: str = raw_example["document"]
+
+                context = context.strip()
+                document = document.strip()
+
+                # for decoder only models, we need an explicit marker
+                if not self.is_encoder_decoder:
+                    context += "\nAgent:"
 
                 if self.data_config.dataset_type != YatinDineshDatasetType.NO_EVIDENCE:
                     if self.data_config.static_evidence is None:

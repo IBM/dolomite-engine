@@ -8,7 +8,14 @@ from peft import PromptTuningInit
 from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from src.constants import DatasetConfigKeys, LearningRateScheduler, Mode, OptimizerKeys, TrainingInferenceType
+from src.constants import (
+    DatasetConfigKeys,
+    LearningRateScheduler,
+    Mode,
+    OptimizerKeys,
+    PaddingSide,
+    TrainingInferenceType,
+)
 
 
 class BaseArgs(BaseModel):
@@ -30,6 +37,8 @@ class ModelArgs(BaseArgs):
     dtype: str = "float32"
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
+    # padding side
+    padding_side: PaddingSide = None
 
     def _post_init(self) -> None:
         # model_name

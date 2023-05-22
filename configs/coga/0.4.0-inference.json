@@ -7,6 +7,8 @@
             "data_sampling_proportion": 1812,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
+            "output_format": " __output__",
+            "max_input_tokens": 1920,
             "files": {
                 "train": "chitchat_subdocs_train.json",
                 "val": "chitchat_subdocs_val.json",
@@ -20,49 +22,24 @@
             "data_sampling_proportion": 4228,
             "dataset_type": "response_evidence",
             "combine_no_evidence": true,
+            "output_format": " __output__",
+            "max_input_tokens": 1920,
             "files": {
                 "train": "md2d_subdocs_train_pos_neg.json",
                 "val": "md2d_subdocs_val_pos_neg.json",
                 "test": "md2d_document_test_pos_neg.json"
             }
-        },
-        {
-            "data_class": "YatinAnswerabilityDataset",
-            "data_name": "human 2 bot",
-            "data_path": "../data/h2b/processed/",
-            "data_sampling_proportion": 223,
-            "dataset_type": "response_evidence",
-            "combine_no_evidence": true,
-            "filter_allowed": false,
-            "files": {
-                "train": "manually-cleaned-coga-internal_CONSOLE_train_all.json",
-                "val": "manually-cleaned-coga-internal_CONSOLE_test_all.json",
-                "test": "manually-cleaned-coga-internal_CONSOLE_test_all.json"
-            }
-        },
-        {
-            "data_class": "YatinAnswerabilityDataset",
-            "data_name": "human 2 human",
-            "data_path": "../data/h2h/coga_internal_data_v1_processed/",
-            "data_sampling_proportion": 1287,
-            "dataset_type": "response_evidence",
-            "combine_no_evidence": true,
-            "filter_allowed": false,
-            "files": {
-                "train": "internal_v1_train_all.json",
-                "val": "internal_v1_test_all.json",
-                "test": "internal_v1_test_all.json"
-            }
         }
     ],
     "model_name": "mosaicml/mpt-7b",
     "model_class": "AutoModelForCausalLM",
+    "padding_side": "left",
     "trust_remote_code": true,
     "training_inference_type": "full_finetuning",
-    "load_path": "/cos/mayank/checkpoints/coga-7b-0.4.0/global_step20000",
-    "batch_size": 1,
+    "load_path": "/cos/mayank/checkpoints/coga-7b-0.4.0/global_step8000",
+    "batch_size": 4,
     "dtype": "bfloat16",
     "do_sample": false,
     "max_new_tokens": 256,
-    "output_dir": "/cos/mayank/output/coga-7b-0.4.0/global_step20000"
+    "output_dir": "/cos/mayank/output/coga-7b-0.4.0/global_step8000"
 }

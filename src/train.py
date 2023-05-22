@@ -6,9 +6,10 @@ from torch.utils.data import DataLoader
 from transformers import set_seed
 
 from src.arguments import TrainingArgs, get_args
+from src.checkpointing import ModelCheckpointer
 from src.constants import DatasetSplit, Mode
 from src.data import ConcatenatedDatasets
-from src.model import Model, ModelCheckpointer
+from src.model import Model
 from src.optimization import get_optimizer, get_scheduler_method
 from src.utils import (
     ExperimentsTracker,

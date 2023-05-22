@@ -3,8 +3,9 @@ from argparse import ArgumentParser, Namespace
 import torch
 import transformers
 
+from src.checkpointing import ModelCheckpointer
 from src.constants import Mode, TrainingInferenceType
-from src.model import Model, ModelCheckpointer
+from src.model import Model
 
 
 def get_args() -> Namespace:

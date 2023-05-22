@@ -127,10 +127,10 @@ class ConcatenatedDataSampler(DistributedSampler):
 
         for i, dataset in enumerate(self.dataset.datasets):
             print_rank_0(
-                f"\nnumber of samples of {dataset.__class__.__name__} in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i]}"
+                f"\nnumber of samples of {dataset.__class__.__name__} ({dataset.data_name}) in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i]}"
             )
             print_rank_0(
-                f"number of epochs of {dataset.__class__.__name__} in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i] / len(dataset)}"
+                f"number of epochs of {dataset.__class__.__name__} ({dataset.data_name}) in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i] / len(dataset)}"
             )
 
         print_rank_0("*" * 57)

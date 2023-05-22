@@ -3,9 +3,10 @@ import os
 import sys
 
 from src.arguments import InferenceArgs, get_args
+from src.checkpointing import ModelCheckpointer
 from src.constants import DatasetKeys, DatasetSplit, Mode
 from src.data import ConcatenatedDatasets
-from src.model import Model, ModelCheckpointer
+from src.model import Model
 from src.utils import ProgressBar, setup_debugging, setup_tf32
 
 
