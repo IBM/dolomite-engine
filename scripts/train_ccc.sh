@@ -18,4 +18,4 @@ torchrun --nnodes=$NNODES \
     --rdzv_id=101 \
     --rdzv_endpoint=$MASTER_ADDRESS:$MASTER_PORT \
     -m src.train \
-    --config configs/sst2/full_finetuning-training.json
+    --config ${1}

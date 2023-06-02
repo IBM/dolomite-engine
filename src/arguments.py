@@ -35,6 +35,8 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # dtype to use for training / inference
     dtype: str = "float32"
+    # add special tokens to the tokenizer
+    additional_special_tokens: List[str] = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
     # padding side
@@ -260,6 +262,15 @@ class InferenceArgs(ModelArgs, InitializationArgs, DatasetArgs):
 
 
 def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs]:
+    """get args for training / inference
+
+    Args:
+        mode (Mode): training / inference mode for running the program
+
+    Returns:
+        Union[TrainingArgs, InferenceArgs]: args for training / inference
+    """
+
     parser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="path for the config")
     args = parser.parse_args()
@@ -267,6 +278,11 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs]:
     config: dict = json.load(open(args.config, "r"))
 
     if mode == Mode.training:
-        return TrainingArgs(**config)
+        args = TrainingArgs(**config)
     else:
-        return InferenceArgs(**config)
+        args = InferenceArgs(**config)
+
+    from src.utils import print_args
+
+    print_args(args)
+    return args

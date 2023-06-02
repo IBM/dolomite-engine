@@ -4,8 +4,9 @@ import torch
 import transformers
 
 from src.checkpointing import ModelCheckpointer
-from src.constants import Mode, TrainingInferenceType
+from src.constants import Mode, PaddingSide, TrainingInferenceType
 from src.model import Model
+from src.utils import print_args
 
 
 def get_args() -> Namespace:
@@ -30,7 +31,18 @@ def get_args() -> Namespace:
         help="type of tuning, full finetuning or PEFT",
     )
 
+    parser.add_argument("--additional_special_tokens", default=None, nargs="*", type=str)
+    parser.add_argument("--trust_remote_code", action="store_true")
+    parser.add_argument(
+        "--padding_side",
+        type=lambda x: getattr(PaddingSide, x),
+        choices=[PaddingSide.left, PaddingSide.right],
+        help="padding side: left or right",
+        default=None,
+    )
+
     args = parser.parse_args()
+    print_args(args)
     return args
 
 

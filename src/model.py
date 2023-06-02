@@ -8,6 +8,7 @@ from transformers.deepspeed import HfDeepSpeedConfig
 from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import Mode, PaddingSide, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
+from src.utils.logging import print_rank_0
 
 
 def pad(
@@ -96,6 +97,11 @@ class Model(torch.nn.Module):
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+            print_rank_0(f"PAD token not found, adding it explicitely")
+
+        if args.additional_special_tokens is not None:
+            self.tokenizer.add_special_tokens({"additional_special_tokens": args.additional_special_tokens})
+            print_rank_0(f"added {len(args.additional_special_tokens)} tokens")
 
         model_kwargs = {"pretrained_model_name_or_path": self.model_name, "trust_remote_code": args.trust_remote_code}
 
