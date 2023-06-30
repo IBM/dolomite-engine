@@ -1,0 +1,96 @@
+{
+    "datasets": [
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "multidoc2dial",
+            "data_path": "../multidoc2dial-data-forge/augmented_multidoc2dial/v3/contextual_unanswerable_classifier_with_da",
+            "data_sampling_proportion": 255270,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "no_evidence",
+            "combine_no_evidence": true,
+            "allowed_data_type": "ST",
+            "files": {
+                "train": "md2d_subdocs_train_pos_neg.json",
+                "val": "md2d_subdocs_val_pos_neg.json",
+                "test": "md2d_document_test_pos_neg.json"
+            }
+        },
+        {
+            "data_class": "ELI5Dataset",
+            "data_name": "asqa-positive",
+            "data_path": "../multidoc2dial-data-forge/qa/v3/asqa_processed",
+            "data_sampling_proportion": 17404,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "files": {
+                "train": "pos_best_train_orig.json_ans_retrieved.json",
+                "val": "pos_best_dev_orig.json_ans_retrieved.json",
+                "test": "pos_best_test_orig.json_ans_retrieved.json"
+            }
+        },
+        {
+            "data_class": "ELI5Dataset",
+            "data_name": "asqa-negative",
+            "data_path": "../multidoc2dial-data-forge/qa/v3/asqa_processed",
+            "data_sampling_proportion": 4351,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "output_format": "I don't know.",
+            "files": {
+                "train": "neg_best_train_orig.json_ans_retrieved.json",
+                "val": "neg_best_train_orig.json_ans_retrieved.json",
+                "test": "neg_best_train_orig.json_ans_retrieved.json"
+            }
+        },
+        {
+            "data_class": "ELI5Dataset",
+            "data_name": "eli5-positive",
+            "data_path": "../multidoc2dial-data-forge/qa/v3/eli5_processed",
+            "data_sampling_proportion": 186812,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "files": {
+                "train": "pos_best_train_orig.json_ans_retrieved.json",
+                "val": "pos_best_dev_orig.json_ans_retrieved.json",
+                "test": "pos_best_dev_orig.json_ans_retrieved.json"
+            }
+        },
+        {
+            "data_class": "ELI5Dataset",
+            "data_name": "eli5-negative",
+            "data_path": "../multidoc2dial-data-forge/qa/v3/eli5_processed",
+            "data_sampling_proportion": 46703,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "output_format": "I don't know.",
+            "files": {
+                "train": "neg_best_train_orig.json_ans_retrieved.json",
+                "val": "neg_best_dev_orig.json_ans_retrieved.json",
+                "test": "neg_best_dev_orig.json_ans_retrieved.json"
+            }
+        }
+    ],
+    "model_name": "google/flan-t5-xl",
+    "model_class": "AutoModelForSeq2SeqLM",
+    "logdir": "/cos/mayank/aim-repo",
+    "training_inference_type": "prompt_tuning",
+    "prompt_tuning_init": "TEXT",
+    "prompt_tuning_init_text": "Given the document below, generate an agent response to the query:",
+    "num_virtual_tokens": 13,
+    "experiment_name": "coga-3b-0.6.0",
+    "save_path": "/cos/mayank/checkpoints/coga-3b-0.6.0",
+    "num_training_steps": 20000,
+    "eval_interval": 1000,
+    "save_interval": 4000,
+    "batch_size_per_gpu": 2,
+    "dtype": "bfloat16",
+    "optimizer": {
+        "optimizer_class": "ApexFusedAdam",
+        "lr": 1e-5,
+        "weight_decay": 0.1,
+        "betas": [0.9, 0.95],
+        "eps": 1e-10
+    },
+    "lr_schedule": "cosine"
+}

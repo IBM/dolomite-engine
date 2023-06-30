@@ -49,6 +49,6 @@
     "dtype": "bfloat16",
     "do_sample": false,
     "max_new_tokens": 256,
-    "output_dir": "../output/coga-3b-0.3.6/global_step20000"
-    
+    "output_dir": "../output/coga-3b-0.3.6/global_step20000/md2dv3-chitchatv2-h2hv3"
+
 }

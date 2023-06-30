@@ -1,0 +1,127 @@
+{
+    "datasets": [
+        {
+            "data_class": "DineshChitChatDataset",
+            "data_name": "chitchat",
+            "data_path": "../multidoc2dial-data-forge/chitchat/v2/chitchat_v2/",
+            "data_sampling_proportion": 122,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "control_prompt": "Response type: multi turn",
+            "dataset_type": "response_evidence",
+            "files": {
+                "train": "chitchat_subdocs_train.json",
+                "val": "chitchat_subdocs_val.json",
+                "test": "chitchat_document_test.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "multidoc2dial",
+            "data_path": "../multidoc2dial-data-forge/augmented_multidoc2dial/v3/contextual_unanswerable_classifier_with_da/",
+            "data_sampling_proportion": 342,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "control_prompt": "Response type: multi turn",
+            "dataset_type": "response_evidence",
+            "files": {
+                "train": "md2d_subdocs_train_pos_neg.json",
+                "val": "md2d_subdocs_val_pos_neg.json",
+                "test": "md2d_document_test_pos_neg.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "human 2 human",
+            "data_path": "../multidoc2dial-data-forge/h2h/v3/coga_internal_v3_h2h_processed",
+            "data_sampling_proportion": 239,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "control_prompt": "Response type: multi turn",
+            "dataset_type": "response_evidence",
+            "filter_allowed": false,
+            "files": {
+                "train": "coga_internal_v3_train.json",
+                "val": "coga_internal_v3_test.json",
+                "test": "coga_internal_v3_test.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "eli5",
+            "data_path": "../multidoc2dial-data-forge/qa/v3/eli5_processed",
+            "data_sampling_proportion": 146,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "control_prompt": "Response type: multi turn",
+            "filter_functions": ["is_bertscore_high"],
+            "bertscore_threshold": 0.1,
+            "dataset_type": "response_evidence",
+            "filter_allowed": false,
+            "files": {
+                "train": "pos_best_train_orig.json_ans_retrieved.json",
+                "val": "pos_best_dev_orig.json_ans_retrieved.json",
+                "test": "pos_best_dev_orig.json_ans_retrieved.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "eli5",
+            "data_path": "../multidoc2dial-data-forge/qa/v3/eli5_processed",
+            "data_sampling_proportion": 350,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "control_prompt": "Response type: single turn",
+            "filter_functions": ["is_bertscore_high"],
+            "bertscore_threshold": 0.1,
+            "dataset_type": "response_only",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "files": {
+                "train": "pos_best_train_orig.json_ans_retrieved.json",
+                "val": "pos_best_dev_orig.json_ans_retrieved.json",
+                "test": "pos_best_dev_orig.json_ans_retrieved.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "multidoc2dial",
+            "data_path": "../multidoc2dial-data-forge/augmented_multidoc2dial/v3/contextual_unanswerable_classifier_with_da/",
+            "data_sampling_proportion": 500,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "control_prompt": "Response type: single turn",
+            "filter_functions": ["is_da_type_allowed"],
+            "allowed_da_types": ["idk", "respond_solution", "respond_solution_positive", "respond_solution_negative"],
+            "dataset_type": "response_only",
+            "combine_no_evidence": true,
+            "filter_allowed": true,
+            "files": {
+                "train": "md2d_subdocs_train_pos_neg.json",
+                "val": "md2d_subdocs_val_pos_neg.json",
+                "test": "md2d_document_test_pos_neg.json"
+            }
+        }
+
+    ],
+    "model_name": "google/flan-t5-xl",
+    "additional_special_tokens": ["\n"],
+    "model_class": "AutoModelForSeq2SeqLM",
+    "training_inference_type": "full_finetuning",
+    "logdir": "/cos/mayank/aim-repo",
+    "experiment_name": "coga-3b-0.5.2",
+    "save_path": "/cos/mayank/checkpoints/coga-3b-0.5.2",
+    "num_training_steps": 20000,
+    "eval_interval": 2000,
+    "save_interval": 4000,
+    "batch_size_per_gpu": 2,
+    "dtype": "bfloat16",
+    "optimizer": {
+        "optimizer_class": "ApexFusedAdam",
+        "lr": 1e-5,
+        "weight_decay": 0.1,
+        "betas": [0.9, 0.95],
+        "eps": 1e-10
+    },
+    "lr_schedule": "cosine"
+}

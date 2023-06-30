@@ -2,8 +2,10 @@ import json
 from argparse import ArgumentParser
 from typing import Any, List, Union
 
+import fm_nlp.architecture
 import torch
 import transformers
+from fm_nlp.architecture import GraniteHF, SandstoneHF
 from peft import PromptTuningInit
 from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -45,13 +47,13 @@ class ModelArgs(BaseArgs):
     def _post_init(self) -> None:
         # model_name
         assert self.model_name is not None, "model_name cannot be None"
-
         # model_class
-        self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(transformers, self.model_class)
-        assert self.model_class in [
-            AutoModelForCausalLM,
-            AutoModelForSeq2SeqLM,
-        ], f"unexpected model_class '{self.model_class}'"
+        try:
+            self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(
+                transformers, self.model_class
+            )
+        except AttributeError:
+            self.model_class: Union[GraniteHF, SandstoneHF] = getattr(fm_nlp.architecture, self.model_class)
 
         # dtype
         self.dtype = getattr(torch, self.dtype)
@@ -69,23 +71,23 @@ class InitializationArgs(BaseArgs):
     prompt_tuning_init_text: str = None
     # number of virtual tokens for PEFT
     num_virtual_tokens: int = None
+    # the dimension of the low-rank matrices
+    lora_rank: int = None
+    # the scaling factor for the low-rank matrices
+    lora_alpha: float = 32.0
+    # the dropout probability of the LoRA layers
+    lora_dropout: float = 0.1
     # path to load checkpoints
     load_path: str = None
 
     def _post_init(self) -> None:
         assert self.training_inference_type is not None, "training_inference_type can't be None"
 
-        # check whether the arguments specified are valid for finetuning / prompt tuning
+        # check whether the arguments specified are valid
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
-            assert (
-                self.prompt_tuning_init is None
-            ), f"prompt_tuning_init '{self.prompt_tuning_init}' should not be specified with full_finetuning"
-            assert (
-                self.prompt_tuning_init_text is None
-            ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' should not be specified with full_finetuning"
-            assert (
-                self.num_virtual_tokens is None
-            ), f"num_virtual_tokens '{self.num_virtual_tokens}' should not be specified with full_finetuning"
+            self._check_prompt_tuning_is_disabled()
+            self._check_lora_is_disabled()
+
         elif self.training_inference_type == TrainingInferenceType.prompt_tuning:
             if self.prompt_tuning_init == PromptTuningInit.RANDOM:
                 assert (
@@ -95,6 +97,27 @@ class InitializationArgs(BaseArgs):
                 assert (
                     self.prompt_tuning_init_text is not None
                 ), f"prompt_tuning_init_text needs to be specified with TEXT init method"
+
+            self._check_lora_is_disabled()
+
+        elif self.training_inference_type == TrainingInferenceType.lora:
+            assert self.lora_rank is not None, f"lora_rank {self.lora_rank} is a required argument for lora"
+
+            self._check_prompt_tuning_is_disabled()
+
+    def _check_prompt_tuning_is_disabled(self) -> None:
+        assert (
+            self.prompt_tuning_init is None
+        ), f"prompt_tuning_init '{self.prompt_tuning_init}' should not be specified with {self.training_inference_type.value}"
+        assert (
+            self.prompt_tuning_init_text is None
+        ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' should not be specified with {self.training_inference_type.value}"
+        assert (
+            self.num_virtual_tokens is None
+        ), f"num_virtual_tokens '{self.num_virtual_tokens}' should not be specified with {self.training_inference_type.value}"
+
+    def _check_lora_is_disabled(self) -> None:
+        assert self.lora_rank is None, f"lora_rank {self.lora_rank} should not be specified with full_finetuning"
 
 
 class DatasetArgs(BaseArgs):

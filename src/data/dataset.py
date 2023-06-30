@@ -1,7 +1,8 @@
 import glob
 import os
 from copy import deepcopy
-from typing import List, Set, Tuple, Type, Union
+from functools import partial
+from typing import Callable, List, Set, Tuple, Type, Union
 from uuid import uuid4
 
 import jsonlines

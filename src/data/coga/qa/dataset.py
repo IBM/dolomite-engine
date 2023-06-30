@@ -6,9 +6,10 @@ from transformers import AutoTokenizer
 
 from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import DatasetKeys, DatasetSplit, Mode
+from src.data.coga.filters import filter_dataset
+from src.data.coga.qa.config import ELI5Config
 from src.data.dataset import BaseDataset, check_raw_example, generate_random_id
-from src.data.qa.config import ELI5Config
-from src.utils.logging import warn_rank_0
+from src.utils.logging import print_rank_0, warn_rank_0
 
 
 class ELI5Dataset(BaseDataset):
@@ -23,7 +24,13 @@ class ELI5Dataset(BaseDataset):
         super().__init__(args, split, mode, tokenizer, is_encoder_decoder)
 
         self.data_config = ELI5Config(**self.data_config)
-
+        self.control_prompt = self.data_config.control_prompt
+        print_rank_0("The data name is: ", self.data_name)
+        print_rank_0("The control prompt is: ", self.control_prompt)
+        if self.control_prompt is None:
+            self.control_token_ids = []
+        else:
+            self.control_token_ids = self.tokenizer(self.control_prompt, add_special_tokens=False)["input_ids"]
         if self.do_format_input:
             raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
 
@@ -41,6 +48,8 @@ class ELI5Dataset(BaseDataset):
             document = document[: self.data_config.max_document_length - 1]
 
         input = document + context
+        if len(self.control_token_ids) != 0:
+            input = input + self.control_token_ids
 
         return input
 
@@ -51,23 +60,30 @@ class ELI5Dataset(BaseDataset):
         return output
 
     def prepare_examples(self) -> List[dict]:
-        examples = []
         if self.split.value not in self.data_config.files:
-            return examples
+            return []
 
         data_file = os.path.join(self.data_path, self.data_config.files[self.split.value])
 
         with open(data_file, "r") as f:
-            json_file = json.load(f)
-
-            for raw_example in json_file:
+            raw_examples = json.load(f)
+            print_rank_0("Total number of examples in json file: {}".format(len(raw_examples)))
+            filtered_examples = filter_dataset(raw_examples)
+            print_rank_0("Total number of examples after filtering: {}".format(len(filtered_examples)))
+            examples = []
+            for raw_example in filtered_examples:
                 check_raw_example(raw_example, self.mode)
 
                 result_example = {}
 
                 # construct input
                 context: str = raw_example["context"]
-                document: str = raw_example["document"]
+                if self.data_config.use_retrieved_passages:
+                    passage_similarities: List[float] = raw_example["bertscore_p"]
+                    most_similar_passage_index = passage_similarities.index(max(passage_similarities))
+                    document: str = raw_example["passage_list"][most_similar_passage_index]
+                else:
+                    document: str = raw_example["document"]
 
                 context = context.strip()
                 document = document.strip()
@@ -93,4 +109,5 @@ class ELI5Dataset(BaseDataset):
 
                 examples.append(result_example)
 
+        print_rank_0(f"Loaded {len(examples)} examples from {data_file}")
         return examples

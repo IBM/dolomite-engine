@@ -1,7 +1,8 @@
 from typing import List, Tuple, Union
 
 import torch
-from peft import PromptTuningConfig, TaskType, get_peft_model
+from fm_nlp.architecture import GraniteHF, GraniteHFConfig, SandstoneHF, SandstoneHFConfig
+from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
@@ -82,7 +83,16 @@ class Model(torch.nn.Module):
 
         self.mode = mode
         self.model_name = args.model_name
-        self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.trust_remote_code)
+        self.model_class = args.model_class
+
+        # check if model_class is GraniteHF
+        if self.model_class == GraniteHF:
+            self.config = GraniteHFConfig.from_pretrained(self.model_name)
+        elif self.model_class == SandstoneHF:
+            self.config = SandstoneHFConfig.from_pretrained(self.model_name)
+        else:
+            self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.trust_remote_code)
+
         self.is_encoder_decoder = self.config.is_encoder_decoder
         self.training_inference_type = args.training_inference_type
         self.dtype = args.dtype
@@ -103,22 +113,35 @@ class Model(torch.nn.Module):
             self.tokenizer.add_special_tokens({"additional_special_tokens": args.additional_special_tokens})
             print_rank_0(f"added {len(args.additional_special_tokens)} tokens")
 
-        model_kwargs = {"pretrained_model_name_or_path": self.model_name, "trust_remote_code": args.trust_remote_code}
+        model_kwargs = {
+            "pretrained_model_name_or_path": self.model_name,
+            "trust_remote_code": args.trust_remote_code,
+            "use_cache": mode == Mode.inference,
+        }
 
         if self.training_inference_type == TrainingInferenceType.full_finetuning:
-            if mode == Mode.training:
-                # this tells from_pretrained to instantiate directly on gpus
-                # this only instantiates a single instance of the model across the ranks
+            self._setup_model_for_finetuning(args, model_kwargs)
+        else:
+            self._setup_model_for_peft(args, model_kwargs)
+
+        self._setup_input_device()
+
+    def _setup_model_for_finetuning(self, args: Union[TrainingArgs, InferenceArgs], model_kwargs: dict) -> None:
+        if self.mode == Mode.training:
+            # this tells from_pretrained to instantiate directly on gpus
+            # this only instantiates a single instance of the model across the ranks
+            if self.model_class not in [GraniteHF, SandstoneHF]:
                 self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
-                self.model = args.model_class.from_pretrained(**model_kwargs)
+            self.model = args.model_class.from_pretrained(**model_kwargs)
 
-                if args.gradient_checkpointing:
-                    self.model.gradient_checkpointing_enable()
-            else:
-                self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype, use_cache=True)
+            if args.gradient_checkpointing:
+                self.model.gradient_checkpointing_enable()
+        else:
+            self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
 
-        elif args.training_inference_type == TrainingInferenceType.prompt_tuning:
+    def _setup_model_for_peft(self, args: Union[TrainingArgs, InferenceArgs], model_kwargs: dict) -> None:
+        if args.training_inference_type == TrainingInferenceType.prompt_tuning:
             self.peft_config = PromptTuningConfig(
                 task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
                 prompt_tuning_init=args.prompt_tuning_init,
@@ -126,33 +149,21 @@ class Model(torch.nn.Module):
                 prompt_tuning_init_text=args.prompt_tuning_init_text,
                 tokenizer_name_or_path=args.model_name,
             )
+        elif args.training_inference_type == TrainingInferenceType.lora:
+            self.peft_config = LoraConfig(
+                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
+                inference_mode=True if self.mode == Mode.inference else False,
+                r=args.lora_rank,
+                lora_alpha=args.lora_alpha,
+                lora_dropout=args.lora_dropout,
+            )
 
-            if mode == Mode.inference:
-                model_kwargs["use_cache"] = True
+        self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
 
-            self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
+        if args.gradient_checkpointing:
+            self.model.gradient_checkpointing_enable()
 
-            if args.gradient_checkpointing:
-                self.model.gradient_checkpointing_enable()
-
-            self.model = get_peft_model(self.model, self.peft_config)
-
-        if mode == Mode.training:
-            # if using deepspeed
-            self.input_device = get_local_rank()
-        else:
-            self.input_device = 0
-            if not torch.cuda.is_available():
-                warn_rank_0("no CUDA device found, running on CPU")
-                self.input_device = "cpu"
-
-            self.to(self.input_device)
-
-    def post_init(self) -> None:
-        """a post init method for expanding word embeddings"""
-
-        if len(self.tokenizer) != self.original_vocab_size:
-            self.model.resize_token_embeddings(len(self.tokenizer))
+        self.model = get_peft_model(self.model, self.peft_config)
 
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
@@ -173,7 +184,11 @@ class Model(torch.nn.Module):
 
         model_outputs = self.model(**batch)
 
-        return model_outputs.loss
+        if type(model_outputs) is tuple:
+            loss = model_outputs[0]
+        else:
+            loss = model_outputs.loss
+        return loss
 
     @register_profiler("generate")
     @register_timer("generate")
@@ -246,3 +261,21 @@ class Model(torch.nn.Module):
         result["input_ids"] = torch.tensor(input_ids)
         result["attention_mask"] = torch.tensor(attention_mask)
         return result
+
+    def _setup_input_device(self) -> None:
+        if self.mode == Mode.training:
+            # if using deepspeed
+            self.input_device = get_local_rank()
+        else:
+            self.input_device = 0
+            if not torch.cuda.is_available():
+                warn_rank_0("no CUDA device found, running on CPU")
+                self.input_device = "cpu"
+
+            self.to(self.input_device)
+
+    def post_init(self) -> None:
+        """a post init method for expanding word embeddings"""
+
+        if len(self.tokenizer) != self.original_vocab_size:
+            self.model.resize_token_embeddings(len(self.tokenizer))

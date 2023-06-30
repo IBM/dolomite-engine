@@ -70,3 +70,4 @@ class TrainingInferenceType(str, Enum):
 
     full_finetuning = "full_finetuning"
     prompt_tuning = "prompt_tuning"
+    lora = "lora"

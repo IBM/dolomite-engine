@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 
 from src.constants import DatasetSplit
 from src.data.config import DatasetConfig
@@ -13,6 +14,10 @@ class YatinDineshDatasetType(Enum):
     EVIDENCE_RESPONSE = "evidence_response"
     # generate evidence and feed it back to the encoder to generate the response
     TOKEN_GUIDED_EVIDENCE_RESPONSE = "token_guided_evidence_response"
+    # generate response only with response tag
+    RESPONSE_ONLY = "response_only"
+    # generate evidence only with evidence tag
+    EVIDENCE_ONLY = "evidence_only"
 
 
 class YatinAnswerabilityConfig(DatasetConfig):
@@ -32,10 +37,24 @@ class YatinAnswerabilityConfig(DatasetConfig):
     filter_allowed: bool = True
     # always use this evidence, evidence field is looked up if this is None
     static_evidence: str = None
+    # use this evidence for positive class
+    static_positive_evidence: str = None
     # if this is True, chit-chat and unanswerable is combined into NA
     combine_no_evidence: bool = False
     # filter by ST or MT
     allowed_data_type: str = None
+    # filter by allowed data types
+    allowed_da_types: List[str] = None
+    # filter functions to use
+    filter_functions: List[str] = []
+    # select only examples with response length greater than this
+    length_threshold: int = None
+    # whether to use the control prompt
+    control_prompt: str = None
+    # threshold for bertscore match between document and response
+    bertscore_threshold: float = None
+    # If a formatted response is desired, specify the format here
+    response_format: str = None
 
     def _post_init(self) -> None:
         return

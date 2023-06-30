@@ -1,0 +1,56 @@
+{
+    "datasets": [
+       {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "sap-gold-assaf",
+            "data_path": "../multidoc2dial-data-forge/qa/sap",
+            "data_sampling_proportion": 1287,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "files": {
+                "train": "assaf_perplexity_output_gold.json",
+                "val": "assaf_perplexity_output_gold.json",
+                "test": "assaf_perplexity_output_gold.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "sap-perplexity-assaf",
+            "data_path": "../multidoc2dial-data-forge/qa/sap",
+            "data_sampling_proportion": 1287,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "files": {
+                "train": "assaf_perplexity_output_retrieved.json",
+                "val": "assaf_perplexity_output_retrieved.json",
+                "test": "assaf_perplexity_output_retrieved.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "sap-primeqa-assaf",
+            "data_path": "../multidoc2dial-data-forge/qa/sap",
+            "data_sampling_proportion": 1287,
+            "dataset_type": "response_evidence",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "files": {
+                "train": "assaf_primeqa_output_retrieved.json",
+                "val": "assaf_primeqa_output_retrieved.json",
+                "test": "assaf_primeqa_output_retrieved.json"
+            }
+        }
+    ],
+    "model_name": "google/flan-t5-xl",
+    "model_class": "AutoModelForSeq2SeqLM",
+    "training_inference_type": "full_finetuning",
+    "load_path": "../checkpoints/coga-3.6/global_step20000",
+    "batch_size": 1,
+    "dtype": "bfloat16",
+    "do_sample": false,
+    "max_new_tokens": 256,
+    "output_dir": "../output/coga-3.6/global_step20000/assaf-primeqa-perplexity"
+
+}
