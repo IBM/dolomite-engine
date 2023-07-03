@@ -9,8 +9,9 @@ services:
 env:
   global:
     - IMAGE_NAME=transformer-engine
-    - IMAGE_TAG=0.0.9
+    - IMAGE_TAG=0.1.0
     - BUILD_IMAGE=true
 
 install:
+  - git clone -b t5_hf-lego https://$GIT_PAT@github.ibm.com/ai-foundation/foundation-model-stack
   - sh scripts/travis/build.sh

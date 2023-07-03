@@ -1,3 +1,0 @@
-[submodule "transformers-bloom-inference"]
-	path = transformers-bloom-inference
-	url = https://github.com/huggingface/transformers-bloom-inference.git

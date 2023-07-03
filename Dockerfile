@@ -27,12 +27,12 @@ RUN conda update -n base -c defaults conda -y
 RUN conda install -c anaconda cmake -y
 
 # necessary stuff
-RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117 \
-    transformers==4.28.1 \
-    accelerate==0.18.0 \
-    bitsandbytes==0.38.1 \
-    aim==3.17.3 \
-    peft==0.2.0 \
+RUN pip install torch \
+    transformers==4.30.1 \
+    accelerate==0.20.3 \
+    bitsandbytes==0.39.1 \
+    aim==3.17.5 \
+    peft==0.3.0 \
     pydantic \
     jsonlines \
     datasets \
@@ -40,7 +40,18 @@ RUN pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.o
     pynvml \
     einops \
     packaging \
+    ninja \
     --no-cache-dir
+
+# fms
+COPY foundation-model-stack/fm /app/foundation-model-stack/fm
+COPY foundation-model-stack/nlp /app/foundation-model-stack/nlp
+COPY foundation-model-stack/version.py /app/foundation-model-stack/version.py
+COPY foundation-model-stack/README.md /app/foundation-model-stack/README.md
+RUN cd foundation-model-stack && \
+    pip install ./fm ./nlp && \
+    cd .. && \
+    rm -rf foundation-model-stack
 
 # apex
 RUN git clone https://github.com/NVIDIA/apex && \
@@ -53,7 +64,7 @@ RUN git clone https://github.com/NVIDIA/apex && \
 # deepspeed
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
-    git checkout v0.9.1 && \
+    git checkout v0.9.5 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
 
 # flash attention
