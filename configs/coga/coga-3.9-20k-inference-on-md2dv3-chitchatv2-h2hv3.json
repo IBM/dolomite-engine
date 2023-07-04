@@ -1,0 +1,119 @@
+{
+    "datasets": [
+        {
+            "data_class": "DineshChitChatDataset",
+            "data_name": "chitchat-grnd-prompt",
+            "data_path": "../multidoc2dial-data-forge/chitchat/v2/chitchat_v2/",
+            "data_sampling_proportion": 6,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "evidence_response",
+            "combine_no_evidence": true,
+            "control_prompt": "Response type: [GROUNDED]",
+            "static_positive_evidence": "grounded",
+            "files": {
+                "train": "chitchat_subdocs_train.json",
+                "val": "chitchat_subdocs_val.json",
+                "test": "chitchat_document_test.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "multidoc2dial-grnd-prompt",
+            "data_path": "../multidoc2dial-data-forge/augmented_multidoc2dial/v3/contextual_unanswerable_classifier_with_da/",
+            "data_sampling_proportion": 14,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "evidence_response",
+            "combine_no_evidence": true,
+            "static_positive_evidence": "grounded",
+            "control_prompt": "Response type: [GROUNDED]",
+            "files": {
+                "train": "md2d_subdocs_train_pos_neg.json",
+                "val": "md2d_subdocs_val_pos_neg.json",
+                "test": "md2d_document_test_pos_neg.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "human 2 human-grnd-prompt",
+            "data_path": "../multidoc2dial-data-forge/h2h/v3/coga_internal_v3_h2h_processed",
+            "data_sampling_proportion": 5,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "evidence_response",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "static_positive_evidence": "grounded",
+            "control_prompt": "Response type: [GROUNDED]",
+            "files": {
+                "train": "coga_internal_v3_train.json",
+                "val": "coga_internal_v3_test.json",
+                "test": "coga_internal_v3_test.json"
+            }
+        },
+        {
+            "data_class": "DineshChitChatDataset",
+            "data_name": "chitchat",
+            "data_path": "../multidoc2dial-data-forge/chitchat/v2/chitchat_v2/",
+            "data_sampling_proportion": 6,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "evidence_response",
+            "combine_no_evidence": true,
+            "control_prompt": "Response type: [ANY]",
+            "static_positive_evidence": "grounded",
+            "files": {
+                "train": "chitchat_subdocs_train.json",
+                "val": "chitchat_subdocs_val.json",
+                "test": "chitchat_document_test.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "multidoc2dial",
+            "data_path": "../multidoc2dial-data-forge/augmented_multidoc2dial/v3/contextual_unanswerable_classifier_with_da/",
+            "data_sampling_proportion": 14,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "evidence_response",
+            "combine_no_evidence": true,
+            "static_positive_evidence": "grounded",
+            "control_prompt": "Response type: [ANY]",
+            "files": {
+                "train": "md2d_subdocs_train_pos_neg.json",
+                "val": "md2d_subdocs_val_pos_neg.json",
+                "test": "md2d_document_test_pos_neg.json"
+            }
+        },
+        {
+            "data_class": "YatinAnswerabilityDataset",
+            "data_name": "human 2 human",
+            "data_path": "../multidoc2dial-data-forge/h2h/v3/coga_internal_v3_h2h_processed",
+            "data_sampling_proportion": 5,
+            "max_input_tokens": 1024,
+            "max_output_tokens": 256,
+            "dataset_type": "evidence_response",
+            "combine_no_evidence": true,
+            "filter_allowed": false,
+            "static_positive_evidence": "grounded",
+            "control_prompt": "Response type: [ANY]",
+            "files": {
+                "train": "coga_internal_v3_train.json",
+                "val": "coga_internal_v3_test.json",
+                "test": "coga_internal_v3_test.json"
+            }
+        }
+    ],
+    "additional_special_tokens": ["[GROUNDED]", "[ANY]"],
+    "model_name": "google/flan-t5-xl",
+    "model_class": "AutoModelForSeq2SeqLM",
+    "training_inference_type": "full_finetuning",
+    "load_path": "../checkpoints/coga-3.9/global_step20000",
+    "batch_size": 1,
+    "dtype": "bfloat16",
+    "do_sample": false,
+    "max_new_tokens": 256,
+    "output_dir": "../output/coga-3.9-20k/global_step20000/md2dv3-chitchatv2-h2hv3"
+
+}
