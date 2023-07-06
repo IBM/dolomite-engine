@@ -41,6 +41,7 @@ RUN pip install torch \
     einops \
     packaging \
     ninja \
+    scipy \
     --no-cache-dir
 
 # fms
