@@ -28,11 +28,11 @@ RUN conda install -c anaconda cmake -y
 
 # necessary stuff
 RUN pip install torch \
-    transformers==4.30.1 \
-    accelerate==0.20.3 \
-    bitsandbytes==0.39.1 \
+    transformers==4.30.2 \
+    accelerate==0.21.0 \
+    bitsandbytes==0.41.0 \
     aim==3.17.5 \
-    peft==0.3.0 \
+    peft==0.4.0 \
     pydantic \
     jsonlines \
     datasets \
@@ -65,7 +65,7 @@ RUN git clone https://github.com/NVIDIA/apex && \
 # deepspeed
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
-    git checkout v0.9.5 && \
+    git checkout v0.10.0 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
 
 # flash attention
