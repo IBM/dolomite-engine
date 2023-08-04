@@ -1,4 +1,4 @@
-[![Build Status](https://travis.ibm.com/conversational-ai/transformer-engine.svg?token=WfYJYyWqkPKchbvxR6xs&branch=main)](https://travis.ibm.com/conversational-ai/transformer-engine)
+[![Build Status](https://v3.travis.ibm.com/conversational-ai/transformer-engine.svg?token=j27SP2KbYBa6fwpWWtcX&branch=main)](https://v3.travis.ibm.com/conversational-ai/transformer-engine)
 
 
 # Distributed finetuning
