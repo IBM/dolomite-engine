@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from typing import Any, List, Union
 
 import fm_nlp.architecture
+import numpy as np
 import torch
 import transformers
 from fm_nlp.architecture import GraniteHF, SandstoneHF
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from src.constants import (
+    AttentionImplementation,
     DatasetConfigKeys,
     LearningRateScheduler,
     Mode,
@@ -43,6 +45,8 @@ class ModelArgs(BaseArgs):
     trust_remote_code: bool = False
     # padding side
     padding_side: PaddingSide = None
+    # attention implementation (only works with GPTMegatronForCausalLM)
+    attention_implementation: AttentionImplementation = None
 
     def _post_init(self) -> None:
         # model_name
@@ -58,6 +62,18 @@ class ModelArgs(BaseArgs):
         # dtype
         self.dtype = getattr(torch, self.dtype)
         assert self.dtype in [torch.float32, torch.float16, torch.bfloat16], f"unexpected dtype '{self.dtype}'"
+
+        if self.attention_implementation is not None:
+            try:
+                from transformers import GPTMegatronForCausalLM
+            except ImportError:
+                raise ImportError(
+                    "pip install this version of transformers: https://github.ibm.com/ai-models-architectures/transformers"
+                )
+
+            assert (
+                self.model_class == GPTMegatronForCausalLM
+            ), "attention_implementation only works with GPTMegatronForCausalLM"
 
 
 class InitializationArgs(BaseArgs):
@@ -195,8 +211,8 @@ class LoggingArgs(BaseArgs):
 
 
 class DebuggingArgs(BaseArgs):
-    # steps per print
-    steps_per_print: int = 10
+    # steps per print for memory logging etc for deepspeed
+    steps_per_print: int = np.inf
 
 
 class TrainingArgs(
@@ -251,7 +267,7 @@ class InferenceArgs(ModelArgs, InitializationArgs, DatasetArgs):
     # batch size
     batch_size: int = None
     # sample or greedy
-    do_sample: bool = False
+    do_sample: bool = None
     # max new tokens to generate
     max_new_tokens: int = None
     # temperature

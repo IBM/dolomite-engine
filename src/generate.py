@@ -61,8 +61,6 @@ def main() -> None:
 
     args: InferenceArgs = get_args(mode)
 
-    setup_debugging()
-
     generate_kwargs = {
         "max_new_tokens": args.max_new_tokens,
         "do_sample": args.do_sample,

@@ -1,6 +1,7 @@
+import json
 import os
 import time
-from typing import Callable
+from typing import Callable, Set
 
 import torch
 from pynvml import nvmlDeviceGetCount, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
@@ -8,21 +9,40 @@ from pynvml import nvmlDeviceGetCount, nvmlDeviceGetHandleByIndex, nvmlDeviceGet
 from src.utils.distributed import run_rank_n
 
 
-def is_debugging_enabled() -> bool:
-    """check whether debugging is enabled
-
-    Returns:
-        bool: whether debugging is enabled
-    """
-
-    return bool(os.getenv("DEBUG"))
+_DEBUG_CONFIG = "debug.json"
+_TIMERS = set()
+_PROFILERS = set()
 
 
 def setup_debugging() -> None:
     """setup debugging if enabled"""
 
-    if is_debugging_enabled():
+    if not os.path.isfile(_DEBUG_CONFIG):
+        return
+
+    debug_json: dict = json.load(open(_DEBUG_CONFIG, "r"))
+
+    timers = debug_json.get("timers", [])
+    for timer_name in timers:
+        _TIMERS.add(timer_name)
+
+    profilers = debug_json.get("profilers", [])
+    for profiler_name in profilers:
+        _PROFILERS.add(profiler_name)
+
+    if len(profilers) > 0:
         run_rank_n(nvmlInit)()
+
+
+setup_debugging()
+
+
+def get_timers() -> Set[str]:
+    return _TIMERS
+
+
+def get_profilers() -> Set[str]:
+    return _PROFILERS
 
 
 def register_timer(timer_name: str, rank: int = 0) -> Callable:
@@ -46,7 +66,7 @@ def register_timer(timer_name: str, rank: int = 0) -> Callable:
             )
             return output
 
-        if is_debugging_enabled():
+        if timer_name in get_timers():
             return timed_func
         return func
 
@@ -111,7 +131,7 @@ def register_profiler(profiler_name: str) -> Callable:
             report_memory(profiler_name, "end")
             return output
 
-        if is_debugging_enabled():
+        if profiler_name in get_profilers():
             return profiled_func
         return func
 

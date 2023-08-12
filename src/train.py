@@ -141,7 +141,7 @@ def train(
                 val_loss = evaluate(val_dataloader, model)
                 track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
-            if micro_step % (args.save_interval * args.gradient_accumulation_steps) == 0:
+            if micro_step != 0 and micro_step % (args.save_interval * args.gradient_accumulation_steps) == 0:
                 ModelCheckpointer.save_deepspeed_checkpoint(model, args, args.save_path)
 
             train_loss_step_accumulator += train_step(model, batch)
@@ -168,6 +168,7 @@ def train(
 
 
 @register_profiler("evaluate_dataset")
+@torch.no_grad()
 def evaluate(val_dataloader: DataLoader, model: Model) -> float:
     """main validation loop for the program
 
@@ -188,12 +189,11 @@ def evaluate(val_dataloader: DataLoader, model: Model) -> float:
     micro_step = 0
     progress_bar = ProgressBar(0, len(val_dataloader))
 
-    with torch.inference_mode():
-        for batch in val_dataloader:
-            loss_value = model(batch).item()
-            loss_sum += loss_value
-            micro_step += 1
-            progress_bar.update()
+    for batch in val_dataloader:
+        loss_value = model(batch).item()
+        loss_sum += loss_value
+        micro_step += 1
+        progress_bar.update()
 
     loss_mean = loss_sum / micro_step
 
@@ -211,10 +211,8 @@ def main() -> None:
 
     args: TrainingArgs = get_args(mode)
 
-    setup_debugging()
-
     # initialize distributed with nccl for multi-node communications
-    init_distributed("nccl")
+    init_distributed()
     set_seed(args.seed)
 
     # setup deepspeed model

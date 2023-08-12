@@ -9,4 +9,4 @@ from src.utils.logging import (
     print_ranks_all,
     warn_rank_0,
 )
-from src.utils.monitoring import is_debugging_enabled, register_profiler, register_timer, setup_debugging
+from src.utils.monitoring import register_profiler, register_timer, setup_debugging

@@ -45,7 +45,7 @@ def print_args(args: Union[TrainingArgs, InferenceArgs, Namespace]) -> None:
     kv_list = []
     for k, v in vars(args).items():
         dots = "." * (48 - len(k))
-        kv_list.append(f"{k} {dots} {v}")
+        kv_list.append(f"{k} {dots} " + str(v))
 
     kv_list.sort(key=lambda x: x.lower())
 

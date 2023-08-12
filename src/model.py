@@ -7,13 +7,18 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
 from src.arguments import InferenceArgs, TrainingArgs
-from src.constants import Mode, PaddingSide, TrainingInferenceType
+from src.constants import AttentionImplementation, Mode, PaddingSide, TrainingInferenceType
 from src.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
 from src.utils.logging import print_rank_0
 
 
 def pad(
-    inputs: list, outputs: list, pad_token_id: int, padding_side: PaddingSide, is_encoder_decoder: bool
+    inputs: list,
+    outputs: list,
+    pad_token_id: int,
+    padding_side: PaddingSide,
+    is_encoder_decoder: bool,
+    attention_implementation: AttentionImplementation = None,
 ) -> Tuple[List[int], List[int]]:
     """pads the arrays with the specified padding value
 
@@ -23,6 +28,7 @@ def pad(
         pad_token_id (int): token id to pad with
         padding_side (PaddingSide): padding side for the tensors
         is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
+        attention_implementation (AttentionImplementation): attention implementation for the model
 
     Returns:
         Tuple[List[int], List[int]]: token ids and the corresponding attention masks
@@ -45,23 +51,36 @@ def pad(
             output_max_length = max(list(map(len, outputs)))
             labels = [array + [-100] * (output_max_length - len(array)) for array in outputs]
     else:
-        max_length = max(list(map(len, inputs)))
-
-        if padding_side == PaddingSide.left:
-            input_ids = [[pad_token_id] * (max_length - len(array)) + array for array in inputs]
-            attention_mask = [[0] * (max_length - len(array)) + [1] * len(array) for array in inputs]
-
-            if outputs is not None:
-                labels = [[-100] * (max_length - len(array)) + array for array in outputs]
+        if attention_implementation == AttentionImplementation.flash:
+            input_ids = inputs
+            attention_mask = None
+            labels = [
+                [-100] * (len(array_in) - len(array_out)) + array_out for array_in, array_out in zip(inputs, outputs)
+            ]
         else:
-            input_ids = [array + [pad_token_id] * (max_length - len(array)) for array in inputs]
-            attention_mask = [[1] * len(array) + [0] * (max_length - len(array)) for array in inputs]
+            max_length = max(list(map(len, inputs)))
 
-            if outputs is not None:
-                labels = [
-                    [-100] * (len(array_in) - len(array_out)) + array_out + [-100] * (max_length - len(array_in))
-                    for array_in, array_out in zip(inputs, outputs)
-                ]
+            if padding_side == PaddingSide.left:
+                input_ids = [[pad_token_id] * (max_length - len(array)) + array for array in inputs]
+                attention_mask = [[0] * (max_length - len(array)) + [1] * len(array) for array in inputs]
+
+                if outputs is not None:
+                    labels = [[-100] * (max_length - len(array)) + array for array in outputs]
+            else:
+                input_ids = [array + [pad_token_id] * (max_length - len(array)) for array in inputs]
+                attention_mask = [[1] * len(array) + [0] * (max_length - len(array)) for array in inputs]
+
+                if outputs is not None:
+                    labels = [
+                        [-100] * (len(array_in) - len(array_out)) + array_out + [-100] * (max_length - len(array_in))
+                        for array_in, array_out in zip(inputs, outputs)
+                    ]
+
+    if attention_implementation != AttentionImplementation.flash:
+        input_ids = torch.tensor(input_ids)
+        attention_mask = torch.tensor(attention_mask)
+        if labels is not None:
+            labels = torch.tensor(labels)
 
     return input_ids, attention_mask, labels
 
@@ -84,6 +103,7 @@ class Model(torch.nn.Module):
         self.mode = mode
         self.model_name = args.model_name
         self.model_class = args.model_class
+        self.attention_implementation = args.attention_implementation
 
         # check if model_class is GraniteHF
         if self.model_class == GraniteHF:
@@ -124,6 +144,8 @@ class Model(torch.nn.Module):
         else:
             self._setup_model_for_peft(args, model_kwargs)
 
+        print_rank_0(self.model)
+
         self._setup_input_device()
 
     def _setup_model_for_finetuning(self, args: Union[TrainingArgs, InferenceArgs], model_kwargs: dict) -> None:
@@ -139,6 +161,9 @@ class Model(torch.nn.Module):
                 self.model.gradient_checkpointing_enable()
         else:
             self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
+
+        if self.attention_implementation is not None:
+            self._inject_attention_implementation()
 
     def _setup_model_for_peft(self, args: Union[TrainingArgs, InferenceArgs], model_kwargs: dict) -> None:
         if args.training_inference_type == TrainingInferenceType.prompt_tuning:
@@ -163,6 +188,9 @@ class Model(torch.nn.Module):
         if args.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
 
+        if self.attention_implementation is not None:
+            self._inject_attention_implementation()
+
         self.model = get_peft_model(self.model, self.peft_config)
 
     @register_profiler("forward_pass")
@@ -179,8 +207,9 @@ class Model(torch.nn.Module):
 
         batch = self.prepare_batch(batch)
 
-        for i in batch:
-            batch[i] = batch[i].to(self.input_device)
+        if self.attention_implementation != AttentionImplementation.flash:
+            for i in batch:
+                batch[i] = batch[i].to(self.input_device)
 
         model_outputs = self.model(**batch)
 
@@ -202,6 +231,9 @@ class Model(torch.nn.Module):
         Returns:
             List[str]: list of generated text. input is trimmed from the generated text
         """
+
+        if self.attention_implementation == AttentionImplementation.flash:
+            raise NotImplementedError("flash attention doesn't support generation yet")
 
         batch = self.prepare_batch(batch)
 
@@ -236,7 +268,6 @@ class Model(torch.nn.Module):
             inputs = batch
 
         result = {}
-
         if self.mode == Mode.training:
             assert outputs is not None, "outputs can't be None during training"
 
@@ -246,9 +277,10 @@ class Model(torch.nn.Module):
                 self.tokenizer.pad_token_id,
                 padding_side=self.padding_side,
                 is_encoder_decoder=self.is_encoder_decoder,
+                attention_implementation=self.attention_implementation,
             )
 
-            result["labels"] = torch.tensor(labels)
+            result["labels"] = labels
         elif self.mode == Mode.inference:
             input_ids, attention_mask, _ = pad(
                 inputs,
@@ -256,10 +288,12 @@ class Model(torch.nn.Module):
                 self.tokenizer.pad_token_id,
                 padding_side=self.padding_side,
                 is_encoder_decoder=self.is_encoder_decoder,
+                attention_implementation=self.attention_implementation,
             )
 
-        result["input_ids"] = torch.tensor(input_ids)
-        result["attention_mask"] = torch.tensor(attention_mask)
+        result["input_ids"] = input_ids
+        result["attention_mask"] = attention_mask
+
         return result
 
     def _setup_input_device(self) -> None:
@@ -279,3 +313,18 @@ class Model(torch.nn.Module):
 
         if len(self.tokenizer) != self.original_vocab_size:
             self.model.resize_token_embeddings(len(self.tokenizer))
+
+    def _inject_attention_implementation(self) -> None:
+        from transformers import GPTMegatronForCausalLM
+
+        assert isinstance(self.model, GPTMegatronForCausalLM)
+
+        if self.attention_implementation == AttentionImplementation.math:
+            warn_rank_0("ignores padding and doesn't work for generation")
+            self.model.inject_math_attention()
+        elif self.attention_implementation == AttentionImplementation.flash:
+            self.model.inject_flash_attention()
+        elif self.attention_implementation == AttentionImplementation.sdpa:
+            self.model.inject_sdpa()
+        else:
+            raise ValueError("unexpected attention_implementation")

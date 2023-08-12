@@ -13,14 +13,10 @@ from src.utils.logging import print_rank_0
 from src.utils.monitoring import register_timer
 
 
-def init_distributed(dist_backend: str = "nccl") -> None:
-    """intialize distributed
+def init_distributed() -> None:
+    """intialize distributed"""
 
-    Args:
-        dist_backend (str, optional): backend to use. Defaults to "nccl".
-    """
-
-    deepspeed.init_distributed(dist_backend=dist_backend)
+    deepspeed.init_distributed()
     torch.cuda.set_device(get_local_rank())
     print_rank_0(f"total GPUs = {get_world_size()}")
 
@@ -110,12 +106,7 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
         config["zero_optimization"]["offload_param"] = {"device": "cpu", "pin_memory": True}
         config["zero_optimization"]["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
 
-    from src.utils.monitoring import is_debugging_enabled
-
-    # debugging stuff
-    config["steps_per_print"] = np.inf
-    if is_debugging_enabled():
-        config["steps_per_print"] = args.steps_per_print
+    config["steps_per_print"] = args.steps_per_print
 
     return config
 

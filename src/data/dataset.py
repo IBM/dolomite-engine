@@ -1,8 +1,7 @@
 import glob
 import os
 from copy import deepcopy
-from functools import partial
-from typing import Callable, List, Set, Tuple, Type, Union
+from typing import List, Set, Tuple, Type, Union
 from uuid import uuid4
 
 import jsonlines
@@ -50,7 +49,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.do_format_input = self.input_format != "__input__"
         self.do_format_output = self.output_format != "__output__"
 
-        # length to use for trimming
+        # length to use for trimming (excludes eos)
         self.max_input_tokens = get_max_input_length(
             data_config.get(DatasetConfigKeys.max_input_tokens.value),
             self.training_inference_type,
@@ -117,11 +116,7 @@ class BaseDataset(torch.utils.data.Dataset):
                 p = self.tokenizer(p, add_special_tokens=False)["input_ids"]
 
             if self.max_input_tokens is not None:
-                if self.is_encoder_decoder:
-                    # eos needs to be added later
-                    p = p[: self.max_input_tokens - 1]
-                else:
-                    p = p[: self.max_input_tokens]
+                p = p[: self.max_input_tokens]
 
             if self.mode == Mode.training:
                 r: Union[str, List[int]] = example[DatasetKeys.preprocessed_output.value]
@@ -131,7 +126,7 @@ class BaseDataset(torch.utils.data.Dataset):
                     r = self.tokenizer(r, add_special_tokens=False)["input_ids"]
 
                 if self.max_output_tokens is not None:
-                    r = r[: self.max_output_tokens - 1]
+                    r = r[: self.max_output_tokens]
 
                 r.append(self.tokenizer.eos_token_id)
                 outputs.append(r)
@@ -529,16 +524,15 @@ def get_max_input_length(
     if max_input_tokens_specified is None:
         return None
 
+    max_input_tokens = max_input_tokens_specified
+
+    if training_inference_type == TrainingInferenceType.prompt_tuning:
+        max_input_tokens -= num_virtual_tokens
+
     if is_encoder_decoder:
-        if training_inference_type == TrainingInferenceType.full_finetuning:
-            return max_input_tokens_specified - 1
-        elif training_inference_type == TrainingInferenceType.prompt_tuning:
-            return max_input_tokens_specified - num_virtual_tokens - 1
-    else:
-        if training_inference_type == TrainingInferenceType.full_finetuning:
-            return max_input_tokens_specified
-        elif training_inference_type == TrainingInferenceType.prompt_tuning:
-            return max_input_tokens_specified - num_virtual_tokens
+        max_input_tokens -= 1
+
+    return max_input_tokens
 
 
 def get_max_output_length(
@@ -562,13 +556,13 @@ def get_max_output_length(
     if max_output_tokens_specified is None:
         return None
 
+    max_output_tokens = max_output_tokens_specified - 1
+
     if is_encoder_decoder:
-        if training_inference_type == TrainingInferenceType.full_finetuning:
-            return max_output_tokens_specified - 1
-        elif training_inference_type == TrainingInferenceType.prompt_tuning:
-            return max_output_tokens_specified - num_virtual_tokens - 1
-    else:
-        return max_output_tokens_specified - 1
+        if training_inference_type == TrainingInferenceType.prompt_tuning:
+            max_output_tokens -= num_virtual_tokens
+
+    return max_output_tokens
 
 
 def check_raw_example(raw_example: dict, mode: Mode) -> None:

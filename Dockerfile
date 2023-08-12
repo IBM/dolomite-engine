@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.7.1-devel-ubuntu22.04 as base
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 as base
 
 ENV HOME=/homedir \
     PYTHON_VERSION=3.9 \
@@ -27,9 +27,15 @@ RUN conda update -n base -c defaults conda -y
 RUN conda install -c anaconda cmake -y
 
 # necessary stuff
-RUN pip install torch \
-    transformers==4.30.2 \
-    accelerate==0.21.0 \
+RUN pip install torch --index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
+
+COPY transformers /app/transformers
+RUN cd transformers && \
+    pip install . && \
+    cd .. && \
+    rm -rf transformers
+
+RUN pip install accelerate==0.21.0 \
     bitsandbytes==0.41.0 \
     aim==3.17.5 \
     peft==0.4.0 \
@@ -57,8 +63,8 @@ RUN cd foundation-model-stack && \
 # apex
 RUN git clone https://github.com/NVIDIA/apex && \
     cd apex && \
-    git checkout b3e3bab && \
-    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" . && \
+    git checkout 2958e06 && \
+    pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" . && \
     cd .. && \
     rm -rf apex
 
@@ -69,11 +75,11 @@ RUN git clone https://github.com/microsoft/DeepSpeed && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
 
 # flash attention
-RUN pip install flash-attn==1.0.4 --no-cache-dir
+RUN MAX_JOBS=4 pip install -v flash-attn==2.0.4 --no-cache-dir --no-build-isolation
 
 # clean conda env
 RUN conda clean -ya
 
-RUN mkdir -p ~/.cache ~/.local && \
-    chmod -R g+w /app ~/.cache ~/.local && \
+RUN mkdir -p ~/.cache ~/.local ~/.triton && \
+    chmod -R g+w /app ~/.cache ~/.local ~/.triton && \
     touch ~/.aim_profile && chmod g+w ~/.aim_profile && aim telemetry off
