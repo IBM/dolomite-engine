@@ -1,0 +1,67 @@
+namespace: mfcoga
+jobName: mm-sst2
+priority: "default-priority"
+
+containerImage: us.icr.io/cil15-shared-registry/transformer-engine:0.2.1
+disableRequeuing: True
+
+numPods: 1
+numCpusPerPod: 8
+numGpusPerPod: 2
+totalMemoryPerPod: 32Gi
+
+environmentVariables:
+  - name: NCCL_MIN_NCHANNELS
+    value: "2"
+  - name: NCCL_CROSS_NIC
+    value: "0"
+  - name: CUDA_VISIBLE_DEVICES
+    value: 0,1,2,3,4,5,6,7
+  - name: NCCL_TREE_THRESHOLD
+    value: "0"
+  - name: NCCL_ALGO
+    value: Tree
+  - name: NCCL_IGNORE_CPU_AFFINITY
+    value: "1"
+  - name: NCCL_DEBUG_SUBSYS
+    value: INIT,GRAPH,ENV,TUNING
+  - name: NCCL_SOCKET_NTHREADS
+    value: "2"
+  - name: NCCL_IB_DISABLE
+    value: "1"
+  - name: NCCL_NSOCKS_PERTHREAD
+    value: "4"
+  - name: NCCL_DEBUG
+    value: WARN
+  - name: TOKENIZERS_PARALLELISM
+    value: "false"
+  - name: GIT_PAT
+    secret:
+      key: api-key
+      name: mayank-git-pat
+  - name: COS_BUCKET
+    value: /cos
+  - name: TRANSFORMERS_CACHE
+    value: $(COS_BUCKET)/HF_cache
+  - name: HUGGINGFACE_HUB_CACHE
+    value: $(TRANSFORMERS_CACHE)
+  - name: HF_DATASETS_CACHE
+    value: $(TRANSFORMERS_CACHE)
+
+# do something before the torchrun command
+# this could be pulling repo/data/preprocessing etc
+setupCommands:
+  - git clone https://$(GIT_PAT)@github.ibm.com/conversational-ai/transformer-engine
+  - cd transformer-engine
+
+mainProgram: -m src.train --config configs/sst2/full_finetuning-training.json
+
+multiNicNetworkName: multi-nic-network
+
+imagePullSecrets:
+  - name: all-icr-io
+
+volumes:
+  - name: content-grounded-pvc
+    claimName: content-grounded-pvc
+    mountPath: /cos

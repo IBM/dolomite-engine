@@ -37,6 +37,7 @@ RUN cd transformers && \
 
 RUN pip install accelerate==0.21.0 \
     bitsandbytes==0.41.0 \
+    safetensors==0.3.2 \
     aim==3.17.5 \
     peft==0.4.0 \
     pydantic \

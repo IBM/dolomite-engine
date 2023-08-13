@@ -25,9 +25,9 @@ jbsub -q x86_24h -cores 2x8+4 -mem 128G -require a100_80gb -err err.log -out out
 Note that the `blaunch.sh` script here (provided by CCC) executes the command `sh scripts/train_ccc.sh` on both the nodes.
 
 ### Training on Vela cluster
-Take a look at https://github.ibm.com/Mayank-Mishra1/dipc-openshift for launching jobs.
-
-Training and inference require a `config` to be passed to the program. Look [here](configs/) for some examples. Examples for both full finetuning and prompt tuning are given.
+```shell
+helm template -f scripts/train_vela.yaml chart | tee appwrapper.yaml | oc create -f -
+```
 
 ## Supported optimizers
 ```python

@@ -1,0 +1,459 @@
+{{- if .Values.priority -}}
+{{- $priorities := list "default-priority" "low-priority" "high-priority" -}}
+{{- if eq ( has .Values.priority $priorities ) false -}}
+{{- fail ( printf "Field 'priority: \"%s\"' in user file is not correctly set (values possible: 'default-priority', 'low-priority', 'high-priority')" .Values.priority ) -}}
+{{- end -}}
+{{- else -}}
+{{ required "Please specify a valid 'priority' in the user file" "" -}}
+{{- end -}}
+
+{{- define "priority.className" -}}
+{{- if eq .Values.priority "high-priority" -}}
+priorityClassName: "high-priority"
+{{- else if eq .Values.priority "low-priority" -}}
+priorityClassName: "low-priority"
+{{- else -}}
+priorityClassName: "default-priority"
+{{- end -}}
+{{- end -}}
+
+{{- define "priority.value" -}}
+{{- if eq .Values.priority "high-priority" -}}
+priority: 10
+{{- else if eq .Values.priority "low-priority" -}}
+priority: 1
+{{- else -}}
+priority: 5
+{{- end -}}
+{{- end -}}
+
+{{- define "priority.slope" -}}
+priorityslope: 0.0
+{{- end -}}
+
+{{- define "commands.header" -}}
+echo "Environment variables set by the kubeflow training operator:"
+echo ${MASTER_ADDR}:${MASTER_PORT}
+echo "PYTHONUNBUFFERED:"${PYTHONUNBUFFERED}
+echo My global rank is ${RANK} / ${WORLD_SIZE}
+{{- end -}}
+
+{{- if .Values.jobName -}}
+{{- if eq ( regexMatch "^[a-z]([-a-z0-9]*[a-z0-9])?$" .Values.jobName ) false -}}
+{{ required "The 'jobName' provided is NOT correct. Some possible causes are: it begins with a number or a special character (including '-'), has one or more capital letters somewhere in the name, has one or more special characters other than '-', it ends with a special character (including '-')" "" }}
+{{- else -}}
+{{- if gt ( len .Values.jobName ) 63 -}}
+{{ required "Your 'jobName' cannot be longer than 63 characters" "" -}}
+{{- end -}}
+{{- end -}}
+{{- else -}}
+{{ required "Please specify an 'jobName' in the user file" "" -}}
+{{- end -}}
+
+apiVersion: mcad.ibm.com/v1beta1
+kind: AppWrapper
+metadata:
+    name: {{ .Values.jobName }}
+    namespace: {{ required "Please specify a 'namespace' in the user file" .Values.namespace }}
+spec:
+    {{ include "priority.value" . }}
+    {{ include "priority.slope" . }}
+    schedulingSpec:
+        {{- if eq .Values.disableRequeuing false }}
+        minAvailable: {{ .Values.numPods }}
+        {{- end }}
+        {{- if .Values.requeuing }}
+        requeuing:
+            {{- if .Values.requeuing.timeInSeconds }}
+            timeInSeconds: {{ .Values.requeuing.timeInSeconds }}
+            {{- end }}
+            {{- if .Values.requeuing.maxTimeInSeconds }}
+            maxTimeInSeconds: {{ .Values.requeuing.maxTimeInSeconds }}
+            {{- end }}
+            {{- if .Values.requeuing.growthType }}
+            growthType: {{ .Values.requeuing.growthType | quote }}
+            {{- end }}
+            {{- if .Values.requeuing.maxNumRequeuings }}
+            maxNumRequeuings: {{ .Values.requeuing.maxNumRequeuings }}
+            {{- end }}
+        {{- end }}
+    resources:
+        Items: []
+        GenericItems:
+            - replicas: 1
+              generictemplate:
+                  apiVersion: scheduling.sigs.k8s.io/v1alpha1
+                  kind: PodGroup
+                  metadata:
+                      name: {{ .Values.jobName }}
+                      namespace: {{ .Values.namespace }}
+                      labels:
+                          appwrapper.mcad.ibm.com: {{ .Values.jobName }}
+                  spec:
+                      minMember: {{ .Values.numPods }}
+                      {{- if .Values.scheduleTimeoutSeconds }}
+                      scheduleTimeoutSeconds: {{ .Values.scheduleTimeoutSeconds }}
+                      {{- end }}
+            - replicas: 1
+              completionstatus: {{ .Values.completionStatus | default "Complete" | quote }}
+              custompodresources:
+                  - replicas: {{ .Values.numPods }}
+                    requests:
+                        cpu: {{ .Values.numCpusPerPod }}
+                        nvidia.com/gpu: {{ .Values.numGpusPerPod }}
+                        memory: {{ .Values.totalMemoryPerPod }}
+                    limits:
+                        cpu: {{ .Values.limitCpusPerPod | default .Values.numCpusPerPod }}
+                        nvidia.com/gpu: {{ .Values.limitGpusPerPod | default .Values.numGpusPerPod }}
+                        memory: {{ .Values.limitMemoryPerPod | default .Values.totalMemoryPerPod }}
+              generictemplate:
+                  apiVersion: "kubeflow.org/v1"
+                  kind: "PyTorchJob"
+                  metadata:
+                      name: {{ .Values.jobName }}
+                      namespace: {{ .Values.namespace }}
+                      labels:
+                          appwrapper.mcad.ibm.com: {{ .Values.jobName }}
+                          pod-group.scheduling.sigs.k8s.io: {{ .Values.jobName }}
+                  spec:
+                      pytorchReplicaSpecs:
+                          Master:
+                              replicas: 1
+                              restartPolicy: {{ .Values.restartPolicy | default "Never" }}
+                              template:
+                                  metadata:
+                                      namespace: {{ .Values.namespace }}
+                                      labels:
+                                          appwrapper.mcad.ibm.com: {{ .Values.jobName }}
+                                          pod-group.scheduling.sigs.k8s.io: {{ .Values.jobName }}
+                                          {{- if .Values.autopilotHealthChecks }}
+                                          autopilot: ""
+                                            {{- range $healthcheck := .Values.autopilotHealthChecks }}
+                                          {{ $healthcheck }}: ""
+                                            {{- end }}
+                                          {{- end }}
+                                      {{- if .Values.multiNicNetworkName }}
+                                      annotations:
+                                          k8s.v1.cni.cncf.io/networks: {{ .Values.multiNicNetworkName }}
+                                      {{- end }}
+                                  spec:
+                                      schedulerName: scheduler-plugins-scheduler
+                                      {{ include "priority.className" . }}
+                                      {{- if .Values.terminationGracePeriodSeconds }}
+                                      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+                                      {{- end }}
+                                      {{- if .Values.initContainers }}
+                                      initContainers:
+                                          {{- range $container := .Values.initContainers }}
+                                          - name: {{ required "Missing 'name' of initContainer" $container.name }}
+                                            image: {{ required "Missing 'image' of initContainer" $container.image }}
+                                            {{- if ( required "Missing 'command' array of initContainer" $container.command ) }}
+                                            {{- if kindIs "string" $container.command }}
+                                            command: {{ $container.command }}
+                                            {{- else }}
+                                            command:
+                                                {{- range $command := $container.command }}
+                                                - {{ $command }}
+                                                {{- end }}
+                                            {{- end }}
+                                            {{- end }}
+                                          {{- end }}
+                                      {{- end }}
+                                      containers:
+                                          - name: pytorch
+                                            image: {{ required "Please specify a 'containerImage' in the user file" .Values.containerImage }}
+                                            imagePullPolicy: IfNotPresent
+                                            {{- if or .Values.environmentVariables .Values.sshGitCloneConfig }}
+                                            env:
+                                                {{- range $variable := .Values.environmentVariables }}
+                                                - name: {{ required "Missing 'name' in 'environmentVariables' list element" $variable.name }}
+                                                  {{- if $variable.value }}
+                                                  value: {{ $variable.value | quote }}
+                                                  {{- else if $variable.secret }}
+                                                  valueFrom:
+                                                      secretKeyRef:
+                                                          name: {{ required "Missing 'name' in 'environmentVariables.secret' list element" $variable.secret.name }}
+                                                          key: {{ required "Missing 'key' in 'environmentVariables.secret' list element" $variable.secret.key | quote }}
+                                                  {{- else if ( kindIs "float64" $variable.value ) }}
+                                                  value: "0"
+                                                  {{- else }}
+                                                  value: {{ required "Missing 'value' in 'environmentVariables' list element" "" }}
+                                                  {{- end }}
+                                                {{- end }}
+                                                {{- if .Values.sshGitCloneConfig }}
+                                                - name: GIT_SSH_COMMAND
+                                                  {{- if .Values.sshGitCloneConfig.sshCmd }} {{- /* TODO move this logic to one location*/}}
+                                                  value: {{ .Values.sshGitCloneConfig.sshCmd | quote }}
+                                                  {{- else if .Values.sshGitCloneConfig.secretMountPath }}
+                                                  {{- if .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  value: "ssh -i {{ .Values.sshGitCloneConfig.secretMountPath }}/id_rsa -o UserKnownHostsFile={{ .Values.sshGitCloneConfig.configMapMountPath }}/known_hosts -vv"
+                                                  {{- else }}
+                                                  value: "ssh -i {{ .Values.sshGitCloneConfig.secretMountPath }}/id_rsa -o UserKnownHostsFile=/tmp/.ssh/hosts/known_hosts -vv"
+                                                  {{- end }}
+                                                  {{- else if .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  value: "ssh -i /tmp/.ssh/keys/id_rsa -o UserKnownHostsFile={{ .Values.sshGitCloneConfig.configMapMountPath }}/known_hosts -vv"
+                                                  {{- else }}
+                                                  value: "ssh -i /tmp/.ssh/keys/id_rsa -o UserKnownHostsFile=/tmp/.ssh/hosts/known_hosts -vv"
+                                                  {{- end }}
+                                                {{- end }}
+                                            {{- else }}
+                                            env: []
+                                            {{- end }}
+                                            command:
+                                                - sh
+                                                - -c
+                                                - |
+                                                  {{- include "commands.header" . | nindent 50 }}
+                                                  #
+                                                  # User commands
+                                                  #
+                                                  {{- range $command := .Values.setupCommands }}
+                                                  {{ $command }}
+                                                  {{- end }}
+                                                  {{- if .Values.mainProgram }}
+                                                  {{- if gt ( int .Values.numGpusPerPod ) 0 }}
+                                                  torchrun --nnodes=${WORLD_SIZE} --node_rank=${RANK} --nproc_per_node={{ .Values.numGpusPerPod }} --rdzv_id=101 --rdzv_endpoint="${MASTER_ADDR}:${MASTER_PORT}" {{ .Values.mainProgram }}
+                                                  {{- else }}
+                                                  torchrun --nnodes=${WORLD_SIZE} --node_rank=${RANK} --rdzv_id=101 --rdzv_endpoint="${MASTER_ADDR}:${MASTER_PORT}" {{ .Values.mainProgram }}
+                                                  {{- end }}
+                                                  {{- end }}
+                                            resources:
+                                                requests:
+                                                    cpu: {{ .Values.numCpusPerPod }}
+                                                    nvidia.com/gpu: {{ .Values.numGpusPerPod }}
+                                                    memory: {{ .Values.totalMemoryPerPod }}
+                                                limits:
+                                                    cpu: {{ .Values.limitCpusPerPod | default .Values.numCpusPerPod }}
+                                                    nvidia.com/gpu: {{ .Values.limitGpusPerPod | default .Values.numGpusPerPod }}
+                                                    memory: {{ .Values.limitMemoryPerPod | default .Values.totalMemoryPerPod }}
+                                            {{- if or .Values.volumes .Values.sshGitCloneConfig ( not .Values.disableSharedMemory ) }}
+                                            volumeMounts:
+                                                {{- range $volume := .Values.volumes }}
+                                                - name: {{ required "Missing 'name' in 'volumes' list element" $volume.name }}
+                                                  mountPath: {{ required "Missing 'mountPath' in 'volumes' list element" $volume.mountPath }}
+                                                {{- end }}
+                                                {{- if .Values.sshGitCloneConfig }}
+                                                - name: private-ssh-git-deploy-key
+                                                  readOnly: true
+                                                  {{- if .Values.sshGitCloneConfig.secretMountPath }}
+                                                  mountPath: {{ .Values.sshGitCloneConfig.secretMountPath }}
+                                                  {{- else }}
+                                                  mountPath: "/tmp/.ssh/keys"
+                                                  {{- end }}
+                                                - name: github-known-hosts
+                                                  {{- if .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  mountPath: {{ .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  {{- else }}
+                                                  mountPath: "/tmp/.ssh/hosts"
+                                                  {{- end }}
+                                                {{- end }}
+                                                {{- if eq .Values.disableSharedMemory false }}
+                                                - name: dshm
+                                                  mountPath: "/dev/shm"
+                                                {{- end }}
+                                            {{- else }}
+                                            volumeMounts: []
+                                            {{- end }}
+                                      {{- if or .Values.volumes .Values.sshGitCloneConfig ( not .Values.disableSharedMemory ) }}
+                                      volumes:
+                                          {{- range $volume := .Values.volumes }}
+                                          - name: {{ required "Missing 'name' in 'volumes' list element" $volume.name }}
+                                            persistentVolumeClaim:
+                                                claimName: {{ required "Missing 'claimName' in 'volumes' list element" $volume.claimName }}
+                                          {{- end }}
+                                          {{- if .Values.sshGitCloneConfig }}
+                                          - name: private-ssh-git-deploy-key
+                                            secret:
+                                                secretName: {{ required "Missing 'secretName' in 'sshGitCloneConfig' " .Values.sshGitCloneConfig.secretName }}
+                                                optional: false
+                                          - name: github-known-hosts
+                                            configMap:
+                                                name: {{ required "Missing 'configMapName' in 'sshGitCloneConfig' " .Values.sshGitCloneConfig.configMapName }}
+                                          {{- end }}
+                                          {{- if eq .Values.disableSharedMemory false }}
+                                          - name: dshm
+                                            emptyDir:
+                                                medium: Memory
+                                          {{- end }}
+                                      {{- else }}
+                                      volumes: []
+                                      {{- end }}
+                                      {{- if .Values.imagePullSecrets }}
+                                      imagePullSecrets:
+                                          {{- range $secret := .Values.imagePullSecrets }}
+                                          - name: {{ $secret.name }}
+                                          {{- end }}
+                                      {{- else }}
+                                      imagePullSecrets: []
+                                      {{- end }}
+                          {{- if gt ( .Values.numPods | int ) 1 }} {{- /*Including a worker spec when only 1 pod (Master) is specified leads to strange behavior */}}
+                          Worker:
+                              replicas: {{ sub .Values.numPods 1 }}
+                              restartPolicy: {{ .Values.restartPolicy | default "Never" }}
+                              template:
+                                  metadata:
+                                      namespace: {{ .Values.namespace }}
+                                      labels:
+                                          appwrapper.mcad.ibm.com: {{ .Values.jobName }}
+                                          pod-group.scheduling.sigs.k8s.io: {{ .Values.jobName }}
+                                          {{- if .Values.autopilotHealthChecks }}
+                                          autopilot: ""
+                                            {{- range $healthcheck := .Values.autopilotHealthChecks }}
+                                          {{ $healthcheck }}: ""
+                                            {{- end }}
+                                          {{- end }}
+                                      {{- if .Values.multiNicNetworkName }}
+                                      annotations:
+                                          k8s.v1.cni.cncf.io/networks: {{ .Values.multiNicNetworkName }}
+                                      {{- end }}
+                                  spec:
+                                      schedulerName: scheduler-plugins-scheduler
+                                      {{ include "priority.className" . }}
+                                      {{- if .Values.terminationGracePeriodSeconds }}
+                                      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+                                      {{- end }}
+                                      {{- if .Values.initContainers }}
+                                      initContainers:
+                                          {{- range $container := .Values.initContainers }}
+                                          - name: {{ required "Missing 'name' of initContainer" $container.name }}
+                                            image: {{ required "Missing 'image' of initContainer" $container.image }}
+                                            {{- if ( required "Missing 'command' array of initContainer" $container.command ) }}
+                                            {{- if kindIs "string" $container.command }}
+                                            command: {{ $container.command }}
+                                            {{- else }}
+                                            command:
+                                                {{- range $command := $container.command }}
+                                                - {{ $command }}
+                                                {{- end }}
+                                            {{- end }}
+                                            {{- end }}
+                                          {{- end }}
+                                      {{- end }}
+                                      containers:
+                                          - name: pytorch
+                                            image: {{ required "Please specify a 'containerImage' in the user file" .Values.containerImage }}
+                                            imagePullPolicy: IfNotPresent
+                                            {{- if or .Values.environmentVariables .Values.sshGitCloneConfig }}
+                                            env:
+                                                {{- range $variable := .Values.environmentVariables }}
+                                                - name: {{ required "Missing 'name' in 'environmentVariables' list element" $variable.name }}
+                                                  {{- if $variable.value }}
+                                                  value: {{ $variable.value | quote }}
+                                                  {{- else if $variable.secret }}
+                                                  valueFrom:
+                                                      secretKeyRef:
+                                                          name: {{ required "Missing 'name' in 'environmentVariables.secret' list element" $variable.secret.name }}
+                                                          key: {{ required "Missing 'key' in 'environmentVariables.secret' list element" $variable.secret.key | quote }}
+                                                  {{- else if ( kindIs "float64" $variable.value ) }}
+                                                  value: "0"
+                                                  {{- else }}
+                                                  value: {{ required "Missing 'value' in 'environmentVariables' list element" "" }}
+                                                  {{- end }}
+                                                {{- end }}
+                                                {{- if .Values.sshGitCloneConfig }}
+                                                - name: GIT_SSH_COMMAND
+                                                  {{- if .Values.sshGitCloneConfig.sshCmd }} {{- /* TODO move this logic to one location*/}}
+                                                  value: {{ .Values.sshGitCloneConfig.sshCmd | quote }}
+                                                  {{- else if .Values.sshGitCloneConfig.secretMountPath }}
+                                                  {{- if .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  value: "ssh -i {{ .Values.sshGitCloneConfig.secretMountPath }}/id_rsa -o UserKnownHostsFile={{ .Values.sshGitCloneConfig.configMapMountPath }}/known_hosts -vv"
+                                                  {{- else }}
+                                                  value: "ssh -i {{ .Values.sshGitCloneConfig.secretMountPath }}/id_rsa -o UserKnownHostsFile=/tmp/.ssh/hosts/known_hosts -vv"
+                                                  {{- end }}
+                                                  {{- else if .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  value: "ssh -i /tmp/.ssh/keys/id_rsa -o UserKnownHostsFile={{ .Values.sshGitCloneConfig.configMapMountPath }}/known_hosts -vv"
+                                                  {{- else }}
+                                                  value: "ssh -i /tmp/.ssh/keys/id_rsa -o UserKnownHostsFile=/tmp/.ssh/hosts/known_hosts -vv"
+                                                  {{- end }}
+                                                {{- end }}
+                                            {{- else }}
+                                            env: []
+                                            {{- end }}
+                                            command:
+                                                - sh
+                                                - -c
+                                                - |
+                                                  {{- include "commands.header" . | nindent 50 }}
+                                                  #
+                                                  # User commands
+                                                  #
+                                                  {{- range $command := .Values.setupCommands }}
+                                                  {{ $command }}
+                                                  {{- end }}
+                                                  {{- if .Values.mainProgram }}
+                                                  {{- if gt ( int .Values.numGpusPerPod ) 0 }}
+                                                  torchrun --nnodes=${WORLD_SIZE} --node_rank=${RANK} --nproc_per_node={{ .Values.numGpusPerPod }} --rdzv_id=101 --rdzv_endpoint="${MASTER_ADDR}:${MASTER_PORT}" {{ .Values.mainProgram }}
+                                                  {{- else }}
+                                                  torchrun --nnodes=${WORLD_SIZE} --node_rank=${RANK} --rdzv_id=101 --rdzv_endpoint="${MASTER_ADDR}:${MASTER_PORT}" {{ .Values.mainProgram }}
+                                                  {{- end }}
+                                                  {{- end }}
+                                            resources:
+                                                requests:
+                                                    cpu: {{ .Values.numCpusPerPod }}
+                                                    nvidia.com/gpu: {{ .Values.numGpusPerPod }}
+                                                    memory: {{ .Values.totalMemoryPerPod }}
+                                                limits:
+                                                    cpu: {{ .Values.limitCpusPerPod | default .Values.numCpusPerPod }}
+                                                    nvidia.com/gpu: {{ .Values.limitGpusPerPod | default .Values.numGpusPerPod }}
+                                                    memory: {{ .Values.limitMemoryPerPod | default .Values.totalMemoryPerPod }}
+                                            {{- if or .Values.volumes .Values.sshGitCloneConfig ( not .Values.disableSharedMemory ) }}
+                                            volumeMounts:
+                                                {{- range $volume := .Values.volumes }}
+                                                - name: {{ required "Missing 'name' in 'volumes' list element" $volume.name }}
+                                                  mountPath: {{ required "Missing 'mountPath' in 'volumes' list element" $volume.mountPath }}
+                                                {{- end }}
+                                                {{- if .Values.sshGitCloneConfig }}
+                                                - name: private-ssh-git-deploy-key
+                                                  readOnly: true
+                                                  {{- if .Values.sshGitCloneConfig.secretMountPath }}
+                                                  mountPath: {{ .Values.sshGitCloneConfig.secretMountPath }}
+                                                  {{- else }}
+                                                  mountPath: "/tmp/.ssh/keys"
+                                                  {{- end }}
+                                                - name: github-known-hosts
+                                                  {{- if .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  mountPath: {{ .Values.sshGitCloneConfig.configMapMountPath }}
+                                                  {{- else }}
+                                                  mountPath: "/tmp/.ssh/hosts"
+                                                  {{- end }}
+                                                {{- end }}
+                                                {{- if eq .Values.disableSharedMemory false }}
+                                                - name: dshm
+                                                  mountPath: "/dev/shm"
+                                                {{- end }}
+                                            {{- else }}
+                                            volumeMounts: []
+                                            {{- end }}
+                                      {{- if or .Values.volumes .Values.sshGitCloneConfig ( not .Values.disableSharedMemory ) }}
+                                      volumes:
+                                          {{- range $volume := .Values.volumes }}
+                                          - name: {{ required "Missing 'name' in 'volumes' list element" $volume.name }}
+                                            persistentVolumeClaim:
+                                                claimName: {{ required "Missing 'claimName' in 'volumes' list element" $volume.claimName }}
+                                          {{- end }}
+                                          {{- if .Values.sshGitCloneConfig }}
+                                          - name: private-ssh-git-deploy-key
+                                            secret:
+                                                secretName: {{ required "Missing 'secretName' in 'sshGitCloneConfig' " .Values.sshGitCloneConfig.secretName }}
+                                                optional: false
+                                          - name: github-known-hosts
+                                            configMap:
+                                                name: {{ required "Missing 'configMapName' in 'sshGitCloneConfig' " .Values.sshGitCloneConfig.configMapName }}
+                                          {{- end }}
+                                          {{- if eq .Values.disableSharedMemory false }}
+                                          - name: dshm
+                                            emptyDir:
+                                                medium: Memory
+                                          {{- end }}
+                                      {{- else }}
+                                      volumes: []
+                                      {{- end }}
+                                      {{- if .Values.imagePullSecrets }}
+                                      imagePullSecrets:
+                                          {{- range $secret := .Values.imagePullSecrets }}
+                                          - name: {{ $secret.name }}
+                                          {{- end }}
+                                      {{- else }}
+                                      imagePullSecrets: []
+                                      {{- end }}
+                          {{- end }}
