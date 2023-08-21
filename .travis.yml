@@ -9,7 +9,7 @@ services:
 env:
   global:
     - IMAGE_NAME=transformer-engine
-    - IMAGE_TAG=0.2.1
+    - IMAGE_TAG=0.2.2
     - BUILD_IMAGE=true
 
 install:

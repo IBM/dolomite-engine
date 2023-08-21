@@ -1,7 +1,6 @@
 from typing import List, Tuple, Union
 
 import torch
-from fm_nlp.architecture import GraniteHF, GraniteHFConfig, SandstoneHF, SandstoneHFConfig
 from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 from transformers import AutoConfig, AutoTokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
@@ -105,13 +104,7 @@ class Model(torch.nn.Module):
         self.model_class = args.model_class
         self.attention_implementation = args.attention_implementation
 
-        # check if model_class is GraniteHF
-        if self.model_class == GraniteHF:
-            self.config = GraniteHFConfig.from_pretrained(self.model_name)
-        elif self.model_class == SandstoneHF:
-            self.config = SandstoneHFConfig.from_pretrained(self.model_name)
-        else:
-            self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.trust_remote_code)
+        self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.trust_remote_code)
 
         self.is_encoder_decoder = self.config.is_encoder_decoder
         self.training_inference_type = args.training_inference_type
@@ -152,8 +145,7 @@ class Model(torch.nn.Module):
         if self.mode == Mode.training:
             # this tells from_pretrained to instantiate directly on gpus
             # this only instantiates a single instance of the model across the ranks
-            if self.model_class not in [GraniteHF, SandstoneHF]:
-                self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
+            self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
             self.model = args.model_class.from_pretrained(**model_kwargs)
 

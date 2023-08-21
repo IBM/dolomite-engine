@@ -51,16 +51,6 @@ RUN pip install accelerate==0.21.0 \
     scipy \
     --no-cache-dir
 
-# fms
-COPY foundation-model-stack/fm /app/foundation-model-stack/fm
-COPY foundation-model-stack/nlp /app/foundation-model-stack/nlp
-COPY foundation-model-stack/version.py /app/foundation-model-stack/version.py
-COPY foundation-model-stack/README.md /app/foundation-model-stack/README.md
-RUN cd foundation-model-stack && \
-    pip install ./fm ./nlp && \
-    cd .. && \
-    rm -rf foundation-model-stack
-
 # apex
 RUN git clone https://github.com/NVIDIA/apex && \
     cd apex && \

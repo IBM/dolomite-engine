@@ -2,11 +2,9 @@ import json
 from argparse import ArgumentParser
 from typing import Any, List, Union
 
-import fm_nlp.architecture
 import numpy as np
 import torch
 import transformers
-from fm_nlp.architecture import GraniteHF, SandstoneHF
 from peft import PromptTuningInit
 from pydantic import BaseModel, Extra
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -52,12 +50,7 @@ class ModelArgs(BaseArgs):
         # model_name
         assert self.model_name is not None, "model_name cannot be None"
         # model_class
-        try:
-            self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(
-                transformers, self.model_class
-            )
-        except AttributeError:
-            self.model_class: Union[GraniteHF, SandstoneHF] = getattr(fm_nlp.architecture, self.model_class)
+        self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(transformers, self.model_class)
 
         # dtype
         self.dtype = getattr(torch, self.dtype)
