@@ -49,24 +49,30 @@ class ModelArgs(BaseArgs):
     def _post_init(self) -> None:
         # model_name
         assert self.model_name is not None, "model_name cannot be None"
+
         # model_class
-        self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(transformers, self.model_class)
+        if self.attention_implementation is None:
+            assert self.model_class in [
+                AutoModelForCausalLM.__name__,
+                AutoModelForSeq2SeqLM.__name__,
+            ], f"attention implementation is not supported with {AutoModelForCausalLM.__name__} or {AutoModelForSeq2SeqLM.__name__}"
+
+            self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(
+                transformers, self.model_class
+            )
+        else:
+            try:
+                from megatron_models import GPTMegatronForCausalLM
+
+                self.model_class = GPTMegatronForCausalLM
+            except ImportError:
+                raise ImportError(
+                    "please pip install megatron-models: https://github.ibm.com/ai-models-architectures/megatron-models"
+                )
 
         # dtype
         self.dtype = getattr(torch, self.dtype)
         assert self.dtype in [torch.float32, torch.float16, torch.bfloat16], f"unexpected dtype '{self.dtype}'"
-
-        if self.attention_implementation is not None:
-            try:
-                from transformers import GPTMegatronForCausalLM
-            except ImportError:
-                raise ImportError(
-                    "pip install this version of transformers: https://github.ibm.com/ai-models-architectures/transformers"
-                )
-
-            assert (
-                self.model_class == GPTMegatronForCausalLM
-            ), "attention_implementation only works with GPTMegatronForCausalLM"
 
 
 class InitializationArgs(BaseArgs):

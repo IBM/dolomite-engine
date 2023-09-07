@@ -12,7 +12,7 @@ then
     fi
 
     echo "building image $IMAGE"
-    docker build -t $IMAGE --platform $ARCH .
+    ./scripts/travis/dots.sh docker build -t $IMAGE --platform $ARCH .
 
     # login into cil15-registry
     echo $IBM_CLOUD_API_KEY | docker login -u iamapikey --password-stdin $REGISTRY_URL

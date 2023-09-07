@@ -29,14 +29,15 @@ RUN conda install -c anaconda cmake -y
 # necessary stuff
 RUN pip install torch --index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
 
-COPY transformers /app/transformers
-RUN cd transformers && \
+COPY megatron-models /app/megatron-models
+RUN cd megatron-models && \
     pip install . && \
     cd .. && \
-    rm -rf transformers
+    rm -rf megatron-models
 
-RUN pip install accelerate==0.21.0 \
-    bitsandbytes==0.41.0 \
+RUN pip install transformers==4.33.1 \
+    accelerate==0.22.0 \
+    bitsandbytes==0.41.1 \
     safetensors==0.3.2 \
     aim==3.17.5 \
     peft==0.4.0 \
@@ -66,7 +67,7 @@ RUN git clone https://github.com/microsoft/DeepSpeed && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
 
 # flash attention
-RUN MAX_JOBS=4 pip install -v flash-attn==2.0.4 --no-cache-dir --no-build-isolation
+RUN MAX_JOBS=4 pip install -v flash-attn==2.2.1 --no-cache-dir --no-build-isolation
 
 # clean conda env
 RUN conda clean -ya

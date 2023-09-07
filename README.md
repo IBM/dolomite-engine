@@ -29,6 +29,10 @@ Note that the `blaunch.sh` script here (provided by CCC) executes the command `s
 helm template -f scripts/train_vela.yaml chart | tee appwrapper.yaml | oc create -f -
 ```
 
+## To use Flash Attention for IBM models
+Install the latest release of https://github.ibm.com/ai-models-architectures/megatron-models. Simple pip install will work.
+Use this [config](configs/8k/).
+
 ## Supported optimizers
 ```python
 # https://nvidia.github.io/apex/optimizers.html

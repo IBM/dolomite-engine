@@ -3,7 +3,7 @@ from typing import List, Tuple, Union
 import torch
 from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 from transformers import AutoConfig, AutoTokenizer
-from transformers.deepspeed import HfDeepSpeedConfig
+from transformers.integrations import HfDeepSpeedConfig
 
 from src.arguments import InferenceArgs, TrainingArgs
 from src.constants import AttentionImplementation, Mode, PaddingSide, TrainingInferenceType
@@ -307,7 +307,7 @@ class Model(torch.nn.Module):
             self.model.resize_token_embeddings(len(self.tokenizer))
 
     def _inject_attention_implementation(self) -> None:
-        from transformers import GPTMegatronForCausalLM
+        from megatron_models import GPTMegatronForCausalLM
 
         assert isinstance(self.model, GPTMegatronForCausalLM)
 
