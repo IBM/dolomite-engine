@@ -9,9 +9,9 @@ services:
 env:
   global:
     - IMAGE_NAME=transformer-engine
-    - IMAGE_TAG=0.2.3
+    - IMAGE_TAG=0.2.4
     - BUILD_IMAGE=true
 
 install:
-  - git clone -b 0.0.0 https://$GIT_PAT@github.ibm.com/ai-models-architectures/megatron-models
+  - git clone -b 0.0.1 https://$GIT_PAT@github.ibm.com/ai-models-architectures/megatron-models
   - sh scripts/travis/build.sh
