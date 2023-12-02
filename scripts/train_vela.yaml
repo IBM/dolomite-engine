@@ -54,7 +54,7 @@ setupCommands:
   - git clone https://$(GIT_PAT)@github.ibm.com/conversational-ai/transformer-engine
   - cd transformer-engine
 
-mainProgram: -m src.train --config configs/sst2/full_finetuning-training.json
+mainProgram: -m engine.train --config configs/sst2/full_finetuning-training.json
 
 multiNicNetworkName: multi-nic-network
 

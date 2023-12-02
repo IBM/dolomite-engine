@@ -20,7 +20,6 @@
     "save_interval": 500,
     "batch_size_per_gpu": 8,
     "dtype": "bfloat16",
-    "learning_rate": 1e-5,
     "optimizer": {
         "optimizer_class": "ApexFusedAdam",
         "lr": 1e-5,

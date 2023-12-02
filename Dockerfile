@@ -1,7 +1,7 @@
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 as base
 
 ENV HOME=/homedir \
-    PYTHON_VERSION=3.9 \
+    PYTHON_VERSION=3.11 \
     PATH=/opt/conda/envs/ai/bin:/opt/conda/bin:${PATH} \
     BITSANDBYTES_NOWELCOME=1
 
@@ -29,16 +29,16 @@ RUN conda install -c anaconda cmake -y
 # necessary stuff
 RUN pip install torch --index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
 
-COPY megatron-models /app/megatron-models
-RUN cd megatron-models && \
+COPY ibm-models /app/ibm-models
+RUN cd ibm-models && \
     pip install . && \
     cd .. && \
-    rm -rf megatron-models
+    rm -rf ibm-models
 
-RUN pip install transformers==4.33.1 \
-    accelerate==0.22.0 \
+RUN pip install transformers==4.35.2 \
+    accelerate==0.25.0 \
     bitsandbytes==0.41.1 \
-    safetensors==0.3.2 \
+    safetensors==0.4.1 \
     aim==3.17.5 \
     peft==0.4.0 \
     pydantic \
@@ -55,19 +55,19 @@ RUN pip install transformers==4.33.1 \
 # apex
 RUN git clone https://github.com/NVIDIA/apex && \
     cd apex && \
-    git checkout 2958e06 && \
-    pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" . && \
+    git checkout 9fc94b7 && \
+    pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" --config-settings "--build-option=--fast_layer_norm" . && \
     cd .. && \
     rm -rf apex
 
 # deepspeed
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
-    git checkout v0.10.0 && \
+    git checkout v0.12.4 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
 
 # flash attention
-RUN MAX_JOBS=4 pip install -v flash-attn==2.2.1 --no-cache-dir --no-build-isolation
+RUN MAX_JOBS=4 pip install -v flash-attn==2.3.4 --no-cache-dir --no-build-isolation
 
 # clean conda env
 RUN conda clean -ya

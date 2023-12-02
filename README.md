@@ -30,7 +30,7 @@ helm template -f scripts/train_vela.yaml chart | tee appwrapper.yaml | oc create
 ```
 
 ## To use Flash Attention for IBM models
-Install the latest release of https://github.ibm.com/ai-models-architectures/megatron-models. Simple pip install will work.
+Install the latest release of https://github.ibm.com/ai-models-architectures/ibm-models. Simple pip install will work.
 Use this [config](configs/8k/).
 
 ## Supported optimizers
