@@ -3,7 +3,7 @@ import os
 import sys
 
 from engine.arguments import InferenceArgs, get_args
-from engine.checkpointing import ModelCheckpointer
+from engine.checkpointing import load_checkpoint_for_inference, save_inference_args
 from engine.constants import DatasetKeys, DatasetSplit, Mode
 from engine.data import ConcatenatedDatasets
 from engine.model import Model
@@ -24,7 +24,7 @@ def generate(args: InferenceArgs, model: Model, test_dataset: ConcatenatedDatase
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    ModelCheckpointer.save_inference_args(args, os.path.join(args.output_dir, "inference_config.json"))
+    save_inference_args(args, os.path.join(args.output_dir, "inference_config.json"))
 
     output_file = open(os.path.join(args.output_dir, "output.jsonl"), "w")
     raw_batch = []
@@ -81,7 +81,7 @@ def main() -> None:
 
     model.post_init()
     if args.load_path is not None:
-        ModelCheckpointer.load_checkpoint_for_inference(model, args.load_path)
+        load_checkpoint_for_inference(model, args.load_path)
 
     generate(args, model, test_dataset, generate_kwargs)
 

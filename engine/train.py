@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from transformers import set_seed
 
 from engine.arguments import TrainingArgs, get_args
-from engine.checkpointing import ModelCheckpointer
+from engine.checkpointing import load_checkpoint_for_training, save_deepspeed_checkpoint
 from engine.constants import DatasetSplit, Mode
 from engine.data import ConcatenatedDatasets
 from engine.model import Model
@@ -142,7 +142,7 @@ def train(
                 track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
             if micro_step != 0 and micro_step % (args.save_interval * args.gradient_accumulation_steps) == 0:
-                ModelCheckpointer.save_deepspeed_checkpoint(model, args, args.save_path)
+                save_deepspeed_checkpoint(model, args, args.save_path)
 
             train_loss_step_accumulator += train_step(model, batch)
             micro_step += 1
@@ -164,7 +164,7 @@ def train(
         val_loss = evaluate(val_dataloader, model)
         track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
 
-    ModelCheckpointer.save_deepspeed_checkpoint(model, args, args.save_path)
+    save_deepspeed_checkpoint(model, args, args.save_path)
 
 
 @register_profiler("evaluate_dataset")
@@ -254,7 +254,7 @@ def main() -> None:
     )
 
     if args.load_path is not None:
-        ModelCheckpointer.load_checkpoint_for_training(model, args.load_path)
+        load_checkpoint_for_training(model, args.load_path)
 
     experiments_tracker = ExperimentsTracker(__name__, args.experiment_name, args.aim_repo, args.logdir)
     # track all hyperparams in args

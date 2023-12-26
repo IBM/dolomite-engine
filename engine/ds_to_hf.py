@@ -3,7 +3,7 @@ from argparse import ArgumentParser, Namespace
 import torch
 import transformers
 
-from engine.checkpointing import ModelCheckpointer
+from engine.checkpointing import convert_deepspeed_to_huggingface_checkpoint
 from engine.constants import Mode, PaddingSide, TrainingInferenceType
 from engine.model import Model
 from engine.utils import print_args
@@ -54,7 +54,7 @@ def main() -> None:
     model = Model(args, Mode.inference)
     model.post_init()
 
-    ModelCheckpointer.convert_deepspeed_to_huggingface_checkpoint(model, args.load_path, args.save_path)
+    convert_deepspeed_to_huggingface_checkpoint(model, args.load_path, args.save_path)
 
 
 if __name__ == "__main__":
