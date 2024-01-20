@@ -8,7 +8,7 @@ from transformers import AutoTokenizer
 from engine.arguments import InferenceArgs, TrainingArgs
 from engine.constants import DatasetKeys, DatasetSplit, Mode
 from engine.data.dataset import BaseDataset, check_raw_example, generate_random_id
-from engine.data.instructions.config import AlpacaConfig, DollyConfig, VicunaConfig
+from engine.data.instruction_tuning.config import AlpacaConfig, DollyConfig, VicunaConfig
 from engine.data.utils import train_val_test_split
 
 
