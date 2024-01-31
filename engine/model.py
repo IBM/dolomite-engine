@@ -117,11 +117,6 @@ class Model(torch.nn.Module):
             self.tokenizer.padding_side if args.padding_side is None else args.padding_side
         )
 
-        if self.tokenizer.pad_token_id is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-            print_rank_0(f"PAD token not found, adding it explicitely")
-
         if args.additional_special_tokens is not None:
             self.tokenizer.add_special_tokens({"additional_special_tokens": args.additional_special_tokens})
             print_rank_0(f"added {len(args.additional_special_tokens)} tokens")
@@ -237,7 +232,8 @@ class Model(torch.nn.Module):
         if not self.is_encoder_decoder:
             generated = generated[:, batch["input_ids"].shape[1] :]
 
-        num_generated_tokens = (generated != self.tokenizer.pad_token_id).sum(dim=-1).tolist()
+        # add 1 since eos token to also count eos in generated tokens
+        num_generated_tokens = ((generated != self.tokenizer.eos_token_id).sum(dim=-1) + 1).tolist()
         generated_text = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
 
         return generated_text, num_generated_tokens
@@ -266,7 +262,7 @@ class Model(torch.nn.Module):
             input_ids, attention_mask, labels = pad(
                 inputs,
                 outputs,
-                self.tokenizer.pad_token_id,
+                self.tokenizer.eos_token_id,
                 padding_side=self.padding_side,
                 is_encoder_decoder=self.is_encoder_decoder,
                 attention_implementation=self.attention_implementation,
@@ -277,7 +273,7 @@ class Model(torch.nn.Module):
             input_ids, attention_mask, _ = pad(
                 inputs,
                 None,
-                self.tokenizer.pad_token_id,
+                self.tokenizer.eos_token_id,
                 padding_side=self.padding_side,
                 is_encoder_decoder=self.is_encoder_decoder,
                 attention_implementation=self.attention_implementation,
