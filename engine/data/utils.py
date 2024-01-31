@@ -27,6 +27,6 @@ def train_val_test_split(
     elif split == DatasetSplit.test:
         indices = indices[-test_samples:]
 
-    split_data = [data[i] for i in indices]
+    split_data = [data[i.item()] for i in indices]
 
     return split_data

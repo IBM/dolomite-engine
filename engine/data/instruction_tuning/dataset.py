@@ -2,7 +2,7 @@ import json
 import os
 from typing import List, Union
 
-import jsonlines
+from datasets import load_dataset
 from transformers import AutoTokenizer
 
 from engine.arguments import InferenceArgs, TrainingArgs
@@ -93,7 +93,7 @@ class DollyDataset(BaseInstructionDataset):
         self.examples = self.prepare_examples()
 
     def prepare_examples(self) -> List[dict]:
-        data = [i for i in jsonlines.open(os.path.join(self.data_path, "databricks-dolly-15k.jsonl"), "r")]
+        data = load_dataset("databricks/databricks-dolly-15k")["train"]
         data = train_val_test_split(
             data, self.split, self.data_config.seed, self.data_config.val_samples, self.data_config.test_samples
         )
