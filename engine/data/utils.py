@@ -1,16 +1,6 @@
-from typing import List
-
 import torch
 
-from engine.constants import DatasetSplit
-
-
-def get_num_samples_by_dataset(data_sampling_proportion: List[int], total_examples: int) -> List[int]:
-    data_sampling_proportion = torch.tensor(data_sampling_proportion)
-    num_samples_by_dataset = data_sampling_proportion / data_sampling_proportion.sum() * total_examples
-    num_samples_by_dataset = num_samples_by_dataset.to(torch.long)
-    num_samples_by_dataset[-1] = total_examples - num_samples_by_dataset[:-1].sum()
-    return num_samples_by_dataset.tolist()
+from ..enums import DatasetSplit
 
 
 def train_val_test_split(

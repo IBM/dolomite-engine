@@ -1,23 +1,12 @@
 import os
 from typing import Callable
 
-import torch.distributed as dist
+import torch.distributed
 
 
-def _get_int_env_var(var_name: str) -> int:
-    """get the int value of an env variable, returns None if the variable is not found
-
-    Args:
-        var_name (str): env variable name
-
-    Returns:
-        int: value of the env variable
-    """
-
-    var_value = os.getenv(var_name)
-    if var_value is not None:
-        var_value = int(var_value)
-    return var_value
+_WORLD_SIZE: int = None
+_LOCAL_RANK: int = None
+_GLOBAL_RANK: int = None
 
 
 def get_world_size() -> int:
@@ -27,7 +16,11 @@ def get_world_size() -> int:
         int: number of GPUs
     """
 
-    return _get_int_env_var("WORLD_SIZE")
+    global _WORLD_SIZE
+
+    if _WORLD_SIZE is None:
+        _WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
+    return _WORLD_SIZE
 
 
 def get_local_rank() -> int:
@@ -37,17 +30,25 @@ def get_local_rank() -> int:
         int: GPU rank on current node
     """
 
-    return _get_int_env_var("LOCAL_RANK")
+    global _LOCAL_RANK
+
+    if _LOCAL_RANK is None:
+        _LOCAL_RANK = int(os.getenv("LOCAL_RANK", 0))
+    return _LOCAL_RANK
 
 
-def get_rank() -> int:
+def get_global_rank() -> int:
     """GPU global rank across all nodes
 
     Returns:
         int: GPU global rank across all nodes
     """
 
-    return _get_int_env_var("RANK")
+    global _GLOBAL_RANK
+
+    if _GLOBAL_RANK is None:
+        _GLOBAL_RANK = int(os.getenv("RANK", 0))
+    return _GLOBAL_RANK
 
 
 def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable:
@@ -66,17 +67,17 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
     def func_rank_n(*args, **kwargs):
         output = func(*args, **kwargs)
         if barrier:
-            dist.barrier()
+            torch.distributed.barrier()
         return output
 
     # a dummy method that doesn't do anything
     def func_rank_other(*args, **kwargs):
         if barrier:
-            dist.barrier()
+            torch.distributed.barrier()
 
-    if get_rank() == rank:
+    if get_global_rank() == rank:
         return func_rank_n
-    elif get_rank() == None:
+    elif get_global_rank() == None:
         # distributed is not initialized
         return func
     else:

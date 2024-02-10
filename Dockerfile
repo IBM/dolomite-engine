@@ -35,7 +35,7 @@ RUN cd ibm-models && \
     cd .. && \
     rm -rf ibm-models
 
-RUN pip install transformers==4.35.2 \
+RUN pip install transformers==4.37.2 \
     accelerate==0.25.0 \
     bitsandbytes==0.41.1 \
     safetensors==0.4.1 \
@@ -55,7 +55,6 @@ RUN pip install transformers==4.35.2 \
 # apex
 RUN git clone https://github.com/NVIDIA/apex && \
     cd apex && \
-    git checkout 9fc94b7 && \
     pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" --config-settings "--build-option=--fast_layer_norm" . && \
     cd .. && \
     rm -rf apex
@@ -63,11 +62,11 @@ RUN git clone https://github.com/NVIDIA/apex && \
 # deepspeed
 RUN git clone https://github.com/microsoft/DeepSpeed && \
     cd DeepSpeed && \
-    git checkout v0.12.4 && \
+    git checkout v0.13.1 && \
     TORCH_CUDA_ARCH_LIST="8.0" DS_BUILD_CPU_ADAM=1 DS_BUILD_AIO=1 DS_BUILD_UTILS=1 pip install -v --global-option="build_ext" --global-option="-j8" --no-cache-dir .
 
 # flash attention
-RUN MAX_JOBS=4 pip install -v flash-attn==2.3.4 --no-cache-dir --no-build-isolation
+RUN MAX_JOBS=4 pip install -v flash-attn==2.5.2 --no-cache-dir --no-build-isolation
 
 # clean conda env
 RUN conda clean -ya

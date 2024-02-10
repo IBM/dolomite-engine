@@ -1,24 +1,21 @@
 import math
-from typing import Iterator
+from typing import Iterator, List
 
 import torch
 from torch.utils.data import DistributedSampler
 
-from engine.arguments import TrainingArgs
-from engine.constants import DatasetSplit, Mode
-from engine.data.dataset import ConcatenatedDatasets
-from engine.data.utils import get_num_samples_by_dataset
-from engine.utils.distributed import get_world_size
-from engine.utils.logging import print_rank_0
+from ..enums import DatasetSplit, Mode
+from .base import BlendedDatasets
 
 
-class ConcatenatedDataSampler(DistributedSampler):
+class BlendedDistributedSampler(DistributedSampler):
     """Data sampler used for training on multiple datasets according to the specified sampling proportions"""
 
     def __init__(
         self,
-        args: TrainingArgs,
-        dataset: ConcatenatedDatasets,
+        dataset: BlendedDatasets,
+        data_sampling_ratios: List[int],
+        ignore_sampling_proportion_for_validation: bool = True,
         num_replicas: int = None,
         rank: int = None,
         shuffle: bool = True,
@@ -27,27 +24,22 @@ class ConcatenatedDataSampler(DistributedSampler):
     ) -> None:
         super().__init__(dataset, num_replicas, rank, shuffle, seed, drop_last)
 
-        self.dataset: ConcatenatedDatasets
-        assert self.dataset.mode == Mode.training, "only use sampler during training"
+        self.dataset: BlendedDatasets
 
         self.num_examples_in_each_dataset = self.dataset.get_num_examples_in_each_dataset()
         self.num_datasets = dataset.get_num_datasets()
 
-        if args.ignore_sampling_proportion_for_validation and self.dataset.split == DatasetSplit.val:
+        if self.dataset.split == DatasetSplit.val and ignore_sampling_proportion_for_validation:
             self.num_samples_by_dataset = self.num_examples_in_each_dataset
         else:
-            self.num_samples_by_dataset = get_num_samples_by_dataset(
-                self.dataset.data_sampling_proportion, len(dataset)
-            )
-
-        self.print_sampler_stats(args.batch_size_per_gpu, args.num_training_steps, args.gradient_accumulation_steps)
+            self.num_samples_by_dataset = _get_num_samples_by_dataset(data_sampling_ratios, len(dataset))
 
     def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int, seed: int) -> torch.Tensor:
         g = torch.Generator()
         g.manual_seed(seed)
 
         if num_samples_in_subset < subset_size:
-            sampler = torch.randperm(num_samples_in_subset, generator=g)
+            sampler = torch.randperm(subset_size, generator=g)[:num_samples_in_subset]
         else:
             num_concats = num_samples_in_subset // subset_size
             padding = num_samples_in_subset - num_concats * subset_size
@@ -55,8 +47,7 @@ class ConcatenatedDataSampler(DistributedSampler):
             sampler = torch.tensor(sampler)
 
             if padding > 0:
-                padding_samples = torch.randperm(subset_size, generator=g)
-                padding_samples = padding_samples[:padding]
+                padding_samples = torch.randperm(subset_size, generator=g)[:padding]
                 sampler = torch.cat([sampler, padding_samples])
 
         return sampler
@@ -103,34 +94,18 @@ class ConcatenatedDataSampler(DistributedSampler):
             else:
                 yield i
 
-    def print_sampler_stats(
-        self, batch_size_per_gpu: int, num_training_steps: int, gradient_accumulation_steps: int
-    ) -> None:
-        """prints the statistics of the program"""
-
-        if self.dataset.mode == Mode.training and self.dataset.split == DatasetSplit.train:
-            total_samples_seen = (
-                num_training_steps * gradient_accumulation_steps * batch_size_per_gpu * get_world_size()
-            )
-        elif self.dataset.mode == Mode.inference or self.dataset.split != DatasetSplit.train:
-            if len(self.dataset) % (batch_size_per_gpu * get_world_size()) == 0:
-                num_steps = len(self.dataset) // (batch_size_per_gpu * get_world_size())
-            else:
-                num_steps = (len(self.dataset) // (batch_size_per_gpu * get_world_size())) + 1
-
-            total_samples_seen = num_steps * batch_size_per_gpu * get_world_size()
-
-        print_rank_0(f"{'*' * 25} {self.dataset.split.value} {'*' * 25}")
-        print_rank_0(f"total samples seen = {total_samples_seen}")
-        print_rank_0(f"total samples in 1 epoch of the dataset mixture = {len(self.dataset)}")
-        print_rank_0(f"total epochs for the dataset mixture = {total_samples_seen / len(self.dataset)}")
-
+    def __repr__(self) -> None:
+        x = ""
         for i, dataset in enumerate(self.dataset.datasets):
-            print_rank_0(
-                f"\nnumber of samples of {dataset.__class__.__name__} ({dataset.data_name}) in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i]}"
-            )
-            print_rank_0(
-                f"number of epochs of {dataset.__class__.__name__} ({dataset.data_name}) in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i] / len(dataset)}"
-            )
+            x += f"number of samples of {dataset.__class__.__name__} ({dataset.data_name}) in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i]}\n"
+            x += f"number of epochs of {dataset.__class__.__name__} ({dataset.data_name}) in 1 epoch of the entire dataset = {self.num_samples_by_dataset[i] / len(dataset)}\n\n"
 
-        print_rank_0("*" * 57)
+        return x.rstrip()
+
+
+def _get_num_samples_by_dataset(data_sampling_ratio: List[int], total_examples: int) -> List[int]:
+    data_sampling_ratio = torch.tensor(data_sampling_ratio)
+    num_samples_by_dataset = data_sampling_ratio / data_sampling_ratio.sum() * total_examples
+    num_samples_by_dataset = num_samples_by_dataset.to(torch.long)
+    num_samples_by_dataset[-1] = total_examples - num_samples_by_dataset[:-1].sum()
+    return num_samples_by_dataset.tolist()

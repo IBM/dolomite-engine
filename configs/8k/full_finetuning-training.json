@@ -1,32 +1,47 @@
 {
     "datasets": [
         {
-            "data_class": "DebugDataset",
+            "class_name": "DebugDataset",
             "data_name": "sst2",
-            "data_sampling_proportion": 1,
+            "data_sampling_ratio": 1,
             "max_input_tokens": 4096,
             "max_output_tokens": 4096
         }
     ],
-    "model_name": "bigcode/starcoder",
-    "model_class": "GPTMegatronForCausalLM",
-    "training_inference_type": "full_finetuning",
-    "experiment_name": "starcoder-15b-8k",
-    "attention_implementation": "flash",
-    "save_path": "checkpoints",
-    "gradient_checkpointing": true,
-    "logdir": "logs",
-    "num_training_steps": 100,
-    "eval_interval": 50,
-    "save_interval": 50,
-    "batch_size_per_gpu": 6,
-    "dtype": "bfloat16",
-    "optimizer": {
-        "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-5,
-        "weight_decay": 0.1,
-        "betas": [0.9, 0.95],
-        "eps": 1e-10
+    "model_args": {
+        "model_name": "bigcode/starcoder",
+        "model_class": "GPTMegatronForCausalLM",
+        "dtype": "bfloat16",
+        "attention_implementation": "flash"
     },
-    "lr_schedule": "cosine"
+    "tuning_args": {
+        "tuning_method": "full_finetuning"
+    },
+    "save_args": {
+        "save_path": "checkpoints",
+        "save_interval": 50
+    },
+    "gradient_checkpointing": true,
+    "logging_args": {
+        "logdir": "logs",
+        "experiment_name": "starcoder-15b-8k"
+    },
+    "training_parameters": {
+        "num_training_steps": 100,
+        "eval_interval": 50,
+        "batch_size_per_gpu": 6
+    },
+    "optimizer_args": {
+        "class_name": "ApexFusedAdam",
+        "class_args": 
+        {
+            "lr": 1e-5,
+            "weight_decay": 0.1,
+            "betas": [0.9, 0.95],
+            "eps": 1e-10
+        }
+    },
+    "lr_scheduler_args": {
+        "lr_schedule": "cosine"
+    }
 }

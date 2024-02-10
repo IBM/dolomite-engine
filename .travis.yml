@@ -9,9 +9,9 @@ services:
 env:
   global:
     - IMAGE_NAME=transformer-engine
-    - IMAGE_TAG=0.2.5
+    - IMAGE_TAG=0.3.0
     - BUILD_IMAGE=true
 
 install:
-  - git clone -b 0.0.8 https://$GIT_PAT@github.ibm.com/ai-models-architectures/ibm-models
+  - git clone -b 0.1.0 https://$GIT_PAT@github.ibm.com/ai-models-architectures/ibm-models
   - sh scripts/travis/build.sh

@@ -1,26 +1,29 @@
-from typing import List, Tuple
+import contextlib
+from typing import Union
 
 import torch
 from deepspeed import DeepSpeedEngine
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from transformers import set_seed
 
-from engine.arguments import TrainingArgs, get_args
-from engine.checkpointing import load_checkpoint_for_training, save_deepspeed_checkpoint
-from engine.constants import DatasetSplit, Mode
-from engine.data import ConcatenatedDatasets
-from engine.model import Model
-from engine.optimization import get_optimizer, get_scheduler_method
-from engine.utils import (
+from .arguments import TrainingArgs, get_args
+from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .data import get_dataloader, infinite_iterator
+from .distributed import wrap_model_for_distributed_training
+from .enums import DatasetSplit, DistributedBackend, Mode
+from .model import Model
+from .utils import (
     ExperimentsTracker,
     ProgressBar,
     RunningMean,
-    deepspeed_initialize,
     init_distributed,
     print_rank_0,
     register_profiler,
     register_timer,
-    setup_debugging,
     setup_tf32,
 )
 
@@ -84,87 +87,142 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
 
 @register_profiler("train_step")
 @register_timer("train_step")
-def train_step(model: DeepSpeedEngine, batch: Tuple[List[int]]) -> float:
+def train_step(
+    model: Union[DeepSpeedEngine, DDP, FSDP],
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
+    distributed_backend: DistributedBackend,
+    train_dataloader: DataLoader,
+    gradient_accumulation_steps: int,
+) -> float:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (DeepSpeedEngine): DeepSpeed sharded model
-        batch (Tuple[List[int]]): a batch of examples on each GPU
+        model (DeepSpeedEngine, DDP, FSDP): DeepSpeed sharded model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LamdaLR): learning rate scheduler
+        distributed_backend (DistributedBackend): distributed backend
+        train_dataloader (DataLoader): training dataloader
+        gradient_accumulation_steps (int): gradient accumulation steps
 
     Returns:
         float: loss at the current step
     """
 
-    loss = model(batch)
+    no_sync = model.no_sync if distributed_backend == DistributedBackend.torch else contextlib.nullcontext
+    loss = 0
+    if distributed_backend == DistributedBackend.torch:
+        optimizer.zero_grad()
+
+    with no_sync():
+        for _ in range(gradient_accumulation_steps - 1):
+            batch = next(train_dataloader)
+            loss_micro_step = model(batch)
+            loss += loss_micro_step
+
+            # compute gradients
+            if distributed_backend == DistributedBackend.deepspeed:
+                model.backward(loss_micro_step)
+                model.step()
+            elif distributed_backend == DistributedBackend.torch:
+                loss_micro_step.backward()
+            else:
+                raise ValueError(f"unexpected distributed backend ({distributed_backend})")
+
+    batch = next(train_dataloader)
+    loss_micro_step = model(batch)
+    loss += loss_micro_step
 
     # compute gradients
-    model.backward(loss)
-    # update weights and optimizer states
-    model.step()
+    if distributed_backend == DistributedBackend.deepspeed:
+        model.backward(loss_micro_step)
+        model.step()
+    elif distributed_backend == DistributedBackend.torch:
+        loss_micro_step.backward()
+        optimizer.step()
+        lr_scheduler.step()
+    else:
+        raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    loss_value = loss.item()
-    return loss_value
+    loss = loss / gradient_accumulation_steps
+    loss = loss.item()
+
+    return loss
 
 
 def train(
     args: TrainingArgs,
+    model: DeepSpeedEngine,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
     val_dataloader: DataLoader,
-    model: DeepSpeedEngine,
     experiments_tracker: ExperimentsTracker,
 ) -> None:
     """main training loop for the program
 
     Args:
         args (TrainingArgs): training args
+        model (DeepSpeedEngine): DeepSpeed sharded model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LRScheduler): learning rate scheduler
         train_dataloader (DataLoader): training dataloader
         val_dataloader (DataLoader): validation dataloader
-        model (DeepSpeedEngine): DeepSpeed sharded model
         experiments_tracker (ExperimentsTracker): metrics tracker
     """
 
+    num_training_steps = args.training_parameters.num_training_steps
+    gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
+
+    eval_during_training = args.training_parameters.eval_during_training
+    eval_interval = args.training_parameters.eval_interval
+    distributed_backend = args.distributed_args.distributed_backend
+    save_interval = args.save_args.save_interval
+
     loss_running_mean_tracker = RunningMean()
-    progress_bar = ProgressBar(0, args.num_training_steps)
-    micro_step = 0
+    progress_bar = ProgressBar(0, num_training_steps)
 
     model.train()
-    train_loss_step_accumulator = 0
+
+    train_dataloader = infinite_iterator(train_dataloader)
 
     # to run on multiple epochs
-    while micro_step < args.num_training_steps * args.gradient_accumulation_steps:
-        for batch in train_dataloader:
-            # this completes the job
-            if micro_step == args.num_training_steps * args.gradient_accumulation_steps:
-                break
+    for global_step in range(num_training_steps):
+        if eval_during_training and global_step % eval_interval == 0:
+            val_loss = evaluate(val_dataloader, model)
+            track_val_metrics(global_step, val_loss, experiments_tracker)
 
-            if args.eval_during_training and micro_step % (args.eval_interval * args.gradient_accumulation_steps) == 0:
-                val_loss = evaluate(val_dataloader, model)
-                track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
+        if global_step != 0 and global_step % save_interval == 0:
+            save_checkpoint(args, model, optimizer, lr_scheduler, global_step)
 
-            if micro_step != 0 and micro_step % (args.save_interval * args.gradient_accumulation_steps) == 0:
-                save_deepspeed_checkpoint(model, args, args.save_path)
+        loss_step = train_step(
+            model=model,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            distributed_backend=distributed_backend,
+            train_dataloader=train_dataloader,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+        )
 
-            train_loss_step_accumulator += train_step(model, batch)
-            micro_step += 1
+        track_train_metrics(
+            global_step=global_step,
+            train_loss_step=loss_step,
+            current_lr=model.lr_scheduler.get_lr()[0]
+            if distributed_backend == DistributedBackend.deepspeed
+            else lr_scheduler.get_lr()[0],
+            experiments_tracker=experiments_tracker,
+            loss_running_mean_tracker=loss_running_mean_tracker,
+            progress_bar=progress_bar,
+        )
 
-            if micro_step % args.gradient_accumulation_steps == 0:
-                track_train_metrics(
-                    global_step=micro_step // args.gradient_accumulation_steps,
-                    train_loss_step=train_loss_step_accumulator / args.gradient_accumulation_steps,
-                    current_lr=model.lr_scheduler.get_lr()[0],
-                    experiments_tracker=experiments_tracker,
-                    loss_running_mean_tracker=loss_running_mean_tracker,
-                    progress_bar=progress_bar,
-                )
+        progress_bar.update()
 
-                train_loss_step_accumulator = 0
-                progress_bar.update()
-
-    if args.eval_during_training:
+    if eval_during_training:
         val_loss = evaluate(val_dataloader, model)
-        track_val_metrics(micro_step // args.gradient_accumulation_steps, val_loss, experiments_tracker)
+        track_val_metrics(global_step, val_loss, experiments_tracker)
 
-    save_deepspeed_checkpoint(model, args, args.save_path)
+    if global_step % save_interval != 0:
+        save_checkpoint(args, model, optimizer, lr_scheduler, global_step)
 
 
 @register_profiler("evaluate_dataset")
@@ -213,13 +271,12 @@ def main() -> None:
 
     # initialize distributed with nccl for multi-node communications
     init_distributed()
-    set_seed(args.seed)
+    set_seed(args.random_args.seed)
 
     # setup deepspeed model
     model = Model(args, mode)
 
-    # non-sharded training dataset
-    train_dataset = ConcatenatedDatasets(
+    train_dataloader = get_dataloader(
         args,
         split=DatasetSplit.train,
         mode=mode,
@@ -227,10 +284,9 @@ def main() -> None:
         is_encoder_decoder=model.is_encoder_decoder,
     )
 
-    # non-sharded validation dataset
-    val_dataset = None
-    if args.eval_during_training:
-        val_dataset = ConcatenatedDatasets(
+    val_dataloader = None
+    if args.training_parameters.eval_during_training:
+        val_dataloader = get_dataloader(
             args,
             split=DatasetSplit.val,
             mode=mode,
@@ -238,30 +294,29 @@ def main() -> None:
             is_encoder_decoder=model.is_encoder_decoder,
         )
 
-    model.post_init()
+    model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)
 
-    # setup Adam optimizer
-    optimizer = get_optimizer(args, model.parameters())
+    print_rank_0(model)
 
-    # setup learning rate schedule
-    lr_scheduler = get_scheduler_method(args.lr_schedule)(
-        optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=args.num_training_steps
+    if args.load_args is not None:
+        load_checkpoint_for_training(args, model, optimizer, lr_scheduler)
+
+    experiments_tracker = ExperimentsTracker(
+        __name__, args.logging_args.experiment_name, args.logging_args.aim_repo, args.logging_args.logdir
     )
-
-    # shard the model and the optimizer
-    model, (train_dataloader, val_dataloader) = deepspeed_initialize(
-        args, model, optimizer, lr_scheduler, [train_dataset, val_dataset]
-    )
-
-    if args.load_path is not None:
-        load_checkpoint_for_training(model, args.load_path)
-
-    experiments_tracker = ExperimentsTracker(__name__, args.experiment_name, args.aim_repo, args.logdir)
     # track all hyperparams in args
     experiments_tracker.log_args(args)
 
     # main training loop
-    train(args, train_dataloader, val_dataloader, model, experiments_tracker)
+    train(
+        args,
+        model=model,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        train_dataloader=train_dataloader,
+        val_dataloader=val_dataloader,
+        experiments_tracker=experiments_tracker,
+    )
 
 
 if __name__ == "__main__":

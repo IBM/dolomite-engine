@@ -1,31 +1,46 @@
 {
     "datasets": [
         {
-            "data_class": "SST2Dataset",
+            "class_name": "SST2Dataset",
             "data_name": "sst2",
             "input_format": "Classify the sentiment of the sentence:\n__input__\nSentiment:",
             "output_format": " __output__",
-            "data_sampling_proportion": 1,
+            "data_sampling_ratio": 1,
             "max_input_tokens": 1024,
             "max_output_tokens": 128
         }
     ],
-    "model_name": "bigscience/bloom-560m",
-    "model_class": "AutoModelForCausalLM",
-    "training_inference_type": "full_finetuning",
-    "experiment_name": "sst2-bloom-560m-full_finetuning",
-    "save_path": "checkpoints/full_finetuning",
-    "num_training_steps": 4000,
-    "eval_interval": 500,
-    "save_interval": 500,
-    "batch_size_per_gpu": 8,
-    "dtype": "bfloat16",
-    "optimizer": {
-        "optimizer_class": "ApexFusedAdam",
-        "lr": 1e-5,
-        "weight_decay": 0.1,
-        "betas": [0.9, 0.95],
-        "eps": 1e-10
+    "model_args": {
+        "model_name": "bigscience/bloom-560m",
+        "model_class": "AutoModelForCausalLM",
+        "dtype": "bfloat16"
     },
-    "lr_schedule": "cosine"
+    "tuning_args": {
+        "tuning_method": "full_finetuning"
+    },
+    "logging_args": {
+        "experiment_name": "sst2-bloom-560m-full_finetuning"
+    },
+    "save_args": {
+        "save_path": "checkpoints/full_finetuning",
+        "save_interval": 500
+    },
+    "training_parameters": {
+        "num_training_steps": 4000,
+        "eval_interval": 500,
+        "batch_size_per_gpu": 8
+    },
+    "optimizer_args": {
+        "class_name": "ApexFusedAdam",
+        "class_args": 
+        {
+            "lr": 1e-5,
+            "weight_decay": 0.1,
+            "betas": [0.9, 0.95],
+            "eps": 1e-10
+        }
+    },
+    "lr_scheduler_args": {
+        "lr_schedule": "cosine"
+    }
 }

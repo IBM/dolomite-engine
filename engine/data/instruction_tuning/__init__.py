@@ -1,1 +1,2 @@
-from engine.data.instruction_tuning.dataset import AlpacaDataset, DollyDataset, VicunaDataset
+from .alpaca import AlpacaDataset
+from .dolly import DollyDataset

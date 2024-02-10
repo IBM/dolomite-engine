@@ -6,7 +6,7 @@ from typing import Callable, Set
 import torch
 from pynvml import nvmlDeviceGetCount, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
 
-from engine.utils.distributed import run_rank_n
+from .ranks import run_rank_n
 
 
 _DEBUG_CONFIG = "debug.json"

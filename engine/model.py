@@ -5,83 +5,10 @@ from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 from transformers import AutoConfig, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from engine.arguments import InferenceArgs, TrainingArgs
-from engine.constants import AttentionImplementation, Mode, PaddingSide, TrainingInferenceType
-from engine.utils import get_deepspeed_config, get_local_rank, register_profiler, register_timer, warn_rank_0
-from engine.utils.logging import print_rank_0
-
-
-def pad(
-    inputs: list,
-    outputs: list,
-    pad_token_id: int,
-    padding_side: PaddingSide,
-    is_encoder_decoder: bool,
-    attention_implementation: AttentionImplementation = None,
-) -> Tuple[List[int], List[int]]:
-    """pads the arrays with the specified padding value
-
-    Args:
-        inputs (list): input token ids
-        outputs (list): output token labels
-        pad_token_id (int): token id to pad with
-        padding_side (PaddingSide): padding side for the tensors
-        is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
-        attention_implementation (AttentionImplementation): attention implementation for the model
-
-    Returns:
-        Tuple[List[int], List[int]]: token ids and the corresponding attention masks
-    """
-
-    # labels is None when outputs is None
-    labels = None
-
-    if is_encoder_decoder:
-        input_max_length = max(list(map(len, inputs)))
-
-        if padding_side == PaddingSide.left:
-            input_ids = [[pad_token_id] * (input_max_length - len(array)) + array for array in inputs]
-            attention_mask = [[0] * (input_max_length - len(array)) + [1] * len(array) for array in inputs]
-        else:
-            input_ids = [array + [pad_token_id] * (input_max_length - len(array)) for array in inputs]
-            attention_mask = [[1] * len(array) + [0] * (input_max_length - len(array)) for array in inputs]
-
-        if outputs is not None:
-            output_max_length = max(list(map(len, outputs)))
-            labels = [array + [-100] * (output_max_length - len(array)) for array in outputs]
-    else:
-        if attention_implementation == AttentionImplementation.flash:
-            input_ids = inputs
-            attention_mask = None
-            labels = [
-                [-100] * (len(array_in) - len(array_out)) + array_out for array_in, array_out in zip(inputs, outputs)
-            ]
-        else:
-            max_length = max(list(map(len, inputs)))
-
-            if padding_side == PaddingSide.left:
-                input_ids = [[pad_token_id] * (max_length - len(array)) + array for array in inputs]
-                attention_mask = [[0] * (max_length - len(array)) + [1] * len(array) for array in inputs]
-
-                if outputs is not None:
-                    labels = [[-100] * (max_length - len(array)) + array for array in outputs]
-            else:
-                input_ids = [array + [pad_token_id] * (max_length - len(array)) for array in inputs]
-                attention_mask = [[1] * len(array) + [0] * (max_length - len(array)) for array in inputs]
-
-                if outputs is not None:
-                    labels = [
-                        [-100] * (len(array_in) - len(array_out)) + array_out + [-100] * (max_length - len(array_in))
-                        for array_in, array_out in zip(inputs, outputs)
-                    ]
-
-    if attention_implementation != AttentionImplementation.flash:
-        input_ids = torch.tensor(input_ids)
-        attention_mask = torch.tensor(attention_mask)
-        if labels is not None:
-            labels = torch.tensor(labels)
-
-    return input_ids, attention_mask, labels
+from .arguments import ExportArgs, InferenceArgs, TrainingArgs
+from .distributed import get_deepspeed_config
+from .enums import AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
+from .utils import get_local_rank, print_rank_0, register_profiler, register_timer, warn_rank_0
 
 
 class Model(torch.nn.Module):
@@ -89,96 +16,58 @@ class Model(torch.nn.Module):
 
     @register_profiler("initialize_model")
     @register_timer("initialize_model")
-    def __init__(self, args: Union[TrainingArgs, InferenceArgs], mode: Mode):
+    def __init__(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], mode: Mode):
         """initializes a Model wrapper for a HuggingFace model
 
         Args:
-            args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
+            args (Union[TrainingArgs, InferenceArgs, ExportArgs]): arguments based on training / inference mode
             mode (Mode): training / inference mode for running the program
         """
 
         super().__init__()
 
         self.mode = mode
-        self.model_name = args.model_name
-        self.model_class = args.model_class
-        self.attention_implementation = args.attention_implementation
+        self.model_name = args.model_args.model_name
+        self.model_class = args.model_args.model_class
+        self.attention_implementation = args.model_args.attention_implementation
+        self.distributed_backend = args.distributed_args.distributed_backend if mode == Mode.training else None
 
-        self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.trust_remote_code)
+        self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.model_args.trust_remote_code)
 
         self.is_encoder_decoder = self.config.is_encoder_decoder
-        self.training_inference_type = args.training_inference_type
-        self.dtype = args.dtype
+        self.tuning_method = args.tuning_args.tuning_method
+        self.dtype = args.model_args.dtype
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.original_vocab_size = len(self.tokenizer)
-
         self.padding_side = PaddingSide(
-            self.tokenizer.padding_side if args.padding_side is None else args.padding_side
+            self.tokenizer.padding_side
+            if args.tokenizer_args.padding_side is None
+            else args.tokenizer_args.padding_side
         )
-
-        if args.additional_special_tokens is not None:
-            self.tokenizer.add_special_tokens({"additional_special_tokens": args.additional_special_tokens})
-            print_rank_0(f"added {len(args.additional_special_tokens)} tokens")
 
         model_kwargs = {
             "pretrained_model_name_or_path": self.model_name,
-            "trust_remote_code": args.trust_remote_code,
+            "trust_remote_code": args.model_args.trust_remote_code,
             "use_cache": mode == Mode.inference,
         }
 
-        if self.training_inference_type == TrainingInferenceType.full_finetuning:
+        if self.tuning_method == TuningMethod.full_finetuning:
             self._setup_model_for_finetuning(args, model_kwargs)
         else:
             self._setup_model_for_peft(args, model_kwargs)
 
-        print_rank_0(self.model)
+        if args.tokenizer_args.additional_special_tokens is not None:
+            original_vocab_size = len(self.tokenizer)
+
+            self.tokenizer.add_special_tokens(
+                {"additional_special_tokens": args.tokenizer_args.additional_special_tokens}
+            )
+            print_rank_0(f"added {len(args.tokenizer_args.additional_special_tokens)} tokens")
+
+            if len(self.tokenizer) != original_vocab_size:
+                self.model.resize_token_embeddings(len(self.tokenizer))
 
         self._setup_input_device()
-
-    def _setup_model_for_finetuning(self, args: Union[TrainingArgs, InferenceArgs], model_kwargs: dict) -> None:
-        if self.mode == Mode.training:
-            # this tells from_pretrained to instantiate directly on gpus
-            # this only instantiates a single instance of the model across the ranks
-            self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
-
-            self.model = args.model_class.from_pretrained(**model_kwargs)
-
-            if args.gradient_checkpointing:
-                self.model.gradient_checkpointing_enable()
-        else:
-            self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
-
-        if self.attention_implementation is not None:
-            self._inject_attention_implementation()
-
-    def _setup_model_for_peft(self, args: Union[TrainingArgs, InferenceArgs], model_kwargs: dict) -> None:
-        if args.training_inference_type == TrainingInferenceType.prompt_tuning:
-            self.peft_config = PromptTuningConfig(
-                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
-                prompt_tuning_init=args.prompt_tuning_init,
-                num_virtual_tokens=args.num_virtual_tokens,
-                prompt_tuning_init_text=args.prompt_tuning_init_text,
-                tokenizer_name_or_path=args.model_name,
-            )
-        elif args.training_inference_type == TrainingInferenceType.lora:
-            self.peft_config = LoraConfig(
-                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
-                inference_mode=True if self.mode == Mode.inference else False,
-                r=args.lora_rank,
-                lora_alpha=args.lora_alpha,
-                lora_dropout=args.lora_dropout,
-            )
-
-        self.model = args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
-
-        if args.gradient_checkpointing:
-            self.model.gradient_checkpointing_enable()
-
-        if self.attention_implementation is not None:
-            self._inject_attention_implementation()
-
-        self.model = get_peft_model(self.model, self.peft_config)
 
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
@@ -259,7 +148,7 @@ class Model(torch.nn.Module):
         if self.mode == Mode.training:
             assert outputs is not None, "outputs can't be None during training"
 
-            input_ids, attention_mask, labels = pad(
+            input_ids, attention_mask, labels = _pad(
                 inputs,
                 outputs,
                 self.tokenizer.eos_token_id,
@@ -269,8 +158,8 @@ class Model(torch.nn.Module):
             )
 
             result["labels"] = labels
-        elif self.mode == Mode.inference:
-            input_ids, attention_mask, _ = pad(
+        else:
+            input_ids, attention_mask, _ = _pad(
                 inputs,
                 None,
                 self.tokenizer.eos_token_id,
@@ -284,6 +173,53 @@ class Model(torch.nn.Module):
 
         return result
 
+    def _setup_model_for_finetuning(
+        self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict
+    ) -> None:
+        if self.mode == Mode.training:
+            # this tells from_pretrained to instantiate directly on gpus
+            # this only instantiates a single instance of the model across the ranks
+            if self.distributed_backend == DistributedBackend.deepspeed:
+                self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
+
+            self.model = args.model_args.model_class.from_pretrained(**model_kwargs)
+
+            if args.distributed_args.gradient_checkpointing:
+                self.model.gradient_checkpointing_enable()
+        else:
+            self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
+
+        if self.attention_implementation is not None:
+            self._inject_attention_implementation()
+
+    def _setup_model_for_peft(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict) -> None:
+        if args.tuning_args.tuning_method == TuningMethod.prompt_tuning:
+            self.peft_config = PromptTuningConfig(
+                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
+                prompt_tuning_init=args.tuning_args.prompt_tuning_args.prompt_tuning_init,
+                num_virtual_tokens=args.tuning_args.prompt_tuning_args.num_virtual_tokens,
+                prompt_tuning_init_text=args.tuning_args.prompt_tuning_args.prompt_tuning_init_text,
+                tokenizer_name_or_path=args.model_args.model_name,
+            )
+        elif args.tuning_args.tuning_method == TuningMethod.lora:
+            self.peft_config = LoraConfig(
+                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
+                inference_mode=self.mode != Mode.training,
+                r=args.lora_rank,
+                lora_alpha=args.lora_alpha,
+                lora_dropout=args.lora_dropout,
+            )
+
+        self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
+
+        if args.distributed_args.gradient_checkpointing:
+            self.model.gradient_checkpointing_enable()
+
+        if self.attention_implementation is not None:
+            self._inject_attention_implementation()
+
+        self.model = get_peft_model(self.model, self.peft_config)
+
     def _setup_input_device(self) -> None:
         if self.mode == Mode.training:
             # if using deepspeed
@@ -295,12 +231,6 @@ class Model(torch.nn.Module):
                 self.input_device = "cpu"
 
             self.to(self.input_device)
-
-    def post_init(self) -> None:
-        """a post init method for expanding word embeddings"""
-
-        if len(self.tokenizer) != self.original_vocab_size:
-            self.model.resize_token_embeddings(len(self.tokenizer))
 
     def _inject_attention_implementation(self) -> None:
         from ibm_models import GPTMegatronForCausalLM
@@ -316,3 +246,76 @@ class Model(torch.nn.Module):
             self.model.inject_sdpa()
         else:
             raise ValueError("unexpected attention_implementation")
+
+
+def _pad(
+    inputs: list,
+    outputs: list,
+    pad_token_id: int,
+    padding_side: PaddingSide,
+    is_encoder_decoder: bool,
+    attention_implementation: AttentionImplementation = None,
+) -> Tuple[List[int], List[int]]:
+    """pads the arrays with the specified padding value
+
+    Args:
+        inputs (list): input token ids
+        outputs (list): output token labels
+        pad_token_id (int): token id to pad with
+        padding_side (PaddingSide): padding side for the tensors
+        is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
+        attention_implementation (AttentionImplementation): attention implementation for the model
+
+    Returns:
+        Tuple[List[int], List[int]]: token ids and the corresponding attention masks
+    """
+
+    # labels is None when outputs is None
+    labels = None
+
+    if is_encoder_decoder:
+        input_max_length = max(list(map(len, inputs)))
+
+        if padding_side == PaddingSide.left:
+            input_ids = [[pad_token_id] * (input_max_length - len(array)) + array for array in inputs]
+            attention_mask = [[0] * (input_max_length - len(array)) + [1] * len(array) for array in inputs]
+        else:
+            input_ids = [array + [pad_token_id] * (input_max_length - len(array)) for array in inputs]
+            attention_mask = [[1] * len(array) + [0] * (input_max_length - len(array)) for array in inputs]
+
+        if outputs is not None:
+            output_max_length = max(list(map(len, outputs)))
+            labels = [array + [-100] * (output_max_length - len(array)) for array in outputs]
+    else:
+        if attention_implementation == AttentionImplementation.flash:
+            input_ids = inputs
+            attention_mask = None
+            labels = [
+                [-100] * (len(array_in) - len(array_out)) + array_out for array_in, array_out in zip(inputs, outputs)
+            ]
+        else:
+            max_length = max(list(map(len, inputs)))
+
+            if padding_side == PaddingSide.left:
+                input_ids = [[pad_token_id] * (max_length - len(array)) + array for array in inputs]
+                attention_mask = [[0] * (max_length - len(array)) + [1] * len(array) for array in inputs]
+
+                if outputs is not None:
+                    labels = [[-100] * (max_length - len(array)) + array for array in outputs]
+            else:
+                input_ids = [array + [pad_token_id] * (max_length - len(array)) for array in inputs]
+                attention_mask = [[1] * len(array) + [0] * (max_length - len(array)) for array in inputs]
+
+                if outputs is not None:
+                    labels = [
+                        [-100] * (len(array_in) - len(array_out)) + array_out + [-100] * (max_length - len(array_in))
+                        for array_in, array_out in zip(inputs, outputs)
+                    ]
+
+    if attention_implementation != AttentionImplementation.flash:
+        input_ids = torch.tensor(input_ids)
+        attention_mask = torch.tensor(attention_mask)
+        if labels is not None:
+            labels = torch.tensor(labels)
+
+    return input_ids, attention_mask, labels

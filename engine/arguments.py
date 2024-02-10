@@ -1,27 +1,62 @@
 import json
 from argparse import ArgumentParser
-from typing import Any, List, Union
+from copy import deepcopy
+from enum import Enum
+from typing import Any, List, Optional, Tuple, Union
 
-import numpy as np
 import torch
 import transformers
 from peft import PromptTuningInit
 from pydantic import BaseModel, ConfigDict
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from engine.constants import (
-    AttentionImplementation,
-    DatasetConfigKeys,
-    LearningRateScheduler,
-    Mode,
-    OptimizerKeys,
-    PaddingSide,
-    TrainingInferenceType,
-)
+from .enums import ArgsFileExtension, AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
+
+
+_ARGS_FILE_EXTENSION: ArgsFileExtension = None
+
+
+def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
+    for obj, name in object_name_list:
+        assert obj is not None, f"{name} cannot be None"
 
 
 class BaseArgs(BaseModel):
     model_config = ConfigDict(extra="allow")
+
+    def to_dict(self) -> dict:
+        copied = deepcopy(self)
+
+        for key, value in copied:
+            if isinstance(value, BaseArgs):
+                result = value.to_dict()
+            elif isinstance(value, list):
+                result = []
+                for v in value:
+                    if isinstance(v, BaseArgs):
+                        result.append(v.to_dict())
+            elif isinstance(value, Enum):
+                result = value.value
+            elif isinstance(value, type):
+                result = value.__name__
+            else:
+                result = value
+
+            setattr(copied, key, result)
+
+        return vars(copied)
+
+
+class RandomArgs(BaseArgs):
+    # random seed
+    seed: int = 42
+
+
+class TokenizerArgs(BaseArgs):
+    # add special tokens to the tokenizer
+    additional_special_tokens: Optional[List[str]] = None
+    # padding side
+    padding_side: Optional[PaddingSide] = None
 
 
 class ModelArgs(BaseArgs):
@@ -31,18 +66,13 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # dtype to use for training / inference
     dtype: str = "float32"
-    # add special tokens to the tokenizer
-    additional_special_tokens: List[str] = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
-    # padding side
-    padding_side: PaddingSide = None
     # attention implementation (only works with GPTMegatronForCausalLM)
-    attention_implementation: AttentionImplementation = None
+    attention_implementation: Optional[AttentionImplementation] = None
 
     def model_post_init(self, __context: Any) -> None:
-        # model_name
-        assert self.model_name is not None, "model_name cannot be None"
+        _check_not_None([(self.model_name, "model_name"), (self.model_class, "model_class")])
 
         # model_class
         if self.attention_implementation is None:
@@ -68,253 +98,371 @@ class ModelArgs(BaseArgs):
         self.dtype = getattr(torch, self.dtype)
         assert self.dtype in [torch.float32, torch.float16, torch.bfloat16], f"unexpected dtype '{self.dtype}'"
 
+    def to_dict(self) -> dict:
+        result = super().to_dict()
+        result["dtype"] = str(self.dtype).split(".")[1]
+        return result
 
-class InitializationArgs(BaseArgs):
-    # random seed
-    seed: int = 42
-    # type of tuning, full finetuning or PEFT
-    training_inference_type: TrainingInferenceType = None
+
+class PromptTuningArgs(BaseArgs):
     # prompt tuning init method
     prompt_tuning_init: PromptTuningInit = None
     # prompt tuning init text
-    prompt_tuning_init_text: str = None
+    prompt_tuning_init_text: Optional[str] = None
     # number of virtual tokens for PEFT
-    num_virtual_tokens: int = None
-    # the dimension of the low-rank matrices
+    num_virtual_tokens: Optional[int] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.prompt_tuning_init, "prompt_tuning_init")])
+
+        if self.prompt_tuning_init == PromptTuningInit.RANDOM:
+            assert (
+                self.prompt_tuning_init_text is None
+            ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' was specified with RANDOM init method"
+        elif self.prompt_tuning_init == PromptTuningInit.TEXT:
+            assert (
+                self.prompt_tuning_init_text is not None
+            ), f"prompt_tuning_init_text needs to be specified with TEXT init method"
+
+
+class LoRAArgs(BaseArgs):
+    # lora rank
     lora_rank: int = None
     # the scaling factor for the low-rank matrices
     lora_alpha: float = 32.0
     # the dropout probability of the LoRA layers
     lora_dropout: float = 0.1
-    # path to load checkpoints
-    load_path: str = None
 
     def model_post_init(self, __context: Any) -> None:
-        assert self.training_inference_type is not None, "training_inference_type can't be None"
+        _check_not_None([(self.lora_rank, "lora_rank")])
+
+
+class TuningArgs(BaseArgs):
+    # type of tuning, full finetuning or PEFT
+    tuning_method: TuningMethod = None
+    # prompt tuning related arguments
+    prompt_tuning_args: Optional[PromptTuningArgs] = None
+    # lora related arguments
+    lora_args: Optional[LoRAArgs] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.tuning_method, "tuning_method")])
 
         # check whether the arguments specified are valid
-        if self.training_inference_type == TrainingInferenceType.full_finetuning:
-            self._check_prompt_tuning_is_disabled()
-            self._check_lora_is_disabled()
+        if self.tuning_method == TuningMethod.full_finetuning:
+            assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with full_finetuning"
+            assert self.lora_args is None, "lora_args should not be specified with full_finetuning"
+        elif self.tuning_method == TuningMethod.prompt_tuning:
+            assert self.lora_args is None, "lora_args should not be specified with promt_tuning"
+        elif self.tuning_method == TuningMethod.lora:
+            assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with lora"
 
-        elif self.training_inference_type == TrainingInferenceType.prompt_tuning:
-            if self.prompt_tuning_init == PromptTuningInit.RANDOM:
-                assert (
-                    self.prompt_tuning_init_text is None
-                ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' was specified with RANDOM init method"
-            elif self.prompt_tuning_init == PromptTuningInit.TEXT:
-                assert (
-                    self.prompt_tuning_init_text is not None
-                ), f"prompt_tuning_init_text needs to be specified with TEXT init method"
 
-            self._check_lora_is_disabled()
+class TrainingParameters(BaseArgs):
+    # whether to use sequential sampler for validation
+    ignore_sampling_proportion_for_validation: bool = False
+    # number of training steps
+    num_training_steps: Optional[int] = None
+    # gradient accumulation steps
+    gradient_accumulation_steps: int = 1
+    # interval for evaluation
+    eval_interval: Optional[int] = None
+    # batch size per GPU for ZeRO-DP
+    batch_size_per_gpu: int = None
+    # whether to use val dataset for validation during training
+    eval_during_training: bool = True
 
-        elif self.training_inference_type == TrainingInferenceType.lora:
-            assert self.lora_rank is not None, f"lora_rank {self.lora_rank} is a required argument for lora"
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None(
+            [(self.num_training_steps, "num_training_steps"), (self.batch_size_per_gpu, "batch_size_per_gpu")]
+        )
 
-            self._check_prompt_tuning_is_disabled()
+        # eval_interval
+        if self.eval_during_training:
+            _check_not_None([(self.eval_interval, "eval_interval")])
 
-    def _check_prompt_tuning_is_disabled(self) -> None:
-        assert (
-            self.prompt_tuning_init is None
-        ), f"prompt_tuning_init '{self.prompt_tuning_init}' should not be specified with {self.training_inference_type.value}"
-        assert (
-            self.prompt_tuning_init_text is None
-        ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' should not be specified with {self.training_inference_type.value}"
-        assert (
-            self.num_virtual_tokens is None
-        ), f"num_virtual_tokens '{self.num_virtual_tokens}' should not be specified with {self.training_inference_type.value}"
 
-    def _check_lora_is_disabled(self) -> None:
-        assert self.lora_rank is None, f"lora_rank {self.lora_rank} should not be specified with full_finetuning"
+class SaveArgs(BaseArgs):
+    # path to save checkpoints
+    save_path: str = None
+    # interval for checkpointing
+    save_interval: int = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.save_path, "save_path"), (self.save_interval, "save_interval")])
+
+
+class LoadArgs(BaseArgs):
+    # path to load checkpoints
+    load_path: str = None
+    # iteration to load
+    iteration: int = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.load_path, "load_path"), (self.iteration, "iteration")])
 
 
 class DatasetArgs(BaseArgs):
-    # list of datasets to use
-    datasets: List[dict] = []
+    # optimizer class
+    class_name: str = None
+    # class args for optimizer
+    class_args: dict = {}
+    # dataset name
+    data_name: str = None
+    # formatting to use for input
+    input_format: str = "__input__"
+    # formatting to use for output
+    output_format: str = "__output__"
+    # data sampling proportions
+    data_sampling_ratio: int = None
+    # max tokens for input text
+    max_input_tokens: Optional[int] = None
+    # max tokens for output text
+    max_output_tokens: Optional[int] = None
 
     def model_post_init(self, __context: Any) -> None:
-        # datasets
-        assert self.datasets is not None and len(self.datasets) != 0, "datasets cannot be None or an empty list"
-        self._check_each_dataset_and_set_defaults()
+        _check_not_None(
+            [
+                (self.class_name, "dataset class_name"),
+                (self.data_sampling_ratio, "data_sampling_ratio"),
+                (self.data_name, "data_name"),
+            ]
+        )
 
-    def _check_each_dataset_and_set_defaults(self) -> None:
-        """checks whether the arguments specified in the config are valid"""
-
-        import engine.data as data_classes
-
-        for i, data_config in enumerate(self.datasets):
-            assert (
-                DatasetConfigKeys.data_class.value in data_config
-            ), f"{DatasetConfigKeys.data_class.value} is not specified for dataset at index {i}"
-            # convert to string to the actual class type
-            data_config[DatasetConfigKeys.data_class.value] = getattr(
-                data_classes, data_config[DatasetConfigKeys.data_class.value]
-            )
-
-            # check data_sampling_proportion
-            assert (
-                DatasetConfigKeys.data_sampling_proportion.value in data_config
-                and isinstance(data_config[DatasetConfigKeys.data_sampling_proportion.value], int)
-                and data_config[DatasetConfigKeys.data_sampling_proportion.value] > 0
-            ), f"{DatasetConfigKeys.data_sampling_proportion.value} is not specified for dataset at index {i}"
+        # data_sampling_ratios
+        assert self.data_sampling_ratio > 0, "data_sampling_ratio should be a positive integer"
 
 
-class OptimizationArgs(BaseArgs):
-    # optimizer
-    optimizer: dict = {
-        "optimizer_class": "ApexFusedAdam",
+class OptimizerArgs(BaseArgs):
+    # optimizer class
+    class_name: str = "ApexFusedAdam"
+    # class args for optimizer
+    class_args: dict = {
         "lr": 1e-5,
         "weight_decay": 0.1,
         "betas": [0.9, 0.95],
         "eps": 1e-10,
     }
-    # learning rate schedule
-    lr_schedule: LearningRateScheduler = LearningRateScheduler.cosine
-    # warmup steps
-    warmup_steps: int = 200
 
     def model_post_init(self, __context: Any) -> None:
-        # optimizer
-        import engine.optimization as optimizer_classes
-
-        self.optimizer[OptimizerKeys.optimizer_class.value] = getattr(
-            optimizer_classes, self.optimizer[OptimizerKeys.optimizer_class.value]
-        )
+        _check_not_None([(self.class_name, "optimizer class_name")])
 
 
-class DeepSpeedArgs(BaseArgs):
-    # deepspeed ZeRO stage
+class LRSchedulerArgs(BaseArgs):
+    # learning rate schedule
+    lr_schedule: str = "cosine"
+    # warmup steps
+    num_warmup_steps: int = 200
+
+
+class DistributedArgs(BaseArgs):
+    # ZeRO stage
     stage: int = 3
+    # distributed backend to use
+    distributed_backend: DistributedBackend = DistributedBackend.torch
     # overlap communication with computation
     overlap_comm: bool = False
     # use contiguous buffers for gradients, requires more memory if enabled
     contiguous_gradients: bool = False
     # train with CPU offloading to save GPU memory
     cpu_offload: bool = False
+    # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
+    gradient_checkpointing: bool = False
 
 
 class LoggingArgs(BaseArgs):
     # logging directory for experiments
-    logdir: str = None
+    logdir: Optional[str] = None
     # aim repo, experiment logs are saved here
-    aim_repo: str = None
+    aim_repo: Optional[str] = None
     # name of the experiment
-    experiment_name: str = None
+    experiment_name: Optional[str] = None
 
 
-class DebuggingArgs(BaseArgs):
-    # steps per print for memory logging etc for deepspeed
-    steps_per_print: int = np.inf
-
-
-class TrainingArgs(
-    ModelArgs, InitializationArgs, DatasetArgs, OptimizationArgs, DeepSpeedArgs, LoggingArgs, DebuggingArgs
-):
-    # path to save checkpoints
-    save_path: str = None
-    # whether to use sequential sampler for validation
-    ignore_sampling_proportion_for_validation: bool = False
-    # number of training steps
-    num_training_steps: int = None
-    # gradient accumulation steps
-    gradient_accumulation_steps: int = 1
-    # interval for evaluation
-    eval_interval: int = None
-    # interval for checkpointing
-    save_interval: int = None
-    # batch size per GPU for ZeRO-DP
-    batch_size_per_gpu: int = None
-    # whether to use val dataset for validation during training
-    eval_during_training: bool = True
-    # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
-    gradient_checkpointing: bool = False
+class TrainingArgs(BaseArgs):
+    # randomization related arguments
+    random_args: RandomArgs = RandomArgs()
+    # tokenizer related arguments
+    tokenizer_args: TokenizerArgs = TokenizerArgs()
+    # model related arguments
+    model_args: ModelArgs = None
+    # tuning related arguments
+    tuning_args: TuningArgs = None
+    # optimizer related arguments
+    optimizer_args: OptimizerArgs = OptimizerArgs()
+    # lr_scheduler related arguments
+    lr_scheduler_args: LRSchedulerArgs = LRSchedulerArgs()
+    # list of datasets to use
+    datasets: List[DatasetArgs] = []
+    # save related arguments
+    save_args: SaveArgs = None
+    # load related arguments
+    load_args: Optional[LoadArgs] = None
+    # training parameters
+    training_parameters: Optional[TrainingParameters] = None
+    # logging related arguments
+    logging_args: LoggingArgs = LoggingArgs()
+    # distributed training related arguments
+    distributed_args: DistributedArgs = DistributedArgs()
 
     def model_post_init(self, __context: Any) -> None:
-        ModelArgs.model_post_init(self, __context)
-        InitializationArgs.model_post_init(self, __context)
-        DatasetArgs.model_post_init(self, __context)
-        OptimizationArgs.model_post_init(self, __context)
-        DeepSpeedArgs.model_post_init(self, __context)
-        LoggingArgs.model_post_init(self, __context)
-        DebuggingArgs.model_post_init(self, __context)
+        _check_not_None(
+            [
+                (self.model_args, "model_args"),
+                (self.tuning_args, "tuning_args"),
+                (self.save_args, "save_args"),
+                (self.datasets, "datasets"),
+            ]
+        )
 
-        # save_path
-        assert self.save_path is not None, "save_path cannot be None"
-
-        # num_training_steps
-        assert self.num_training_steps is not None, "num_training_steps cannot be None"
-
-        # save_interval
-        assert self.save_interval is not None, "save_interval cannot be None"
-
-        # eval_interval
-        if self.eval_during_training:
-            assert self.eval_interval is not None, "eval_interval cannot be None"
-
-        # batch_size_per_gpu
-        assert self.batch_size_per_gpu is not None, "batch_size_per_gpu cannot be None"
+        # datasets
+        _check_datasets(self.datasets)
 
 
-class InferenceArgs(ModelArgs, InitializationArgs, DatasetArgs):
+class GenerationParameters(BaseArgs):
     # batch size
     batch_size: int = None
     # sample or greedy
-    do_sample: bool = None
+    do_sample: Optional[bool] = None
     # max new tokens to generate
     max_new_tokens: int = None
     # temperature
-    temperature: float = None
+    temperature: Optional[float] = None
     # top k
-    top_k: int = None
+    top_k: Optional[int] = None
     # top p
-    top_p: float = None
+    top_p: Optional[float] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.batch_size, "batch_size"), (self.max_new_tokens, "max_new_tokens")])
+
+
+class InferenceArgs(BaseArgs):
+    # randomization related arguments
+    random_args: RandomArgs = RandomArgs()
+    # tokenizer related arguments
+    tokenizer_args: TokenizerArgs = TokenizerArgs()
+    # model related arguments
+    model_args: ModelArgs = None
+    # tuning related arguments
+    tuning_args: TuningArgs = None
+    # list of datasets to use
+    datasets: List[DatasetArgs] = []
+    # load related arguments
+    load_args: Optional[LoadArgs] = None
+    # generation parameters
+    generation_parameters: GenerationParameters = None
     # output dir
     output_dir: str = None
 
     def model_post_init(self, __context: Any) -> None:
-        ModelArgs.model_post_init(self, __context)
-        InitializationArgs.model_post_init(self, __context)
-        DatasetArgs.model_post_init(self, __context)
+        _check_not_None(
+            [
+                (self.model_args, "model_args"),
+                (self.tuning_args, "tuning_args"),
+                (self.datasets, "datasets"),
+                (self.generation_parameters, "generation_parameters"),
+                (self.output_dir, "output_dir"),
+            ]
+        )
 
-        # load_path
-        if self.load_path is None:
-            from engine.utils.logging import warn_rank_0
-
-            warn_rank_0("load_path was None, not loading any trained checkpoint")
-
-        # batch_size
-        assert self.batch_size is not None, "batch_size cannot be None"
-
-        # max_new_tokens
-        assert self.max_new_tokens is not None, "max_new_tokens cannot be None"
-
-        # output_dir
-        assert self.output_dir is not None, "output_dir cannot be None"
+        # datasets
+        _check_datasets(self.datasets)
 
 
-def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs]:
+class ExportArgs(BaseArgs):
+    # tokenizer related arguments
+    tokenizer_args: TokenizerArgs = TokenizerArgs()
+    # model related arguments
+    model_args: ModelArgs = None
+    # tuning related arguments
+    tuning_args: TuningArgs = None
+    # load related arguments
+    load_args: LoadArgs = None
+    # export path
+    export_path: str = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None(
+            [
+                (self.model_args, "model_args"),
+                (self.tuning_args, "tuning_args"),
+                (self.load_args, "load_args"),
+                (self.export_path, "export_path"),
+            ]
+        )
+
+
+_MODE_ARGS_MAP = {
+    Mode.training: TrainingArgs,
+    Mode.inference: InferenceArgs,
+    Mode.export: ExportArgs,
+}
+
+
+def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
     """get args for training / inference
 
     Args:
         mode (Mode): training / inference mode for running the program
 
     Returns:
-        Union[TrainingArgs, InferenceArgs]: args for training / inference
+        Union[TrainingArgs, InferenceArgs, ExportArgs]: args for training / inference
     """
+
+    global _ARGS_FILE_EXTENSION
 
     parser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="path for the config")
     args = parser.parse_args()
 
-    config: dict = json.load(open(args.config, "r"))
+    if args.config.endswith("json"):
+        config: dict = json.load(open(args.config, "r"))
+        _ARGS_FILE_EXTENSION = ArgsFileExtension.json
+    elif args.config.endswith("yaml") or args.config.endswith("yml"):
+        from .utils import load_yaml
 
-    if mode == Mode.training:
-        args = TrainingArgs(**config)
-    else:
-        args = InferenceArgs(**config)
+        config: dict = load_yaml(args.config)
+        _ARGS_FILE_EXTENSION = ArgsFileExtension.yaml
 
-    from engine.utils import print_args
+    args = _MODE_ARGS_MAP[mode](**config)
 
     print_args(args)
     return args
+
+
+def print_args(args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+    """prints args
+
+    Args:
+        args (Union[TrainingArgs, InferenceArgs, ExportArgs]): args
+    """
+
+    from .utils import print_rank_0
+
+    print_rank_0("------------------------ arguments ------------------------")
+
+    kv_list = []
+    for k, v in vars(args).items():
+        dots = "." * (48 - len(k))
+        kv_list.append(f"{k} {dots} " + str(v))
+
+    kv_list.sort(key=lambda x: x.lower())
+
+    for kv in kv_list:
+        print_rank_0(kv)
+
+    print_rank_0("-------------------- end of arguments ---------------------")
+
+
+def get_args_file_extension() -> ArgsFileExtension:
+    assert _ARGS_FILE_EXTENSION is not None, "args file extesnion is not set"
+    return _ARGS_FILE_EXTENSION
+
+
+def _check_datasets(datasets: List[DatasetArgs]) -> None:
+    assert len(datasets) != 0, "datasets cannot be an empty list"
+    # check data_names are unique
+    assert len(datasets) == len(
+        set([dataset.data_name for dataset in datasets])
+    ), "data_name should be unique for each dataset"

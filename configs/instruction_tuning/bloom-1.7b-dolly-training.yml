@@ -1,0 +1,44 @@
+datasets:
+  - class_name: DollyDataset
+    class_args:
+      data_path: ../dolly/data/
+    data_name: dolly
+    output_format: " __output__"
+    data_sampling_ratio: 1
+    max_input_tokens: 1740
+    max_output_tokens: 308
+
+model_args:
+  model_name: bigscience/bloom-1b7
+  model_class: AutoModelForCausalLM
+  dtype: bfloat16
+
+tuning_args:
+  tuning_method: full_finetuning
+
+logging_args:
+  logdir: /cos/mayank/aim-repo
+  experiment_name: gma-bloom-1b7-dolly
+
+save_args:
+  save_path: /cos/mayank/checkpoints/gma-bloom-1b7-dolly
+  save_interval: 1000
+
+training_parameters:
+  num_training_steps: 5000
+  eval_interval: 500
+  batch_size_per_gpu: 2
+  gradient_accumulation_steps: 2
+
+optimizer_args:
+  class_name: ApexFusedAdam
+  class_args:
+    lr: 1e-4
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    eps: 1e-10
+
+lr_scheduler_args:
+  lr_schedule: cosine

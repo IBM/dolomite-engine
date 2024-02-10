@@ -1,15 +1,14 @@
 import logging
 import os
-from argparse import Namespace
-from typing import Any, Union
+from typing import Any
 from warnings import warn
 
 from aim import Run
 from aim.sdk.types import AimObject
 from tqdm import tqdm
 
-from engine.arguments import InferenceArgs, TrainingArgs
-from engine.utils.distributed import get_world_size, run_rank_n
+from ..arguments import TrainingArgs
+from .ranks import get_world_size, run_rank_n
 
 
 @run_rank_n
@@ -31,28 +30,6 @@ def warn_rank_0(*args, **kwargs) -> None:
     """warn on a single process"""
 
     warn(*args, **kwargs)
-
-
-def print_args(args: Union[TrainingArgs, InferenceArgs, Namespace]) -> None:
-    """prints args
-
-    Args:
-        args (Union[TrainingArgs, InferenceArgs, Namespace]): args
-    """
-
-    print_rank_0("------------------------ arguments ------------------------")
-
-    kv_list = []
-    for k, v in vars(args).items():
-        dots = "." * (48 - len(k))
-        kv_list.append(f"{k} {dots} " + str(v))
-
-    kv_list.sort(key=lambda x: x.lower())
-
-    for kv in kv_list:
-        print_rank_0(kv)
-
-    print_rank_0("-------------------- end of arguments ---------------------")
 
 
 class RunningMean:
