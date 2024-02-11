@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import time
 from typing import Callable, Set
@@ -6,6 +7,7 @@ from typing import Callable, Set
 import torch
 from pynvml import nvmlDeviceGetCount, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
 
+from .logging import log_rank_0
 from .ranks import run_rank_n
 
 
@@ -111,7 +113,7 @@ memory allocated at {profiler_name} ({point}) = {bytes_to_gigabytes(torch.cuda.m
 max memory allocated at {profiler_name} ({point}) = {bytes_to_gigabytes(torch.cuda.max_memory_allocated(device_id))}
 max memory reserved at {profiler_name} ({point}) = {bytes_to_gigabytes(torch.cuda.max_memory_reserved(device_id))}"""
 
-    print(memory_stats)
+    log_rank_0(logging.DEBUG, memory_stats)
 
 
 def register_profiler(profiler_name: str) -> Callable:

@@ -1,4 +1,5 @@
 import json
+import logging
 from argparse import ArgumentParser
 from copy import deepcopy
 from enum import Enum
@@ -11,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .enums import ArgsFileExtension, AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
+from .utils import get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
 
 
 _ARGS_FILE_EXTENSION: ArgsFileExtension = None
@@ -271,8 +273,10 @@ class DistributedArgs(BaseArgs):
 
 
 class LoggingArgs(BaseArgs):
-    # logging directory for experiments
-    logdir: Optional[str] = None
+    # logging level
+    logging_level: str = "INFO"
+    # log interval
+    log_interval: int = 1
     # aim repo, experiment logs are saved here
     aim_repo: Optional[str] = None
     # name of the experiment
@@ -352,6 +356,8 @@ class InferenceArgs(BaseArgs):
     load_args: Optional[LoadArgs] = None
     # generation parameters
     generation_parameters: GenerationParameters = None
+    # logging related arguments
+    logging_args: LoggingArgs = LoggingArgs()
     # output dir
     output_dir: str = None
 
@@ -379,6 +385,8 @@ class ExportArgs(BaseArgs):
     tuning_args: TuningArgs = None
     # load related arguments
     load_args: LoadArgs = None
+    # logging related arguments
+    logging_args: LoggingArgs = LoggingArgs()
     # export path
     export_path: str = None
 
@@ -420,39 +428,63 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
         config: dict = json.load(open(args.config, "r"))
         _ARGS_FILE_EXTENSION = ArgsFileExtension.json
     elif args.config.endswith("yaml") or args.config.endswith("yml"):
-        from .utils import load_yaml
-
         config: dict = load_yaml(args.config)
         _ARGS_FILE_EXTENSION = ArgsFileExtension.yaml
 
-    args = _MODE_ARGS_MAP[mode](**config)
+    args: Union[TrainingArgs, InferenceArgs, ExportArgs] = _MODE_ARGS_MAP[mode](**config)
 
-    print_args(args)
+    set_logger(args.logging_args.logging_level)
+    log_args(args)
+
     return args
 
 
-def print_args(args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
-    """prints args
+@run_rank_n
+def log_args(args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+    """log args
 
     Args:
-        args (Union[TrainingArgs, InferenceArgs, ExportArgs]): args
+        args (Union[TrainingArgs, InferenceArgs, ExportArgs]): args for training / inference
     """
 
-    from .utils import print_rank_0
+    def _iterate_args_recursively(
+        args: Union[TrainingArgs, InferenceArgs, ExportArgs, dict, BaseArgs], prefix: str = ""
+    ) -> None:
+        result = []
 
-    print_rank_0("------------------------ arguments ------------------------")
+        if isinstance(args, BaseArgs):
+            args = vars(args)
 
-    kv_list = []
-    for k, v in vars(args).items():
-        dots = "." * (48 - len(k))
-        kv_list.append(f"{k} {dots} " + str(v))
+        p = len(prefix)
 
-    kv_list.sort(key=lambda x: x.lower())
+        for k, v in args.items():
+            suffix = "." * (48 - len(k) - p)
 
-    for kv in kv_list:
-        print_rank_0(kv)
+            if isinstance(v, (BaseArgs, dict)):
+                if isinstance(v, dict) and len(v) == 0:
+                    result.append(f"{prefix}{k} {suffix} " + r"{}")
+                else:
+                    kv_list_subargs = _iterate_args_recursively(v, prefix + " " * 4)
+                    result.append(f"{prefix}{k}:\n" + "\n".join(kv_list_subargs))
+            elif isinstance(v, list) and all([isinstance(v_, (BaseArgs, dict)) for v_ in v]):
+                kv_list_subargs = []
+                for v_ in v:
+                    v_ = _iterate_args_recursively(v_, prefix + " " * 4)
+                    kv_list_subargs.append(f"\n".join(v_))
+                result.append(f"{prefix}{k}:\n" + ("\n" + " " * (p + 4) + "*" * (44 - p) + "\n").join(kv_list_subargs))
+            else:
+                result.append(f"{prefix}{k} {suffix} " + str(v))
 
-    print_rank_0("-------------------- end of arguments ---------------------")
+        result.sort(key=lambda x: x.lower())
+        return result
+
+    log_rank_0(logging.INFO, f"total GPUs = {get_world_size()}")
+    log_rank_0(logging.INFO, "------------------------ arguments ------------------------")
+    for line in _iterate_args_recursively(args):
+        line = line.split("\n")
+        for l in line:
+            log_rank_0(logging.INFO, l)
+    log_rank_0(logging.INFO, "-------------------- end of arguments ---------------------")
 
 
 def get_args_file_extension() -> ArgsFileExtension:

@@ -1,3 +1,4 @@
+import logging
 from typing import Iterable, List, Tuple, Union
 
 from torch.utils.data import DataLoader
@@ -5,7 +6,7 @@ from transformers import AutoTokenizer
 
 from ..arguments import InferenceArgs, TrainingArgs
 from ..enums import DatasetSplit, Mode, TuningMethod
-from ..utils import get_world_size, print_rank_0
+from ..utils import get_world_size, log_rank_0
 from .base import BaseDataset, BlendedDatasets, collate
 from .debug import DebugDataset
 from .instruction_tuning import AlpacaDataset, DollyDataset
@@ -55,8 +56,8 @@ def get_dataloader(
 
     blended_dataset = BlendedDatasets(datasets=datasets_list, split=split)
 
-    print_rank_0(f"{'-' * 25} {split.value} {'-' * 25}")
-    print_rank_0(blended_dataset)
+    log_rank_0(logging.INFO, f"{'-' * 25} {split.value} {'-' * 25}")
+    log_rank_0(logging.INFO, blended_dataset)
 
     sampler = BlendedDistributedSampler(
         dataset=blended_dataset,
@@ -91,11 +92,11 @@ def get_dataloader(
 
         total_samples_seen = num_steps * batch_size_per_gpu * get_world_size()
 
-    print_rank_0("*" * 57)
-    print_rank_0(f"total samples seen = {total_samples_seen}")
-    print_rank_0(f"total epochs for the dataset mixture = {total_samples_seen / len(blended_dataset)}")
-    print_rank_0(sampler)
-    print_rank_0("-" * 57)
+    log_rank_0(logging.INFO, "*" * 57)
+    log_rank_0(logging.INFO, f"total samples seen = {total_samples_seen}")
+    log_rank_0(logging.INFO, f"total epochs for the dataset mixture = {total_samples_seen / len(blended_dataset)}")
+    log_rank_0(logging.INFO, sampler)
+    log_rank_0(logging.INFO, "-" * 57)
 
     return dataloader
 
@@ -156,7 +157,9 @@ def get_datasets_list(
             datasets_list.append(dataset)
             data_sampling_ratios.append(data_args.data_sampling_ratio)
 
-            print_rank_0(f"examples in {dataset.__class__.__name__} ({data_args.data_name}) = {len(dataset)}")
+            log_rank_0(
+                logging.INFO, f"examples in {dataset.__class__.__name__} ({data_args.data_name}) = {len(dataset)}"
+            )
 
     return datasets_list, data_sampling_ratios
 

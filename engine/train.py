@@ -1,4 +1,5 @@
 import contextlib
+import logging
 from typing import Union
 
 import torch
@@ -15,13 +16,12 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, Mode
-from .model import Model
+from .model import Model, log_model
 from .utils import (
     ExperimentsTracker,
-    ProgressBar,
     RunningMean,
     init_distributed,
-    print_rank_0,
+    log_rank_0,
     register_profiler,
     register_timer,
     setup_tf32,
@@ -34,7 +34,6 @@ def track_train_metrics(
     current_lr: float,
     experiments_tracker: ExperimentsTracker,
     loss_running_mean_tracker: RunningMean,
-    progress_bar: ProgressBar,
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -44,7 +43,6 @@ def track_train_metrics(
         current_lr (float): learning rate at the current step
         experiments_tracker (ExperimentsTracker): metrics tracker
         loss_running_mean_tracker (RunningMean): running mean accumulator for loss
-        progress_bar (ProgressBar): progress bar for tracking training progress
     """
 
     # update loss running mean
@@ -63,12 +61,10 @@ def track_train_metrics(
 
     # track learning_rate
     experiments_tracker.track(value=current_lr, name="learning_rate", step=global_step)
-    experiments_tracker.info(
-        f"step = {global_step}, train_loss (batch) = {train_loss_step}, train_loss (running_mean) = {loss_running_mean}, learning_rate = {current_lr}"
+    log_rank_0(
+        logging.INFO,
+        f"step = {global_step}, train_loss (batch) = {train_loss_step}, train_loss (running_mean) = {loss_running_mean}, learning_rate = {current_lr}",
     )
-
-    # update metrics in progress bar
-    progress_bar.track(loss_step=train_loss_step, loss_running_mean=loss_running_mean, current_lr=current_lr)
 
 
 def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker) -> None:
@@ -80,8 +76,7 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
         experiments_tracker (ExperimentsTracker): metrics tracker
     """
 
-    print_rank_0(f"step = {global_step}, val_loss = {val_loss}")
-    experiments_tracker.info(f"step = {global_step}, val_loss = {val_loss}")
+    log_rank_0(logging.INFO, f"step = {global_step}, val_loss = {val_loss}")
     experiments_tracker.track(value=val_loss, name="loss", step=global_step, context={"subset": "val"})
 
 
@@ -178,9 +173,9 @@ def train(
     eval_interval = args.training_parameters.eval_interval
     distributed_backend = args.distributed_args.distributed_backend
     save_interval = args.save_args.save_interval
+    log_interval = args.logging_args.log_interval
 
     loss_running_mean_tracker = RunningMean()
-    progress_bar = ProgressBar(0, num_training_steps)
 
     model.train()
 
@@ -204,18 +199,16 @@ def train(
             gradient_accumulation_steps=gradient_accumulation_steps,
         )
 
-        track_train_metrics(
-            global_step=global_step,
-            train_loss_step=loss_step,
-            current_lr=model.lr_scheduler.get_lr()[0]
-            if distributed_backend == DistributedBackend.deepspeed
-            else lr_scheduler.get_lr()[0],
-            experiments_tracker=experiments_tracker,
-            loss_running_mean_tracker=loss_running_mean_tracker,
-            progress_bar=progress_bar,
-        )
-
-        progress_bar.update()
+        if global_step % log_interval == 0:
+            track_train_metrics(
+                global_step=global_step,
+                train_loss_step=loss_step,
+                current_lr=model.lr_scheduler.get_lr()[0]
+                if distributed_backend == DistributedBackend.deepspeed
+                else lr_scheduler.get_lr()[0],
+                experiments_tracker=experiments_tracker,
+                loss_running_mean_tracker=loss_running_mean_tracker,
+            )
 
     if eval_during_training:
         val_loss = evaluate(val_dataloader, model)
@@ -245,13 +238,11 @@ def evaluate(val_dataloader: DataLoader, model: Model) -> float:
 
     loss_sum = 0
     micro_step = 0
-    progress_bar = ProgressBar(0, len(val_dataloader))
 
     for batch in val_dataloader:
         loss_value = model(batch).item()
         loss_sum += loss_value
         micro_step += 1
-        progress_bar.update()
 
     loss_mean = loss_sum / micro_step
 
@@ -296,14 +287,12 @@ def main() -> None:
 
     model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)
 
-    print_rank_0(model)
+    log_model(model)
 
     if args.load_args is not None:
         load_checkpoint_for_training(args, model, optimizer, lr_scheduler)
 
-    experiments_tracker = ExperimentsTracker(
-        __name__, args.logging_args.experiment_name, args.logging_args.aim_repo, args.logging_args.logdir
-    )
+    experiments_tracker = ExperimentsTracker(args.logging_args.experiment_name, args.logging_args.aim_repo)
     # track all hyperparams in args
     experiments_tracker.log_args(args)
 

@@ -23,7 +23,6 @@
     },
     "gradient_checkpointing": true,
     "logging_args": {
-        "logdir": "logs",
         "experiment_name": "starcoder-15b-8k"
     },
     "training_parameters": {

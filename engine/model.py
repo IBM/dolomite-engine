@@ -1,3 +1,4 @@
+import logging
 from typing import List, Tuple, Union
 
 import torch
@@ -8,7 +9,7 @@ from transformers.integrations import HfDeepSpeedConfig
 from .arguments import ExportArgs, InferenceArgs, TrainingArgs
 from .distributed import get_deepspeed_config
 from .enums import AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
-from .utils import get_local_rank, print_rank_0, register_profiler, register_timer, warn_rank_0
+from .utils import get_local_rank, log_rank_0, register_profiler, register_timer, run_rank_n, warn_rank_0
 
 
 class Model(torch.nn.Module):
@@ -62,7 +63,7 @@ class Model(torch.nn.Module):
             self.tokenizer.add_special_tokens(
                 {"additional_special_tokens": args.tokenizer_args.additional_special_tokens}
             )
-            print_rank_0(f"added {len(args.tokenizer_args.additional_special_tokens)} tokens")
+            log_rank_0(logging.INFO, f"added {len(args.tokenizer_args.additional_special_tokens)} tokens")
 
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
@@ -319,3 +320,16 @@ def _pad(
             labels = torch.tensor(labels)
 
     return input_ids, attention_mask, labels
+
+
+@run_rank_n
+def log_model(model: Model) -> None:
+    """print model
+
+    Args:
+        model (Model): model to print
+    """
+
+    log_rank_0(logging.INFO, "------------------------ model ------------------------")
+    log_rank_0(logging.INFO, model)
+    log_rank_0(logging.INFO, "-------------------- end of model ---------------------")

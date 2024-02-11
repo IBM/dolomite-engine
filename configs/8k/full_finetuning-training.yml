@@ -15,7 +15,6 @@ tuning_args:
   tuning_method: full_finetuning
 
 logging_args:
-  logdir: logs
   experiment_name: starcoder-15b-8k
 
 training_parameters:

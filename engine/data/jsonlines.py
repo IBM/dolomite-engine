@@ -6,7 +6,6 @@ import jsonlines
 from transformers import AutoTokenizer
 
 from ..enums import DatasetKeys, DatasetSplit, Mode, TuningMethod
-from ..utils import print_rank_0
 from .base import BaseDataset
 
 
@@ -44,7 +43,6 @@ class JSONLinesDataset(BaseDataset):
         )
 
         self.examples = self.prepare_examples()
-        print_rank_0(f"{len(self.examples)} examples in {self.split.value} split")
 
     def prepare_examples(self) -> List[dict]:
         examples = []

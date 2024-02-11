@@ -5,31 +5,10 @@ from warnings import warn
 
 from aim import Run
 from aim.sdk.types import AimObject
+from pydantic import BaseModel
 from tqdm import tqdm
 
-from ..arguments import TrainingArgs
 from .ranks import get_world_size, run_rank_n
-
-
-@run_rank_n
-def print_rank_0(*args, **kwargs) -> None:
-    """print on a single process"""
-
-    print(*args, **kwargs)
-
-
-def print_ranks_all(*args, **kwargs) -> None:
-    """print on all processes sequentially, blocks other process and is slow. Please us sparingly."""
-
-    for rank in range(get_world_size()):
-        run_rank_n(print, rank=rank, barrier=True)(f"rank {rank}:", *args, **kwargs)
-
-
-@run_rank_n
-def warn_rank_0(*args, **kwargs) -> None:
-    """warn on a single process"""
-
-    warn(*args, **kwargs)
 
 
 class RunningMean:
@@ -89,7 +68,7 @@ class ProgressBar:
         self.progress_bar.set_postfix(**loss_kwargs)
 
 
-class AimTracker:
+class ExperimentsTracker:
     """aim tracker for training"""
 
     def __init__(self, experiment: str, repo: str) -> None:
@@ -98,17 +77,19 @@ class AimTracker:
         if self.tracking_enabled:
             run_rank_n(os.makedirs)(repo, exist_ok=True)
             self.run: Run = run_rank_n(Run)(experiment=experiment, repo=repo)
+        else:
+            warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
 
     @classmethod
     def is_tracking_enabled(cls, experiment: str, repo: str) -> bool:
         return experiment is not None and repo is not None
 
     @run_rank_n
-    def log_args(self, args: TrainingArgs) -> None:
+    def log_args(self, args: BaseModel) -> None:
         """log args
 
         Args:
-            args (TrainingArgs): arguments based on training mode
+            args (BaseModel): pydantic object
         """
 
         if self.tracking_enabled:
@@ -136,96 +117,47 @@ class AimTracker:
             self.run.track(value=value, name=name, step=step, epoch=epoch, context=context)
 
 
-class Logger:
-    """logger class for logging to a directory"""
-
-    def __init__(
-        self,
-        name: str,
-        logfile: str,
-        level: int = logging.INFO,
-        format: str = "%(asctime)s - [%(levelname)s]: %(message)s",
-        # format: str = "%(asctime)s - [%(levelname)s] - (%(filename)s:%(lineno)d): %(message)s",
-        disable_stdout: bool = False,
-    ) -> None:
-        self.logging_enabled = self.is_logging_enabled(logfile)
-
-        if self.logging_enabled:
-            dirname = os.path.dirname(logfile)
-            if dirname is not None and dirname not in ["", "."]:
-                run_rank_n(os.makedirs)(dirname, exist_ok=True)
-
-            # for writing to file
-            handlers = [run_rank_n(logging.FileHandler)(logfile, "a")]
-            # for writing to stdout
-            if not disable_stdout:
-                handlers.append(run_rank_n(logging.StreamHandler)())
-
-            run_rank_n(logging.basicConfig)(level=level, handlers=handlers, format=format)
-
-            self.logger: logging.Logger = run_rank_n(logging.getLogger)(name)
-            self.stacklevel = 3
-
-    @classmethod
-    def is_logging_enabled(cls, logfile: str) -> bool:
-        return logfile is not None
-
-    @run_rank_n
-    def log_args(self, args: TrainingArgs) -> None:
-        """log args
-
-        Args:
-            args (TrainingArgs): arguments based on training mode
-        """
-
-        if self.logging_enabled:
-            self.info(f"total GPUs = {get_world_size()}")
-            self.info(vars(args))
-
-    @run_rank_n
-    def info(self, msg) -> None:
-        if self.logging_enabled:
-            self.logger.info(msg, stacklevel=self.stacklevel)
-
-    @run_rank_n
-    def debug(self, msg) -> None:
-        if self.logging_enabled:
-            self.logger.debug(msg, stacklevel=self.stacklevel)
-
-    @run_rank_n
-    def critical(self, msg) -> None:
-        if self.logging_enabled:
-            self.logger.critical(msg, stacklevel=self.stacklevel)
-
-    @run_rank_n
-    def error(self, msg) -> None:
-        if self.logging_enabled:
-            self.logger.error(msg, stacklevel=self.stacklevel)
-
-    @run_rank_n
-    def warn(self, msg) -> None:
-        if self.logging_enabled:
-            self.logger.warn(msg, stacklevel=self.stacklevel)
+_LOGGER: logging.Logger = None
 
 
-class ExperimentsTracker(Logger, AimTracker):
-    """a class with functionality of both Logger and AimTracker"""
+def set_logger(level: int = logging.INFO) -> None:
+    # format: str = "%(asctime)s - [%(levelname)s]: %(message)s"
+    logging.basicConfig(
+        level=level,
+        handlers=[logging.StreamHandler()],
+        format="%(asctime)s - [%(levelname)s] - (%(filename)s:%(lineno)d): %(message)s",
+    )
 
-    def __init__(self, logger_name: str, experiment_name: str, aim_repo: str, logdir: str) -> None:
-        logfile = None
-        if logdir is not None:
-            logfile = os.path.join(logdir, f"{experiment_name}.log")
+    global _LOGGER
+    _LOGGER = run_rank_n(logging.getLogger)()
 
-        if not Logger.is_logging_enabled(logfile):
-            warn_rank_0("Logger is disabled since logdir was not specified")
 
-        Logger.__init__(self, logger_name, logfile, disable_stdout=True)
+def get_logger() -> logging.Logger:
+    assert _LOGGER is not None
+    return _LOGGER
 
-        if not AimTracker.is_tracking_enabled(experiment_name, aim_repo):
-            warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
 
-        AimTracker.__init__(self, experiment_name, aim_repo)
+@run_rank_n
+def log_rank_0(level: int, msg: str) -> None:
+    return get_logger().log(level=level, msg=msg, stacklevel=2)
 
-    def log_args(self, args: TrainingArgs) -> None:
-        Logger.log_args(self, args)
-        AimTracker.log_args(self, args)
+
+@run_rank_n
+def print_rank_0(*args, **kwargs) -> None:
+    """print on a single process"""
+
+    print(*args, **kwargs)
+
+
+def print_ranks_all(*args, **kwargs) -> None:
+    """print on all processes sequentially, blocks other process and is slow. Please us sparingly."""
+
+    for rank in range(get_world_size()):
+        run_rank_n(print, rank=rank, barrier=True)(f"rank {rank}:", *args, **kwargs)
+
+
+@run_rank_n
+def warn_rank_0(*args, **kwargs) -> None:
+    """warn on a single process"""
+
+    warn(*args, **kwargs)
