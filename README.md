@@ -1,8 +1,22 @@
-[![Build Status](https://v3.travis.ibm.com/conversational-ai/transformer-engine.svg?token=j27SP2KbYBa6fwpWWtcX&branch=main)](https://v3.travis.ibm.com/conversational-ai/transformer-engine)
+<h1 align="center" style="font-size: 50px;">Dolomite Engine</h1>
+
+<p align="center">
+  <img src="assets/dolomite.webp" width="300px" height="300px">
+  <br>
+   Image of Dolomite generated using DALL-E
+</p>
+
+# Build Pipeline Status
+[![Docker image](https://v3.travis.ibm.com/ai-models-architectures/dolomite-engine.svg?token=oyYWKBKVMyqdMh3qyxqB&branch=main)](https://v3.travis.ibm.com/ai-models-architectures/dolomite-engine)
 
 
 # Distributed finetuning
-This repository is meant for finetuning large language models (of any scale) using [DeepSpeed](https://github.com/microsoft/DeepSpeed). Right now 2 main class of models from [HuggingFace](https://huggingface.co/docs/transformers/index) are supported:
+This repository is meant for finetuning large language models (of any scale) using multiple backends. The following backends are currently supported:
+
+1. [DeepSpeed](https://github.com/microsoft/DeepSpeed)
+2. [FSDP](https://pytorch.org/docs/stable/fsdp.html)
+
+The repository currently only supports generative models but can be easily extended to non-generative models if needed. 2 main class of models from [HuggingFace](https://huggingface.co/docs/transformers/index) are supported:
 
 1. decoder models like GPT2, OPT, BLOOM etc
 1. encoder-decoder models like T5, BART etc
@@ -110,11 +124,3 @@ This brings up an awesome UI like this:
 
 # Contribution
 Feel free to open any issues and open pull requests to contribute code :)
-
-# Distributed training research papers
-
-1. [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)
-1. [Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/abs/1909.08053)
-1. [Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM](https://arxiv.org/abs/2104.04473)
-1. [DeepSpeed Inference: Enabling Efficient Inference of Transformer Models at Unprecedented Scale](https://arxiv.org/abs/2207.00032)
-1. [Meet Gemini:The Heterogeneous Memory Manager of Colossal-AI](https://colossalai.org/docs/advanced_tutorials/meet_gemini/)
