@@ -24,7 +24,7 @@ def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
 
 
 class BaseArgs(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     def to_dict(self) -> dict:
         copied = deepcopy(self)

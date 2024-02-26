@@ -9,10 +9,14 @@ model_args:
   model_name: bigcode/starcoder
   model_class: GPTMegatronForCausalLM
   dtype: bfloat16
-  attention_implementation: flash
+  attention_implementation: packed_flash
 
 tuning_args:
   tuning_method: full_finetuning
+
+save_args:
+  save_path: checkpoints
+  save_interval: 50
 
 logging_args:
   experiment_name: starcoder-15b-8k
@@ -34,3 +38,7 @@ optimizer_args:
 
 lr_scheduler_args:
   lr_schedule: cosine
+
+distributed_args:
+  distributed_backend: deepspeed
+  gradient_checkpointing: true
