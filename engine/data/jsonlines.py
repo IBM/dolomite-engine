@@ -45,8 +45,10 @@ class JSONLinesDataset(BaseDataset):
         self.examples = self.prepare_examples()
 
     def prepare_examples(self) -> List[dict]:
+        assert "data_path" in self.class_args, "JSONLinesDataset requires additional class_args `data_path`"
+
         examples = []
-        data_files = glob.glob(os.path.join(self.data_path, self.split.value, "*.jsonl"))
+        data_files = glob.glob(os.path.join(self.class_args["data_path"], self.split.value, "*.jsonl"))
 
         for filename in data_files:
             json_file = jsonlines.open(filename, "r")
