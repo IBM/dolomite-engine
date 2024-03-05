@@ -129,6 +129,12 @@ class BaseDataset(torch.utils.data.Dataset):
 
         return result
 
+    def state_dict(self) -> dict:
+        return {}
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        return
+
     def __getitem__(self, index: int) -> dict:
         return self.examples[index]
 
@@ -166,6 +172,12 @@ class BlendedDatasets(torch.utils.data.Dataset):
         """
 
         return [len(dataset) for dataset in self.datasets]
+
+    def state_dict(self) -> dict:
+        return {}
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        return
 
     def __len__(self) -> int:
         return self.num_examples

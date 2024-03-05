@@ -201,7 +201,7 @@ class LoadArgs(BaseArgs):
     iteration: int = None
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.load_path, "load_path"), (self.iteration, "iteration")])
+        _check_not_None([(self.load_path, "load_path")])
 
 
 class DatasetArgs(BaseArgs):

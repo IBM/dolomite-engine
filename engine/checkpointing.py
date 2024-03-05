@@ -16,6 +16,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import InferenceArgs, TrainingArgs, get_args_file_extension
+from .data import DataLoader
 from .enums import ArgsFileExtension, DistributedBackend, Mode, TuningMethod
 from .model import Model
 from .utils import get_global_rank, load_yaml, register_timer, run_rank_n
@@ -31,6 +32,7 @@ def save_checkpoint(
     model: Union[DeepSpeedEngine, DDP, FSDP],
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
+    train_dataloader: DataLoader,
     iteration: int,
 ) -> None:
     """save checkpoint during training
@@ -40,6 +42,7 @@ def save_checkpoint(
         model (Union[DeepSpeedEngine, DDP, FSDP]): model to save
         optimizer (Optimizer): optimizer to save
         lr_scheduler (LambdaLR): learning rate scheduler to save
+        train_dataloader (DataLoader): train dataloader to save
         iteration (int): current iteration
     """
 
@@ -82,6 +85,16 @@ def save_checkpoint(
     os.makedirs(os.path.dirname(rng_state_path), exist_ok=True)
     torch.save(rng_state, rng_state_path)
 
+    dataloader_path = _get_dataloader_path(save_path)
+    os.makedirs(os.path.dirname(dataloader_path), exist_ok=True)
+    torch.save(train_dataloader.state_dict(), dataloader_path)
+
+    if get_global_rank() == 0:
+        json.dump(
+            {"latest_checkpointed_iteration": iteration},
+            open(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
+        )
+
     save_args(args, save_path, mode=Mode.training)
 
 
@@ -91,14 +104,16 @@ def load_checkpoint_for_training(
     model: Union[DeepSpeedEngine, DDP, FSDP],
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
+    train_dataloader: DataLoader,
 ) -> None:
     """load checkpoint for training
 
     Args:
         args (TrainingArgs): arguments for training
-        model (Union[DeepSpeedEngine, DDP, FSDP]): model to save
+        model (Union[DeepSpeedEngine, DDP, FSDP]): model to load
         optimizer (Optimizer): optimizer to save
-        lr_scheduler (LambdaLR): learning rate scheduler to save
+        lr_scheduler (LambdaLR): learning rate scheduler to load
+        train_dataloader (DataLoader): train dataloader to load
     """
 
     if args.load_args is None or args.load_args.load_path is None:
@@ -108,6 +123,11 @@ def load_checkpoint_for_training(
     stage = args.distributed_args.stage
 
     iteration = args.load_args.iteration
+    if iteration is None:
+        iteration = json.load(open(_get_latest_checkpointed_iterations_path(args.load_args.load_path), "r"))[
+            "latest_checkpointed_iteration"
+        ]
+
     load_path = _get_base_path(args.load_args.load_path, iteration)
 
     if distributed_backend == DistributedBackend.deepspeed:
@@ -138,6 +158,10 @@ def load_checkpoint_for_training(
     np.random.set_state(rng_state["np_rng_state"])
     torch.set_rng_state(rng_state["torch_rng_state"])
     torch.cuda.set_rng_state(rng_state["cuda_rng_state"])
+
+    train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
+
+    return iteration
 
 
 def load_checkpoint_for_inference(model: Model, load_path: str, iteration: int) -> None:
@@ -217,5 +241,13 @@ def _get_lr_scheduler_path(path: str) -> str:
     return os.path.join(path, "lr_scheduler.pt")
 
 
+def _get_dataloader_path(path: str) -> str:
+    return os.path.join(path, "dataloader", f"dataloader-{get_global_rank()}.pt")
+
+
 def _get_rng_state_path(path: str) -> str:
     return os.path.join(path, "rng_state", f"rng_state-{get_global_rank()}.pt")
+
+
+def _get_latest_checkpointed_iterations_path(path: str) -> str:
+    return os.path.join(path, "latest_checkpointed_iteration.json")

@@ -1,13 +1,13 @@
 import logging
 from typing import Iterable, List, Tuple, Union
 
-from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 from ..arguments import InferenceArgs, TrainingArgs
 from ..enums import DatasetSplit, Mode, TuningMethod
 from ..utils import get_world_size, log_rank_0
 from .base import BaseDataset, BlendedDatasets, collate
+from .dataloader import DataLoader
 from .debug import DebugDataset
 from .instruction_tuning import AlpacaDataset, DollyDataset
 from .jsonlines import JSONLinesDataset

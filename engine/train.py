@@ -8,12 +8,11 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
-from .data import get_dataloader, infinite_iterator
+from .data import DataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, Mode
 from .model import Model, log_model
@@ -153,6 +152,7 @@ def train(
     train_dataloader: DataLoader,
     val_dataloader: DataLoader,
     experiments_tracker: ExperimentsTracker,
+    starting_iteration: int = 0,
 ) -> None:
     """main training loop for the program
 
@@ -164,6 +164,7 @@ def train(
         train_dataloader (DataLoader): training dataloader
         val_dataloader (DataLoader): validation dataloader
         experiments_tracker (ExperimentsTracker): metrics tracker
+        starting_iteration (int): starting iteration
     """
 
     num_training_steps = args.training_parameters.num_training_steps
@@ -179,23 +180,22 @@ def train(
 
     model.train()
 
-    train_dataloader = infinite_iterator(train_dataloader)
+    # need this for iterating infinitely
+    train_dataloader_infinite = infinite_iterator(train_dataloader)
 
-    # to run on multiple epochs
-    for global_step in range(num_training_steps):
-        if eval_during_training and global_step % eval_interval == 0:
-            val_loss = evaluate(val_dataloader, model)
-            track_val_metrics(global_step, val_loss, experiments_tracker)
+    if eval_during_training:
+        evaluate(val_dataloader, model, starting_iteration, experiments_tracker)
 
-        if global_step != 0 and global_step % save_interval == 0:
-            save_checkpoint(args, model, optimizer, lr_scheduler, global_step)
+    global_step = starting_iteration
+    while global_step < num_training_steps:
+        global_step += 1
 
         loss_step = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             distributed_backend=distributed_backend,
-            train_dataloader=train_dataloader,
+            train_dataloader=train_dataloader_infinite,
             gradient_accumulation_steps=gradient_accumulation_steps,
         )
 
@@ -210,22 +210,25 @@ def train(
                 loss_running_mean_tracker=loss_running_mean_tracker,
             )
 
-    if eval_during_training:
-        val_loss = evaluate(val_dataloader, model)
-        track_val_metrics(global_step, val_loss, experiments_tracker)
+        if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
+            evaluate(val_dataloader, model, global_step, experiments_tracker)
 
-    if global_step % save_interval != 0:
-        save_checkpoint(args, model, optimizer, lr_scheduler, global_step)
+        if global_step % save_interval == 0 or global_step == num_training_steps:
+            save_checkpoint(args, model, optimizer, lr_scheduler, train_dataloader, global_step)
 
 
 @register_profiler("evaluate_dataset")
 @torch.no_grad()
-def evaluate(val_dataloader: DataLoader, model: Model) -> float:
+def evaluate(
+    val_dataloader: DataLoader, model: Model, global_step: int, experiments_tracker: ExperimentsTracker
+) -> float:
     """main validation loop for the program
 
     Args:
         val_dataloader (DataLoader): validation dataloader
         model (DeepSpeedEngine): DeepSpeed sharded model
+        global_step (int): global step during training
+        experiments_tracker (ExperimentsTracker): metrics tracker
 
     Returns:
         float: loss at the current step
@@ -245,6 +248,7 @@ def evaluate(val_dataloader: DataLoader, model: Model) -> float:
         micro_step += 1
 
     loss_mean = loss_sum / micro_step
+    track_val_metrics(global_step, loss_mean, experiments_tracker)
 
     model.train()
 
@@ -289,8 +293,9 @@ def main() -> None:
 
     log_model(model)
 
+    starting_iteration = 0
     if args.load_args is not None:
-        load_checkpoint_for_training(args, model, optimizer, lr_scheduler)
+        starting_iteration = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, train_dataloader)
 
     experiments_tracker = ExperimentsTracker(args.logging_args.experiment_name, args.logging_args.aim_repo)
     # track all hyperparams in args
@@ -305,6 +310,7 @@ def main() -> None:
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
         experiments_tracker=experiments_tracker,
+        starting_iteration=starting_iteration,
     )
 
 

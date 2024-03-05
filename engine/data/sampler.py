@@ -4,7 +4,7 @@ from typing import Iterator, List
 import torch
 from torch.utils.data import DistributedSampler
 
-from ..enums import DatasetSplit, Mode
+from ..enums import DatasetSplit
 from .base import BlendedDatasets
 
 
@@ -34,12 +34,16 @@ class BlendedDistributedSampler(DistributedSampler):
         else:
             self.num_samples_by_dataset = _get_num_samples_by_dataset(data_sampling_ratios, len(dataset))
 
-    def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int, seed: int) -> torch.Tensor:
-        g = torch.Generator()
-        g.manual_seed(seed)
+        if shuffle:
+            self.generator = torch.Generator()
+            self.generator.manual_seed(seed)
 
+        # this is just needed to store the state
+        self.index = 0
+
+    def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int) -> torch.Tensor:
         if num_samples_in_subset < subset_size:
-            sampler = torch.randperm(subset_size, generator=g)[:num_samples_in_subset]
+            sampler = torch.randperm(subset_size, generator=self.generator)[:num_samples_in_subset]
         else:
             num_concats = num_samples_in_subset // subset_size
             padding = num_samples_in_subset - num_concats * subset_size
@@ -47,7 +51,7 @@ class BlendedDistributedSampler(DistributedSampler):
             sampler = torch.tensor(sampler)
 
             if padding > 0:
-                padding_samples = torch.randperm(subset_size, generator=g)[:padding]
+                padding_samples = torch.randperm(subset_size, generator=self.generator)[:padding]
                 sampler = torch.cat([sampler, padding_samples])
 
         return sampler
@@ -57,18 +61,16 @@ class BlendedDistributedSampler(DistributedSampler):
             data_samples = []
 
             for i in range(self.num_datasets):
+                self.generator.manual_seed(self.seed + self.epoch)
                 sampler = self.get_indices_in_data_subset(
-                    self.num_samples_by_dataset[i],
-                    self.num_examples_in_each_dataset[i],
-                    self.seed + (self.epoch + 1) * (i + 1),
+                    self.num_samples_by_dataset[i], self.num_examples_in_each_dataset[i]
                 )
                 sampler += self.dataset.start_indices[i]
 
                 data_samples.extend(sampler.tolist())
 
-            g = torch.Generator()
-            g.manual_seed(self.seed + self.epoch)
-            indices = torch.randperm(len(data_samples), generator=g).tolist()
+            self.generator.manual_seed(self.seed + self.epoch)
+            indices = torch.randperm(len(data_samples), generator=self.generator).tolist()
         else:
             indices = list(range(len(self.dataset)))
 
@@ -88,11 +90,32 @@ class BlendedDistributedSampler(DistributedSampler):
         indices = indices[self.rank : self.total_size : self.num_replicas]
         assert len(indices) == self.num_samples
 
+        self.index = 0
         for i in indices:
+            self.index += 1
+
             if self.shuffle:
                 yield data_samples[i]
             else:
                 yield i
+
+        self.set_epoch(self.epoch + 1)
+
+    def state_dict(self) -> dict:
+        state_dict = {"epoch": self.epoch, "index": self.index}
+        if self.shuffle:
+            state_dict["generator"] = self.generator.get_state()
+
+        return state_dict
+
+    def load_state_dict(self, state_dict: dict) -> dict:
+        self.set_epoch(state_dict["epoch"])
+        if self.shuffle:
+            self.generator.set_state(state_dict["generator"])
+
+        for _ in self:
+            if self.index == state_dict["index"]:
+                break
 
     def __repr__(self) -> None:
         x = ""
