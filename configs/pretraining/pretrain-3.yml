@@ -1,0 +1,68 @@
+datasets:
+  # class_name, data_name & data_sampling_ratio are not used but need to be passed to avoid errors
+  - class_name: MegatronDataset
+    data_name: Megatron
+    data_sampling_ratio: 1
+    class_args:
+      eval_steps: 2
+      data_cache_path: cache
+      # Option 3: data loading using --(train|val|test)-data-path with multiple weighted files
+      train_data_path:
+        - 0.2
+        - data/train/lang=Matlab
+        - 0.5
+        - data/train/lang=Verilog
+        - 0.3
+        - data/train/lang=Zig
+      val_data_path:
+        - 0.2
+        - data/val/lang=Matlab
+        - 0.5
+        - data/val/lang=Verilog
+        - 0.3
+        - data/val/lang=Zig
+      test_data_path:
+        - 0.2
+        - data/test/lang=Matlab
+        - 0.5
+        - data/test/lang=Verilog
+        - 0.3
+        - data/test/lang=Zig
+      sequence_length: 2048
+
+model_args:
+  model_name: bigcode/starcoderbase-1b
+  model_class: GPTMegatronForCausalLM
+  dtype: bfloat16
+  attention_implementation: packed_flash
+
+tuning_args:
+  tuning_method: pretraining
+
+save_args:
+  save_path: checkpoints
+  save_interval: 50
+
+logging_args:
+  experiment_name: starcoder-15b-8k
+
+training_parameters:
+  num_training_steps: 100
+  eval_interval: 50
+  batch_size_per_gpu: 6
+
+optimizer_args:
+  class_name: ApexFusedAdam
+  class_args:
+    lr: 1e-5
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    eps: 1e-10
+
+lr_scheduler_args:
+  lr_schedule: cosine
+
+distributed_args:
+  distributed_backend: deepspeed

@@ -20,6 +20,30 @@ from .optimization import get_optimizer_and_lr_scheduler
 
 _DEEPSPEED_CONFIG: dict = None
 
+_STAGE_SHARDING_STRATEGY_MAP = {
+    0: ShardingStrategy.NO_SHARD,
+    2: ShardingStrategy.SHARD_GRAD_OP,
+    3: ShardingStrategy.FULL_SHARD,
+}
+
+_FSDP_MIXED_PRECISION_POLICIES = {
+    torch.float32: FSDP_MixedPrecision(
+        param_dtype=torch.float32, reduce_dtype=torch.float32, buffer_dtype=torch.float32
+    ),
+    torch.float16: FSDP_MixedPrecision(
+        param_dtype=torch.float16, reduce_dtype=torch.float16, buffer_dtype=torch.float16
+    ),
+    torch.bfloat16: FSDP_MixedPrecision(
+        param_dtype=torch.bfloat16, reduce_dtype=torch.float32, buffer_dtype=torch.bfloat16
+    ),
+}
+
+_DEEPSPEED_MIXED_PRECISION_CONFIG = {
+    torch.float32: {},
+    torch.float16: {"fp16": {"enabled": True, "auto_cast": True}},
+    torch.bfloat16: {"bf16": {"enabled": True}, "data_types": {"grad_accum_dtype": "fp32"}},
+}
+
 
 def wrap_model_for_distributed_training(
     args: TrainingArgs, model: torch.nn.Module
@@ -61,38 +85,22 @@ def wrap_model_for_distributed_training(
         optimizer = None
         lr_scheduler = None
     elif args.distributed_args.distributed_backend == DistributedBackend.torch:
-        assert stage in [0, 2, 3]
+        assert stage in _STAGE_SHARDING_STRATEGY_MAP
+        assert not cpu_offload
 
-        if stage == 0:
-            assert not cpu_offload
-            assert args.model_args.dtype == torch.float32
-
-            model = DDP(model.to(torch.cuda.current_device()))
-        else:
-            assert not cpu_offload
-
-            if stage == 2:
-                sharding_strategy = ShardingStrategy.SHARD_GRAD_OP
-            elif stage == 3:
-                sharding_strategy = ShardingStrategy.FULL_SHARD
-            else:
-                raise ValueError(f"unexpected stage ({stage}) for torch backend")
-
-            mixed_precision = FSDP_MixedPrecision(param_dtype=args.model_args.dtype)
-            model = FSDP(
-                model.to(torch.cuda.current_device()),
-                sharding_strategy=sharding_strategy,
-                mixed_precision=mixed_precision,
-                auto_wrap_policy=partial(
-                    transformer_auto_wrap_policy,
-                    transformer_layer_cls=[
-                        FSDP_plugin.get_module_class_from_name(model.model, name)
-                        for name in model.model._no_split_modules
-                    ],
-                ),
-                limit_all_gathers=True,
-                use_orig_params=True,
-            )
+        model = FSDP(
+            model.to(torch.cuda.current_device()),
+            sharding_strategy=_STAGE_SHARDING_STRATEGY_MAP[stage],
+            mixed_precision=_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype],
+            auto_wrap_policy=partial(
+                transformer_auto_wrap_policy,
+                transformer_layer_cls=[
+                    FSDP_plugin.get_module_class_from_name(model.model, name) for name in model.model._no_split_modules
+                ],
+            ),
+            limit_all_gathers=True,
+            use_orig_params=True,
+        )
 
         optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(
             optimizer_class_name=args.optimizer_args.class_name,
@@ -130,16 +138,13 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
             "gradient_accumulation_steps": args.training_parameters.gradient_accumulation_steps,
         }
 
-        # mixed precision options
-        if args.model_args.dtype == torch.bfloat16:
-            config["bf16"] = {"enabled": True}
-        elif args.model_args.dtype == torch.float16:
-            config["fp16"] = {"enabled": True, "auto_cast": True}
+        config.update(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])
 
         # cpu offload
         if args.distributed_args.cpu_offload:
-            config["zero_optimization"]["offload_param"] = {"device": "cpu", "pin_memory": True}
-            config["zero_optimization"]["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
+            cpu_params = {"device": "cpu", "pin_memory": True}
+            config["zero_optimization"]["offload_param"] = cpu_params
+            config["zero_optimization"]["offload_optimizer"] = cpu_params
 
         _DEEPSPEED_CONFIG = config
 

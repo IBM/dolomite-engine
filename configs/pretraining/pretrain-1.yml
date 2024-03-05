@@ -1,9 +1,16 @@
 datasets:
-  - class_name: DebugDataset
-    data_name: sst2
+  # class_name, data_name & data_sampling_ratio are not used but need to be passed to avoid errors
+  - class_name: MegatronDataset
+    data_name: Megatron
     data_sampling_ratio: 1
-    max_input_tokens: 4096
-    max_output_tokens: 4096
+    class_args:
+      eval_steps: 2
+      data_cache_path: cache
+      # Option 1: data loading using --data-path with single file
+      data_path:
+        - data/lang=Matlab
+      split: 98,1,1
+      sequence_length: 2048
 
 model_args:
   model_name: bigcode/starcoderbase-1b
@@ -12,7 +19,7 @@ model_args:
   attention_implementation: packed_flash
 
 tuning_args:
-  tuning_method: full_finetuning
+  tuning_method: pretraining
 
 save_args:
   save_path: checkpoints
@@ -41,4 +48,3 @@ lr_scheduler_args:
 
 distributed_args:
   distributed_backend: deepspeed
-  gradient_checkpointing: true

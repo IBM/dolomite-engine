@@ -11,6 +11,7 @@ from .dataloader import DataLoader
 from .debug import DebugDataset
 from .instruction_tuning import AlpacaDataset, DollyDataset
 from .jsonlines import JSONLinesDataset
+from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
 from .sst2 import SST2Dataset
 

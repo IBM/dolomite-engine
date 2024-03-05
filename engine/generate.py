@@ -68,6 +68,7 @@ def main() -> None:
     args: InferenceArgs = get_args(mode)
 
     model = Model(args, mode)
+    model = model.to(model.input_device)
 
     datasets_list, _ = get_datasets_list(
         args,

@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer
 
+from ..defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from ..enums import DatasetSplit, Mode, TuningMethod
 
 
@@ -44,8 +45,8 @@ class BaseDataset(torch.utils.data.Dataset):
         self.output_format = output_format
 
         # if format is __input__ or __output__ formatting is a no-op
-        self.do_format_input = self.input_format != "__input__"
-        self.do_format_output = self.output_format != "__output__"
+        self.do_format_input = self.input_format != INPUT_FORMAT
+        self.do_format_output = self.output_format != OUTPUT_FORMAT
 
         # length to use for trimming (excludes eos)
         self.max_input_tokens = get_max_input_length(
@@ -74,7 +75,7 @@ class BaseDataset(torch.utils.data.Dataset):
         """
 
         if self.do_format_input:
-            return self.input_format.replace("__input__", input, 1)
+            return self.input_format.replace(INPUT_FORMAT, input, 1)
         return input
 
     def construct_output_from_format(self, output: str) -> str:

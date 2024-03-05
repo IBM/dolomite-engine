@@ -54,4 +54,4 @@ class DebugDataset(BaseDataset):
         return self.example
 
     def __len__(self) -> int:
-        return 10000
+        return 100

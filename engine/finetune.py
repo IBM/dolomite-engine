@@ -295,7 +295,7 @@ def main() -> None:
 
     starting_iteration = 0
     if args.load_args is not None:
-        starting_iteration = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, train_dataloader)
+        starting_iteration, _ = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, train_dataloader)
 
     experiments_tracker = ExperimentsTracker(args.logging_args.experiment_name, args.logging_args.aim_repo)
     # track all hyperparams in args

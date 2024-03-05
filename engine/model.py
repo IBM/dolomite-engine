@@ -2,6 +2,7 @@ import logging
 from typing import List, Tuple, Union
 
 import torch
+import torch.nn.functional as F
 from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 from transformers import AutoConfig, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
@@ -30,7 +31,15 @@ class Model(torch.nn.Module):
         self.mode = mode
         self.model_name = args.model_args.model_name
         self.model_class = args.model_args.model_class
+
+        self._setup_input_device()
+
         self.attention_implementation = args.model_args.attention_implementation
+        if self.attention_implementation is not None:
+            from ibm_models import GPTMegatronForCausalLM, MoEMegablocksForCausalLM
+
+            assert self.model_class in [GPTMegatronForCausalLM, MoEMegablocksForCausalLM]
+
         self.distributed_backend = args.distributed_args.distributed_backend if mode == Mode.training else None
 
         self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.model_args.trust_remote_code)
@@ -51,11 +60,17 @@ class Model(torch.nn.Module):
             "trust_remote_code": args.model_args.trust_remote_code,
             "use_cache": mode == Mode.inference,
         }
+        if self.attention_implementation is not None:
+            model_kwargs["attention_implementation"] = self.attention_implementation
 
-        if self.tuning_method == TuningMethod.full_finetuning:
+        if self.tuning_method == TuningMethod.pretraining:
+            self._setup_model_for_pretraining(args, model_kwargs)
+        elif self.tuning_method == TuningMethod.full_finetuning:
             self._setup_model_for_finetuning(args, model_kwargs)
-        else:
+        elif self.tuning_method in [TuningMethod.prompt_tuning, TuningMethod.lora]:
             self._setup_model_for_peft(args, model_kwargs)
+        else:
+            raise ValueError(f"unexpected tuning_method ({self.tuning_method})")
 
         if args.tokenizer_args.additional_special_tokens is not None:
             original_vocab_size = len(self.tokenizer)
@@ -67,8 +82,6 @@ class Model(torch.nn.Module):
 
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
-
-        self._setup_input_device()
 
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
@@ -82,18 +95,49 @@ class Model(torch.nn.Module):
             torch.Tensor: loss tensor
         """
 
-        batch = self.prepare_batch(batch)
+        if self.tuning_method == TuningMethod.pretraining:
+            # for pretraining we compute loss externally here instead of relying on transformers.
+            # this is done because megatron's dataset returns batches of length (sequence_length + 1)
+            # instead of (sequence_length), so we need to trim the input_ids before forward pass.
+            # transformers does forward pass before however and then trims the tokens.
 
-        if self.attention_implementation != AttentionImplementation.flash:
-            for i in batch:
-                batch[i] = batch[i].to(self.input_device)
+            tokens: torch.Tensor = batch["text"]
+            if not tokens.is_cuda:
+                tokens = tokens.to(self.input_device)
 
-        model_outputs = self.model(**batch)
+            input_ids = tokens[:, :-1]
+            labels = tokens[:, 1:]
 
-        if type(model_outputs) is tuple:
-            loss = model_outputs[0]
+            if self.attention_implementation == AttentionImplementation.packed_flash:
+                model_outputs = self.model(
+                    input_ids=input_ids.reshape(-1),
+                    position_ids=self.position_ids,
+                    cu_seqlens=self.cu_seqlens,
+                    max_seqlen=self.max_seqlen,
+                )
+            else:
+                model_outputs = self.model(input_ids=input_ids)
+
+            if type(model_outputs) is tuple:
+                logits = model_outputs[0]
+            else:
+                logits = model_outputs.logits
+
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
         else:
-            loss = model_outputs.loss
+            batch = self.prepare_batch(batch)
+
+            if self.attention_implementation != AttentionImplementation.packed_flash:
+                for i in batch:
+                    batch[i] = batch[i].to(self.input_device)
+
+            model_outputs = self.model(**batch)
+
+            if type(model_outputs) is tuple:
+                loss = model_outputs[0]
+            else:
+                loss = model_outputs.loss
+
         return loss
 
     @register_profiler("generate")
@@ -109,8 +153,8 @@ class Model(torch.nn.Module):
             List[str]: list of generated text. input is trimmed from the generated text
         """
 
-        if self.attention_implementation == AttentionImplementation.flash:
-            raise NotImplementedError("flash attention doesn't support generation yet")
+        if self.attention_implementation == AttentionImplementation.packed_flash:
+            raise NotImplementedError("packed_flash attention doesn't support generation yet")
 
         batch = self.prepare_batch(batch)
 
@@ -140,39 +184,56 @@ class Model(torch.nn.Module):
             dict: dict containing input_ids, attention_mask and labels if outputs is specified
         """
 
+        result = {}
+
         if self.mode == Mode.training:
             inputs, outputs = batch
+            assert outputs is not None, "outputs can't be None during training"
         else:
             inputs = batch
+            outputs = None
 
-        result = {}
-        if self.mode == Mode.training:
-            assert outputs is not None, "outputs can't be None during training"
-
-            input_ids, attention_mask, labels = _pad(
-                inputs,
-                outputs,
-                self.tokenizer.eos_token_id,
-                padding_side=self.padding_side,
-                is_encoder_decoder=self.is_encoder_decoder,
-                attention_implementation=self.attention_implementation,
-            )
-
-            result["labels"] = labels
-        else:
-            input_ids, attention_mask, _ = _pad(
-                inputs,
-                None,
-                self.tokenizer.eos_token_id,
-                padding_side=self.padding_side,
-                is_encoder_decoder=self.is_encoder_decoder,
-                attention_implementation=self.attention_implementation,
-            )
+        input_ids, attention_mask, labels = _pad(
+            inputs,
+            outputs,
+            self.tokenizer.eos_token_id,
+            padding_side=self.padding_side,
+            is_encoder_decoder=self.is_encoder_decoder,
+            attention_implementation=self.attention_implementation,
+        )
 
         result["input_ids"] = input_ids
         result["attention_mask"] = attention_mask
+        if self.mode == Mode.training:
+            result["labels"] = labels
 
         return result
+
+    def _setup_model_for_pretraining(
+        self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict
+    ) -> None:
+        # cache these since they are static during pretraining
+        if self.attention_implementation == AttentionImplementation.packed_flash:
+            batch_size = args.training_parameters.batch_size_per_gpu
+            sequence_length = args.datasets[0].class_args.get("sequence_length")
+
+            self.register_buffer(
+                "cu_seqlens",
+                torch.arange(
+                    0, batch_size * sequence_length + 1, sequence_length, dtype=torch.int32, device=self.input_device
+                ),
+                persistent=False,
+            )
+            self.register_buffer(
+                "max_seqlen", torch.tensor(sequence_length, device=self.input_device), persistent=False
+            )
+            self.register_buffer(
+                "position_ids",
+                torch.arange(0, sequence_length, 1, device=self.input_device).repeat(batch_size),
+                persistent=False,
+            )
+
+        self._setup_model_for_finetuning(args, model_kwargs)
 
     def _setup_model_for_finetuning(
         self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict
@@ -189,9 +250,6 @@ class Model(torch.nn.Module):
                 self.model.gradient_checkpointing_enable()
         else:
             self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
-
-        if self.attention_implementation is not None:
-            self._inject_attention_implementation()
 
     def _setup_model_for_peft(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict) -> None:
         if args.tuning_args.tuning_method == TuningMethod.prompt_tuning:
@@ -216,9 +274,6 @@ class Model(torch.nn.Module):
         if args.distributed_args.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
 
-        if self.attention_implementation is not None:
-            self._inject_attention_implementation()
-
         self.model = get_peft_model(self.model, self.peft_config)
 
     def _setup_input_device(self) -> None:
@@ -230,23 +285,6 @@ class Model(torch.nn.Module):
             if not torch.cuda.is_available():
                 warn_rank_0("no CUDA device found, running on CPU")
                 self.input_device = "cpu"
-
-            self.to(self.input_device)
-
-    def _inject_attention_implementation(self) -> None:
-        from ibm_models import GPTMegatronForCausalLM
-
-        assert isinstance(self.model, GPTMegatronForCausalLM)
-
-        if self.attention_implementation == AttentionImplementation.math:
-            warn_rank_0("ignores padding and doesn't work for generation")
-            self.model.inject_math_attention()
-        elif self.attention_implementation == AttentionImplementation.flash:
-            self.model.inject_flash_attention()
-        elif self.attention_implementation == AttentionImplementation.sdpa:
-            self.model.inject_sdpa()
-        else:
-            raise ValueError("unexpected attention_implementation")
 
 
 def _pad(
@@ -288,7 +326,7 @@ def _pad(
             output_max_length = max(list(map(len, outputs)))
             labels = [array + [-100] * (output_max_length - len(array)) for array in outputs]
     else:
-        if attention_implementation == AttentionImplementation.flash:
+        if attention_implementation == AttentionImplementation.packed_flash:
             input_ids = inputs
             attention_mask = None
             labels = [
@@ -313,7 +351,7 @@ def _pad(
                         for array_in, array_out in zip(inputs, outputs)
                     ]
 
-    if attention_implementation != AttentionImplementation.flash:
+    if attention_implementation != AttentionImplementation.packed_flash:
         input_ids = torch.tensor(input_ids)
         attention_mask = torch.tensor(attention_mask)
         if labels is not None:

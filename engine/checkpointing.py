@@ -1,10 +1,11 @@
 import json
 import os
 import random
-from typing import Union
+from typing import Tuple, Union
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import yaml
 from deepspeed import DeepSpeedEngine
 from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
@@ -34,6 +35,7 @@ def save_checkpoint(
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
     iteration: int,
+    metadata: dict = {},
 ) -> None:
     """save checkpoint during training
 
@@ -44,6 +46,10 @@ def save_checkpoint(
         lr_scheduler (LambdaLR): learning rate scheduler to save
         train_dataloader (DataLoader): train dataloader to save
         iteration (int): current iteration
+        metadata (dict): extra stuff to store
+
+    Raises:
+        ValueError: if unexpected distributed backend is found
     """
 
     distributed_backend = args.distributed_args.distributed_backend
@@ -85,14 +91,21 @@ def save_checkpoint(
     os.makedirs(os.path.dirname(rng_state_path), exist_ok=True)
     torch.save(rng_state, rng_state_path)
 
-    dataloader_path = _get_dataloader_path(save_path)
-    os.makedirs(os.path.dirname(dataloader_path), exist_ok=True)
-    torch.save(train_dataloader.state_dict(), dataloader_path)
+    if train_dataloader is not None:
+        dataloader_path = _get_dataloader_path(save_path)
+        os.makedirs(os.path.dirname(dataloader_path), exist_ok=True)
+        torch.save(train_dataloader.state_dict(), dataloader_path)
+
+    if metadata is not None:
+        json.dump(metadata, open(_get_metadata_path(save_path), "w"), indent=4)
+
+    dist.barrier()
 
     if get_global_rank() == 0:
         json.dump(
             {"latest_checkpointed_iteration": iteration},
             open(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
+            indent=4,
         )
 
     save_args(args, save_path, mode=Mode.training)
@@ -105,7 +118,7 @@ def load_checkpoint_for_training(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
-) -> None:
+) -> Tuple[int, dict]:
     """load checkpoint for training
 
     Args:
@@ -114,6 +127,12 @@ def load_checkpoint_for_training(
         optimizer (Optimizer): optimizer to save
         lr_scheduler (LambdaLR): learning rate scheduler to load
         train_dataloader (DataLoader): train dataloader to load
+
+    Raises:
+        ValueError: if unexpected distributed backend is found
+
+    Returns:
+        Tuple[int, dict]: checkpointed iteration, metadata
     """
 
     if args.load_args is None or args.load_args.load_path is None:
@@ -159,9 +178,14 @@ def load_checkpoint_for_training(
     torch.set_rng_state(rng_state["torch_rng_state"])
     torch.cuda.set_rng_state(rng_state["cuda_rng_state"])
 
-    train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
+    metadata = None
+    if os.path.isfile(_get_metadata_path(load_path)):
+        metadata = json.load(open(_get_metadata_path(load_path), "r"))
 
-    return iteration
+    if train_dataloader is not None:
+        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
+
+    return iteration, metadata
 
 
 def load_checkpoint_for_inference(model: Model, load_path: str, iteration: int) -> None:
@@ -187,7 +211,7 @@ def load_checkpoint_for_inference(model: Model, load_path: str, iteration: int) 
 
         if model.tuning_method == TuningMethod.prompt_tuning:
             model.load_state_dict(state, strict=False)
-        elif model.tuning_method == TuningMethod.full_finetuning:
+        elif model.tuning_method in [TuningMethod.pretraining, TuningMethod.full_finetuning]:
             for key in state:
                 state[key] = state[key].to(model.dtype)
 
@@ -251,3 +275,7 @@ def _get_rng_state_path(path: str) -> str:
 
 def _get_latest_checkpointed_iterations_path(path: str) -> str:
     return os.path.join(path, "latest_checkpointed_iteration.json")
+
+
+def _get_metadata_path(path: str) -> str:
+    return os.path.join(path, "metadata.json")

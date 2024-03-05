@@ -38,6 +38,7 @@ class DatasetKeys(str, Enum):
 class TuningMethod(str, Enum):
     """training method"""
 
+    pretraining = "pretraining"
     full_finetuning = "full_finetuning"
     prompt_tuning = "prompt_tuning"
     lora = "lora"

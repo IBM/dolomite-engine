@@ -11,6 +11,7 @@ from peft import PromptTuningInit
 from pydantic import BaseModel, ConfigDict
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
+from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import ArgsFileExtension, AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
 from .utils import get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
 
@@ -151,9 +152,11 @@ class TuningArgs(BaseArgs):
         _check_not_None([(self.tuning_method, "tuning_method")])
 
         # check whether the arguments specified are valid
-        if self.tuning_method == TuningMethod.full_finetuning:
-            assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with full_finetuning"
-            assert self.lora_args is None, "lora_args should not be specified with full_finetuning"
+        if self.tuning_method in [TuningMethod.full_finetuning, TuningMethod.pretraining]:
+            assert (
+                self.prompt_tuning_args is None
+            ), "prompt_tuning_args should not be specified with full_finetuning or pretraining"
+            assert self.lora_args is None, "lora_args should not be specified with full_finetuning or pretraining"
         elif self.tuning_method == TuningMethod.prompt_tuning:
             assert self.lora_args is None, "lora_args should not be specified with promt_tuning"
         elif self.tuning_method == TuningMethod.lora:
@@ -205,16 +208,16 @@ class LoadArgs(BaseArgs):
 
 
 class DatasetArgs(BaseArgs):
-    # optimizer class
+    # dataset class
     class_name: str = None
-    # class args for optimizer
+    # class args for dataset
     class_args: dict = {}
     # dataset name
     data_name: str = None
     # formatting to use for input
-    input_format: str = "__input__"
+    input_format: str = INPUT_FORMAT
     # formatting to use for output
-    output_format: str = "__output__"
+    output_format: str = OUTPUT_FORMAT
     # data sampling proportions
     data_sampling_ratio: int = None
     # max tokens for input text
@@ -261,7 +264,7 @@ class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
     # distributed backend to use
-    distributed_backend: DistributedBackend = DistributedBackend.torch
+    distributed_backend: DistributedBackend = DistributedBackend.deepspeed
     # overlap communication with computation
     overlap_comm: bool = False
     # use contiguous buffers for gradients, requires more memory if enabled
