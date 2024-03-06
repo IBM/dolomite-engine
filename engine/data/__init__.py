@@ -62,7 +62,7 @@ def get_dataloader(
 
     sampler = BlendedDistributedSampler(
         dataset=blended_dataset,
-        data_sampling_ratios=data_sampling_ratios if len(datasets_list) == 1 else [1],
+        data_sampling_ratios=[1] if len(datasets_list) == 1 else data_sampling_ratios,
         ignore_sampling_proportion_for_validation=args.training_parameters.ignore_sampling_proportion_for_validation,
         shuffle=split == DatasetSplit.train,
         seed=args.random_args.seed,

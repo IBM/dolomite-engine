@@ -203,7 +203,7 @@ class BlendedDatasets(torch.utils.data.Dataset):
 
     def __repr__(self) -> str:
         x = f"number of datasets = {self.get_num_datasets()}\n"
-        x += f"total examples in the entire dataset mixture = {len(self)}\n"
+        x += f"total examples in the entire dataset mixture = {len(self)}"
 
         for dataset in self.datasets:
             x += f"\nexamples in {dataset.__class__.__name__} ({dataset.data_name}) = {len(dataset)}"
