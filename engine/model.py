@@ -72,6 +72,10 @@ class Model(torch.nn.Module):
         else:
             raise ValueError(f"unexpected tuning_method ({self.tuning_method})")
 
+        neft_alpha = args.research_args.neft_alpha
+        if neft_alpha is not None and neft_alpha > 0:
+            self._override_embedding_forward_with_neft_forward(neft_alpha)
+
         if args.tokenizer_args.additional_special_tokens is not None:
             original_vocab_size = len(self.tokenizer)
 
@@ -275,6 +279,28 @@ class Model(torch.nn.Module):
             self.model.gradient_checkpointing_enable()
 
         self.model = get_peft_model(self.model, self.peft_config)
+
+    def _override_embedding_forward_with_neft_forward(self, neft_alpha: float):
+        if not hasattr(self.model, "get_input_embeddings"):
+            raise Exception(
+                "`get_input_embeddings` is not implemented for this model so its not possible to inject noise to input"
+                " embeddings. Please implement `get_input_embeddings` ot set `neft_alpha` to None"
+            )
+
+        original_forward = self.model.get_input_embeddings().forward
+
+        def _noisy_forward(x: torch.Tensor):
+            x = original_forward(x)
+
+            # to check if we are in eval mode we use self.training instead of self.model.training
+            if self.training:
+                mag_norm = neft_alpha / torch.sqrt(torch.tensor(torch.numel(x)))
+                return x + torch.zeros_like(x).uniform_(-mag_norm, mag_norm)
+
+            return x
+
+        # overrides the forward function of torch.nn.Embedding
+        self.model.get_input_embeddings().forward = _noisy_forward
 
     def _setup_input_device(self) -> None:
         if self.mode == Mode.training:

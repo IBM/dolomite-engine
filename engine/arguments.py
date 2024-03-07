@@ -286,6 +286,12 @@ class LoggingArgs(BaseArgs):
     experiment_name: Optional[str] = None
 
 
+class ResearchArgs(BaseArgs):
+    # Scalar of noise to inject into input embeddings
+    # https://arxiv.org/abs/2310.05914
+    neft_alpha: Optional[float] = None
+
+
 class TrainingArgs(BaseArgs):
     # randomization related arguments
     random_args: RandomArgs = RandomArgs()
@@ -311,6 +317,8 @@ class TrainingArgs(BaseArgs):
     logging_args: LoggingArgs = LoggingArgs()
     # distributed training related arguments
     distributed_args: DistributedArgs = DistributedArgs()
+    # research args
+    research_args: ResearchArgs = ResearchArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
