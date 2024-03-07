@@ -6,9 +6,6 @@
    Image of Dolomite generated using DALL-E
 </p>
 
-# Build Pipeline Status
-[![Docker image](https://v3.travis.ibm.com/ai-models-architectures/dolomite-engine.svg?token=oyYWKBKVMyqdMh3qyxqB&branch=main)](https://v3.travis.ibm.com/ai-models-architectures/dolomite-engine)
-
 
 # Distributed finetuning
 This repository is meant for finetuning large language models (of any scale) using multiple backends. The following backends are currently supported:
