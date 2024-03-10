@@ -12,7 +12,15 @@ from pydantic import BaseModel, ConfigDict
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
-from .enums import ArgsFileExtension, AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
+from .enums import (
+    ArgsFileExtension,
+    AttentionImplementation,
+    DistributedBackend,
+    LossMask,
+    Mode,
+    PaddingSide,
+    TuningMethod,
+)
 from .utils import get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
 
 
@@ -176,6 +184,8 @@ class TrainingParameters(BaseArgs):
     batch_size_per_gpu: int = None
     # whether to use val dataset for validation during training
     eval_during_training: bool = True
+    # masking methodology of loss function input
+    loss_mask: LossMask = LossMask.output_only
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(

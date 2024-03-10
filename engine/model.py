@@ -9,7 +9,7 @@ from transformers.integrations import HfDeepSpeedConfig
 
 from .arguments import ExportArgs, InferenceArgs, TrainingArgs
 from .distributed import get_deepspeed_config
-from .enums import AttentionImplementation, DistributedBackend, Mode, PaddingSide, TuningMethod
+from .enums import AttentionImplementation, DistributedBackend, LossMask, Mode, PaddingSide, TuningMethod
 from .utils import get_local_rank, log_rank_0, register_profiler, register_timer, run_rank_n, warn_rank_0
 
 
@@ -54,6 +54,12 @@ class Model(torch.nn.Module):
             if args.tokenizer_args.padding_side is None
             else args.tokenizer_args.padding_side
         )
+
+        self.loss_mask = args.training_parameters.loss_mask
+        if self.is_encoder_decoder:
+            assert (
+                self.loss_mask == LossMask.output_only
+            ), "only output_only loss mask is supported with encoder decoder models"
 
         model_kwargs = {
             "pretrained_model_name_or_path": self.model_name,
@@ -203,6 +209,7 @@ class Model(torch.nn.Module):
             self.tokenizer.eos_token_id,
             padding_side=self.padding_side,
             is_encoder_decoder=self.is_encoder_decoder,
+            loss_mask=self.loss_mask,
             attention_implementation=self.attention_implementation,
         )
 
@@ -319,7 +326,9 @@ def _pad(
     pad_token_id: int,
     padding_side: PaddingSide,
     is_encoder_decoder: bool,
+    loss_mask: LossMask,
     attention_implementation: AttentionImplementation = None,
+    labels_mask_value: int = -100,
 ) -> Tuple[List[int], List[int]]:
     """pads the arrays with the specified padding value
 
@@ -329,7 +338,9 @@ def _pad(
         pad_token_id (int): token id to pad with
         padding_side (PaddingSide): padding side for the tensors
         is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
+        loss_mask (LossMask): masking methodology for loss
         attention_implementation (AttentionImplementation): attention implementation for the model
+        labels_mask_value (int): mask value to use for labels
 
     Returns:
         Tuple[List[int], List[int]]: token ids and the corresponding attention masks
@@ -349,15 +360,27 @@ def _pad(
             attention_mask = [[1] * len(array) + [0] * (input_max_length - len(array)) for array in inputs]
 
         if outputs is not None:
+            assert (
+                loss_mask == LossMask.output_only
+            ), "only output_only loss mask is supported with encoder decoder models"
+
             output_max_length = max(list(map(len, outputs)))
-            labels = [array + [-100] * (output_max_length - len(array)) for array in outputs]
+            # right padding for labels
+            labels = [array + [labels_mask_value] * (output_max_length - len(array)) for array in outputs]
     else:
         if attention_implementation == AttentionImplementation.packed_flash:
             input_ids = inputs
             attention_mask = None
-            labels = [
-                [-100] * (len(array_in) - len(array_out)) + array_out for array_in, array_out in zip(inputs, outputs)
-            ]
+
+            if loss_mask == LossMask.output_only:
+                labels = [
+                    [labels_mask_value] * (len(array_in) - len(array_out)) + array_out
+                    for array_in, array_out in zip(inputs, outputs)
+                ]
+            elif loss_mask == LossMask.no_mask:
+                labels = inputs
+            else:
+                raise ValueError(f"unexpected loss_mask ({loss_mask})")
         else:
             max_length = max(list(map(len, inputs)))
 
@@ -366,16 +389,28 @@ def _pad(
                 attention_mask = [[0] * (max_length - len(array)) + [1] * len(array) for array in inputs]
 
                 if outputs is not None:
-                    labels = [[-100] * (max_length - len(array)) + array for array in outputs]
+                    if loss_mask == LossMask.output_only:
+                        labels = [[labels_mask_value] * (max_length - len(array)) + array for array in outputs]
+                    elif loss_mask == LossMask.no_mask:
+                        labels = inputs
+                    else:
+                        raise ValueError(f"unexpected loss_mask ({loss_mask})")
             else:
                 input_ids = [array + [pad_token_id] * (max_length - len(array)) for array in inputs]
                 attention_mask = [[1] * len(array) + [0] * (max_length - len(array)) for array in inputs]
 
                 if outputs is not None:
-                    labels = [
-                        [-100] * (len(array_in) - len(array_out)) + array_out + [-100] * (max_length - len(array_in))
-                        for array_in, array_out in zip(inputs, outputs)
-                    ]
+                    if loss_mask == LossMask.output_only:
+                        labels = [
+                            [labels_mask_value] * (len(array_in) - len(array_out))
+                            + array_out
+                            + [labels_mask_value] * (max_length - len(array_in))
+                            for array_in, array_out in zip(inputs, outputs)
+                        ]
+                    elif loss_mask == LossMask.no_mask:
+                        labels = inputs
+                    else:
+                        raise ValueError(f"unexpected loss_mask ({loss_mask})")
 
     if attention_implementation != AttentionImplementation.packed_flash:
         input_ids = torch.tensor(input_ids)

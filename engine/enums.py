@@ -52,3 +52,10 @@ class DistributedBackend(str, Enum):
 class ArgsFileExtension(str, Enum):
     json = "json"
     yaml = "yaml"
+
+
+class LossMask(str, Enum):
+    """Type of loss masking method"""
+
+    output_only = "output_only"
+    no_mask = "no_mask"
