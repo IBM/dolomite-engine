@@ -107,25 +107,22 @@ class BaseDataset(torch.utils.data.Dataset):
 
         input: List[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
         if self.max_input_tokens is not None:
-            input = input[: self.max_input_tokens]
+            if self.is_encoder_decoder:
+                input = input[: self.max_input_tokens - 1]
+            else:
+                input = input[: self.max_input_tokens]
+
+        if self.is_encoder_decoder:
+            input.append(eos_token_id)
 
         if self.mode == Mode.training:
             output: List[int] = self.tokenizer(output, add_special_tokens=False)["input_ids"]
             if self.max_output_tokens is not None:
-                output = output[: self.max_output_tokens]
+                output = output[: self.max_output_tokens - 1]
 
             output.append(eos_token_id)
-
-            if self.is_encoder_decoder:
-                input.append(eos_token_id)
-            else:
-                input.extend(output)
-
             result = input, output
         else:
-            if self.is_encoder_decoder:
-                input.append(eos_token_id)
-
             result = input
 
         return result
