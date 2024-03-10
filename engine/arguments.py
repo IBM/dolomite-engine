@@ -236,16 +236,11 @@ class DatasetArgs(BaseArgs):
     max_output_tokens: Optional[int] = None
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None(
-            [
-                (self.class_name, "dataset class_name"),
-                (self.data_sampling_ratio, "data_sampling_ratio"),
-                (self.data_name, "data_name"),
-            ]
-        )
+        _check_not_None([(self.class_name, "dataset class_name"), (self.data_name, "data_name")])
 
         # data_sampling_ratios
-        assert self.data_sampling_ratio > 0, "data_sampling_ratio should be a positive integer"
+        if self.data_sampling_ratio is not None:
+            assert self.data_sampling_ratio > 0, "data_sampling_ratio should be a positive integer"
 
 
 class OptimizerArgs(BaseArgs):

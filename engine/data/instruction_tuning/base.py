@@ -40,9 +40,14 @@ class BaseInstructionDataset(BaseDataset):
         if self.do_format_input:
             raise ValueError(f"input_format for {self.__class__.__name__} should be '__input__'")
 
+        self.examples = self.prepare_examples()
+
     def construct_input_from_format(self, instruction: str, input: str) -> List[int]:
         input_text = instruction + "\n\n"
         if not (input is None or input == ""):
             input_text += f"input: {input}\n"
         input_text += "output:"
         return input_text
+
+    def prepare_examples(self) -> List[dict]:
+        raise NotImplementedError()

@@ -6,17 +6,19 @@ from ...enums import DatasetSplit
 from .base import BaseInstructionDataset
 
 
-class AlpacaDataset(BaseInstructionDataset):
+class SlimOrcaDataset(BaseInstructionDataset):
     def prepare_examples(self) -> List[dict]:
         if self.split != DatasetSplit.train:
             return []
 
-        data = load_dataset("tatsu-lab/alpaca")["train"]
+        data = load_dataset("Open-Orca/SlimOrca-Dedup")["train"]
 
         examples = []
         for raw_example in data:
-            input = self.construct_input_from_format(raw_example["instruction"], raw_example.get("input", ""))
-            output = self.construct_output_from_format(raw_example["output"].strip())
+            raw_example = raw_example["conversations"]
+
+            input = self.construct_input_from_format(raw_example[0]["value"], raw_example[1]["value"])
+            output = self.construct_output_from_format(raw_example[2]["value"].strip())
 
             example = self.get_input_output_token_ids(input, output)
             examples.append(example)

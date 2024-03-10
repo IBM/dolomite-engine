@@ -9,7 +9,7 @@ from ..utils import get_world_size, log_rank_0
 from .base import BaseDataset, BlendedDatasets, collate
 from .dataloader import DataLoader
 from .debug import DebugDataset
-from .instruction_tuning import AlpacaDataset, DollyDataset
+from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
 from .jsonlines import JSONLinesDataset
 from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
@@ -21,6 +21,7 @@ _DATASETS_LIST = {
     "DebugDataset": DebugDataset,
     "DollyDataset": DollyDataset,
     "JSONLinesDataset": JSONLinesDataset,
+    "SlimOrcaDataset": SlimOrcaDataset,
     "SST2Dataset": SST2Dataset,
 }
 
@@ -54,6 +55,9 @@ def get_dataloader(
         tokenizer=tokenizer,
         is_encoder_decoder=is_encoder_decoder,
     )
+
+    if len(datasets_list) == 0:
+        return None
 
     blended_dataset = BlendedDatasets(datasets=datasets_list, split=split)
 
@@ -161,6 +165,12 @@ def get_datasets_list(
             log_rank_0(
                 logging.INFO, f"examples in {dataset.__class__.__name__} ({data_args.data_name}) = {len(dataset)}"
             )
+
+    assert all([i is not None for i in data_sampling_ratios]) or all(
+        [i is None for i in data_sampling_ratios]
+    ), "either all data_sampling_ratios should be specified or all should be None"
+    if all([i is None for i in data_sampling_ratios]):
+        data_sampling_ratios = [len(i) for i in datasets_list]
 
     return datasets_list, data_sampling_ratios
 
