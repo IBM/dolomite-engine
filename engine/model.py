@@ -55,11 +55,13 @@ class Model(torch.nn.Module):
             else args.tokenizer_args.padding_side
         )
 
-        self.loss_mask = args.training_parameters.loss_mask
-        if self.is_encoder_decoder:
-            assert (
-                self.loss_mask == LossMask.output_only
-            ), "only output_only loss mask is supported with encoder decoder models"
+        self.loss_mask = None
+        if self.mode == Mode.training:
+            self.loss_mask = args.training_parameters.loss_mask
+            if self.is_encoder_decoder:
+                assert (
+                    self.loss_mask == LossMask.output_only
+                ), "only output_only loss mask is supported with encoder decoder models"
 
         model_kwargs = {
             "pretrained_model_name_or_path": self.model_name,
@@ -78,9 +80,10 @@ class Model(torch.nn.Module):
         else:
             raise ValueError(f"unexpected tuning_method ({self.tuning_method})")
 
-        neft_alpha = args.research_args.neft_alpha
-        if neft_alpha is not None and neft_alpha > 0:
-            self._override_embedding_forward_with_neft_forward(neft_alpha)
+        if self.mode == Mode.training:
+            neft_alpha = args.research_args.neft_alpha
+            if neft_alpha is not None and neft_alpha > 0:
+                self._override_embedding_forward_with_neft_forward(neft_alpha)
 
         if args.tokenizer_args.additional_special_tokens is not None:
             original_vocab_size = len(self.tokenizer)
