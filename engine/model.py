@@ -4,13 +4,20 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn.functional as F
 from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
-from transformers import AutoConfig, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from .arguments import ExportArgs, InferenceArgs, TrainingArgs
+from .arguments import _CUSTOM_MODEL_CLASSES, ExportArgs, InferenceArgs, TrainingArgs
 from .distributed import get_deepspeed_config
 from .enums import AttentionImplementation, DistributedBackend, LossMask, Mode, PaddingSide, TuningMethod
 from .utils import get_local_rank, log_rank_0, register_profiler, register_timer, run_rank_n, warn_rank_0
+
+
+_CUSTOM_MODEL_TYPES = ["gpt_megatron", "moe_megablocks"]
+
+
+def is_padding_free_transformer_supported(model_class: AutoModelForCausalLM, model_type: str) -> bool:
+    return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
 
 
 class Model(torch.nn.Module):
@@ -34,15 +41,20 @@ class Model(torch.nn.Module):
 
         self._setup_input_device()
 
-        self.attention_implementation = args.model_args.attention_implementation
-        if self.attention_implementation is not None:
-            from ibm_models import GPTMegatronForCausalLM, MoEMegablocksForCausalLM
-
-            assert self.model_class in [GPTMegatronForCausalLM, MoEMegablocksForCausalLM]
-
         self.distributed_backend = args.distributed_args.distributed_backend if mode == Mode.training else None
 
         self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.model_args.trust_remote_code)
+
+        self.attention_implementation = args.model_args.attention_implementation
+        self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
+        if self.use_padding_free_transformer:
+            assert is_padding_free_transformer_supported(
+                self.model_class, self.config.model_type
+            ), "padding free transformer is not supported with the specified model"
+
+            assert (
+                self.attention_implementation == AttentionImplementation.flash_attention_2
+            ), "padding free transformer only works with flash attention"
 
         self.is_encoder_decoder = self.config.is_encoder_decoder
         self.tuning_method = args.tuning_args.tuning_method
@@ -69,7 +81,9 @@ class Model(torch.nn.Module):
             "use_cache": mode == Mode.inference,
         }
         if self.attention_implementation is not None:
-            model_kwargs["attention_implementation"] = self.attention_implementation
+            model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if self.use_padding_free_transformer:
+            model_kwargs["use_padding_free_transformer"] = True
 
         if self.tuning_method == TuningMethod.pretraining:
             self._setup_model_for_pretraining(args, model_kwargs)
@@ -121,7 +135,7 @@ class Model(torch.nn.Module):
             input_ids = tokens[:, :-1]
             labels = tokens[:, 1:]
 
-            if self.attention_implementation == AttentionImplementation.packed_flash:
+            if self.use_padding_free_transformer:
                 model_outputs = self.model(
                     input_ids=input_ids.reshape(-1),
                     position_ids=self.position_ids,
@@ -140,7 +154,7 @@ class Model(torch.nn.Module):
         else:
             batch = self.prepare_batch(batch)
 
-            if self.attention_implementation != AttentionImplementation.packed_flash:
+            if not self.use_padding_free_transformer:
                 for i in batch:
                     batch[i] = batch[i].to(self.input_device)
 
@@ -166,8 +180,8 @@ class Model(torch.nn.Module):
             List[str]: list of generated text. input is trimmed from the generated text
         """
 
-        if self.attention_implementation == AttentionImplementation.packed_flash:
-            raise NotImplementedError("packed_flash attention doesn't support generation yet")
+        if self.use_padding_free_transformer:
+            raise NotImplementedError("padding free transformer doesn't support generation")
 
         batch = self.prepare_batch(batch)
 
@@ -207,13 +221,13 @@ class Model(torch.nn.Module):
             outputs = None
 
         input_ids, attention_mask, labels = _pad(
-            inputs,
-            outputs,
-            self.tokenizer.eos_token_id,
+            inputs=inputs,
+            outputs=outputs,
+            pad_token_id=self.tokenizer.eos_token_id,
             padding_side=self.padding_side,
             is_encoder_decoder=self.is_encoder_decoder,
             loss_mask=self.loss_mask,
-            attention_implementation=self.attention_implementation,
+            use_padding_free_transformer=self.use_padding_free_transformer,
         )
 
         result["input_ids"] = input_ids
@@ -227,7 +241,7 @@ class Model(torch.nn.Module):
         self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict
     ) -> None:
         # cache these since they are static during pretraining
-        if self.attention_implementation == AttentionImplementation.packed_flash:
+        if self.use_padding_free_transformer:
             batch_size = args.training_parameters.batch_size_per_gpu
             sequence_length = args.datasets[0].class_args.get("sequence_length")
 
@@ -330,7 +344,7 @@ def _pad(
     padding_side: PaddingSide,
     is_encoder_decoder: bool,
     loss_mask: LossMask,
-    attention_implementation: AttentionImplementation = None,
+    use_padding_free_transformer: bool = False,
     labels_mask_value: int = -100,
 ) -> Tuple[List[int], List[int]]:
     """pads the arrays with the specified padding value
@@ -342,7 +356,7 @@ def _pad(
         padding_side (PaddingSide): padding side for the tensors
         is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
         loss_mask (LossMask): masking methodology for loss
-        attention_implementation (AttentionImplementation): attention implementation for the model
+        use_padding_free_transformer (bool): whether to use padding free transformer
         labels_mask_value (int): mask value to use for labels
 
     Returns:
@@ -371,7 +385,7 @@ def _pad(
             # right padding for labels
             labels = [array + [labels_mask_value] * (output_max_length - len(array)) for array in outputs]
     else:
-        if attention_implementation == AttentionImplementation.packed_flash:
+        if use_padding_free_transformer:
             input_ids = inputs
             attention_mask = None
 
@@ -415,7 +429,7 @@ def _pad(
                     else:
                         raise ValueError(f"unexpected loss_mask ({loss_mask})")
 
-    if attention_implementation != AttentionImplementation.packed_flash:
+    if not use_padding_free_transformer:
         input_ids = torch.tensor(input_ids)
         attention_mask = torch.tensor(attention_mask)
         if labels is not None:

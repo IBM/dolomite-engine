@@ -25,6 +25,7 @@ from .utils import get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
 
 
 _ARGS_FILE_EXTENSION: ArgsFileExtension = None
+_CUSTOM_MODEL_CLASSES = ["GPTMegatronForCausalLM"]
 
 
 def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
@@ -81,29 +82,33 @@ class ModelArgs(BaseArgs):
     trust_remote_code: bool = False
     # attention implementation (only works with GPTMegatronForCausalLM)
     attention_implementation: Optional[AttentionImplementation] = None
+    # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
+    use_padding_free_transformer: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.model_name, "model_name"), (self.model_class, "model_class")])
 
         # model_class
-        if self.attention_implementation is None:
-            assert self.model_class in [
-                AutoModelForCausalLM.__name__,
-                AutoModelForSeq2SeqLM.__name__,
-            ], f"attention implementation is not supported with {AutoModelForCausalLM.__name__} or {AutoModelForSeq2SeqLM.__name__}"
-
-            self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(
-                transformers, self.model_class
-            )
-        else:
+        if self.model_class in _CUSTOM_MODEL_CLASSES:
             try:
-                from ibm_models import GPTMegatronForCausalLM
+                import ibm_models
 
-                self.model_class = GPTMegatronForCausalLM
+                self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(
+                    ibm_models, self.model_class
+                )
             except ImportError:
                 raise ImportError(
                     "please pip install ibm-models: https://github.ibm.com/ai-models-architectures/ibm-models"
                 )
+        else:
+            assert self.model_class in [
+                AutoModelForCausalLM.__name__,
+                AutoModelForSeq2SeqLM.__name__,
+            ], f"unexpected model_class ({self.model_class})"
+
+            self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(
+                transformers, self.model_class
+            )
 
         # dtype
         self.dtype = getattr(torch, self.dtype)

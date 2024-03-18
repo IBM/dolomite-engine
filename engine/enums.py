@@ -1,6 +1,14 @@
 from enum import Enum
 
-from ibm_models import AttentionImplementation
+
+class AttentionImplementation(Enum):
+    """
+    Enum class for attention implementation
+    """
+
+    eager = "eager"
+    sdpa = "sdpa"
+    flash_attention_2 = "flash_attention_2"
 
 
 class DatasetSplit(str, Enum):

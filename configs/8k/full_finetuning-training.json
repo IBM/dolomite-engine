@@ -12,7 +12,8 @@
         "model_name": "bigcode/starcoder",
         "model_class": "GPTMegatronForCausalLM",
         "dtype": "bfloat16",
-        "attention_implementation": "packed_flash"
+        "attention_implementation": "flash_attention_2",
+        "use_padding_free_transformer": true
     },
     "tuning_args": {
         "tuning_method": "full_finetuning"
