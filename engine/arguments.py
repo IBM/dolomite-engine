@@ -283,6 +283,35 @@ class DistributedArgs(BaseArgs):
     cpu_offload: bool = False
     # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
     gradient_checkpointing: bool = False
+    # hierarchical partioning for ZeRO (HSDP)
+    zero_hpz_partition_size: int = 1
+    # whether to use quantized weights (ZeRO++)
+    zero_quantized_weights: bool = False
+    # whether to use quantized gradients (ZeRO++)
+    zero_quantized_gradients: bool = False
+    # communication dtype
+    communication_dtype: str = "float32"
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.zero_hpz_partition_size, "zero_hpz_partition_size")])
+
+        assert self.zero_hpz_partition_size in [
+            1,
+            torch.cuda.device_count(),
+        ], "currently we only support 1 and number of GPUs per node for HSDP"
+
+        if self.zero_quantized_weights or self.zero_quantized_gradients:
+            assert (
+                self.distributed_backend == DistributedBackend.deepspeed
+            ), "parameter or gradient quantization is only supported with DeepSpeed backend"
+
+        # communication dtype
+        self.communication_dtype = getattr(torch, self.communication_dtype)
+        assert self.communication_dtype in [
+            torch.float32,
+            torch.float16,
+            torch.bfloat16,
+        ], f"unexpected dtype '{self.communication_dtype}'"
 
 
 class LoggingArgs(BaseArgs):

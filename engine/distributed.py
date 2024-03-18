@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 from typing import Tuple, Union
 
@@ -16,14 +17,19 @@ from torch.optim.lr_scheduler import LambdaLR
 from .arguments import TrainingArgs
 from .enums import DistributedBackend
 from .optimization import get_optimizer_and_lr_scheduler
+from .utils import warn_rank_0
 
 
 _DEEPSPEED_CONFIG: dict = None
 
-_STAGE_SHARDING_STRATEGY_MAP = {
-    0: ShardingStrategy.NO_SHARD,
+_STAGE_FULL_SHARDING_STRATEGY_MAP = {
     2: ShardingStrategy.SHARD_GRAD_OP,
     3: ShardingStrategy.FULL_SHARD,
+}
+
+_STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
+    2: ShardingStrategy._HYBRID_SHARD_ZERO2,
+    3: ShardingStrategy.HYBRID_SHARD,
 }
 
 _FSDP_MIXED_PRECISION_POLICIES = {
@@ -34,14 +40,14 @@ _FSDP_MIXED_PRECISION_POLICIES = {
         param_dtype=torch.float16, reduce_dtype=torch.float16, buffer_dtype=torch.float16
     ),
     torch.bfloat16: FSDP_MixedPrecision(
-        param_dtype=torch.bfloat16, reduce_dtype=torch.float32, buffer_dtype=torch.bfloat16
+        param_dtype=torch.bfloat16, reduce_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16
     ),
 }
 
 _DEEPSPEED_MIXED_PRECISION_CONFIG = {
     torch.float32: {},
     torch.float16: {"fp16": {"enabled": True, "auto_cast": True}},
-    torch.bfloat16: {"bf16": {"enabled": True}, "data_types": {"grad_accum_dtype": "fp32"}},
+    torch.bfloat16: {"bf16": {"enabled": True}},
 }
 
 
@@ -60,6 +66,12 @@ def wrap_model_for_distributed_training(
 
     stage = args.distributed_args.stage
     cpu_offload = args.distributed_args.cpu_offload
+
+    if args.model_args.dtype in [torch.float16, torch.bfloat16]:
+        if args.distributed_args.communication_dtype != torch.float32:
+            warn_rank_0(
+                f"using ({args.distributed_args.communication_dtype}) with mixed precision training in ({args.model_args.dtype}), recommended is to use ({torch.float32})"
+            )
 
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
         assert stage in [1, 2, 3]
@@ -85,12 +97,26 @@ def wrap_model_for_distributed_training(
         optimizer = None
         lr_scheduler = None
     elif args.distributed_args.distributed_backend == DistributedBackend.torch:
-        assert stage in _STAGE_SHARDING_STRATEGY_MAP
+        assert stage in [0, 2, 3]
         assert not cpu_offload
+
+        if stage == 0:
+            sharding_strategy = ShardingStrategy.NO_SHARD
+        else:
+            if args.distributed_args.zero_hpz_partition_size == 1:
+                sharding_strategy = _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+            else:
+                assert args.distributed_args.zero_hpz_partition_size == torch.cuda.device_count()
+
+                sharding_strategy = _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
+
+        mixed_precision_policy = deepcopy(_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype])
+        if args.distributed_args.communication_dtype is not None:
+            mixed_precision_policy.reduce_dtype = args.distributed_args.communication_dtype
 
         model = FSDP(
             model.to(torch.cuda.current_device()),
-            sharding_strategy=_STAGE_SHARDING_STRATEGY_MAP[stage],
+            sharding_strategy=sharding_strategy,
             mixed_precision=_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype],
             auto_wrap_policy=partial(
                 transformer_auto_wrap_policy,
@@ -133,12 +159,25 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
                 "stage": args.distributed_args.stage,
                 "overlap_comm": args.distributed_args.overlap_comm,
                 "contiguous_gradients": args.distributed_args.contiguous_gradients,
+                # hierarchical partioning for ZeRO (HSDP)
+                "zero_hpz_partition_size": args.distributed_args.zero_hpz_partition_size,
+                # whether to use quantized weights (ZeRO++)
+                "zero_quantized_weights": args.distributed_args.zero_quantized_weights,
+                # # whether to use quantized gradients (ZeRO++)
+                "zero_quantized_gradients": args.distributed_args.zero_quantized_gradients,
             },
             "train_micro_batch_size_per_gpu": args.training_parameters.batch_size_per_gpu,
             "gradient_accumulation_steps": args.training_parameters.gradient_accumulation_steps,
         }
 
-        config.update(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])
+        dtype_config = deepcopy(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])
+        if args.distributed_args.communication_dtype == torch.float32:
+            dtype_config.update({"data_types": {"grad_accum_dtype": "fp32"}})
+        elif args.distributed_args.communication_dtype == torch.float16:
+            dtype_config.update({"data_types": {"grad_accum_dtype": "fp16"}})
+        elif args.distributed_args.communication_dtype == torch.bfloat16:
+            dtype_config.update({"data_types": {"grad_accum_dtype": "bf16"}})
+        config.update(dtype_config)
 
         # cpu offload
         if args.distributed_args.cpu_offload:
