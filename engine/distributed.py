@@ -50,6 +50,12 @@ _DEEPSPEED_MIXED_PRECISION_CONFIG = {
     torch.bfloat16: {"bf16": {"enabled": True}},
 }
 
+_TORCH_DTYPE_TO_STR = {
+    torch.float32: "fp32",
+    torch.float16: "fp16",
+    torch.bfloat16: "bf16",
+}
+
 
 def wrap_model_for_distributed_training(
     args: TrainingArgs, model: torch.nn.Module
@@ -70,7 +76,8 @@ def wrap_model_for_distributed_training(
     if args.model_args.dtype in [torch.float16, torch.bfloat16]:
         if args.distributed_args.communication_dtype != torch.float32:
             warn_rank_0(
-                f"using ({args.distributed_args.communication_dtype}) with mixed precision training in ({args.model_args.dtype}), recommended is to use ({torch.float32})"
+                f"using ({args.distributed_args.communication_dtype}) with mixed precision training in "
+                f"({args.model_args.dtype}), recommended is to use ({torch.float32})"
             )
 
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
@@ -170,13 +177,10 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
             "gradient_accumulation_steps": args.training_parameters.gradient_accumulation_steps,
         }
 
-        dtype_config = deepcopy(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])
-        if args.distributed_args.communication_dtype == torch.float32:
-            dtype_config.update({"data_types": {"grad_accum_dtype": "fp32"}})
-        elif args.distributed_args.communication_dtype == torch.float16:
-            dtype_config.update({"data_types": {"grad_accum_dtype": "fp16"}})
-        elif args.distributed_args.communication_dtype == torch.bfloat16:
-            dtype_config.update({"data_types": {"grad_accum_dtype": "bf16"}})
+        dtype_config: dict = deepcopy(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])
+        if args.distributed_args.communication_dtype is not None:
+            dtype_str = _TORCH_DTYPE_TO_STR[args.distributed_args.communication_dtype]
+            dtype_config.update({"data_types": {"grad_accum_dtype": dtype_str}, "communication_data_type": dtype_str})
         config.update(dtype_config)
 
         # cpu offload

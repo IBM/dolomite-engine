@@ -290,7 +290,7 @@ class DistributedArgs(BaseArgs):
     # whether to use quantized gradients (ZeRO++)
     zero_quantized_gradients: bool = False
     # communication dtype
-    communication_dtype: str = "float32"
+    communication_dtype: Optional[str] = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.zero_hpz_partition_size, "zero_hpz_partition_size")])
@@ -306,12 +306,13 @@ class DistributedArgs(BaseArgs):
             ), "parameter or gradient quantization is only supported with DeepSpeed backend"
 
         # communication dtype
-        self.communication_dtype = getattr(torch, self.communication_dtype)
-        assert self.communication_dtype in [
-            torch.float32,
-            torch.float16,
-            torch.bfloat16,
-        ], f"unexpected dtype '{self.communication_dtype}'"
+        if self.communication_dtype is not None:
+            self.communication_dtype = getattr(torch, self.communication_dtype)
+            assert self.communication_dtype in [
+                torch.float32,
+                torch.float16,
+                torch.bfloat16,
+            ], f"unexpected dtype '{self.communication_dtype}'"
 
 
 class LoggingArgs(BaseArgs):
