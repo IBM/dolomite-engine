@@ -6,7 +6,7 @@ from .arguments import InferenceArgs, get_args
 from .checkpointing import load_checkpoint_for_inference, save_args
 from .data import BaseDataset, get_datasets_list
 from .enums import DatasetKeys, DatasetSplit, Mode
-from .model import Model
+from .model import Model, get_model
 from .utils import ProgressBar, setup_tf32
 
 
@@ -67,7 +67,7 @@ def main() -> None:
 
     args: InferenceArgs = get_args(mode)
 
-    model = Model(args, mode)
+    model = get_model(args, mode)
     model = model.to(model.input_device)
 
     datasets_list, _ = get_datasets_list(

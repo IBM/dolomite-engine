@@ -1,22 +1,22 @@
 import logging
-from typing import List, Tuple, Union
+from typing import List, Tuple, Type, Union
 
 import torch
-import torch.nn.functional as F
-from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from .arguments import _CUSTOM_MODEL_CLASSES, ExportArgs, InferenceArgs, TrainingArgs
-from .distributed import get_deepspeed_config
-from .enums import AttentionImplementation, DistributedBackend, LossMask, Mode, PaddingSide, TuningMethod
-from .utils import get_local_rank, log_rank_0, register_profiler, register_timer, run_rank_n, warn_rank_0
+from ..arguments import _CUSTOM_MODEL_CLASSES, ExportArgs, InferenceArgs, TrainingArgs
+from ..distributed import get_deepspeed_config
+from ..enums import AttentionImplementation, DistributedBackend, LossMask, Mode, PaddingSide
+from ..utils import get_local_rank, log_rank_0, register_profiler, register_timer, warn_rank_0
 
 
 _CUSTOM_MODEL_TYPES = ["gpt_megatron", "moe_megablocks"]
 
 
-def is_padding_free_transformer_supported(model_class: AutoModelForCausalLM, model_type: str) -> bool:
+def is_padding_free_transformer_supported(
+    model_class: Union[Type[AutoModelForCausalLM], Type[AutoModelForSeq2SeqLM]], model_type: str
+) -> bool:
     return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
 
 
@@ -43,7 +43,19 @@ class Model(torch.nn.Module):
 
         self.distributed_backend = args.distributed_args.distributed_backend if mode == Mode.training else None
 
-        self.config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=args.model_args.trust_remote_code)
+        if self.model_name is None:
+            model_type = args.model_args.pretrained_config.pop("model_type")
+            if model_type in _CUSTOM_MODEL_TYPES:
+                try:
+                    import ibm_models
+                except ImportError:
+                    raise ImportError("pip install IBM-models")
+
+            self.config = AutoConfig.for_model(model_type, **args.model_args.pretrained_config)
+        else:
+            self.config = AutoConfig.from_pretrained(
+                self.model_name, trust_remote_code=args.model_args.trust_remote_code
+            )
 
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
@@ -60,12 +72,17 @@ class Model(torch.nn.Module):
         self.tuning_method = args.tuning_args.tuning_method
         self.dtype = args.model_args.dtype
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        tokenizer_name = args.tokenizer_args.tokenizer_name
+        if tokenizer_name is None:
+            tokenizer_name = self.model_name
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.padding_side = PaddingSide(
             self.tokenizer.padding_side
             if args.tokenizer_args.padding_side is None
             else args.tokenizer_args.padding_side
         )
+
+        self._setup_model(args)
 
         self.loss_mask = None
         if self.mode == Mode.training:
@@ -74,25 +91,6 @@ class Model(torch.nn.Module):
                 assert (
                     self.loss_mask == LossMask.output_only
                 ), "only output_only loss mask is supported with encoder decoder models"
-
-        model_kwargs = {
-            "pretrained_model_name_or_path": self.model_name,
-            "trust_remote_code": args.model_args.trust_remote_code,
-            "use_cache": mode == Mode.inference,
-        }
-        if self.attention_implementation is not None:
-            model_kwargs["attn_implementation"] = self.attention_implementation.value
-        if self.use_padding_free_transformer:
-            model_kwargs["use_padding_free_transformer"] = True
-
-        if self.tuning_method == TuningMethod.pretraining:
-            self._setup_model_for_pretraining(args, model_kwargs)
-        elif self.tuning_method == TuningMethod.full_finetuning:
-            self._setup_model_for_finetuning(args, model_kwargs)
-        elif self.tuning_method in [TuningMethod.prompt_tuning, TuningMethod.lora]:
-            self._setup_model_for_peft(args, model_kwargs)
-        else:
-            raise ValueError(f"unexpected tuning_method ({self.tuning_method})")
 
         if self.mode == Mode.training:
             neft_alpha = args.research_args.neft_alpha
@@ -110,62 +108,39 @@ class Model(torch.nn.Module):
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
 
-    @register_profiler("forward_pass")
-    @register_timer("forward_pass")
-    def forward(self, batch: Tuple[List[int]]) -> torch.Tensor:
-        """forward function for a batch
-
-        Args:
-            batch (dict): a dict of key, value pairs for a batch
-
-        Returns:
-            torch.Tensor: loss tensor
-        """
-
-        if self.tuning_method == TuningMethod.pretraining:
-            # for pretraining we compute loss externally here instead of relying on transformers.
-            # this is done because megatron's dataset returns batches of length (sequence_length + 1)
-            # instead of (sequence_length), so we need to trim the input_ids before forward pass.
-            # transformers does forward pass before however and then trims the tokens.
-
-            tokens: torch.Tensor = batch["text"]
-            if not tokens.is_cuda:
-                tokens = tokens.to(self.input_device)
-
-            input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
-
-            if self.use_padding_free_transformer:
-                model_outputs = self.model(
-                    input_ids=input_ids.reshape(-1),
-                    position_ids=self.position_ids,
-                    cu_seqlens=self.cu_seqlens,
-                    max_seqlen=self.max_seqlen,
-                )
-            else:
-                model_outputs = self.model(input_ids=input_ids)
-
-            if type(model_outputs) is tuple:
-                logits = model_outputs[0]
-            else:
-                logits = model_outputs.logits
-
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+        if self.model_name is None:
+            model_kwargs = {"config": self.config}
         else:
-            batch = self.prepare_batch(batch)
+            model_kwargs = {
+                "pretrained_model_name_or_path": self.model_name,
+                "trust_remote_code": args.model_args.trust_remote_code,
+            }
 
-            if not self.use_padding_free_transformer:
-                for i in batch:
-                    batch[i] = batch[i].to(self.input_device)
+        model_kwargs["use_cache"] = self.mode == Mode.inference
+        if self.attention_implementation is not None:
+            model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if self.use_padding_free_transformer:
+            model_kwargs["use_padding_free_transformer"] = True
 
-            model_outputs = self.model(**batch)
+        if self.mode == Mode.training:
+            # this tells from_pretrained to instantiate directly on gpus
+            # this only instantiates a single instance of the model across the ranks
+            if self.distributed_backend == DistributedBackend.deepspeed:
+                self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
-            if type(model_outputs) is tuple:
-                loss = model_outputs[0]
+            if self.model_name is None:
+                self.model = args.model_args.model_class.from_config(**model_kwargs)
             else:
-                loss = model_outputs.loss
+                self.model = args.model_args.model_class.from_pretrained(**model_kwargs)
 
-        return loss
+            if args.distributed_args.gradient_checkpointing:
+                self.model.gradient_checkpointing_enable()
+        else:
+            if self.model_name is None:
+                self.model = args.model_args.model_class.from_config(**model_kwargs, torch_dtype=self.dtype)
+            else:
+                self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
 
     @register_profiler("generate")
     @register_timer("generate")
@@ -236,73 +211,6 @@ class Model(torch.nn.Module):
             result["labels"] = labels
 
         return result
-
-    def _setup_model_for_pretraining(
-        self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict
-    ) -> None:
-        # cache these since they are static during pretraining
-        if self.use_padding_free_transformer:
-            batch_size = args.training_parameters.batch_size_per_gpu
-            sequence_length = args.datasets[0].class_args.get("sequence_length")
-
-            self.register_buffer(
-                "cu_seqlens",
-                torch.arange(
-                    0, batch_size * sequence_length + 1, sequence_length, dtype=torch.int32, device=self.input_device
-                ),
-                persistent=False,
-            )
-            self.register_buffer(
-                "max_seqlen", torch.tensor(sequence_length, device=self.input_device), persistent=False
-            )
-            self.register_buffer(
-                "position_ids",
-                torch.arange(0, sequence_length, 1, device=self.input_device).repeat(batch_size),
-                persistent=False,
-            )
-
-        self._setup_model_for_finetuning(args, model_kwargs)
-
-    def _setup_model_for_finetuning(
-        self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict
-    ) -> None:
-        if self.mode == Mode.training:
-            # this tells from_pretrained to instantiate directly on gpus
-            # this only instantiates a single instance of the model across the ranks
-            if self.distributed_backend == DistributedBackend.deepspeed:
-                self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
-
-            self.model = args.model_args.model_class.from_pretrained(**model_kwargs)
-
-            if args.distributed_args.gradient_checkpointing:
-                self.model.gradient_checkpointing_enable()
-        else:
-            self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
-
-    def _setup_model_for_peft(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], model_kwargs: dict) -> None:
-        if args.tuning_args.tuning_method == TuningMethod.prompt_tuning:
-            self.peft_config = PromptTuningConfig(
-                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
-                prompt_tuning_init=args.tuning_args.prompt_tuning_args.prompt_tuning_init,
-                num_virtual_tokens=args.tuning_args.prompt_tuning_args.num_virtual_tokens,
-                prompt_tuning_init_text=args.tuning_args.prompt_tuning_args.prompt_tuning_init_text,
-                tokenizer_name_or_path=args.model_args.model_name,
-            )
-        elif args.tuning_args.tuning_method == TuningMethod.lora:
-            self.peft_config = LoraConfig(
-                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
-                inference_mode=self.mode != Mode.training,
-                r=args.lora_rank,
-                lora_alpha=args.lora_alpha,
-                lora_dropout=args.lora_dropout,
-            )
-
-        self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
-
-        if args.distributed_args.gradient_checkpointing:
-            self.model.gradient_checkpointing_enable()
-
-        self.model = get_peft_model(self.model, self.peft_config)
 
     def _override_embedding_forward_with_neft_forward(self, neft_alpha: float):
         if not hasattr(self.model, "get_input_embeddings"):
@@ -436,16 +344,3 @@ def _pad(
             labels = torch.tensor(labels)
 
     return input_ids, attention_mask, labels
-
-
-@run_rank_n
-def log_model(model: Model) -> None:
-    """print model
-
-    Args:
-        model (Model): model to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ model ------------------------")
-    log_rank_0(logging.INFO, model)
-    log_rank_0(logging.INFO, "-------------------- end of model ---------------------")

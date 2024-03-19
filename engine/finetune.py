@@ -15,7 +15,7 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import DataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, Mode
-from .model import Model, log_model
+from .model import Model, get_model, log_model
 from .utils import (
     ExperimentsTracker,
     RunningMean,
@@ -268,8 +268,7 @@ def main() -> None:
     init_distributed()
     set_seed(args.random_args.seed)
 
-    # setup deepspeed model
-    model = Model(args, mode)
+    model = get_model(args, mode)
 
     train_dataloader = get_dataloader(
         args,

@@ -16,7 +16,7 @@ from .data import get_megatron_gpt_dataloaders
 from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, Mode
 from .finetune import track_train_metrics, train_step
-from .model import Model, log_model
+from .model import Model, get_model, log_model
 from .utils import (
     ExperimentsTracker,
     RunningMean,
@@ -189,8 +189,7 @@ def main() -> None:
     init_distributed()
     set_seed(args.random_args.seed)
 
-    # setup deepspeed model
-    model = Model(args, mode)
+    model = get_model(args, mode)
     model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)
 
     log_model(model)

@@ -1,7 +1,7 @@
 from .arguments import get_args
 from .checkpointing import load_checkpoint_for_inference
 from .enums import Mode
-from .model import Model
+from .model import get_model
 
 
 def main() -> None:
@@ -11,7 +11,7 @@ def main() -> None:
 
     args = get_args(mode)
 
-    model = Model(args, mode)
+    model = get_model(args, mode)
 
     load_checkpoint_for_inference(model, args.load_args.load_path, args.load_args.iteration)
 

@@ -65,6 +65,8 @@ class RandomArgs(BaseArgs):
 
 
 class TokenizerArgs(BaseArgs):
+    # override model's tokenizer with this
+    tokenizer_name: str = None
     # add special tokens to the tokenizer
     additional_special_tokens: Optional[List[str]] = None
     # padding side
@@ -74,6 +76,8 @@ class TokenizerArgs(BaseArgs):
 class ModelArgs(BaseArgs):
     # model name on huggingface hub
     model_name: str = None
+    # config class to load the model from
+    pretrained_config: dict = None
     # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
     model_class: str = None
     # dtype to use for training / inference
@@ -86,7 +90,13 @@ class ModelArgs(BaseArgs):
     use_padding_free_transformer: bool = False
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.model_name, "model_name"), (self.model_class, "model_class")])
+        _check_not_None([(self.model_class, "model_class")])
+
+        # model_name
+        if self.model_name is None:
+            _check_not_None([(self.pretrained_config, "pretrained_config")])
+        else:
+            assert self.pretrained_config is None, "pretrained_config shouldn't be specified with model_name"
 
         # model_class
         if self.model_class in _CUSTOM_MODEL_CLASSES:

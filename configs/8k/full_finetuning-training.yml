@@ -6,7 +6,7 @@ datasets:
     max_output_tokens: 4096
 
 model_args:
-  model_name: bigcode/starcoderbase-1b
+  model_name: bigcode/starcoder
   model_class: GPTMegatronForCausalLM
   dtype: bfloat16
   attention_implementation: flash_attention_2
