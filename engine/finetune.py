@@ -47,19 +47,12 @@ def track_train_metrics(
     # update loss running mean
     loss_running_mean = loss_running_mean_tracker.add_loss(train_loss_step)
 
-    # track loss
     experiments_tracker.track(
-        value=train_loss_step, name="loss", step=global_step, context={"subset": "train", "type": "step"}
-    )
-    experiments_tracker.track(
-        value=loss_running_mean,
-        name="loss",
+        {"loss_step": train_loss_step, "loss_running_mean": loss_running_mean, "learning_rate": current_lr},
         step=global_step,
-        context={"subset": "train", "type": "running_mean"},
+        context="train",
     )
 
-    # track learning_rate
-    experiments_tracker.track(value=current_lr, name="learning_rate", step=global_step)
     log_rank_0(
         logging.INFO,
         f"step = {global_step}, train_loss (batch) = {train_loss_step}, train_loss (running_mean) = {loss_running_mean}, learning_rate = {current_lr}",
@@ -76,7 +69,7 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
     """
 
     log_rank_0(logging.INFO, f"step = {global_step}, val_loss = {val_loss}")
-    experiments_tracker.track(value=val_loss, name="loss", step=global_step, context={"subset": "val"})
+    experiments_tracker.track({"loss": val_loss}, step=global_step, context="val")
 
 
 @register_profiler("train_step")
@@ -296,7 +289,9 @@ def main() -> None:
     if args.load_args is not None:
         starting_iteration, _ = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, train_dataloader)
 
-    experiments_tracker = ExperimentsTracker(args.logging_args.experiment_name, args.logging_args.aim_repo)
+    experiments_tracker = ExperimentsTracker(
+        args.logging_args.experiment_name, args.logging_args.aim_repo, args.logging_args.experiments_tracker_name
+    )
     # track all hyperparams in args
     experiments_tracker.log_args(args)
 

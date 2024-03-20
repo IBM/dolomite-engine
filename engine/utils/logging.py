@@ -1,13 +1,13 @@
 import logging
-import os
-from typing import Any
 from warnings import warn
 
-from aim import Run
-from aim.sdk.types import AimObject
+import wandb
+from accelerate.tracking import WandBTracker
+from aim import Run as AimRun
 from pydantic import BaseModel
 from tqdm import tqdm
 
+from ..enums import ExperimentsTrackerName
 from .ranks import get_world_size, run_rank_n
 
 
@@ -69,20 +69,23 @@ class ProgressBar:
 
 
 class ExperimentsTracker:
-    """aim tracker for training"""
+    """experiments tracker for training"""
 
-    def __init__(self, experiment: str, repo: str) -> None:
-        self.tracking_enabled = self.is_tracking_enabled(experiment, repo)
+    def __init__(self, experiment: str, repo: str, experiments_tracker_name: ExperimentsTrackerName) -> None:
+        self.experiments_tracker_name = experiments_tracker_name
 
-        if self.tracking_enabled:
-            run_rank_n(os.makedirs)(repo, exist_ok=True)
-            self.run: Run = run_rank_n(Run)(experiment=experiment, repo=repo)
+        if experiments_tracker_name == ExperimentsTrackerName.aim:
+            self.tracking_enabled = experiment is not None and repo is not None
+            if self.tracking_enabled:
+                self.run: AimRun = run_rank_n(AimRun)(experiment=experiment, repo=repo)
+        elif experiments_tracker_name == ExperimentsTrackerName.wandb:
+            self.tracking_enabled = repo is not None
+            self.run = run_rank_n(wandb.init)(name=experiment, run_name=repo)
         else:
-            warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
+            raise ValueError(f"unexpected experiments_tracker ({experiments_tracker_name})")
 
-    @classmethod
-    def is_tracking_enabled(cls, experiment: str, repo: str) -> bool:
-        return experiment is not None and repo is not None
+        if not self.tracking_enabled:
+            warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
 
     @run_rank_n
     def log_args(self, args: BaseModel) -> None:
@@ -93,28 +96,53 @@ class ExperimentsTracker:
         """
 
         if self.tracking_enabled:
-            for k, v in vars(args).items():
-                try:
-                    self.run[k] = v
-                except TypeError:
-                    self.run[k] = str(v)
+            args: dict = args.to_dict()
+
+            if self.experiments_tracker_name == ExperimentsTrackerName.aim:
+                for k, v in args.items():
+                    try:
+                        self.run[k] = v
+                    except TypeError:
+                        self.run[k] = str(v)
+            elif self.experiments_tracker_name == ExperimentsTrackerName.wandb:
+                wandb.config.update(args)
+            else:
+                raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
     @run_rank_n
-    def track(
-        self, value: Any, name: str = None, step: int = None, epoch: int = None, context: AimObject = None
-    ) -> None:
+    def track(self, values: dict, step: int = None, context: str = None) -> None:
         """main tracking method
 
         Args:
             value (Any): value of the object to track
-            name (str, optional): name of the object to track. Defaults to None.
             step (int, optional): current step, auto-incremented if None. Defaults to None.
-            epoch (int, optional): the training epoch. Defaults to None.
-            context (AimObject, optional): context for tracking. Defaults to None.
+            context (str, optional): context for tracking. Defaults to None.
         """
 
         if self.tracking_enabled:
-            self.run.track(value=value, name=name, step=step, epoch=epoch, context=context)
+            if self.experiments_tracker_name == ExperimentsTrackerName.aim:
+                if context is not None:
+                    context = {"subset": context}
+
+                for key, value in values.items():
+                    self.run.track(value=value, name=key, step=step, context=context)
+            elif self.experiments_tracker_name == ExperimentsTrackerName.wandb:
+                if context is not None:
+                    values = {f"{context}/{k}": v for k, v in values.items()}
+
+                self.run.log(values=values, step=step)
+            else:
+                raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
+
+    @run_rank_n
+    def finish(self) -> None:
+        if self.tracking_enabled:
+            if self.experiments_tracker_name == ExperimentsTrackerName.aim:
+                self.run.close()
+            elif self.experiments_tracker_name == ExperimentsTrackerName.wandb:
+                self.run.finish()
+            else:
+                raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
 
 _LOGGER: logging.Logger = None

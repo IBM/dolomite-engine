@@ -45,7 +45,7 @@ def track_val_metrics(
         message += f", group_name = {group_name}"
 
     log_rank_0(logging.INFO, message)
-    experiments_tracker.track(value=val_loss, name="loss", step=global_step, context={"subset": "val"})
+    experiments_tracker.track({"loss": val_loss}, step=global_step, context=f"val-{group_name}")
 
 
 def train(
@@ -203,7 +203,9 @@ def main() -> None:
         args, model.tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
-    experiments_tracker = ExperimentsTracker(args.logging_args.experiment_name, args.logging_args.aim_repo)
+    experiments_tracker = ExperimentsTracker(
+        args.logging_args.experiment_name, args.logging_args.aim_repo, args.logging_args.experiments_tracker_name
+    )
     # track all hyperparams in args
     experiments_tracker.log_args(args)
 

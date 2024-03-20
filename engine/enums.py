@@ -67,3 +67,10 @@ class LossMask(str, Enum):
 
     output_only = "output_only"
     no_mask = "no_mask"
+
+
+class ExperimentsTrackerName(str, Enum):
+    """Experiment tracker to use"""
+
+    aim = "aim"
+    wandb = "wandb"

@@ -16,6 +16,7 @@ from .enums import (
     ArgsFileExtension,
     AttentionImplementation,
     DistributedBackend,
+    ExperimentsTrackerName,
     LossMask,
     Mode,
     PaddingSide,
@@ -334,6 +335,8 @@ class LoggingArgs(BaseArgs):
     aim_repo: Optional[str] = None
     # name of the experiment
     experiment_name: Optional[str] = None
+    # tracker to use for experiment tracking
+    experiments_tracker_name: ExperimentsTrackerName = None
 
 
 class ResearchArgs(BaseArgs):
