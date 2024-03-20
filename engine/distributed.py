@@ -121,8 +121,10 @@ def wrap_model_for_distributed_training(
         if args.distributed_args.communication_dtype is not None:
             mixed_precision_policy.reduce_dtype = args.distributed_args.communication_dtype
 
+        efficient_cpu_initialization = args.model_args.efficient_cpu_initialization
+
         model = FSDP(
-            model.to(torch.cuda.current_device()),
+            model,
             sharding_strategy=sharding_strategy,
             mixed_precision=_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype],
             auto_wrap_policy=partial(
@@ -131,8 +133,10 @@ def wrap_model_for_distributed_training(
                     FSDP_plugin.get_module_class_from_name(model.model, name) for name in model.model._no_split_modules
                 ],
             ),
+            device_id=torch.cuda.current_device(),
             limit_all_gathers=True,
             use_orig_params=True,
+            sync_module_states=efficient_cpu_initialization,
         )
 
         optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(

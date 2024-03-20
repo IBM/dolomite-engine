@@ -73,6 +73,7 @@ class ExperimentsTracker:
 
     def __init__(self, experiment: str, repo: str, experiments_tracker_name: ExperimentsTrackerName) -> None:
         self.experiments_tracker_name = experiments_tracker_name
+        self.tracking_enabled = False
 
         if experiments_tracker_name == ExperimentsTrackerName.aim:
             self.tracking_enabled = experiment is not None and repo is not None
@@ -81,7 +82,7 @@ class ExperimentsTracker:
         elif experiments_tracker_name == ExperimentsTrackerName.wandb:
             self.tracking_enabled = repo is not None
             self.run = run_rank_n(wandb.init)(name=experiment, run_name=repo)
-        else:
+        elif experiments_tracker_name is not None:
             raise ValueError(f"unexpected experiments_tracker ({experiments_tracker_name})")
 
         if not self.tracking_enabled:

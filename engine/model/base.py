@@ -8,7 +8,7 @@ from transformers.integrations import HfDeepSpeedConfig
 from ..arguments import _CUSTOM_MODEL_CLASSES, ExportArgs, InferenceArgs, TrainingArgs
 from ..distributed import get_deepspeed_config
 from ..enums import AttentionImplementation, DistributedBackend, LossMask, Mode, PaddingSide
-from ..utils import get_local_rank, log_rank_0, register_profiler, register_timer, warn_rank_0
+from ..utils import get_global_rank, log_rank_0, register_profiler, register_timer, warn_rank_0
 
 
 _CUSTOM_MODEL_TYPES = ["gpt_megatron", "moe_megablocks"]
@@ -42,6 +42,7 @@ class Model(torch.nn.Module):
         self._setup_input_device()
 
         self.distributed_backend = args.distributed_args.distributed_backend if mode == Mode.training else None
+        self.stage = args.distributed_args.stage
 
         if self.model_name is None:
             model_type = args.model_args.pretrained_config.pop("model_type")
@@ -123,24 +124,40 @@ class Model(torch.nn.Module):
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
 
+        def _get_model(**extras):
+            if self.model_name is None:
+                model = args.model_args.model_class.from_config(**model_kwargs, **extras)
+            else:
+                model = args.model_args.model_class.from_pretrained(**model_kwargs, **extras)
+
+            return model
+
         if self.mode == Mode.training:
             # this tells from_pretrained to instantiate directly on gpus
             # this only instantiates a single instance of the model across the ranks
             if self.distributed_backend == DistributedBackend.deepspeed:
-                self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
+                if args.model_args.efficient_cpu_initialization:
+                    self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
-            if self.model_name is None:
-                self.model = args.model_args.model_class.from_config(**model_kwargs)
-            else:
-                self.model = args.model_args.model_class.from_pretrained(**model_kwargs)
+                self.model = _get_model()
+            elif self.distributed_backend == DistributedBackend.torch:
+                # DDP
+                if self.stage == 0:
+                    with torch.device(self.input_device):
+                        self.model = _get_model()
+                # FSDP
+                else:
+                    if args.model_args.efficient_cpu_initialization:
+                        with torch.device("meta"):
+                            self.model = _get_model()
+                        self.model = self.model.to_empty(device=self.input_device)
+                    else:
+                        self.model = _get_model()
 
             if args.distributed_args.gradient_checkpointing:
                 self.model.gradient_checkpointing_enable()
         else:
-            if self.model_name is None:
-                self.model = args.model_args.model_class.from_config(**model_kwargs, torch_dtype=self.dtype)
-            else:
-                self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
+            self.model = _get_model(torch_dtype=self.dtype)
 
     @register_profiler("generate")
     @register_timer("generate")
@@ -211,6 +228,10 @@ class Model(torch.nn.Module):
             result["labels"] = labels
 
         return result
+    
+    def reset_parameters(self) -> None:
+        if hasattr(self.model, "reset_parameters"):
+            self.model.reset_parameters()
 
     def _override_embedding_forward_with_neft_forward(self, neft_alpha: float):
         if not hasattr(self.model, "get_input_embeddings"):
@@ -237,7 +258,7 @@ class Model(torch.nn.Module):
     def _setup_input_device(self) -> None:
         if self.mode == Mode.training:
             # if using deepspeed
-            self.input_device = get_local_rank()
+            self.input_device = torch.cuda.current_device()
         else:
             self.input_device = 0
             if not torch.cuda.is_available():
