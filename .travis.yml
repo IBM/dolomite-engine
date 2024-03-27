@@ -1,0 +1,12 @@
+language: minimal
+
+install:
+  - curl -L -o ./miniconda.sh -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+  - bash miniconda.sh -b -p /opt/conda
+  - export PATH=/opt/conda/envs/test/bin:/opt/conda/bin:${PATH}
+  - conda create -n test python=3.11 pip -y
+  - pip install torch transformers pytest parameterized
+
+script:
+  - make install
+  - make test

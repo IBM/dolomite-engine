@@ -18,11 +18,9 @@ The repository currently only supports generative models but can be easily exten
 1. decoder models like GPT2, OPT, BLOOM etc
 1. encoder-decoder models like T5, BART etc
 
-Please note that this repository doesn't support Tensor Parallel or Pipeline Parallel (yet ;p). For distributed training, we use ZeRO-DP from DeepSpeed.
+Please note that this repository doesn't support Tensor Parallel or Pipeline Parallel (yet ;p).
 
 The repository supports models of any scale. But, I don't recommend training models larger than 20 Billion using this repository as using ZeRO-DP is not the most efficient method of scaling to hyper-large models.
-
-For pre-training from scratch or finetuning on huge amount of data, check out [Megatron-DeepSpeed](https://github.com/bigscience-workshop/Megatron-DeepSpeed).
 
 # Usage
 
@@ -39,10 +37,6 @@ Note that the `blaunch.sh` script here (provided by CCC) executes the command `s
 ```shell
 helm template -f scripts/train_vela.yaml chart | tee appwrapper.yaml | oc create -f -
 ```
-
-## To use Flash Attention for IBM models
-Install the latest release of https://github.ibm.com/ai-models-architectures/ibm-models. Simple pip install will work.
-Use this [config](configs/8k/).
 
 ## Supported optimizers
 ```python
@@ -112,7 +106,7 @@ Please note that the user is expected to provide this at both training and infer
 Try not to have trailing spaces in `input_format`, if you need a space between input and output, the space should be part of the `output_format`.
 
 # Tracking experiments
-The repository also supports [aim](https://github.com/aimhubio/aim) based experiment tracking. The default `--aim_repo` for training is `./aim_repo`. To change this, specify `--aim_repo <PATH_TO_AIM_REPO>` arg during training. For viewing the aim dashboard, simply run
+The repository also supports [aim](https://github.com/aimhubio/aim) and [wandb](https://wandb.ai/) based experiment tracking. For viewing the aim dashboard, simply run
 ```shell
 aim up --host <HOST_ADDRESS> --port <HOST_PORT> --repo <PATH_TO_AIM_REPO>
 ```
@@ -121,3 +115,32 @@ This brings up an awesome UI like this:
 
 # Contribution
 Feel free to open any issues and open pull requests to contribute code :)
+[![Build Status](https://v3.travis.ibm.com/ai-models-architectures/IBM-models.svg?token=j27SP2KbYBa6fwpWWtcX&branch=main)](https://v3.travis.ibm.com/ai-models-architectures/IBM-models)
+
+# HuggingFace compatible custom models
+
+## Best training efficiency
+To get best training efficiency, we use [padding free transformers](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This however, doesn't work for inference and you will need to load the model again without padding free transformers.
+
+```python
+import torch
+from ibm_models import GPTMegatronForCausalLM
+
+
+# we need unpadded lists here for avoiding any useless computations on pad tokens
+input_ids = [[1, 2, 3, 4, 5, 0], [6, 7, 8, 0]]
+labels = [[-100, -100, -100, 4, 5, 0], [-100, -100, 8, 0]]
+
+# this will throw a warning saying that the model is of gpt_bigcode class
+# ignore the warning
+model = GPTMegatronForCausalLM.from_pretrained(
+    "bigcode/starcoder",
+    attn_implementation="flash_attention_2"
+    use_padding_free_transformer=True,
+).cuda()
+
+loss = model(
+    input_ids=input_ids,
+    labels=labels,
+).loss
+```
