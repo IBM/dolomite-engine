@@ -1,0 +1,20 @@
+# GDR support (unavailable)
+#
+numRoceGdr: 0 # <optional, default=0> set to 2 to leverage GDR on Vela with GDR over RoCE
+topologyFileConfigMap: # <optional, default=""> Name of configmap containining /var/run/nvidia-topologyd/virtualTopology.xml for the system e.g. topo-gdr-2vf-canary #TODO make this required if numRoceGdr > 0 ?
+ncclGdrEnvConfigMap: # <optional, default=""> Name of configmap containing NCCL networking environment variables for the system e.g. nccl-netwk-env-vars #TODO make this required if numRoceGdr > 0 ?
+
+# Multinic support
+#
+# Note: when GDR over RoCE is used/available, the RoCE multi-nic network instance
+# should be specified here instead of the TCP multi-nic network instance
+#
+multiNicNetworkName: multi-nic-network
+
+# ------------------------------------------------------------------------------------------------
+# Backward compatibility
+#
+#    With the change of CRD in MCAD 1.30+, helm deployments using this tool adhere to the new changes. If you are using old versions of MCAD, set this value to 'true' to generate AppWrappers with the old CRD.
+#
+useOldMcadCrd: true
+useOldCoschedulerCrd: true
