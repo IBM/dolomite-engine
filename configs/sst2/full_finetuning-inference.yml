@@ -1,11 +1,11 @@
 datasets:
-  class_name: SST2Dataset
-  data_name: sst2
-  input_format: "Classify the sentiment of the sentence:\n__input__\nSentiment:"
-  output_format: " __output__"
-  data_sampling_ratio: 1
-  max_input_tokens: 1024
-  max_output_tokens: 128
+  - class_name: SST2Dataset
+    data_name: sst2
+    input_format: "Classify the sentiment of the sentence:\n__input__\nSentiment:"
+    output_format: " __output__"
+    data_sampling_ratio: 1
+    max_input_tokens: 1024
+    max_output_tokens: 128
 
 model_args:
   model_name: bigscience/bloom-560m

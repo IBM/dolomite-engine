@@ -66,7 +66,7 @@ class RandomArgs(BaseArgs):
 
 class TokenizerArgs(BaseArgs):
     # override model's tokenizer with this
-    tokenizer_name: str = None
+    tokenizer_name: Optional[str] = None
     # add special tokens to the tokenizer
     additional_special_tokens: Optional[List[str]] = None
     # padding side
@@ -77,7 +77,7 @@ class ModelArgs(BaseArgs):
     # model name on huggingface hub
     model_name: str = None
     # config class to load the model from
-    pretrained_config: dict = None
+    pretrained_config: Optional[dict] = None
     # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
     model_class: str = None
     # dtype to use for training / inference
@@ -322,7 +322,7 @@ class LoggingArgs(BaseArgs):
     # name of the experiment
     experiment_name: Optional[str] = None
     # tracker to use for experiment tracking
-    experiments_tracker_name: ExperimentsTrackerName = None
+    experiments_tracker_name: Optional[ExperimentsTrackerName] = None
 
 
 class ResearchArgs(BaseArgs):

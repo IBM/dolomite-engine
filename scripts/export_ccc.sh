@@ -1,1 +1,1 @@
-python -m engine.export --config ${1}
+python -m dolomite_engine.export --config ${1}

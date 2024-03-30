@@ -15,7 +15,7 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import DataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, Mode
-from .model_wrapper import Model, get_model, log_model
+from .model_wrapper import ModelWrapper, get_model, log_model
 from .utils import (
     ExperimentsTracker,
     RunningMean,
@@ -213,7 +213,7 @@ def train(
 @register_profiler("evaluate_dataset")
 @torch.no_grad()
 def evaluate(
-    val_dataloader: DataLoader, model: Model, global_step: int, experiments_tracker: ExperimentsTracker
+    val_dataloader: DataLoader, model: ModelWrapper, global_step: int, experiments_tracker: ExperimentsTracker
 ) -> float:
     """main validation loop for the program
 

@@ -2,7 +2,6 @@ import logging
 from warnings import warn
 
 import wandb
-from accelerate.tracking import WandBTracker
 from aim import Run as AimRun
 from pydantic import BaseModel
 from tqdm import tqdm

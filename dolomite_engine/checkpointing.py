@@ -19,7 +19,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from .arguments import InferenceArgs, TrainingArgs, get_args_file_extension
 from .data import DataLoader
 from .enums import ArgsFileExtension, DistributedBackend, Mode, TuningMethod
-from .model_wrapper import Model
+from .model_wrapper import ModelWrapper
 from .utils import get_global_rank, load_yaml, register_timer, run_rank_n
 
 
@@ -188,7 +188,7 @@ def load_checkpoint_for_training(
     return iteration, metadata
 
 
-def load_checkpoint_for_inference(model: Model, load_path: str, iteration: int) -> None:
+def load_checkpoint_for_inference(model: ModelWrapper, load_path: str, iteration: int) -> None:
     """load deepspeed checkpoint for inference
 
     Args:

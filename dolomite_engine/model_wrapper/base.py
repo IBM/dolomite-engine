@@ -33,8 +33,11 @@ class ModelWrapper(torch.nn.Module):
 
         self._setup_input_device()
 
-        self.distributed_backend = args.distributed_args.distributed_backend if mode == Mode.training else None
-        self.stage = args.distributed_args.stage
+        self.distributed_backend = None
+        self.stage = None
+        if self.mode == Mode.training:
+            self.distributed_backend = args.distributed_args.distributed_backend
+            self.stage = args.distributed_args.stage
 
         if self.model_name is None:
             model_type = args.model_args.pretrained_config.pop("model_type")
