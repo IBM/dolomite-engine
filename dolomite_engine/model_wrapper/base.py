@@ -137,11 +137,13 @@ class ModelWrapper(torch.nn.Module):
                 # FSDP
                 else:
                     if args.model_args.efficient_cpu_initialization:
+                        assert self.model_name is None
+
                         with torch.device("meta"):
                             self.model = _get_model()
                         self.model = self.model.to_empty(device=self.input_device)
                     else:
-                        self.model = _get_model()
+                        self.model = _get_model(device_map=self.input_device)
 
             if args.distributed_args.gradient_checkpointing:
                 self.model.gradient_checkpointing_enable()
@@ -179,6 +181,10 @@ class ModelWrapper(torch.nn.Module):
         generated_text = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
 
         return generated_text, num_generated_tokens
+
+    def get_model_tflops(self, batch_size: int, sequence_length: int) -> int:
+        if hasattr(self.model, "get_model_tflops"):
+            return self.model.get_model_tflops(batch_size, sequence_length)
 
     @register_profiler("prepare_batch")
     @register_timer("prepare_batch")

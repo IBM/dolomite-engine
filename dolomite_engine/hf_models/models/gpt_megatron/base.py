@@ -200,6 +200,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
+        self.mask_value = None
 
         assert (
             self.embed_dim % self.num_heads == 0
@@ -316,7 +317,6 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                     hidden_states,
                     None,
                     attention_mask,
-                    position_ids,
                     alibi_bias,
                     rope_cos_sin,
                     use_cache,
@@ -329,7 +329,6 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                     hidden_states,
                     layer_past=layer_past,
                     attention_mask=attention_mask,
-                    position_ids=position_ids,
                     alibi_bias=alibi_bias,
                     rope_cos_sin=rope_cos_sin,
                     use_cache=use_cache,
@@ -648,7 +647,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                 attention_mask = torch.where(
                     attention_mask,
                     ~attention_mask if alibi_bias is None else alibi_bias,
-                    self.h[0].attn._get_mask_value(attention_mask.device, hidden_states.dtype),
+                    self._get_mask_value(attention_mask.device, hidden_states.dtype),
                 )
         else:
             attention_mask = self._prepare_causal_attention_mask(
@@ -691,3 +690,9 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                 )
         else:
             raise NotImplementedError()
+
+    def _get_mask_value(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+        # torch.where expects a tensor. We use a cache to avoid recreating it every time.
+        if self.mask_value is None or self.mask_value.dtype != dtype or self.mask_value.device != device:
+            self.mask_value = torch.full([], torch.finfo(torch.float16).min, dtype=dtype, device=device)
+        return self.mask_value

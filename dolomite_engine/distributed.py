@@ -88,9 +88,12 @@ def wrap_model_for_distributed_training(
             optimizer_class_args=args.optimizer_args.class_args,
             cpu_offload=cpu_offload,
             trainable_parameters=model.parameters(),
-            lr_schedule=args.lr_scheduler_args.lr_schedule,
             num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
             num_training_steps=args.training_parameters.num_training_steps,
+            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         )
 
         model, _, _, _ = deepspeed_initialize(
@@ -144,9 +147,12 @@ def wrap_model_for_distributed_training(
             optimizer_class_args=args.optimizer_args.class_args,
             cpu_offload=cpu_offload,
             trainable_parameters=model.parameters(),
-            lr_schedule=args.lr_scheduler_args.lr_schedule,
             num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
             num_training_steps=args.training_parameters.num_training_steps,
+            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         )
 
     return model, optimizer, lr_scheduler
@@ -179,6 +185,7 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
             },
             "train_micro_batch_size_per_gpu": args.training_parameters.batch_size_per_gpu,
             "gradient_accumulation_steps": args.training_parameters.gradient_accumulation_steps,
+            "gradient_clipping": args.training_parameters.gradient_clipping,
         }
 
         dtype_config: dict = deepcopy(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])

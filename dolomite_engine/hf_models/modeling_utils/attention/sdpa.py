@@ -15,7 +15,6 @@ class SDPA(Attention):
         hidden_states: torch.Tensor,
         layer_past: torch.Tensor = None,
         attention_mask: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
         alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
         use_cache: bool = False,

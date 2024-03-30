@@ -33,6 +33,7 @@ def track_train_metrics(
     current_lr: float,
     experiments_tracker: ExperimentsTracker,
     loss_running_mean_tracker: RunningMean,
+    flops: int = None,
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -42,21 +43,25 @@ def track_train_metrics(
         current_lr (float): learning rate at the current step
         experiments_tracker (ExperimentsTracker): metrics tracker
         loss_running_mean_tracker (RunningMean): running mean accumulator for loss
+        flops (int, optional): total model flops. Defaults to None
     """
 
     # update loss running mean
     loss_running_mean = loss_running_mean_tracker.add_loss(train_loss_step)
 
-    experiments_tracker.track(
-        {"loss_step": train_loss_step, "loss_running_mean": loss_running_mean, "learning_rate": current_lr},
-        step=global_step,
-        context="train",
-    )
+    message = {"loss_step": train_loss_step, "loss_running_mean": loss_running_mean, "learning_rate": current_lr}
+    if flops is not None:
+        message["FLOPS"] = flops
+    experiments_tracker.track(message, step=global_step, context="train")
 
-    log_rank_0(
-        logging.INFO,
-        f"step = {global_step}, train_loss (batch) = {train_loss_step}, train_loss (running_mean) = {loss_running_mean}, learning_rate = {current_lr}",
+    message = (
+        f"step = {global_step}, train_loss (batch) = {train_loss_step}, "
+        f"train_loss (running_mean) = {loss_running_mean}, "
+        f"learning_rate = {current_lr}, "
     )
+    if flops is not None:
+        message += f"FLOPS = {flops}"
+    log_rank_0(logging.INFO, message)
 
 
 def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker) -> None:
@@ -81,6 +86,7 @@ def train_step(
     distributed_backend: DistributedBackend,
     train_dataloader: DataLoader,
     gradient_accumulation_steps: int,
+    gradient_clipping: float,
 ) -> float:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -91,6 +97,7 @@ def train_step(
         distributed_backend (DistributedBackend): distributed backend
         train_dataloader (DataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
+        gradient_clipping (float): gradient clipping value
 
     Returns:
         float: loss at the current step
@@ -126,6 +133,10 @@ def train_step(
         model.step()
     elif distributed_backend == DistributedBackend.torch:
         loss_micro_step.backward()
+
+        if gradient_clipping is not None:
+            model.clip_grad_norm_(gradient_clipping)
+
         optimizer.step()
         lr_scheduler.step()
     else:
@@ -162,6 +173,7 @@ def train(
 
     num_training_steps = args.training_parameters.num_training_steps
     gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
+    gradient_clipping = args.training_parameters.gradient_clipping
 
     eval_during_training = args.training_parameters.eval_during_training
     eval_interval = args.training_parameters.eval_interval
@@ -190,6 +202,7 @@ def train(
             distributed_backend=distributed_backend,
             train_dataloader=train_dataloader_infinite,
             gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_clipping=gradient_clipping,
         )
 
         if global_step % log_interval == 0:
@@ -290,7 +303,7 @@ def main() -> None:
         starting_iteration, _ = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, train_dataloader)
 
     experiments_tracker = ExperimentsTracker(
-        args.logging_args.experiment_name, args.logging_args.aim_repo, args.logging_args.experiments_tracker_name
+        args.logging_args.experiment_name, args.logging_args.project, args.logging_args.experiments_tracker_name
     )
     # track all hyperparams in args
     experiments_tracker.log_args(args)

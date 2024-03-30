@@ -9,6 +9,7 @@ from .attention import (
     interleave_query_key_value_tensor_for_attention,
     repeat_key_value,
     split_query_key_value_tensor_for_attention,
+    unpad_tensor,
 )
 from .normalization import RMSNorm, get_normalization_function
 from .position_embedding import Alibi, RoPE, YaRNScaledRoPE, apply_rotary_pos_emb

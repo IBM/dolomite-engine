@@ -70,22 +70,17 @@ class ProgressBar:
 class ExperimentsTracker:
     """experiments tracker for training"""
 
-    def __init__(self, experiment: str, repo: str, experiments_tracker_name: ExperimentsTrackerName) -> None:
+    def __init__(self, experiment: str, project: str, experiments_tracker_name: ExperimentsTrackerName) -> None:
         self.experiments_tracker_name = experiments_tracker_name
-        self.tracking_enabled = False
+        self.tracking_enabled = experiments_tracker_name is not None
 
         if experiments_tracker_name == ExperimentsTrackerName.aim:
-            self.tracking_enabled = experiment is not None and repo is not None
-            if self.tracking_enabled:
-                self.run: AimRun = run_rank_n(AimRun)(experiment=experiment, repo=repo)
+            assert experiment is not None and project is not None
+            self.run: AimRun = run_rank_n(AimRun)(experiment=experiment, repo=project)
         elif experiments_tracker_name == ExperimentsTrackerName.wandb:
-            self.tracking_enabled = repo is not None
-            self.run = run_rank_n(wandb.init)(name=experiment, run_name=repo)
+            self.run = run_rank_n(wandb.init)(name=experiment, project=project)
         elif experiments_tracker_name is not None:
             raise ValueError(f"unexpected experiments_tracker ({experiments_tracker_name})")
-
-        if not self.tracking_enabled:
-            warn_rank_0("aim tracking is disabled since experiment_name or aim_repo was not specified")
 
     @run_rank_n
     def log_args(self, args: BaseModel) -> None:
@@ -130,7 +125,7 @@ class ExperimentsTracker:
                 if context is not None:
                     values = {f"{context}/{k}": v for k, v in values.items()}
 
-                self.run.log(values=values, step=step)
+                self.run.log(values, step=step)
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 

@@ -18,6 +18,7 @@ from .enums import (
     DistributedBackend,
     ExperimentsTrackerName,
     LossMask,
+    LRDecaySchedule,
     Mode,
     PaddingSide,
     TuningMethod,
@@ -188,6 +189,8 @@ class TrainingParameters(BaseArgs):
     eval_during_training: bool = True
     # masking methodology of loss function input
     loss_mask: LossMask = LossMask.output_only
+    # gradient clip value
+    gradient_clipping: float = 1
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -261,10 +264,16 @@ class OptimizerArgs(BaseArgs):
 
 
 class LRSchedulerArgs(BaseArgs):
-    # learning rate schedule
-    lr_schedule: str = "cosine"
     # warmup steps
     num_warmup_steps: int = 200
+    # constant steps after warmup and before decay
+    num_constant_steps: int = 0
+    # decays steps after constant steps, if None then all remaining steps are for decay
+    num_decay_steps: int = None
+    # lr scheduler for decay
+    lr_decay_style: LRDecaySchedule = LRDecaySchedule.cosine
+    # decay factor * max_lr = min_lr (ratio of min_lr and max_lr)
+    lr_decay_factor: float = 0.1
 
 
 class DistributedArgs(BaseArgs):
@@ -318,7 +327,7 @@ class LoggingArgs(BaseArgs):
     # log interval
     log_interval: int = 1
     # aim repo, experiment logs are saved here
-    aim_repo: Optional[str] = None
+    project: Optional[str] = None
     # name of the experiment
     experiment_name: Optional[str] = None
     # tracker to use for experiment tracking

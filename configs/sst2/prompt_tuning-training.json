@@ -46,6 +46,6 @@
         }
     },
     "lr_scheduler_args": {
-        "lr_schedule": "cosine"
+        "lr_decay_style": "cosine"
     }
 }

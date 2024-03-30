@@ -25,6 +25,7 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEMegablocksModel):
 
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
+        self.mask_value = None
 
         assert (
             self.embed_dim % self.num_heads == 0

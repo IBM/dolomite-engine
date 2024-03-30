@@ -39,7 +39,7 @@ class MoEMegablocksConfig(MegatronConfig):
         output_router_logits: bool = False,
         router_aux_loss_coef: float = 0.001,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(
             vocab_size=vocab_size,
             n_positions=n_positions,

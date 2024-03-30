@@ -23,7 +23,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
     assert args.datasets[0].input_format == INPUT_FORMAT
     assert args.datasets[0].output_format == OUTPUT_FORMAT
 
-    run_rank_n(compile_helpers, barrier=True)()
+    compile_helpers()
 
     log_rank_0(logging.INFO, "> building train, validation, and test datasets for GPT ...")
     print_rank_0()

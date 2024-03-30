@@ -18,6 +18,7 @@ from .utils import (
     split_query_key_value_tensor_for_gqa,
     split_query_key_value_tensor_for_mha,
     split_query_key_value_tensor_for_mqa,
+    unpad_tensor,
 )
 
 

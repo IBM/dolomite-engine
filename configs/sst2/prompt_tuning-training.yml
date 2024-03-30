@@ -42,4 +42,4 @@ optimizer_args:
     eps: 1e-10
 
 lr_scheduler_args:
-  lr_schedule: cosine
+  lr_decay_style: cosine

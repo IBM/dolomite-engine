@@ -1,6 +1,5 @@
 import torch
 from parameterized import parameterized
-from transformers import AutoModelForCausalLM
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 

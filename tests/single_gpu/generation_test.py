@@ -44,10 +44,18 @@ class GenerationTest(TestCommons):
         input_ids, attention_mask, _ = self.get_dummy_inputs(device)
 
         megatron_output = megatron_model.generate(
-            input_ids=input_ids, attention_mask=attention_mask, return_dict_in_generate=True, output_scores=True
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=use_cache,
+            return_dict_in_generate=True,
+            output_scores=True,
         )
         hf_output = hf_model.generate(
-            input_ids=input_ids, attention_mask=attention_mask, return_dict_in_generate=True, output_scores=True
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=use_cache,
+            return_dict_in_generate=True,
+            output_scores=True,
         )
 
         assert megatron_output.sequences.equal(hf_output.sequences)

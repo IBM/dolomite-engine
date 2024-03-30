@@ -1,6 +1,13 @@
 from enum import Enum
 
 
+class LRDecaySchedule(str, Enum):
+    constant = "constant"
+    linear = "linear"
+    cosine = "cosine"
+    exponential = "exponential"
+
+
 class AttentionImplementation(Enum):
     """
     Enum class for attention implementation

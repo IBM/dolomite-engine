@@ -42,7 +42,7 @@ class MegatronConfig(PretrainedConfig):
         rope_theta: int = 10000,
         rope_scaling: dict = None,
         **kwargs,
-    ):
+    ) -> None:
         self.vocab_size = vocab_size
         self.n_positions = n_positions
         self.n_embd = n_embd

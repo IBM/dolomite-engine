@@ -41,7 +41,7 @@
         }
     },
     "lr_scheduler_args": {
-        "lr_schedule": "cosine"
+        "lr_decay_style": "cosine"
     },
     "distributed_args": {
         "distributed_backend": "deepspeed",

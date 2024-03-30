@@ -1,10 +1,8 @@
 import logging
-from typing import List, Union
+import time
+from typing import List
 
 import torch
-from deepspeed import DeepSpeedEngine
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
@@ -16,7 +14,7 @@ from .data import get_megatron_gpt_dataloaders
 from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, Mode
 from .finetune import track_train_metrics, train_step
-from .model_wrapper import Model, get_model, log_model
+from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .utils import (
     ExperimentsTracker,
     RunningMean,
@@ -50,7 +48,7 @@ def track_val_metrics(
 
 def train(
     args: TrainingArgs,
-    model: Union[DeepSpeedEngine, DDP, FSDP],
+    model: ModelWrapperForPretraining,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
@@ -75,6 +73,7 @@ def train(
 
     num_training_steps = args.training_parameters.num_training_steps
     gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
+    gradient_clipping = args.training_parameters.gradient_clipping
 
     eval_during_training = args.training_parameters.eval_during_training
     eval_interval = args.training_parameters.eval_interval
@@ -95,9 +94,17 @@ def train(
         eval_steps = args.datasets[0].class_args.get("eval_steps")
         evaluate(val_dataloaders, model, starting_iteration, experiments_tracker, eval_steps, group_names)
 
+    batch_size_per_gpu = args.training_parameters.batch_size_per_gpu
+    sequence_length = args.datasets[0].class_args.get("sequence_length")
+    model_flops = model.get_model_tflops(batch_size_per_gpu * gradient_accumulation_steps, sequence_length)
+
+    start_time = time.perf_counter()
+    steps_since_start_time = 0
+
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
+        steps_since_start_time += 1
 
         loss_step = train_step(
             model=model,
@@ -106,6 +113,7 @@ def train(
             distributed_backend=distributed_backend,
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_clipping=gradient_clipping,
         )
 
         if global_step % log_interval == 0:
@@ -117,7 +125,12 @@ def train(
                 else lr_scheduler.get_lr()[0],
                 experiments_tracker=experiments_tracker,
                 loss_running_mean_tracker=loss_running_mean_tracker,
+                flops=None
+                if model_flops is None
+                else model_flops * steps_since_start_time / (time.perf_counter() - start_time),
             )
+            start_time = time.perf_counter()
+            steps_since_start_time = 0
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
@@ -127,6 +140,8 @@ def train(
             save_checkpoint(
                 args, model, optimizer, lr_scheduler, None, global_step, {"consumed_samples": consumed_samples}
             )
+            start_time = time.perf_counter()
+            steps_since_start_time = 0
 
     if eval_during_training:
         evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
@@ -136,7 +151,7 @@ def train(
 @torch.no_grad()
 def evaluate(
     val_dataloaders: List[DataLoader],
-    model: Model,
+    model: ModelWrapperForPretraining,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
@@ -204,7 +219,7 @@ def main() -> None:
     )
 
     experiments_tracker = ExperimentsTracker(
-        args.logging_args.experiment_name, args.logging_args.aim_repo, args.logging_args.experiments_tracker_name
+        args.logging_args.experiment_name, args.logging_args.project, args.logging_args.experiments_tracker_name
     )
     # track all hyperparams in args
     experiments_tracker.log_args(args)
