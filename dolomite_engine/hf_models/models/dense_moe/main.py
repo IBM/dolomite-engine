@@ -2,6 +2,7 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
+from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from ..gpt_megatron import GPTMegatronForCausalLM
@@ -25,7 +26,7 @@ class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTMegatronForCausalLM):
     def forward(
         self,
         input_ids: Union[torch.Tensor, List[List[int]]] = None,
-        past_key_values: Tuple[Tuple[torch.Tensor]] = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         token_type_ids: Union[torch.Tensor, List[List[int]]] = None,
         position_ids: Union[torch.Tensor, List[List[int]]] = None,
@@ -73,7 +74,6 @@ class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTMegatronForCausalLM):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cu_seqlens=cu_seqlens,

@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import torch
+from transformers import DynamicCache
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
@@ -21,17 +22,14 @@ class FlashAttention2(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        layer_past: torch.Tensor = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
-        use_cache: bool = False,
-        output_attentions: bool = False,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         assert alibi_bias is None
-        assert not output_attentions
 
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
@@ -49,11 +47,8 @@ class FlashAttention2(Attention):
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
-        if layer_past is not None:
-            key = torch.cat((layer_past[0], key), dim=2)
-            value = torch.cat((layer_past[1], value), dim=2)
-
-        present = (key, value) if use_cache else None
+        if past_key_values is not None:
+            key, value = past_key_values.update(key, value, self.layer_idx)
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
@@ -139,4 +134,4 @@ class FlashAttention2(Attention):
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
-        return attn_output, present
+        return attn_output

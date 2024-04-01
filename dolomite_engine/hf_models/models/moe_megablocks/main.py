@@ -85,7 +85,6 @@ class MoEMegablocksForCausalLM(MoEMegablocksPreTrainedModel, GPTMegatronForCausa
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cu_seqlens=cu_seqlens,

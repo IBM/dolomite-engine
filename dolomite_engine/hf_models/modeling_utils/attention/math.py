@@ -2,9 +2,10 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from transformers import DynamicCache
 from transformers.models.gpt_bigcode.modeling_gpt_bigcode import upcast_masked_softmax, upcast_softmax
 
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
 from .base import Attention
 from .utils import repeat_key_value
@@ -14,15 +15,13 @@ class MathAttention(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        layer_past: torch.Tensor = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
-        use_cache: bool = False,
-        output_attentions: bool = False,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
@@ -39,11 +38,8 @@ class MathAttention(Attention):
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
-        if layer_past is not None:
-            key = torch.cat((layer_past[0], key), dim=2)
-            value = torch.cat((layer_past[1], value), dim=2)
-
-        present = (key, value) if use_cache else None
+        if past_key_values is not None:
+            key, value = past_key_values.update(key, value, self.layer_idx)
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
@@ -143,14 +139,4 @@ class MathAttention(Attention):
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
-        outputs = (attn_output, present)
-        if output_attentions:
-            if self.attention_head_type == AttentionHeadType.mqa:
-                # Transpose to return weights in the usual format (batch_size, num_heads, query_length, key_length)
-                attn_weights = attn_weights.transpose(1, 2)
-            elif self.attention_head_type != AttentionHeadType.mha:
-                raise NotImplementedError()
-
-            outputs += (attn_weights,)
-
-        return outputs
+        return attn_output

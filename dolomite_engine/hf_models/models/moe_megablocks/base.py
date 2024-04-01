@@ -3,6 +3,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
+from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 from transformers.models.mixtral.modeling_mixtral import load_balancing_loss_func
 
@@ -92,13 +93,12 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
     def forward(
         self,
         input_ids: torch.Tensor = None,
-        past_key_values: List[torch.Tensor] = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         token_type_ids: torch.Tensor = None,
         position_ids: torch.Tensor = None,
         inputs_embeds: torch.Tensor = None,
         use_cache: bool = None,
-        output_attentions: bool = None,
         output_hidden_states: bool = None,
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
@@ -106,7 +106,6 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
         output_router_logits: bool = None,
     ) -> Union[Tuple, MoeModelOutputWithPast]:
         (
-            output_attentions,
             output_hidden_states,
             use_cache,
             return_dict,
@@ -126,7 +125,6 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cu_seqlens=cu_seqlens,
@@ -145,11 +143,10 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
 
         output_shape = input_shape + (hidden_states.size(-1),)
 
-        presents = [] if use_cache else None
-        all_self_attentions = () if output_attentions else None
+        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
-        for i, (block, layer_past) in enumerate(zip(self.h, past_key_values)):
+        for block in self.h:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
@@ -168,8 +165,6 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
                     attention_mask,
                     alibi_bias,
                     rope_cos_sin,
-                    use_cache,
-                    output_attentions,
                     cu_seqlens,
                     max_seqlen,
                     output_router_logits,
@@ -177,26 +172,18 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
             else:
                 outputs = block(
                     hidden_states,
-                    layer_past=layer_past,
+                    past_key_values=past_key_values,
                     attention_mask=attention_mask,
                     alibi_bias=alibi_bias,
                     rope_cos_sin=rope_cos_sin,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
                     cu_seqlens=cu_seqlens,
                     max_seqlen=max_seqlen,
                     output_router_logits=output_router_logits,
                 )
 
             hidden_states = outputs[0]
-            if use_cache:
-                presents.append(outputs[1])
-
-            if output_attentions:
-                all_self_attentions += (outputs[2 if use_cache else 1],)
-
             if output_router_logits:
-                all_router_logits += (outputs[3 if use_cache else 2],)
+                all_router_logits += (outputs[1],)
 
         hidden_states = self.ln_f(hidden_states)
 
@@ -207,16 +194,13 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
 
         if not return_dict:
             return tuple(
-                v
-                for v in [hidden_states, presents, all_hidden_states, all_self_attentions, all_router_logits]
-                if v is not None
+                v for v in [hidden_states, past_key_values, all_hidden_states, all_router_logits] if v is not None
             )
 
         return MoeModelOutputWithPast(
             last_hidden_state=hidden_states,
-            past_key_values=presents,
+            past_key_values=past_key_values,
             hidden_states=all_hidden_states,
-            attentions=all_self_attentions,
             router_logits=all_router_logits,
         )
 
@@ -229,14 +213,12 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
         position_ids: torch.Tensor = None,
         inputs_embeds: torch.Tensor = None,
         use_cache: bool = None,
-        output_attentions: bool = None,
         output_hidden_states: bool = None,
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
         output_router_logits: bool = False,
     ) -> Tuple[
-        bool,
         bool,
         bool,
         bool,
@@ -261,7 +243,6 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cu_seqlens=cu_seqlens,

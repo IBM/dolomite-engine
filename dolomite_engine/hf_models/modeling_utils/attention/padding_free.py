@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import torch
+from transformers import DynamicCache
 
 from ...enums import PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
@@ -17,19 +18,15 @@ class PaddingFreeAttention(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        layer_past: torch.Tensor = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
-        use_cache: bool = False,
-        output_attentions: bool = False,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         assert alibi_bias is None
-        assert not output_attentions
-        assert not use_cache
-        assert layer_past is None
+        assert past_key_values is None
 
         # ==========================================================================================
         # hidden_states -> (total_q, num_heads * head_dim)
@@ -79,7 +76,7 @@ class PaddingFreeAttention(Attention):
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
-        return attn_output, None
+        return attn_output
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor

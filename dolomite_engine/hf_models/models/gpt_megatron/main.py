@@ -2,7 +2,7 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
-from transformers import GPTBigCodeForCausalLM
+from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from ...modeling_utils import is_glu
@@ -85,7 +85,7 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
     def forward(
         self,
         input_ids: Union[torch.Tensor, List[List[int]]] = None,
-        past_key_values: Tuple[Tuple[torch.Tensor]] = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         token_type_ids: Union[torch.Tensor, List[List[int]]] = None,
         position_ids: Union[torch.Tensor, List[List[int]]] = None,
@@ -133,7 +133,6 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cu_seqlens=cu_seqlens,
@@ -183,9 +182,3 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
         model_flops /= 10**12
 
         return model_flops
-
-    @staticmethod
-    def _reorder_cache(
-        past_key_values: Tuple[Tuple[torch.Tensor]], beam_idx: torch.Tensor
-    ) -> Tuple[Tuple[torch.Tensor]]:
-        return GPTBigCodeForCausalLM._reorder_cache(past_key_values=past_key_values, beam_idx=beam_idx)

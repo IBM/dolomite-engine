@@ -9,7 +9,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
-from transformers import PreTrainedModel
+from transformers import DynamicCache, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
@@ -247,20 +247,18 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
     def forward(
         self,
         input_ids: torch.Tensor = None,
-        past_key_values: List[torch.Tensor] = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         token_type_ids: torch.Tensor = None,
         position_ids: torch.Tensor = None,
         inputs_embeds: torch.Tensor = None,
         use_cache: bool = None,
-        output_attentions: bool = None,
         output_hidden_states: bool = None,
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> Union[Tuple, BaseModelOutputWithPastAndCrossAttentions]:
         (
-            output_attentions,
             output_hidden_states,
             use_cache,
             return_dict,
@@ -279,7 +277,6 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cu_seqlens=cu_seqlens,
@@ -297,10 +294,9 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
         output_shape = input_shape + (hidden_states.size(-1),)
 
-        presents = [] if use_cache else None
-        all_self_attentions = () if output_attentions else None
+        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
-        for i, (block, layer_past) in enumerate(zip(self.h, past_key_values)):
+        for block in self.h:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
@@ -312,37 +308,26 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
                     return custom_forward
 
-                outputs = checkpoint(
+                hidden_states = checkpoint(
                     create_custom_forward(block),
                     hidden_states,
                     None,
                     attention_mask,
                     alibi_bias,
                     rope_cos_sin,
-                    use_cache,
-                    output_attentions,
                     cu_seqlens,
                     max_seqlen,
                 )
             else:
-                outputs = block(
+                hidden_states = block(
                     hidden_states,
-                    layer_past=layer_past,
+                    past_key_values=past_key_values,
                     attention_mask=attention_mask,
                     alibi_bias=alibi_bias,
                     rope_cos_sin=rope_cos_sin,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
                     cu_seqlens=cu_seqlens,
                     max_seqlen=max_seqlen,
                 )
-
-            hidden_states = outputs[0]
-            if use_cache:
-                presents.append(outputs[1])
-
-            if output_attentions:
-                all_self_attentions += (outputs[2 if use_cache else 1],)
 
         hidden_states = self.ln_f(hidden_states)
 
@@ -352,13 +337,12 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
             all_hidden_states += (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, presents, all_hidden_states, all_self_attentions] if v is not None)
+            return tuple(v for v in [hidden_states, past_key_values, all_hidden_states] if v is not None)
 
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
-            past_key_values=presents,
+            past_key_values=past_key_values,
             hidden_states=all_hidden_states,
-            attentions=all_self_attentions,
         )
 
     def _get_position_ids(
@@ -481,29 +465,20 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
         return inputs_embeds
 
-    def _get_past_length(self, past_key_values: List[Union[torch.Tensor, Tuple[torch.Tensor]]]) -> int:
-        if past_key_values is None:
-            return 0
-
-        past_length = past_key_values[0][0].size(2)
-        return past_length
-
     def _prepare_a_bunch_of_stuff(
         self,
         input_ids: torch.Tensor = None,
-        past_key_values: List[torch.Tensor] = None,
+        past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         token_type_ids: torch.Tensor = None,
         position_ids: torch.Tensor = None,
         inputs_embeds: torch.Tensor = None,
         use_cache: bool = None,
-        output_attentions: bool = None,
         output_hidden_states: bool = None,
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> Tuple[
-        bool,
         bool,
         bool,
         bool,
@@ -516,7 +491,6 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         torch.Tensor,
         Union[Tuple[torch.Tensor], Tuple[Tuple[torch.Tensor, torch.Tensor]]],
     ]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
@@ -578,13 +552,9 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         query_length = None
         key_length = None
         if self._use_padding_free_transformer:
-            past_key_values = tuple([None] * len(self.h))
             key_length = max_seqlen
         else:
-            past_length = self._get_past_length(past_key_values)
-            if past_key_values is None:
-                past_key_values = tuple([None] * len(self.h))
-
+            past_length = 0 if past_key_values is None else past_key_values.get_seq_length()
             query_length = input_shape[-1]
             key_length = past_length + query_length
 
@@ -655,7 +625,6 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
             )
 
         return (
-            output_attentions,
             output_hidden_states,
             use_cache,
             return_dict,
