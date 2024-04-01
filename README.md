@@ -124,7 +124,7 @@ To get best training efficiency, we use [padding free transformers](https://hugg
 
 ```python
 import torch
-from ibm_models import GPTMegatronForCausalLM
+from dolomite_engine.hf_models import GPTMegatronForCausalLM
 
 
 # we need unpadded lists here for avoiding any useless computations on pad tokens
