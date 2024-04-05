@@ -8,15 +8,6 @@
             "max_output_tokens": 4096
         }
     ],
-    "model_args": {
-        "model_name": "bigcode/starcoder",
-        "model_class": "GPTMegatronForCausalLM",
-        "dtype": "float16",
-        "attention_implementation": "sdpa"
-    },
-    "tuning_args": {
-        "tuning_method": "full_finetuning"
-    },
     "load_args": {
         "load_path": "checkpoints",
         "iteration": 4000

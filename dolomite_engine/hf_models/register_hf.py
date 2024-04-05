@@ -9,6 +9,9 @@ from .models import (
     GPTMegatronConfig,
     GPTMegatronForCausalLM,
     GPTMegatronModel,
+    GPTMultiLayerConfig,
+    GPTMultiLayerForCausalLM,
+    GPTMultiLayerModel,
     MoEMegablocksConfig,
     MoEMegablocksForCausalLM,
     MoEMegablocksModel,
@@ -19,6 +22,7 @@ from .models import (
 _CUSTOM_MODEL_REGISTRY = [
     (GPTMegatronConfig, GPTMegatronModel, GPTMegatronForCausalLM),
     (MoEMegablocksConfig, MoEMegablocksModel, MoEMegablocksForCausalLM),
+    (GPTMultiLayerConfig, GPTMultiLayerModel, GPTMultiLayerForCausalLM),
     (DenseMoEConfig, DenseMoEModel, DenseMoEForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []

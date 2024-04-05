@@ -1,0 +1,21 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mayank-pvc # Enter the name of the PVC.
+  namespace: granite-prod # Enter the namespace where you want to create the PVC. 
+  annotations:
+    ibm.io/auto-create-bucket: "false"
+    ibm.io/auto-delete-bucket: "false"
+    ibm.io/bucket: mayank-bucket # Enter the name (not the ID) of the standard class, regional bucket created in a previous step
+    #ibm.io/object-path: "<bucket_subdirectory>" # Uncomment line and enter valid subdirectory if desired
+    ibm.io/secret-name: mayank-cos-secret # Enter the name of the OpenShift Secret created in a previous step
+    ibm.io/quota-limit: "false" # Disable or enable a quota limit for your PVC. To use this annotation you must specify the -set quotaLimit=true option during installation.
+    ibm.io/endpoint: https://s3.direct.us-east.cloud-object-storage.appdomain.cloud
+    ibm.io/tls-cipher-suite: "default"
+spec:
+  accessModes:
+    - ReadWriteMany # ReadWriteMany access mode is also supported.  See the resources section for additional info on access modes
+  resources:
+    requests:
+      storage: 100Gi # Example is for 100 Gigabit.  Enter the desired storage amount.
+  storageClassName: ibmc-s3fs-cos-perf # oc get sc for other COS Storage Class Options.  

@@ -68,10 +68,6 @@ class GPTMegatronPreTrainedModel(PreTrainedModel):
             ]
         )
 
-    def _set_gradient_checkpointing(self, module: nn.Module, value: bool = False) -> None:
-        if isinstance(module, GPTMegatronModel):
-            module.gradient_checkpointing = value
-
     def _init_weights(self, module: nn.Module) -> None:
         if isinstance(module, (MLP, Attention)):
             module.c_proj.weight.data.normal_(
@@ -301,15 +297,8 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                 all_hidden_states += (hidden_states,)
 
             if self.gradient_checkpointing and self.training:
-
-                def create_custom_forward(module):
-                    def custom_forward(*inputs):
-                        return module(*inputs)
-
-                    return custom_forward
-
-                hidden_states = checkpoint(
-                    create_custom_forward(block),
+                hidden_states = self._gradient_checkpointing_func(
+                    block.__call__,
                     hidden_states,
                     None,
                     attention_mask,
@@ -647,7 +636,9 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         elif self.position_embedding_type == PositionEmbeddingType.rope:
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
-                    self.head_dim, max_position_embeddings=max_position_embeddings, base=self.config.rope_theta
+                    self.head_dim,
+                    max_position_embeddings=max_position_embeddings,
+                    base=self.config.rope_theta,
                 )
             else:
                 self.rope = YaRNScaledRoPE(

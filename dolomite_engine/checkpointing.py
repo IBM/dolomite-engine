@@ -16,10 +16,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
-from .arguments import InferenceArgs, TrainingArgs, get_args_file_extension
+from .arguments import ExportArgs, InferenceArgs, TrainingArgs, get_args_file_extension
 from .data import DataLoader
 from .enums import ArgsFileExtension, DistributedBackend, Mode, TuningMethod
-from .model_wrapper import ModelWrapper
+from .model_wrapper import ModelWrapper, get_model
 from .utils import get_global_rank, load_yaml, register_timer, run_rank_n
 
 
@@ -188,25 +188,34 @@ def load_checkpoint_for_training(
     return iteration, metadata
 
 
-def load_checkpoint_for_inference(model: ModelWrapper, load_path: str, iteration: int) -> None:
+def load_checkpoint_for_inference(
+    args: Union[InferenceArgs, ExportArgs], mode: Mode
+) -> Tuple[ModelWrapper, TrainingArgs]:
     """load deepspeed checkpoint for inference
 
     Args:
-        model (ModelWrapper): model to save
-        load_path (str): path to load the deepspeed checkpoint from
-        iteration (int): iteration to load
+        args (Union[InferenceArgs, ExportArgs]): arguments
+        mode (Mode): training/inference mode
     """
+
+    load_path = args.load_args.load_path
+    iteration = args.load_args.iteration
 
     args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.json")
     if os.path.isfile(args_file):
-        args = json.load(open(args_file, "r"))
+        args_from_checkpoint = json.load(open(args_file, "r"))
     else:
         args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yaml")
-        args = load_yaml(args_file)
+        args_from_checkpoint = load_yaml(args_file)
 
-    args = TrainingArgs(**args)
+    args_from_checkpoint: TrainingArgs = TrainingArgs(**args_from_checkpoint)
 
-    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed.value:
+    distributed_backend = args_from_checkpoint.distributed_args.distributed_backend
+
+    model = get_model(args_from_checkpoint, mode)
+    model = model.to(model.input_device)
+
+    if distributed_backend == DistributedBackend.deepspeed:
         state = get_fp32_state_dict_from_zero_checkpoint(load_path, _get_checkpoint_tag(iteration))
 
         if model.tuning_method == TuningMethod.prompt_tuning:
@@ -216,10 +225,12 @@ def load_checkpoint_for_inference(model: ModelWrapper, load_path: str, iteration
                 state[key] = state[key].to(model.dtype)
 
             model.load_state_dict(state)
-    elif args.distributed_args.distributed_backend == DistributedBackend.torch.value:
+    elif distributed_backend == DistributedBackend.torch:
         model.load_state_dict(torch.load(_get_model_path(_get_base_path(load_path, iteration))))
     else:
         raise ValueError(f"unexpected distributed_backend ({args['distributed_args']['distributed_backend']})")
+
+    return model, args_from_checkpoint
 
 
 @run_rank_n

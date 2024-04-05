@@ -1,0 +1,75 @@
+datasets:
+  # class_name, data_name & data_sampling_ratio are not used but need to be passed to avoid errors
+  - class_name: MegatronDataset
+    data_name: Megatron
+    data_sampling_ratio: 1
+    class_args:
+      eval_steps: 2
+      data_cache_path: cache
+      node_uses_local_storage: true
+      # Option 1: data loading using --data-path with single file
+      data_path:
+        - 46
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=Python-1-l1
+        - 45
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=C++-1-l1
+        - 28
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=C-sharp-1-l1
+        - 57
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=C-1-l1
+        - 21
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=GO-1-l1
+        - 60
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=Java-1-l1
+        - 47
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=JavaScript-1-l1
+        - 36
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=Markdown-1-l1
+        - 46
+        - /datasets/starcoder-codepile-v02-L1-noGPL/lang=Python-1-l1
+      split: 98,1,1
+      sequence_length: 8192
+
+model_args:
+  model_class: AutoModelForCausalLM
+  model_name: /mayank-pvc/checkpoints/starcoderbase-7b
+  efficient_cpu_initialization: false
+  dtype: bfloat16
+  attention_implementation: flash_attention_2
+  use_padding_free_transformer: true
+
+tuning_args:
+  tuning_method: pretraining
+
+save_args:
+  save_path: /mayank-pvc/checkpoints/ffa-experiments/starcoderbase-7b
+  save_interval: 2500
+
+logging_args:
+  log_interval: 10
+  experiments_tracker_name: wandb
+
+training_parameters:
+  num_training_steps: 25000
+  eval_interval: 250000
+  batch_size_per_gpu: 1
+  gradient_accumulation_steps: 2
+
+optimizer_args:
+  class_name: ApexFusedAdam
+  class_args:
+    lr: 3e-5
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    eps: 1e-10
+
+lr_scheduler_args:
+  lr_decay_style: cosine
+  num_warmup_steps: 2000
+
+distributed_args:
+  distributed_backend: torch
+  stage: 3
+  zero_hpz_partition_size: 8

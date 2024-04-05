@@ -40,12 +40,12 @@ class ModelWrapper(torch.nn.Module):
             self.stage = args.distributed_args.stage
 
         if self.model_name is None:
-            model_type = args.model_args.pretrained_config.pop("model_type")
-            self.config = AutoConfig.for_model(model_type, **args.model_args.pretrained_config)
+            self.config = AutoConfig.for_model(**args.model_args.pretrained_config)
         else:
             self.config = AutoConfig.from_pretrained(
                 self.model_name, trust_remote_code=args.model_args.trust_remote_code
             )
+        log_rank_0(logging.INFO, self.config)
 
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
@@ -65,6 +65,7 @@ class ModelWrapper(torch.nn.Module):
         tokenizer_name = args.tokenizer_args.tokenizer_name
         if tokenizer_name is None:
             tokenizer_name = self.model_name
+        assert tokenizer_name is not None, "pass a tokenizer"
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.padding_side = PaddingSide(
             self.tokenizer.padding_side
@@ -87,13 +88,12 @@ class ModelWrapper(torch.nn.Module):
             if neft_alpha is not None and neft_alpha > 0:
                 self._override_embedding_forward_with_neft_forward(neft_alpha)
 
-        if args.tokenizer_args.additional_special_tokens is not None:
+        additional_special_tokens = args.tokenizer_args.additional_special_tokens
+        if additional_special_tokens is not None and len(additional_special_tokens) > 0:
             original_vocab_size = len(self.tokenizer)
 
-            self.tokenizer.add_special_tokens(
-                {"additional_special_tokens": args.tokenizer_args.additional_special_tokens}
-            )
-            log_rank_0(logging.INFO, f"added {len(args.tokenizer_args.additional_special_tokens)} tokens")
+            self.tokenizer.add_special_tokens({"additional_special_tokens": additional_special_tokens})
+            log_rank_0(logging.INFO, f"added {len(additional_special_tokens)} tokens")
 
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
@@ -259,6 +259,10 @@ class ModelWrapper(torch.nn.Module):
             if not torch.cuda.is_available():
                 warn_rank_0("no CUDA device found, running on CPU")
                 self.input_device = "cpu"
+
+    def save_pretrained(self, save_path: str) -> None:
+        self.tokenizer.save_pretrained(save_path)
+        self.model.save_pretrained(save_path)
 
 
 def _pad(

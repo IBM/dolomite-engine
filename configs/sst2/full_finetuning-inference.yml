@@ -7,14 +7,6 @@ datasets:
     max_input_tokens: 1024
     max_output_tokens: 128
 
-model_args:
-  model_name: bigscience/bloom-560m
-  model_class: AutoModelForCausalLM
-  dtype: bfloat16
-
-tuning_args:
-  tuning_method: full_finetuning
-
 load_args:
   load_path: checkpoints/full_finetuning
   iteration: 4000

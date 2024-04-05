@@ -1,0 +1,104 @@
+#Uncomment the following line if you are running in the cluster managed by the ETE team
+serviceAccountName: "gdr"
+
+namespace: granite-prod
+jobName: dolomite-test
+
+containerImage: us.icr.io/cil15-shared-registry/dolomite-engine:0.1.2
+disableRequeuing: True
+requeuing:
+  timeInSeconds: 60
+  forceDeletionTimeInSeconds: 600
+  pauseTimeInSeconds: 60
+
+numPods: 16
+numCpusPerPod: 72
+numGpusPerPod: 8
+totalMemoryPerPod: 1000Gi
+
+numRoceGdr: 2
+topologyFileConfigMap: topo-gdr-2vf-canary
+
+useOldMcadCrd: false
+useOldCoschedulerCrd: true
+
+environmentVariables:
+  - name: TOKENIZERS_PARALLELISM
+    value: "false"
+  - name: NCCL_TOPO_FILE
+    value: /var/run/nvidia-topologyd/virtualTopology.xml
+  - name: NCCL_IB_HCA
+    value: mlx5_3,mlx5_4
+  - name: NCCL_IB_QPS_PER_CONNECTION
+    value: "8"
+  - name: NCCL_IB_SPLIT_DATA_ON_QPS
+    value: "0"
+  - name: NCCL_IB_PCI_RELAXED_ORDERING
+    value: "1"
+  - name: NCCL_IB_GID_INDEX
+    value: "3"
+  - name: NCCL_SOCKET_IFNAME
+    value: eth0 #net1-0,net1-1
+  - name: NCCL_CROSS_NIC
+    value: "0"
+  - name: CUDA_VISIBLE_DEVICES
+    value: 0,1,2,3,4,5,6,7
+  - name: NCCL_ALGO
+    value: Ring
+  - name: NCCL_IGNORE_CPU_AFFINITY
+    value: "1"
+  - name: NCCL_DEBUG_SUBSYS
+    value: INIT,GRAPH,ENV,TUNING
+  - name: NCCL_IB_DISABLE
+    value: "0"
+  - name: NCCL_SOCKET_NTHREADS
+    value: "2"
+  - name: NCCL_DEBUG
+    value: WARN
+  - name: OMP_NUM_THREADS
+    value: "16"
+  - name: NCCL_BUFFSIZE
+    value: "67108864"
+  - name: EXPERIMENT_NAME
+    value: rp-granite-code-1b
+  - name: CUDA_DEVICE_MAX_CONNECTIONS
+    value: "1"
+  - name: GITHUB_COM_PAT
+    secret:
+      name: ms-git-access
+      key: github.com
+  - name: GITHUB_IBM_COM_PAT
+    secret:
+      name: ms-git-access
+      key: github.ibm.com
+  - name: WANDB_DISABLE_CODE
+    value: 1
+  - name: WANDB_DISABLE_GIT
+    value: 1
+  - name: WANDB_API_KEY
+    secret: 
+      name: mayank-wandb-public
+      key: api-key
+
+setupCommands:
+  - git clone https://$GITHUB_IBM_COM_PAT@github.ibm.com/ai-models-architectures/IBM-models.git
+  - cd IBM-models
+  - pip install .
+  - cd ..
+  - git clone -b ffa https://$GITHUB_IBM_COM_PAT@github.ibm.com/ai-models-architectures/dolomite-engine.git
+  - cd dolomite-engine
+
+mainProgram: -m engine.pretrain --config configs/ffa-experiments/base.yml
+
+multiNicNetworkName: multi-nic-network
+
+imagePullSecrets:
+  - name: all-icr-io
+
+volumes:
+  - name: mayank-pvc
+    claimName: mayank-pvc
+    mountPath: /mayank-pvc
+  - name: dmf-training-datasets-gpfs
+    claimName: dmf-training-datasets-gpfs
+    mountPath: /datasets

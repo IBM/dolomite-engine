@@ -67,19 +67,30 @@ def main() -> None:
 
     args: InferenceArgs = get_args(mode)
 
-    model = get_model(args, mode)
-    model = model.to(model.input_device)
+    if args.load_args is None:
+        model = get_model(args, mode)
+        model = model.to(model.input_device)
 
-    datasets_list, _ = get_datasets_list(
-        args,
-        split=DatasetSplit.test,
-        mode=mode,
-        tokenizer=model.tokenizer,
-        is_encoder_decoder=model.is_encoder_decoder,
-    )
+        datasets_list, _ = get_datasets_list(
+            args,
+            split=DatasetSplit.test,
+            mode=mode,
+            tokenizer=model.tokenizer,
+            is_encoder_decoder=model.is_encoder_decoder,
+        )
+    else:
+        model, args_from_checkpoint = load_checkpoint_for_inference(args, mode)
 
-    if args.load_args is not None:
-        load_checkpoint_for_inference(model, args.load_args.load_path, args.load_args.iteration)
+        # override with datasets passed in current config
+        args_from_checkpoint.datasets = args.datasets
+
+        datasets_list, _ = get_datasets_list(
+            args_from_checkpoint,
+            split=DatasetSplit.test,
+            mode=mode,
+            tokenizer=model.tokenizer,
+            is_encoder_decoder=model.is_encoder_decoder,
+        )
 
     generate(args, model, datasets_list, mode)
 

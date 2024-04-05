@@ -10,17 +10,6 @@
             "max_output_tokens": 128
         }
     ],
-    "model_args": {
-        "model_name": "bigscience/bloom-560m",
-        "model_class": "AutoModelForCausalLM",
-        "dtype": "bfloat16"
-    },
-    "tuning_args": {
-        "tuning_method": "prompt_tuning",
-        "prompt_tuning_init": "TEXT",
-        "prompt_tuning_init_text": "Classify the sentiment of the sentence:",
-        "num_virtual_tokens": 8
-    },
     "load_args": {
         "load_path": "checkpoints/prompt_tuning",
         "iteration": 4000

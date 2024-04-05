@@ -162,7 +162,7 @@ def get_logger() -> logging.Logger:
 
 @run_rank_n
 def log_rank_0(level: int, msg: str) -> None:
-    return get_logger().log(level=level, msg=msg, stacklevel=2)
+    return get_logger().log(level=level, msg=msg, stacklevel=3)
 
 
 @run_rank_n

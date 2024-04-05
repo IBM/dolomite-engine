@@ -11,12 +11,8 @@ def main() -> None:
 
     args = get_args(mode)
 
-    model = get_model(args, mode)
-
-    load_checkpoint_for_inference(model, args.load_args.load_path, args.load_args.iteration)
-
-    model.tokenizer.save_pretrained(args.export_path)
-    model.model.save_pretrained(args.export_path)
+    model, _ = load_checkpoint_for_inference(args, mode)
+    model.save_pretrained(args.export_path)
 
 
 if __name__ == "__main__":

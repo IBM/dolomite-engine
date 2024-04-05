@@ -35,7 +35,7 @@ def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
 
 
 class BaseArgs(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
 
     def to_dict(self) -> dict:
         copied = deepcopy(self)
@@ -76,7 +76,7 @@ class TokenizerArgs(BaseArgs):
 
 class ModelArgs(BaseArgs):
     # model name on huggingface hub
-    model_name: str = None
+    model_name: Optional[str] = None
     # config class to load the model from
     pretrained_config: Optional[dict] = None
     # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -269,7 +269,7 @@ class LRSchedulerArgs(BaseArgs):
     # constant steps after warmup and before decay
     num_constant_steps: int = 0
     # decays steps after constant steps, if None then all remaining steps are for decay
-    num_decay_steps: int = None
+    num_decay_steps: Optional[int] = None
     # lr scheduler for decay
     lr_decay_style: LRDecaySchedule = LRDecaySchedule.cosine
     # decay factor * max_lr = min_lr (ratio of min_lr and max_lr)
@@ -297,14 +297,11 @@ class DistributedArgs(BaseArgs):
     zero_quantized_gradients: bool = False
     # communication dtype
     communication_dtype: Optional[str] = None
+    # whether to use torch.compile
+    torch_compile: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.zero_hpz_partition_size, "zero_hpz_partition_size")])
-
-        assert self.zero_hpz_partition_size in [
-            1,
-            torch.cuda.device_count(),
-        ], "currently we only support 1 and number of GPUs per node for HSDP"
 
         if self.zero_quantized_weights or self.zero_quantized_gradients:
             assert (
@@ -406,9 +403,7 @@ class InferenceArgs(BaseArgs):
     # tokenizer related arguments
     tokenizer_args: TokenizerArgs = TokenizerArgs()
     # model related arguments
-    model_args: ModelArgs = None
-    # tuning related arguments
-    tuning_args: TuningArgs = None
+    model_args: Optional[ModelArgs] = None
     # list of datasets to use
     datasets: List[DatasetArgs] = []
     # load related arguments
@@ -423,41 +418,31 @@ class InferenceArgs(BaseArgs):
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
             [
-                (self.model_args, "model_args"),
-                (self.tuning_args, "tuning_args"),
                 (self.datasets, "datasets"),
                 (self.generation_parameters, "generation_parameters"),
                 (self.output_dir, "output_dir"),
             ]
         )
 
+        if self.load_args is None:
+            assert self.model_args is not None, "model_args need to be specified if load_args are not specified"
+        else:
+            assert self.model_args is None, "model_args can't be specified with load_args"
+
         # datasets
         _check_datasets(self.datasets)
 
 
 class ExportArgs(BaseArgs):
-    # tokenizer related arguments
-    tokenizer_args: TokenizerArgs = TokenizerArgs()
-    # model related arguments
-    model_args: ModelArgs = None
-    # tuning related arguments
-    tuning_args: TuningArgs = None
     # load related arguments
     load_args: LoadArgs = None
-    # logging related arguments
-    logging_args: LoggingArgs = LoggingArgs()
     # export path
     export_path: str = None
+    # logging related arguments
+    logging_args: LoggingArgs = LoggingArgs()
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None(
-            [
-                (self.model_args, "model_args"),
-                (self.tuning_args, "tuning_args"),
-                (self.load_args, "load_args"),
-                (self.export_path, "export_path"),
-            ]
-        )
+        _check_not_None([(self.load_args, "load_args"), (self.export_path, "export_path")])
 
 
 _MODE_ARGS_MAP = {

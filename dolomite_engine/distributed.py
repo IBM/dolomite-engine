@@ -72,6 +72,7 @@ def wrap_model_for_distributed_training(
 
     stage = args.distributed_args.stage
     cpu_offload = args.distributed_args.cpu_offload
+    torch_compile = args.distributed_args.torch_compile
 
     if args.model_args.dtype in [torch.float16, torch.bfloat16]:
         if args.distributed_args.communication_dtype != torch.float32:
@@ -80,8 +81,14 @@ def wrap_model_for_distributed_training(
                 f"({args.model_args.dtype}), recommended is to use ({torch.float32})"
             )
 
+    assert args.distributed_args.zero_hpz_partition_size in [
+        1,
+        torch.cuda.device_count(),
+    ], "currently we only support 1 and number of GPUs per node for HSDP"
+
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
         assert stage in [1, 2, 3]
+        assert not torch_compile
 
         optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(
             optimizer_class_name=args.optimizer_args.class_name,
@@ -141,6 +148,9 @@ def wrap_model_for_distributed_training(
             use_orig_params=True,
             sync_module_states=efficient_cpu_initialization,
         )
+
+        if torch_compile:
+            model = torch.compile(model)
 
         optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(
             optimizer_class_name=args.optimizer_args.class_name,
