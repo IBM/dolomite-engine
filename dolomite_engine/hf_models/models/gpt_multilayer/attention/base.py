@@ -51,8 +51,8 @@ class MultiLayerAttention(nn.Module):
 
         self.attn_pdrop = attn_pdrop
 
-        self.attn_dropout = nn.Dropout(attn_pdrop)
-        self.resid_dropout = nn.Dropout(resid_pdrop)
+        self.attn_dropout = nn.Identity() if attn_pdrop == 0 else nn.Dropout(attn_pdrop)
+        self.resid_dropout = nn.Identity() if resid_pdrop == 0 else nn.Dropout(resid_pdrop)
 
         assert (
             self.num_key_value_heads is not None

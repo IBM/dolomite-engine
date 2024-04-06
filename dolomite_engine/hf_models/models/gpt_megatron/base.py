@@ -206,7 +206,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
 
-        self.drop = nn.Dropout(config.embd_pdrop)
+        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList(
             [
                 GPTMegatronBlock(

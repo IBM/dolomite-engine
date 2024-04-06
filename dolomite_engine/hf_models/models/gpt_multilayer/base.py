@@ -39,7 +39,7 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
 
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
 
-        self.drop = nn.Dropout(config.embd_pdrop)
+        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
 
         global_index, local_index = 0, 0
         # layer_index to (global_index, local_index)

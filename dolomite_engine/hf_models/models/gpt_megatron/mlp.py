@@ -24,7 +24,7 @@ class MLP(nn.Module):
         )
         self.act = get_activation_function(activation_function)
         self.c_proj = nn.Linear(intermediate_size, hidden_size, bias=add_bias)
-        self.dropout = nn.Dropout(residual_dropout)
+        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc(hidden_states)
