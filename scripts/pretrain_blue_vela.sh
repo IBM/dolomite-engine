@@ -1,6 +1,6 @@
 export CUDA_DEVICE_ORDER=PCI_BUS_ID # Recommended 
 export CUDA_MODULE_LOADING=LAZY # Recommended 
-export CUDA_DEVICE_MAX_CONNECTIONS=1 # Required 
+# export CUDA_DEVICE_MAX_CONNECTIONS=1 # Required 
 
 # NCCl/InfiniBand options
 export NCCL_IB_PCI_RELAXED_ORDERING=2 # only use if available and beneficial
