@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from functools import partial
 from typing import Tuple, Union
@@ -17,7 +18,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from .arguments import TrainingArgs
 from .enums import DistributedBackend
 from .optimization import get_optimizer_and_lr_scheduler
-from .utils import warn_rank_0
+from .utils import log_rank_0, warn_rank_0
 
 
 _DEEPSPEED_CONFIG: dict = None
@@ -123,7 +124,7 @@ def wrap_model_for_distributed_training(
             if args.distributed_args.zero_hpz_partition_size == 1:
                 sharding_strategy = _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
             else:
-                assert args.distributed_args.zero_hpz_partition_size == torch.cuda.device_count()
+                assert args.distributed_args.zero_hpz_partition_size == 8
 
                 sharding_strategy = _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
 

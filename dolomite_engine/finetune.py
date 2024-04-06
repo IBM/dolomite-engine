@@ -34,6 +34,7 @@ def track_train_metrics(
     experiments_tracker: ExperimentsTracker,
     loss_running_mean_tracker: RunningMean,
     flops: int = None,
+    tokens_per_day: int = None,
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -60,7 +61,11 @@ def track_train_metrics(
         f"learning_rate = {current_lr}, "
     )
     if flops is not None:
-        message += f"FLOPS = {flops}"
+        message += f"FLOPS = {flops}, "
+
+    if tokens_per_day is not None:
+        message += f"throughput = {tokens_per_day}B tokens per day"
+
     log_rank_0(logging.INFO, message)
 
 

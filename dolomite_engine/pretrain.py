@@ -97,6 +97,7 @@ def train(
     batch_size_per_gpu = args.training_parameters.batch_size_per_gpu
     sequence_length = args.datasets[0].class_args.get("sequence_length")
     model_flops = model.get_model_tflops(batch_size_per_gpu * gradient_accumulation_steps, sequence_length)
+    tokens_per_batch = batch_size_per_gpu * gradient_accumulation_steps * get_world_size() * sequence_length
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
@@ -117,6 +118,8 @@ def train(
         )
 
         if global_step % log_interval == 0:
+            time_elapsed = time.perf_counter() - start_time
+
             track_train_metrics(
                 global_step=global_step,
                 train_loss_step=loss_step,
@@ -125,9 +128,8 @@ def train(
                 else lr_scheduler.get_lr()[0],
                 experiments_tracker=experiments_tracker,
                 loss_running_mean_tracker=loss_running_mean_tracker,
-                flops=None
-                if model_flops is None
-                else model_flops * steps_since_start_time / (time.perf_counter() - start_time),
+                flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
+                tokens_per_day=tokens_per_batch * steps_since_start_time / time_elapsed * 86400 / 1e9,
             )
             start_time = time.perf_counter()
             steps_since_start_time = 0
