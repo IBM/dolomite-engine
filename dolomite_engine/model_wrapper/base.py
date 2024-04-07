@@ -7,8 +7,16 @@ from transformers.integrations import HfDeepSpeedConfig
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
 from ..distributed import get_deepspeed_config
-from ..enums import AttentionImplementation, DistributedBackend, LossMask, Mode, PaddingSide
+from ..enums import (
+    AttentionImplementation,
+    DistributedBackend,
+    GradientCheckpointingMethod,
+    LossMask,
+    Mode,
+    PaddingSide,
+)
 from ..hf_models import is_padding_free_transformer_supported
+from ..hf_models.modeling_utils import is_glu
 from ..utils import log_rank_0, register_profiler, register_timer, warn_rank_0
 
 
@@ -30,6 +38,8 @@ class ModelWrapper(torch.nn.Module):
         self.mode = mode
         self.model_name = args.model_args.model_name
         self.model_class = args.model_args.model_class
+        self.gradient_checkpointing_method = args.distributed_args.gradient_checkpointing_method
+        self.gradient_checkpointing_args = args.distributed_args.gradient_checkpointing_args
 
         self._setup_input_device()
 
@@ -144,9 +154,6 @@ class ModelWrapper(torch.nn.Module):
                         self.model = self.model.to_empty(device=self.input_device)
                     else:
                         self.model = _get_model(device_map=self.input_device)
-
-            if args.distributed_args.gradient_checkpointing:
-                self.model.gradient_checkpointing_enable()
         else:
             self.model = _get_model(torch_dtype=self.dtype)
 
@@ -182,9 +189,33 @@ class ModelWrapper(torch.nn.Module):
 
         return generated_text, num_generated_tokens
 
-    def get_model_tflops(self, batch_size: int, sequence_length: int) -> int:
-        if hasattr(self.model, "get_model_tflops"):
-            return self.model.get_model_tflops(batch_size, sequence_length)
+    def get_model_tflops(self, batch_size: int, sequence_length: int) -> None:
+        b = batch_size
+        s = sequence_length
+        h = self.config.n_embd
+        f = self.config.n_inner
+        n = self.config.n_head
+        k = self.config.num_key_value_heads
+        l = self.config.n_layer
+        v = self.config.vocab_size
+
+        mlp_flops = 4 * b * s * h * f
+        if is_glu(self.config.activation_function):
+            mlp_flops += 2 * b * s * h * f
+
+        attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
+
+        forward_flops = attention_flops + mlp_flops
+
+        backward_flops = 2 * forward_flops
+        if self.gradient_checkpointing_method == GradientCheckpointingMethod.block:
+            backward_flops = forward_flops / self.gradient_checkpointing_args.get("checkpoint_every", 1)
+
+        model_flops = l * (forward_flops + backward_flops)
+        model_flops += 6 * b * s * h * v
+        model_flops /= 10**12
+
+        return model_flops
 
     @register_profiler("prepare_batch")
     @register_timer("prepare_batch")

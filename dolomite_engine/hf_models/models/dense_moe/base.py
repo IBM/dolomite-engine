@@ -54,7 +54,5 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEMegablocksModel):
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self._setup_positional_encoding()
 
-        self.gradient_checkpointing = False
-
         # Initialize weights and apply final processing
         self.post_init()

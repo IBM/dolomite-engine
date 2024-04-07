@@ -85,8 +85,6 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self._setup_positional_encoding()
 
-        self.gradient_checkpointing = False
-
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -150,29 +148,16 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
-            if self.gradient_checkpointing and self.training:
-                outputs = self._gradient_checkpointing_func(
-                    block.__call__,
-                    hidden_states,
-                    None,
-                    attention_mask,
-                    alibi_bias,
-                    rope_cos_sin,
-                    cu_seqlens,
-                    max_seqlen,
-                    output_router_logits,
-                )
-            else:
-                outputs = block(
-                    hidden_states,
-                    past_key_values=past_key_values,
-                    attention_mask=attention_mask,
-                    alibi_bias=alibi_bias,
-                    rope_cos_sin=rope_cos_sin,
-                    cu_seqlens=cu_seqlens,
-                    max_seqlen=max_seqlen,
-                    output_router_logits=output_router_logits,
-                )
+            outputs = block(
+                hidden_states,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                alibi_bias=alibi_bias,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                output_router_logits=output_router_logits,
+            )
 
             hidden_states = outputs[0]
             if output_router_logits:

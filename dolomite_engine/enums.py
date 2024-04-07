@@ -1,6 +1,10 @@
 from enum import Enum
 
 
+class GradientCheckpointingMethod(Enum):
+    block = "block"
+
+
 class LRDecaySchedule(str, Enum):
     constant = "constant"
     linear = "linear"

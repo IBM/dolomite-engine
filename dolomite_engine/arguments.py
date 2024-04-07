@@ -17,6 +17,7 @@ from .enums import (
     AttentionImplementation,
     DistributedBackend,
     ExperimentsTrackerName,
+    GradientCheckpointingMethod,
     LossMask,
     LRDecaySchedule,
     Mode,
@@ -288,7 +289,9 @@ class DistributedArgs(BaseArgs):
     # train with CPU offloading to save GPU memory
     cpu_offload: bool = False
     # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
-    gradient_checkpointing: bool = False
+    gradient_checkpointing_method: GradientCheckpointingMethod = None
+    # gradient checkpointint args
+    gradient_checkpointing_args: dict = {}
     # hierarchical partioning for ZeRO (HSDP)
     zero_hpz_partition_size: int = 1
     # whether to use quantized weights (ZeRO++)

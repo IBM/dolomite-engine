@@ -45,6 +45,6 @@
     },
     "distributed_args": {
         "distributed_backend": "deepspeed",
-        "gradient_checkpointing": true
+        "gradient_checkpointing_method": "block"
     }
 }

@@ -41,8 +41,4 @@ class ModelWrapperForPEFT(ModelWrapperForFinetuning):
             )
 
         self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
-
-        if args.distributed_args.gradient_checkpointing:
-            self.model.gradient_checkpointing_enable()
-
         self.model = get_peft_model(self.model, self.peft_config)

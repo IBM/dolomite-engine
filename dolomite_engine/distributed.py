@@ -1,10 +1,8 @@
-import logging
 from copy import deepcopy
 from functools import partial
 from typing import Tuple, Union
 
 import torch
-from accelerate import FullyShardedDataParallelPlugin as FSDP_plugin
 from deepspeed import DeepSpeedEngine
 from deepspeed import initialize as deepspeed_initialize
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -17,8 +15,9 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import TrainingArgs
 from .enums import DistributedBackend
+from .gradient_checkpointing import apply_gradient_checkpointing
 from .optimization import get_optimizer_and_lr_scheduler
-from .utils import log_rank_0, warn_rank_0
+from .utils import get_module_class_from_name, warn_rank_0
 
 
 _DEEPSPEED_CONFIG: dict = None
@@ -87,6 +86,8 @@ def wrap_model_for_distributed_training(
         torch.cuda.device_count(),
     ], "currently we only support 1 and number of GPUs per node for HSDP"
 
+    block_names = model.model._no_split_modules
+
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
         assert stage in [1, 2, 3]
         assert not torch_compile
@@ -110,6 +111,13 @@ def wrap_model_for_distributed_training(
             lr_scheduler=lr_scheduler,
             config=get_deepspeed_config(args),
         )
+
+        if args.distributed_args.gradient_checkpointing_method is not None:
+            apply_gradient_checkpointing(
+                model,
+                args.distributed_args.gradient_checkpointing_method,
+                **args.distributed_args.gradient_checkpointing_args,
+            )
 
         # we don't need the optimizer and scheduler when using deepspeed backend
         optimizer = None
@@ -140,15 +148,23 @@ def wrap_model_for_distributed_training(
             mixed_precision=_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype],
             auto_wrap_policy=partial(
                 transformer_auto_wrap_policy,
-                transformer_layer_cls=[
-                    FSDP_plugin.get_module_class_from_name(model.model, name) for name in model.model._no_split_modules
-                ],
+                transformer_layer_cls=[get_module_class_from_name(model, name) for name in block_names],
             ),
             device_id=torch.cuda.current_device(),
             limit_all_gathers=True,
             use_orig_params=True,
             sync_module_states=efficient_cpu_initialization,
         )
+
+        if args.distributed_args.gradient_checkpointing_method is not None:
+            assert len(block_names) == 1
+
+            apply_gradient_checkpointing(
+                model,
+                args.distributed_args.gradient_checkpointing_method,
+                block_name=block_names[0],
+                **args.distributed_args.gradient_checkpointing_args,
+            )
 
         if torch_compile:
             model = torch.compile(model)

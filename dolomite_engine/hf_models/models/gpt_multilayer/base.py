@@ -82,8 +82,6 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self._setup_positional_encoding()
 
-        self.gradient_checkpointing = False
-
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -134,27 +132,15 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
-            if self.gradient_checkpointing and self.training:
-                hidden_states = self._gradient_checkpointing_func(
-                    block.__call__,
-                    hidden_states,
-                    None,
-                    attention_mask,
-                    alibi_bias,
-                    rope_cos_sin,
-                    cu_seqlens,
-                    max_seqlen,
-                )
-            else:
-                hidden_states = block(
-                    hidden_states,
-                    past_key_values=past_key_values,
-                    attention_mask=attention_mask,
-                    alibi_bias=alibi_bias,
-                    rope_cos_sin=rope_cos_sin,
-                    cu_seqlens=cu_seqlens,
-                    max_seqlen=max_seqlen,
-                )
+            hidden_states = block(
+                hidden_states,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                alibi_bias=alibi_bias,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
 
         hidden_states = self.ln_f(hidden_states)
 

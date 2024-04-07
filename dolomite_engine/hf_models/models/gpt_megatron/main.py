@@ -5,7 +5,6 @@ import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
-from ...modeling_utils import is_glu
 from .base import GPTMegatronModel, GPTMegatronPreTrainedModel
 from .config import GPTMegatronConfig
 
@@ -154,31 +153,3 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
             hidden_states=transformer_outputs.hidden_states,
             attentions=transformer_outputs.attentions,
         )
-
-    def get_model_tflops(self, batch_size: int, sequence_length: int) -> None:
-        b = batch_size
-        s = sequence_length
-        h = self.config.n_embd
-        f = self.config.n_inner
-        n = self.config.n_head
-        k = self.config.num_key_value_heads
-        l = self.config.n_layer
-        v = self.config.vocab_size
-
-        mlp_flops = 4 * b * s * h * f
-        if is_glu(self.config.activation_function):
-            mlp_flops += 2 * b * s * h * f
-
-        attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
-
-        forward_flops = attention_flops + mlp_flops
-        if self.transformer.gradient_checkpointing:
-            backward_flops = 3 * forward_flops
-        else:
-            backward_flops = 2 * forward_flops
-
-        model_flops = l * (forward_flops + backward_flops)
-        model_flops += 6 * b * s * h * v
-        model_flops /= 10**12
-
-        return model_flops
