@@ -1,10 +1,8 @@
 from copy import deepcopy
 from functools import partial
-from typing import Tuple, Union
+from typing import Tuple
 
 import torch
-from deepspeed import DeepSpeedEngine
-from deepspeed import initialize as deepspeed_initialize
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as FSDP_MixedPrecision
 from torch.distributed.fsdp import ShardingStrategy
@@ -16,6 +14,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from .arguments import TrainingArgs
 from .enums import DistributedBackend
 from .gradient_checkpointing import apply_gradient_checkpointing
+from .model_wrapper import ModelWrapper
 from .optimization import get_optimizer_and_lr_scheduler
 from .utils import get_module_class_from_name, warn_rank_0
 
@@ -59,15 +58,15 @@ _TORCH_DTYPE_TO_STR = {
 
 def wrap_model_for_distributed_training(
     args: TrainingArgs, model: torch.nn.Module
-) -> Tuple[Union[DeepSpeedEngine, DDP, FSDP], Optimizer, LambdaLR]:
+) -> Tuple[ModelWrapper, Optimizer, LambdaLR]:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
         args (TrainingArgs): arguments based on training mode
-        model (torch.nn.Module): any torch.nn.Module object
+        model (ModelWrapper): any torch.nn.Module object
 
     Returns:
-        Tuple[Union[DeepSpeedEngine, DDP, FSDP], Optimizer, LambdaLR]: parallelized model, optimizer and lr_scheduler
+        Tuple[ModelWrapper, Optimizer, LambdaLR]: parallelized model, optimizer and lr_scheduler
     """
 
     stage = args.distributed_args.stage
@@ -104,6 +103,8 @@ def wrap_model_for_distributed_training(
             lr_decay_style=args.lr_scheduler_args.lr_decay_style,
             lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         )
+
+        from deepspeed import initialize as deepspeed_initialize
 
         model, _, _, _ = deepspeed_initialize(
             model=model,

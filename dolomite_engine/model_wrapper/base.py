@@ -6,7 +6,6 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
-from ..distributed import get_deepspeed_config
 from ..enums import (
     AttentionImplementation,
     DistributedBackend,
@@ -136,6 +135,8 @@ class ModelWrapper(torch.nn.Module):
             # this only instantiates a single instance of the model across the ranks
             if self.distributed_backend == DistributedBackend.deepspeed:
                 if args.model_args.efficient_cpu_initialization:
+                    from ..distributed import get_deepspeed_config
+
                     self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
                 self.model = _get_model()
@@ -283,7 +284,6 @@ class ModelWrapper(torch.nn.Module):
 
     def _setup_input_device(self) -> None:
         if self.mode == Mode.training:
-            # if using deepspeed
             self.input_device = torch.cuda.current_device()
         else:
             self.input_device = 0

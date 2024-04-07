@@ -1,14 +1,3 @@
-from apex.optimizers import FusedAdam as ApexFusedAdam
-from apex.optimizers import FusedLAMB as ApexFusedLAMB
-from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
-from apex.optimizers import FusedSGD as ApexFusedSGD
-from deepspeed.ops.adagrad import DeepSpeedCPUAdagrad
-from deepspeed.ops.adam import DeepSpeedCPUAdam
-from deepspeed.ops.adam import FusedAdam as DeepSpeedFusedAdam
-from deepspeed.ops.lamb import FusedLamb as DeepSpeedFusedLAMB
-from deepspeed.runtime.fp16.onebit import OnebitAdam as DeepSpeedOnebitAdam
-from deepspeed.runtime.fp16.onebit import OnebitLamb as DeepSpeedOnebitLAMB
-from deepspeed.runtime.fp16.onebit import ZeroOneAdam as DeepSpeedZeroOneAdam
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -22,6 +11,35 @@ from torch.optim.radam import RAdam as TorchRAdam
 from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
+
+
+try:
+    from apex.optimizers import FusedAdam as ApexFusedAdam
+    from apex.optimizers import FusedLAMB as ApexFusedLAMB
+    from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
+    from apex.optimizers import FusedSGD as ApexFusedSGD
+except:
+    ApexFusedAdam = None
+    ApexFusedLAMB = None
+    ApexFusedNovoGrad = None
+    ApexFusedSGD = None
+
+try:
+    from deepspeed.ops.adagrad import DeepSpeedCPUAdagrad
+    from deepspeed.ops.adam import DeepSpeedCPUAdam
+    from deepspeed.ops.adam import FusedAdam as DeepSpeedFusedAdam
+    from deepspeed.ops.lamb import FusedLamb as DeepSpeedFusedLAMB
+    from deepspeed.runtime.fp16.onebit import OnebitAdam as DeepSpeedOnebitAdam
+    from deepspeed.runtime.fp16.onebit import OnebitLamb as DeepSpeedOnebitLAMB
+    from deepspeed.runtime.fp16.onebit import ZeroOneAdam as DeepSpeedZeroOneAdam
+except:
+    DeepSpeedCPUAdagrad = None
+    DeepSpeedCPUAdam = None
+    DeepSpeedFusedAdam = None
+    DeepSpeedFusedLAMB = None
+    DeepSpeedOnebitAdam = None
+    DeepSpeedOnebitLAMB = None
+    DeepSpeedZeroOneAdam = None
 
 from ..utils import register_profiler, register_timer, warn_rank_0
 
@@ -76,6 +94,8 @@ def get_optimizer(
         raise ValueError(f"invalid class_name ({optimizer_class_name}) for optimizer")
 
     optimizer_class = _OPTIMIZER_CLASSES[optimizer_class_name]
+    if optimizer_class is None:
+        raise ImportError("relevant package for the optimizer is not installed")
 
     if cpu_offload and optimizer_class not in [DeepSpeedCPUAdam, DeepSpeedCPUAdagrad]:
         warn_rank_0(

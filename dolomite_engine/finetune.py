@@ -1,11 +1,7 @@
 import contextlib
 import logging
-from typing import Union
 
 import torch
-from deepspeed import DeepSpeedEngine
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import set_seed
@@ -15,7 +11,7 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import DataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, Mode
-from .model_wrapper import ModelWrapper, get_model, log_model
+from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .utils import (
     ExperimentsTracker,
     RunningMean,
@@ -85,7 +81,7 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
 @register_profiler("train_step")
 @register_timer("train_step")
 def train_step(
-    model: Union[DeepSpeedEngine, DDP, FSDP],
+    model: ModelWrapperForFinetuning,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     distributed_backend: DistributedBackend,
@@ -96,7 +92,7 @@ def train_step(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (DeepSpeedEngine, DDP, FSDP): DeepSpeed sharded model
+        model (ModelWrapperForFinetuning): model
         optimizer (Optimizer): optimizer
         lr_scheduler (LamdaLR): learning rate scheduler
         distributed_backend (DistributedBackend): distributed backend
@@ -155,7 +151,7 @@ def train_step(
 
 def train(
     args: TrainingArgs,
-    model: DeepSpeedEngine,
+    model: ModelWrapperForFinetuning,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
@@ -167,7 +163,7 @@ def train(
 
     Args:
         args (TrainingArgs): training args
-        model (DeepSpeedEngine): DeepSpeed sharded model
+        model (ModelWrapperForFinetuning): model
         optimizer (Optimizer): optimizer
         lr_scheduler (LRScheduler): learning rate scheduler
         train_dataloader (DataLoader): training dataloader
@@ -231,13 +227,16 @@ def train(
 @register_profiler("evaluate_dataset")
 @torch.no_grad()
 def evaluate(
-    val_dataloader: DataLoader, model: ModelWrapper, global_step: int, experiments_tracker: ExperimentsTracker
+    val_dataloader: DataLoader,
+    model: ModelWrapperForFinetuning,
+    global_step: int,
+    experiments_tracker: ExperimentsTracker,
 ) -> float:
     """main validation loop for the program
 
     Args:
         val_dataloader (DataLoader): validation dataloader
-        model (DeepSpeedEngine): DeepSpeed sharded model
+        model (ModelWrapperForFinetuning): model
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
 

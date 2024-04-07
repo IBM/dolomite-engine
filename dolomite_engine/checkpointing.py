@@ -7,12 +7,9 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import yaml
-from deepspeed import DeepSpeedEngine
-from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
 from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import StateDictType
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -30,7 +27,7 @@ _INFERENCE_CONFIG_PREFIX = "inference_config"
 @register_timer("save_checkpoint")
 def save_checkpoint(
     args: TrainingArgs,
-    model: Union[DeepSpeedEngine, DDP, FSDP],
+    model: ModelWrapper,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
@@ -41,7 +38,7 @@ def save_checkpoint(
 
     Args:
         args (TrainingArgs): arguments for training
-        model (Union[DeepSpeedEngine, DDP, FSDP]): model to save
+        model (ModelWrapper): model to save
         optimizer (Optimizer): optimizer to save
         lr_scheduler (LambdaLR): learning rate scheduler to save
         train_dataloader (DataLoader): train dataloader to save
@@ -59,8 +56,14 @@ def save_checkpoint(
     os.makedirs(save_path, exist_ok=True)
 
     if distributed_backend == DistributedBackend.deepspeed:
+        from deepspeed import DeepSpeedEngine
+
+        assert isinstance(model, DeepSpeedEngine)
+
         model.save_checkpoint(args.save_args.save_path, tag=_get_checkpoint_tag(iteration))
     elif distributed_backend == DistributedBackend.torch:
+        assert isinstance(model, FSDP)
+
         if stage == 0:
             run_rank_n(torch.save)(model.state_dict(), _get_model_path(save_path))
             run_rank_n(torch.save)(optimizer.state_dict(), _get_optimizer_path(save_path))
@@ -114,7 +117,7 @@ def save_checkpoint(
 @register_timer("load_checkpoint_for_training")
 def load_checkpoint_for_training(
     args: TrainingArgs,
-    model: Union[DeepSpeedEngine, DDP, FSDP],
+    model: ModelWrapper,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
@@ -123,7 +126,7 @@ def load_checkpoint_for_training(
 
     Args:
         args (TrainingArgs): arguments for training
-        model (Union[DeepSpeedEngine, DDP, FSDP]): model to load
+        model (ModelWrapper): model to load
         optimizer (Optimizer): optimizer to save
         lr_scheduler (LambdaLR): learning rate scheduler to load
         train_dataloader (DataLoader): train dataloader to load
@@ -150,8 +153,14 @@ def load_checkpoint_for_training(
     load_path = _get_base_path(args.load_args.load_path, iteration)
 
     if distributed_backend == DistributedBackend.deepspeed:
+        from deepspeed import DeepSpeedEngine
+
+        assert isinstance(model, DeepSpeedEngine)
+
         model.load_checkpoint(args.load_args.load_path, tag=_get_checkpoint_tag(iteration))
     elif distributed_backend == DistributedBackend.torch:
+        assert isinstance(model, FSDP)
+
         if stage == 0:
             model.load_state_dict(torch.load(_get_model_path(load_path)))
             optimizer.load_state_dict(torch.load(_get_optimizer_path(load_path)))
@@ -216,6 +225,8 @@ def load_checkpoint_for_inference(
     model = model.to(model.input_device)
 
     if distributed_backend == DistributedBackend.deepspeed:
+        from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
+
         state = get_fp32_state_dict_from_zero_checkpoint(load_path, _get_checkpoint_tag(iteration))
 
         if model.tuning_method == TuningMethod.prompt_tuning:

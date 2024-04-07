@@ -61,7 +61,7 @@ def train(
 
     Args:
         args (TrainingArgs): training args
-        model (DeepSpeedEngine, DDP, FSDP): sharded model
+        model (ModelWrapperForPretraining): model
         optimizer (Optimizer): optimizer
         lr_scheduler (LRScheduler): learning rate scheduler
         train_dataloader (DataLoader): training dataloader
@@ -163,7 +163,7 @@ def evaluate(
 
     Args:
         val_dataloaders (List[DataLoader]): list of validation dataloaders
-        model (DeepSpeedEngine): DeepSpeed sharded model
+        model (ModelWrapperForPretraining): model
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
