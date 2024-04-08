@@ -11,7 +11,7 @@ from .base import ModelWrapper
 class ModelWrapperForPretraining(ModelWrapper):
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
-    def forward(self, batch: Tuple[List[int]]) -> torch.Tensor:
+    def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 
         Args:

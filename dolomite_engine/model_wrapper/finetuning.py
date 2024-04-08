@@ -9,7 +9,7 @@ from .base import ModelWrapper
 class ModelWrapperForFinetuning(ModelWrapper):
     @register_profiler("forward_pass")
     @register_timer("forward_pass")
-    def forward(self, batch: Tuple[List[int]]) -> torch.Tensor:
+    def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 
         Args:
@@ -18,8 +18,6 @@ class ModelWrapperForFinetuning(ModelWrapper):
         Returns:
             torch.Tensor: loss tensor
         """
-
-        batch = self.prepare_batch(batch)
 
         if not self.use_padding_free_transformer:
             for i in batch:

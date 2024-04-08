@@ -286,6 +286,7 @@ def main() -> None:
         mode=mode,
         tokenizer=model.tokenizer,
         is_encoder_decoder=model.is_encoder_decoder,
+        padding_side=model.padding_side,
     )
 
     val_dataloader = None
@@ -296,6 +297,7 @@ def main() -> None:
             mode=mode,
             tokenizer=model.tokenizer,
             is_encoder_decoder=model.is_encoder_decoder,
+            padding_side=model.padding_side,
         )
 
     model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)

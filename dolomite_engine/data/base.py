@@ -92,7 +92,7 @@ class BaseDataset(torch.utils.data.Dataset):
             return self.output_format.replace("__output__", output, 1)
         return output
 
-    def get_input_output_token_ids(self, input: str, output: str) -> Union[List[List[int]], Tuple[List[List[int]]]]:
+    def get_input_output_token_ids(self, input: str, output: str) -> dict:
         """tokenizes the input and output text
 
         Args:
@@ -100,7 +100,7 @@ class BaseDataset(torch.utils.data.Dataset):
             output (str): output text
 
         Returns:
-            Union[List[List[int]], Tuple[List[List[int]]]]: batch of token ids
+            dict: an example
         """
 
         eos_token_id: int = self.tokenizer.eos_token_id
@@ -125,9 +125,9 @@ class BaseDataset(torch.utils.data.Dataset):
             if not self.is_encoder_decoder:
                 input.extend(output)
 
-            result = input, output
+            result = {"input": input, "output": output}
         else:
-            result = input
+            result = {"input": input}
 
         return result
 
@@ -285,23 +285,3 @@ def get_max_output_length(
 #         result = _binary_search_index(x[:middle], i)
 
 #     return result
-
-
-# FIXME check typing
-def collate(batch: Union[List[List[int]], List[Tuple[List[int]]]]) -> Union[List[List[int]], Tuple[List[List[int]]]]:
-    """prepares the inputs and outputs for forward function depending on whther the model is decoder only or encoder-decoder
-
-    Args:
-        batch (List[dict]): batch of examples
-
-    Returns:
-        Union[List[List[int]], Tuple[List[List[int]]]]: batch of token ids
-    """
-
-    inputs = []
-    outputs = []
-    for i, o in batch:
-        inputs.append(i)
-        outputs.append(o)
-
-    return inputs, outputs

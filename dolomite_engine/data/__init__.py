@@ -1,12 +1,13 @@
 import logging
+from functools import partial
 from typing import Iterable, List, Tuple, Union
 
 from transformers import AutoTokenizer
 
 from ..arguments import InferenceArgs, TrainingArgs
-from ..enums import DatasetSplit, Mode, TuningMethod
+from ..enums import DatasetSplit, Mode, PaddingSide, TuningMethod
 from ..utils import get_world_size, log_rank_0
-from .base import BaseDataset, BlendedDatasets, collate
+from .base import BaseDataset, BlendedDatasets
 from .dataloader import DataLoader
 from .debug import DebugDataset
 from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
@@ -14,6 +15,7 @@ from .jsonlines import JSONLinesDataset
 from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
 from .sst2 import SST2Dataset
+from .utils import collate_fn
 
 
 _DATASETS_LIST = {
@@ -32,6 +34,7 @@ def get_dataloader(
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
+    padding_side: PaddingSide,
 ) -> Tuple[DataLoader]:
     """prepares datasets and sampler
 
@@ -79,7 +82,15 @@ def get_dataloader(
         blended_dataset,
         batch_size=batch_size_per_gpu,
         sampler=sampler,
-        collate_fn=collate,
+        collate_fn=partial(
+            collate_fn,
+            mode=mode,
+            padding_side=padding_side,
+            loss_mask=args.training_parameters.loss_mask,
+            eos_token_id=tokenizer.eos_token_id,
+            is_encoder_decoder=is_encoder_decoder,
+            use_padding_free_transformer=args.model_args.use_padding_free_transformer,
+        ),
     )
 
     if split == DatasetSplit.train:

@@ -160,7 +160,7 @@ class ModelWrapper(torch.nn.Module):
 
     @register_profiler("generate")
     @register_timer("generate")
-    def generate(self, batch: Tuple[List[int]], generate_kwargs: dict) -> List[str]:
+    def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
         """generate function for a batch
 
         Args:
@@ -173,8 +173,6 @@ class ModelWrapper(torch.nn.Module):
 
         if self.use_padding_free_transformer:
             raise NotImplementedError("padding free transformer doesn't support generation")
-
-        batch = self.prepare_batch(batch)
 
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
@@ -218,44 +216,6 @@ class ModelWrapper(torch.nn.Module):
 
         return model_flops
 
-    @register_profiler("prepare_batch")
-    @register_timer("prepare_batch")
-    def prepare_batch(self, batch: Tuple[List[int]]) -> dict:
-        """prepares the batch with padding to pass into the forward function of the HuggingFace model
-
-        Args:
-            batch (Tuple[List[int]]): input tokens and output tokens. Output tokens are optional when running generation but required for training.
-
-        Returns:
-            dict: dict containing input_ids, attention_mask and labels if outputs is specified
-        """
-
-        result = {}
-
-        if self.mode == Mode.training:
-            inputs, outputs = batch
-            assert outputs is not None, "outputs can't be None during training"
-        else:
-            inputs = batch
-            outputs = None
-
-        input_ids, attention_mask, labels = _pad(
-            inputs=inputs,
-            outputs=outputs,
-            pad_token_id=self.tokenizer.eos_token_id,
-            padding_side=self.padding_side,
-            is_encoder_decoder=self.is_encoder_decoder,
-            loss_mask=self.loss_mask,
-            use_padding_free_transformer=self.use_padding_free_transformer,
-        )
-
-        result["input_ids"] = input_ids
-        result["attention_mask"] = attention_mask
-        if self.mode == Mode.training:
-            result["labels"] = labels
-
-        return result
-
     def reset_parameters(self) -> None:
         if hasattr(self.model, "reset_parameters"):
             self.model.reset_parameters()
@@ -294,104 +254,3 @@ class ModelWrapper(torch.nn.Module):
     def save_pretrained(self, save_path: str) -> None:
         self.tokenizer.save_pretrained(save_path)
         self.model.save_pretrained(save_path)
-
-
-def _pad(
-    inputs: list,
-    outputs: list,
-    pad_token_id: int,
-    padding_side: PaddingSide,
-    is_encoder_decoder: bool,
-    loss_mask: LossMask,
-    use_padding_free_transformer: bool = False,
-    labels_mask_value: int = -100,
-) -> Tuple[List[int], List[int]]:
-    """pads the arrays with the specified padding value
-
-    Args:
-        inputs (list): input token ids
-        outputs (list): output token labels
-        pad_token_id (int): token id to pad with
-        padding_side (PaddingSide): padding side for the tensors
-        is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
-        loss_mask (LossMask): masking methodology for loss
-        use_padding_free_transformer (bool): whether to use padding free transformer
-        labels_mask_value (int): mask value to use for labels
-
-    Returns:
-        Tuple[List[int], List[int]]: token ids and the corresponding attention masks
-    """
-
-    # labels is None when outputs is None
-    labels = None
-
-    if is_encoder_decoder:
-        input_max_length = max(list(map(len, inputs)))
-
-        if padding_side == PaddingSide.left:
-            input_ids = [[pad_token_id] * (input_max_length - len(array)) + array for array in inputs]
-            attention_mask = [[0] * (input_max_length - len(array)) + [1] * len(array) for array in inputs]
-        else:
-            input_ids = [array + [pad_token_id] * (input_max_length - len(array)) for array in inputs]
-            attention_mask = [[1] * len(array) + [0] * (input_max_length - len(array)) for array in inputs]
-
-        if outputs is not None:
-            assert (
-                loss_mask == LossMask.output_only
-            ), "only output_only loss mask is supported with encoder decoder models"
-
-            output_max_length = max(list(map(len, outputs)))
-            # right padding for labels
-            labels = [array + [labels_mask_value] * (output_max_length - len(array)) for array in outputs]
-    else:
-        if use_padding_free_transformer:
-            input_ids = inputs
-            attention_mask = None
-
-            if loss_mask == LossMask.output_only:
-                labels = [
-                    [labels_mask_value] * (len(array_in) - len(array_out)) + array_out
-                    for array_in, array_out in zip(inputs, outputs)
-                ]
-            elif loss_mask == LossMask.no_mask:
-                labels = inputs
-            else:
-                raise ValueError(f"unexpected loss_mask ({loss_mask})")
-        else:
-            max_length = max(list(map(len, inputs)))
-
-            if padding_side == PaddingSide.left:
-                input_ids = [[pad_token_id] * (max_length - len(array)) + array for array in inputs]
-                attention_mask = [[0] * (max_length - len(array)) + [1] * len(array) for array in inputs]
-
-                if outputs is not None:
-                    if loss_mask == LossMask.output_only:
-                        labels = [[labels_mask_value] * (max_length - len(array)) + array for array in outputs]
-                    elif loss_mask == LossMask.no_mask:
-                        labels = inputs
-                    else:
-                        raise ValueError(f"unexpected loss_mask ({loss_mask})")
-            else:
-                input_ids = [array + [pad_token_id] * (max_length - len(array)) for array in inputs]
-                attention_mask = [[1] * len(array) + [0] * (max_length - len(array)) for array in inputs]
-
-                if outputs is not None:
-                    if loss_mask == LossMask.output_only:
-                        labels = [
-                            [labels_mask_value] * (len(array_in) - len(array_out))
-                            + array_out
-                            + [labels_mask_value] * (max_length - len(array_in))
-                            for array_in, array_out in zip(inputs, outputs)
-                        ]
-                    elif loss_mask == LossMask.no_mask:
-                        labels = inputs
-                    else:
-                        raise ValueError(f"unexpected loss_mask ({loss_mask})")
-
-    if not use_padding_free_transformer:
-        input_ids = torch.tensor(input_ids)
-        attention_mask = torch.tensor(attention_mask)
-        if labels is not None:
-            labels = torch.tensor(labels)
-
-    return input_ids, attention_mask, labels
