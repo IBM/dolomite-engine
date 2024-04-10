@@ -59,7 +59,7 @@ class PaddingFreeAttention(Attention):
             max_seqlen_q=max_seqlen,
             max_seqlen_k=max_seqlen,
             dropout_p=self.attn_pdrop if self.training else 0,
-            softmax_scale=None if self.scale_attn_weights else 1,
+            softmax_scale=self.attention_multiplier if self.scale_attn_weights else 1,
             causal=self.causal,
         )
 

@@ -35,7 +35,10 @@ class MultiLayerMathAttention(MultiLayerAttention):
         unscale = self.layer_idx + 1 if self.scale_attention_softmax_in_fp32 and upcast else 1
         scale_factor = 1 / unscale
         if self.scale_attn_weights:
-            scale_factor /= self.head_dim**0.5
+            if self.attention_multiplier is None:
+                scale_factor /= self.head_dim**0.5
+            else:
+                scale_factor *= self.attention_multiplier
 
         batch_size = query.shape[0]
         query_length = query.shape[2]

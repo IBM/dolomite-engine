@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import Attention
+from ...modeling_utils import Attention, ParameterizedLinear
 from ...safetensors import SafeTensorsWeightsManager
 from ..dropout import Dropout_TP
 from ..TP import ColumnParallelLinear, CopyToTensorParallelRegion, RowParallelLinear, get_tensor_parallel_group_manager
@@ -23,6 +23,7 @@ class Attention_TP(Attention):
         causal: bool,
         add_bias: bool,
         scale_attention_weights: bool,
+        attention_multiplier: float,
         attention_softmax_in_fp32: bool,
         scale_attention_softmax_in_fp32: bool,
         attn_pdrop: float,
@@ -57,6 +58,7 @@ class Attention_TP(Attention):
 
         self.position_embedding_type = position_embedding_type
         self.scale_attn_weights = scale_attention_weights
+        self.attention_multiplier = attention_multiplier
 
         self.layer_idx = layer_idx
         self.attention_softmax_in_fp32 = attention_softmax_in_fp32
@@ -157,7 +159,7 @@ class _MQA_KeyValueProjection(nn.Module):
         self.tp_world_size = get_tensor_parallel_group_manager().get_world_size()
 
         self.q_attn = ColumnParallelLinear(global_hidden_size, global_hidden_size, bias=add_bias)
-        self.kv_attn = nn.Linear(global_hidden_size, 2 * head_dim, bias=add_bias)
+        self.kv_attn = ParameterizedLinear(global_hidden_size, 2 * head_dim, bias=add_bias)
 
     def forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query = self.q_attn(hidden_states)

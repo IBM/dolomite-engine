@@ -8,13 +8,21 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
 from transformers import DynamicCache, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import Alibi, Attention, RMSNorm, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...modeling_utils import (
+    Alibi,
+    Attention,
+    ParameterizedEmbedding,
+    ParameterizedLinear,
+    RMSNorm,
+    RoPE,
+    YaRNScaledRoPE,
+    get_normalization_function,
+)
 from ...utils import check_list_type, flatten_and_convert_to_tensors
 from .config import GPTMegatronConfig
 from .layer import GPTMegatronBlock
@@ -68,26 +76,8 @@ class GPTMegatronPreTrainedModel(PreTrainedModel):
         )
 
     def _init_weights(self, module: nn.Module) -> None:
-        if isinstance(module, (MLP, Attention)):
-            module.c_proj.weight.data.normal_(
-                mean=0, std=(self.config.initializer_range / math.sqrt(2 * self.config.n_layer))
-            )
-            module.c_proj._is_hf_initialized = True
-        elif isinstance(module, nn.Linear):
-            module.weight.data.normal_(mean=0, std=self.config.initializer_range)
-            if module.bias is not None:
-                module.bias.data.zero_()
-        elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0, std=self.config.initializer_range)
-            if module.padding_idx is not None:
-                module.weight.data[module.padding_idx].zero_()
-        elif isinstance(module, (nn.LayerNorm, RMSNorm, Alibi, RoPE)):
+        if isinstance(module, (ParameterizedEmbedding, ParameterizedLinear, nn.LayerNorm, RMSNorm, Alibi, RoPE)):
             module.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        for module in self.modules():
-            self._init_weights(module)
-        self.tie_weights()
 
     def get_autoregressive_language_modeling_loss(
         self, lm_logits: torch.Tensor, labels: torch.Tensor, cu_seqlens: torch.Tensor
@@ -196,6 +186,8 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
         self.mask_value = None
+        self.m_emb = config.m_emb
+        self.initializer_range = config.initializer_range
 
         assert (
             self.embed_dim % self.num_heads == 0
@@ -203,7 +195,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
+        self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
         self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList(
@@ -231,10 +223,10 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    def get_input_embeddings(self) -> nn.Embedding:
+    def get_input_embeddings(self) -> ParameterizedEmbedding:
         return self.wte
 
-    def set_input_embeddings(self, new_embeddings: nn.Embedding) -> None:
+    def set_input_embeddings(self, new_embeddings: ParameterizedEmbedding) -> None:
         self.wte = new_embeddings
 
     def forward(
@@ -437,6 +429,9 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
         inputs_embeds = self.drop(inputs_embeds)
 
+        if self.m_emb is not None:
+            inputs_embeds = inputs_embeds * self.m_emb
+
         return inputs_embeds
 
     def _prepare_a_bunch_of_stuff(
@@ -615,7 +610,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         max_position_embeddings = self.config.max_position_embeddings
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            self.wpe = nn.Embedding(max_position_embeddings, self.embed_dim)
+            self.wpe = ParameterizedEmbedding(max_position_embeddings, self.embed_dim, std=self.initializer_range)
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             self.alibi = Alibi(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:

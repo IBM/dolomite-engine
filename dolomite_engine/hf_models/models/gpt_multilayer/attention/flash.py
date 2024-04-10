@@ -79,7 +79,7 @@ class MultiLayerFlashAttention2(MultiLayerAttention):
             max_seqlen_q=max_seqlen_q,
             max_seqlen_k=max_seqlen_k,
             dropout_p=self.attn_pdrop if self.training else 0,
-            softmax_scale=None if self.scale_attn_weights else 1,
+            softmax_scale=self.attention_multiplier if self.scale_attn_weights else 1,
             causal=self.causal,
         )
         attn_output = pad_input(attn_output, indices_q, batch_size, query_length)

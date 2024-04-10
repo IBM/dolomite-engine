@@ -2,8 +2,8 @@ from typing import Tuple
 
 import torch
 import torch.distributed
-import torch.nn as nn
 
+from ..modeling_utils import ParameterizedLinear
 from ..parallel import ProcessGroupManager
 from ..safetensors import SafeTensorsWeightsManager
 from .random import CUDA_RNGStatesTracker
@@ -76,7 +76,7 @@ class ReduceFromTensorParallelRegion(torch.autograd.Function):
         return grad_output
 
 
-class ColumnParallelLinear(nn.Linear):
+class ColumnParallelLinear(ParameterizedLinear):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         self.tp_world_size = get_tensor_parallel_group_manager().get_world_size()
 
@@ -109,7 +109,7 @@ class ColumnParallelLinear(nn.Linear):
         )
 
 
-class RowParallelLinear(nn.Linear):
+class RowParallelLinear(ParameterizedLinear):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         self.tp_world_size = get_tensor_parallel_group_manager().get_world_size()
         self.is_tp_first_rank = get_tensor_parallel_group_manager().get_first_rank() == torch.distributed.get_rank()

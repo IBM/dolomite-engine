@@ -5,7 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import RoPE, YaRNScaledRoPE, get_normalization_function
+from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_tensor_parallel_group_manager
 from ...safetensors import SafeTensorsWeightsManager
 from ..gpt_megatron import GPTMegatronConfig, GPTMegatronModel, GPTMegatronPreTrainedModel
@@ -36,7 +36,7 @@ class GPTMegatronModel_TP(GPTMegatronModel):
         if self.tensor_parallel_vocab_matrix:
             self.wte = Embedding_TP(config.vocab_size, self.embed_dim)
         else:
-            self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
+            self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim)
 
         self.drop = Dropout_TP(config.embd_pdrop)
         self.h = nn.ModuleList(
@@ -64,10 +64,10 @@ class GPTMegatronModel_TP(GPTMegatronModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    def get_input_embeddings(self) -> Union[Embedding_TP, nn.Embedding]:
+    def get_input_embeddings(self) -> Union[Embedding_TP, ParameterizedEmbedding]:
         return self.wte
 
-    def set_input_embeddings(self, new_embeddings: Union[Embedding_TP, nn.Embedding]) -> None:
+    def set_input_embeddings(self, new_embeddings: Union[Embedding_TP, ParameterizedEmbedding]) -> None:
         self.wte = new_embeddings
 
     def load_unsharded_weights(self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = "") -> None:
@@ -86,7 +86,7 @@ class GPTMegatronModel_TP(GPTMegatronModel):
 
     def _load_embeddings(
         self,
-        module: Union[Embedding_TP, nn.Embedding],
+        module: Union[Embedding_TP, ParameterizedEmbedding],
         safetensors_weight_manager: SafeTensorsWeightsManager,
         prefix: str,
     ) -> None:
@@ -153,7 +153,7 @@ class GPTMegatronModel_TP(GPTMegatronModel):
             if self.tensor_parallel_position_embedding_matrix:
                 self.wpe = Embedding_TP(max_position_embeddings, self.embed_dim)
             else:
-                self.wpe = nn.Embedding(max_position_embeddings, self.embed_dim)
+                self.wpe = ParameterizedEmbedding(max_position_embeddings, self.embed_dim)
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:

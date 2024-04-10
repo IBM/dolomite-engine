@@ -84,6 +84,8 @@ class GPTMultiLayerConfig(MegatronConfig):
 
         self.joint_residual_stream = joint_residual_stream
 
+        assert self.init_method is None
+
     def save_pretrained(self, save_directory: str | PathLike, push_to_hub: bool = False, **kwargs):
         # we don't want to exporet attention_head_type in this config, not sure if there is a better way to do this
         attention_head_type = self.attention_head_type

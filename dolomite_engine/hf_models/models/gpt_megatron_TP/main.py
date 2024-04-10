@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import List, Tuple, Union
 
 import torch
-import torch.nn as nn
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+from ...modeling_utils import ParameterizedLinear
 from ...safetensors import SafeTensorsWeightsManager
 from ..gpt_megatron import GPTMegatronConfig, GPTMegatronForCausalLM, GPTMegatronPreTrainedModel
 from .base import GPTMegatronModel_TP
@@ -32,7 +32,7 @@ class GPTMegatronForCausalLM_TP(GPTMegatronForCausalLM):
 
         # we don't split lm_head for now
         # TODO investigate how to split this for HF generate API
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False)
 
         # Initialize weights and apply final processing
         if not self.tensor_parallel_vocab_matrix:

@@ -1,29 +1,46 @@
+import math
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 
-from ...modeling_utils import get_activation_function, is_glu
+from ...config import MegatronConfig
+from ...enums import InitMethod
+from ...modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 
 
 class MLP(nn.Module):
-    def __init__(
-        self,
-        hidden_size: int,
-        intermediate_size: int,
-        activation_function: str,
-        add_bias: bool = True,
-        residual_dropout: float = 0.1,
-    ) -> None:
+    def __init__(self, config: MegatronConfig) -> None:
         super().__init__()
 
-        self.c_fc = nn.Linear(
+        hidden_size = config.n_embd
+        intermediate_size = config.n_inner
+        activation_function = config.activation_function
+        add_bias = config.add_bias
+        residual_dropout = config.resid_pdrop
+
+        self.init_method = config.init_method
+        self.initializer_range = config.initializer_range
+        self.m_width = config.m_width
+        self.n_layer = config.n_layer
+
+        std = self.initializer_range
+        if self.init_method == InitMethod.mup:
+            std /= math.sqrt(self.m_width)
+        self.c_fc = ParameterizedLinear(
             hidden_size,
             2 * intermediate_size if is_glu(activation_function) else intermediate_size,
             bias=add_bias,
+            std=std,
         )
+
         self.act = get_activation_function(activation_function)
-        self.c_proj = nn.Linear(intermediate_size, hidden_size, bias=add_bias)
+
+        std = self.initializer_range / math.sqrt(2 * self.n_layer)
+        if self.init_method == InitMethod.mup:
+            std /= math.sqrt(self.m_width)
+        self.c_proj = ParameterizedLinear(intermediate_size, hidden_size, bias=add_bias, std=std)
+
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:

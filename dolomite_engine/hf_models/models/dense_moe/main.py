@@ -1,10 +1,10 @@
 from typing import List, Tuple, Union
 
 import torch
-import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+from ...modeling_utils import ParameterizedLinear
 from ..gpt_megatron import GPTMegatronForCausalLM
 from .base import DenseMoEModel, DenseMoEPreTrainedModel
 from .config import DenseMoEConfig
@@ -15,10 +15,12 @@ class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTMegatronForCausalLM):
         DenseMoEPreTrainedModel.__init__(self, config, **kwargs)
 
         self.transformer = DenseMoEModel(config, **kwargs)
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False, std=config.initializer_range)
 
         self.router_aux_loss_coef = config.router_aux_loss_coef
         self.num_experts = config.num_experts
+
+        self.m_width = config.m_width
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -82,6 +84,10 @@ class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTMegatronForCausalLM):
         hidden_states = transformer_outputs[0]
 
         lm_logits = self.lm_head(hidden_states)
+
+        if self.m_width is not None:
+            lm_logits = lm_logits / self.m_width
+
         loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
         if not return_dict:

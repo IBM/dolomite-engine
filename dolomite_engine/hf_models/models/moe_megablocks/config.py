@@ -22,6 +22,7 @@ class MoEMegablocksConfig(MegatronConfig):
         layer_norm_epsilon: float = 0.00001,
         initializer_range: float = 0.02,
         scale_attn_weights: bool = True,
+        attention_multiplier: float = None,
         use_cache: bool = True,
         bos_token_id: int = 50256,
         eos_token_id: int = 50256,
@@ -33,6 +34,9 @@ class MoEMegablocksConfig(MegatronConfig):
         position_embedding_type: str = "learned_absolute",
         rope_theta: int = 10000,
         rope_scaling: dict = None,
+        m_emb: float = None,
+        m_width: float = None,
+        m_residual: float = None,
         num_experts: int = 8,
         num_experts_per_tok: int = 2,
         normalize_expert_weights: bool = True,
@@ -57,6 +61,7 @@ class MoEMegablocksConfig(MegatronConfig):
             layer_norm_epsilon=layer_norm_epsilon,
             initializer_range=initializer_range,
             scale_attn_weights=scale_attn_weights,
+            attention_multiplier=attention_multiplier,
             use_cache=use_cache,
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
@@ -68,6 +73,9 @@ class MoEMegablocksConfig(MegatronConfig):
             position_embedding_type=position_embedding_type,
             rope_theta=rope_theta,
             rope_scaling=rope_scaling,
+            m_emb=m_emb,
+            m_width=m_width,
+            m_residual=m_residual,
             **kwargs,
         )
 
@@ -77,3 +85,5 @@ class MoEMegablocksConfig(MegatronConfig):
 
         self.output_router_logits = output_router_logits
         self.router_aux_loss_coef = router_aux_loss_coef
+
+        assert self.init_method is None

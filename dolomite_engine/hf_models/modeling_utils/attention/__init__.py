@@ -4,7 +4,7 @@ from typing import Tuple
 import torch
 
 from ...config import MegatronConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import AttentionHeadType
 from .base import Attention
 from .flash import FlashAttention2
 from .math import MathAttention
@@ -58,21 +58,7 @@ def get_attention_module(
     else:
         attention_class = _ATTENTION_MODULES[attention_implementation]
 
-    return attention_class(
-        hidden_size=config.hidden_size,
-        num_attention_heads=config.num_attention_heads,
-        num_key_value_heads=config.num_key_value_heads,
-        attention_head_type=AttentionHeadType(config.attention_head_type),
-        position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
-        causal=causal,
-        add_bias=config.add_bias,
-        scale_attention_weights=config.scale_attn_weights,
-        attention_softmax_in_fp32=config.attention_softmax_in_fp32,
-        scale_attention_softmax_in_fp32=config.scale_attention_softmax_in_fp32,
-        attn_pdrop=config.attn_pdrop,
-        resid_pdrop=config.resid_pdrop,
-        layer_idx=layer_idx,
-    )
+    return attention_class(config, causal=causal, layer_idx=layer_idx)
 
 
 def interleave_query_key_value_tensor_for_attention(

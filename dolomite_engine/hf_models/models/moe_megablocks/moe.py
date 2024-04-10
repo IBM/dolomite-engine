@@ -1,46 +1,34 @@
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ...modeling_utils import ParameterizedLinear
 from ..gpt_megatron.mlp import MLP
+from .config import MoEMegablocksConfig
 
 
 class SparseMoE(nn.Module):
-    def __init__(
-        self,
-        hidden_size: int,
-        intermediate_size: int,
-        num_experts: int,
-        top_k: int,
-        activation_function: str,
-        normalize_expert_weights: bool,
-        add_bias: bool = True,
-        residual_dropout: float = 0.1,
-    ) -> None:
+    def __init__(self, config: MoEMegablocksConfig) -> None:
         super().__init__()
 
-        self.num_experts = num_experts
-        self.top_k = top_k
-        self.normalize_expert_weights = normalize_expert_weights
+        hidden_size = config.hidden_size
+
+        self.num_experts = config.num_experts
+        self.top_k = config.num_experts_per_tok
+        self.normalize_expert_weights = config.normalize_expert_weights
 
         # router
-        self.gate = nn.Linear(hidden_size, num_experts, bias=False)
+        self.gate = ParameterizedLinear(hidden_size, self.num_experts, bias=False)
 
-        self.experts = nn.ModuleList(
-            [
-                MLP(
-                    hidden_size,
-                    intermediate_size,
-                    activation_function,
-                    add_bias=False,
-                    residual_dropout=residual_dropout,
-                )
-                for _ in range(self.num_experts)
-            ]
-        )
+        config_copy = deepcopy(config)
+        config_copy.add_bias = False
+        self.experts = nn.ModuleList([MLP(config_copy) for _ in range(self.num_experts)])
+        del config_copy
 
         # shared bias amoung experts (Megablocks has shared bias for some reason)
-        self.bias = nn.Parameter(torch.zeros(hidden_size)) if add_bias else None
+        self.bias = nn.Parameter(torch.zeros(hidden_size)) if config.add_bias else None
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         batch_size, sequence_length, hidden_dim = hidden_states.shape

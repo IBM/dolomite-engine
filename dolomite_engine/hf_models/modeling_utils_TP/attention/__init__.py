@@ -33,6 +33,7 @@ def get_attention_module(
             causal=causal,
             add_bias=config.add_bias,
             scale_attention_weights=config.scale_attn_weights,
+            attention_multiplier=config.attention_multiplier,
             attention_softmax_in_fp32=config.attention_softmax_in_fp32,
             scale_attention_softmax_in_fp32=config.scale_attention_softmax_in_fp32,
             attn_pdrop=config.attn_pdrop,

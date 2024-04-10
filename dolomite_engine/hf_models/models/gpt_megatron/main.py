@@ -5,6 +5,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
 from .base import GPTMegatronModel, GPTMegatronPreTrainedModel
 from .config import GPTMegatronConfig
 
@@ -15,21 +16,23 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
     def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
         self.transformer = GPTMegatronModel(config, **kwargs)
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False, std=config.initializer_range)
+
+        self.m_width = config.m_width
 
         # Initialize weights and apply final processing
         self.post_init()
 
-    def get_input_embeddings(self) -> nn.Embedding:
+    def get_input_embeddings(self) -> ParameterizedEmbedding:
         return self.transformer.wte
 
-    def set_input_embeddings(self, value: nn.Embedding) -> None:
+    def set_input_embeddings(self, value: ParameterizedEmbedding) -> None:
         self.transformer.wte = value
 
-    def get_output_embeddings(self) -> nn.Linear:
+    def get_output_embeddings(self) -> ParameterizedLinear:
         return self.lm_head
 
-    def set_output_embeddings(self, new_embeddings: nn.Linear) -> None:
+    def set_output_embeddings(self, new_embeddings: ParameterizedLinear) -> None:
         self.lm_head = new_embeddings
 
     # FIXME typing
@@ -140,6 +143,10 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
         hidden_states = transformer_outputs[0]
 
         lm_logits = self.lm_head(hidden_states)
+
+        if self.m_width is not None:
+            lm_logits = lm_logits / self.m_width
+
         loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
         if not return_dict:

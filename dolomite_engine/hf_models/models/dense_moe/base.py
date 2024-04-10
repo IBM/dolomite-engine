@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from ...enums import PositionEmbeddingType
-from ...modeling_utils import get_normalization_function
+from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ..gpt_megatron import GPTMegatronPreTrainedModel
 from ..moe_megablocks import MoEMegablocksModel, MoEMegablocksPreTrainedModel
 from .config import DenseMoEConfig
@@ -26,6 +26,8 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEMegablocksModel):
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.mask_value = None
+        self.m_emb = config.m_emb
+        self.initializer_range = config.initializer_range
 
         assert (
             self.embed_dim % self.num_heads == 0
@@ -33,7 +35,7 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEMegablocksModel):
 
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
+        self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
         self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList(

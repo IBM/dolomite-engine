@@ -1,52 +1,47 @@
+import math
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...config import MegatronConfig
+from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ..linear import ParameterizedLinear
 
 
 class Attention(nn.Module):
     """Attention class used by all Megatron models"""
 
-    def __init__(
-        self,
-        hidden_size: int,
-        num_attention_heads: int,
-        num_key_value_heads: int,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
-        causal: bool,
-        add_bias: bool,
-        scale_attention_weights: bool,
-        attention_softmax_in_fp32: bool,
-        scale_attention_softmax_in_fp32: bool,
-        attn_pdrop: float,
-        resid_pdrop: float,
-        layer_idx: int = None,
-    ) -> None:
+    def __init__(self, config: MegatronConfig, causal: bool, layer_idx: int = None) -> None:
         super().__init__()
 
         self.causal = causal
         self.mask_value = None
-        self.hidden_size = hidden_size
-        self.num_heads = num_attention_heads
-        self.num_key_value_heads = num_key_value_heads
-        self.add_bias = add_bias
+        self.hidden_size = config.n_embd
+        self.num_heads = config.n_head
+        self.num_key_value_heads = config.num_key_value_heads
+        self.add_bias = config.add_bias
+        self.initializer_range = config.initializer_range
+        self.m_width = config.m_width
+        self.n_layer = config.n_layer
+        self.init_method = config.init_method
 
         assert (
             self.hidden_size % self.num_heads == 0
         ), f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})"
 
         self.head_dim = self.hidden_size // self.num_heads
-        self.attention_head_type = attention_head_type
+        self.attention_head_type = AttentionHeadType(config.attention_head_type)
 
-        self.position_embedding_type = position_embedding_type
-        self.scale_attn_weights = scale_attention_weights
+        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
+        self.scale_attn_weights = config.scale_attn_weights
+        self.attention_multiplier = config.attention_multiplier
 
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = attention_softmax_in_fp32
-        self.scale_attention_softmax_in_fp32 = scale_attention_softmax_in_fp32 and attention_softmax_in_fp32
+        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
+        self.scale_attention_softmax_in_fp32 = (
+            config.scale_attention_softmax_in_fp32 and config.attention_softmax_in_fp32
+        )
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.num_key_value_heads is None:
@@ -64,25 +59,41 @@ class Attention(nn.Module):
                 f"`num_heads` ({self.num_heads}) should be a multiple of `num_key_value_heads` "
                 f"({self.num_key_value_heads})"
             )
-        elif attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == AttentionHeadType.mqa:
             if self.num_key_value_heads is None:
                 self.num_key_value_heads = 1
 
             assert self.num_key_value_heads == 1, f"{self.__class__.__name__} should have 1 head for keys and values"
         else:
-            raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
         # note that the actual layout is different for the output and depends on whether we are using MHA, MQA or GQA
         # (self.hidden_size + 2 * self.num_key_value_heads * self.head_dim) is just the actual number output features
-        self.c_attn = nn.Linear(
-            self.hidden_size, self.hidden_size + 2 * self.num_key_value_heads * self.head_dim, bias=self.add_bias
+        std = self.initializer_range
+        if self.init_method == InitMethod.mup:
+            std /= math.sqrt(self.m_width)
+        self.c_attn = ParameterizedLinear(
+            self.hidden_size,
+            self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+            bias=self.add_bias,
+            std=std,
         )
-        self.c_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=self.add_bias)
 
-        self.attn_pdrop = attn_pdrop
+        std = self.initializer_range / math.sqrt(2 * self.n_layer)
+        if self.init_method == InitMethod.mup:
+            std /= math.sqrt(self.m_width)
+        self.c_proj = ParameterizedLinear(
+            self.hidden_size,
+            self.hidden_size,
+            bias=self.add_bias,
+            std=std,
+        )
 
-        self.attn_dropout = nn.Identity() if attn_pdrop == 0 else nn.Dropout(attn_pdrop)
-        self.resid_dropout = nn.Identity() if resid_pdrop == 0 else nn.Dropout(resid_pdrop)
+        self.attn_pdrop = config.attn_pdrop
+        self.resid_pdrop = config.resid_pdrop
+
+        self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
+        self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
 
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # ==========================================================================================

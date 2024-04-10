@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 from ...enums import PositionEmbeddingType
@@ -22,6 +23,7 @@ class DenseMoEBlock(SparseMoEBlock):
         self.inner_dim = config.n_inner
         self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
         self.layer_idx = layer_idx
+        self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
             config.normalization_function,
@@ -29,33 +31,11 @@ class DenseMoEBlock(SparseMoEBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.attn = DenseMoA_SDPA(
-            hidden_size=config.hidden_size,
-            num_attention_heads=config.num_attention_heads,
-            num_experts=config.num_experts,
-            position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
-            causal=True,
-            add_bias=config.add_bias,
-            scale_attention_weights=config.scale_attn_weights,
-            attention_softmax_in_fp32=config.attention_softmax_in_fp32,
-            scale_attention_softmax_in_fp32=config.scale_attention_softmax_in_fp32,
-            attn_pdrop=config.attn_pdrop,
-            resid_pdrop=config.resid_pdrop,
-            layer_idx=layer_idx,
-            inference_method=inference_method,
-        )
+        self.attn = DenseMoA_SDPA(config, causal=True, layer_idx=layer_idx, inference_method=inference_method)
         self.ln_2 = get_normalization_function(
             config.normalization_function,
             hidden_size,
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = DenseMoE(
-            config.hidden_size,
-            intermediate_size=self.inner_dim,
-            num_experts=config.num_experts,
-            activation_function=config.activation_function,
-            add_bias=config.add_bias,
-            residual_dropout=config.resid_pdrop,
-            inference_method=inference_method,
-        )
+        self.mlp = DenseMoE(config, inference_method=inference_method)

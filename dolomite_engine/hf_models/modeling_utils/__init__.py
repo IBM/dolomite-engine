@@ -11,5 +11,7 @@ from .attention import (
     split_query_key_value_tensor_for_attention,
     unpad_tensor,
 )
+from .embedding import ParameterizedEmbedding
+from .linear import ParameterizedLinear
 from .normalization import RMSNorm, get_normalization_function
 from .position_embedding import Alibi, RoPE, YaRNScaledRoPE, apply_rotary_pos_emb

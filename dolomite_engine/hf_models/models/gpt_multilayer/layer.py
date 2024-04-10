@@ -49,9 +49,7 @@ class MultiLayer(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = MLP(
-            config.hidden_size, self.inner_dim, config.activation_function, config.add_bias, config.resid_pdrop
-        )
+        self.mlp = MLP(config)
 
     def forward(
         self,

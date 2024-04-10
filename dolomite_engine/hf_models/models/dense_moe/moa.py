@@ -1,57 +1,34 @@
+from copy import deepcopy
 from typing import Tuple
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from transformers import DynamicCache
 
-from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import SDPA, apply_rotary_pos_emb, repeat_key_value
+from ...enums import PositionEmbeddingType
+from ...modeling_utils import SDPA, ParameterizedLinear, apply_rotary_pos_emb, repeat_key_value
+from .config import DenseMoEConfig
 from .inference import mask_probability
 
 
 class DenseMoA_SDPA(SDPA):
     def __init__(
-        self,
-        hidden_size: int,
-        num_attention_heads: int,
-        num_experts: int,
-        position_embedding_type: PositionEmbeddingType,
-        causal: bool,
-        add_bias: bool,
-        scale_attention_weights: bool,
-        attention_softmax_in_fp32: bool,
-        scale_attention_softmax_in_fp32: bool,
-        attn_pdrop: float,
-        resid_pdrop: float,
-        layer_idx: int = None,
-        inference_method: dict = None,
+        self, config: DenseMoEConfig, causal: bool, layer_idx: int = None, inference_method: dict = None
     ) -> None:
         assert (
-            num_attention_heads % num_experts == 0
+            config.n_head % config.num_experts == 0
         ), "number of attention heads must be divisible by the number of experts"
-        self.heads_per_expert = num_attention_heads // num_experts
+        self.heads_per_expert = config.n_head // config.num_experts
 
-        self.num_experts = num_experts
+        self.num_experts = config.num_experts
         self.inference_method = inference_method
 
-        super().__init__(
-            hidden_size,
-            num_attention_heads,
-            self.heads_per_expert,
-            AttentionHeadType.gqa,
-            position_embedding_type,
-            causal,
-            add_bias,
-            scale_attention_weights,
-            attention_softmax_in_fp32,
-            scale_attention_softmax_in_fp32,
-            attn_pdrop,
-            resid_pdrop,
-            layer_idx,
-        )
+        config_copy = deepcopy(config)
+        config_copy.num_key_value_heads = config_copy.num_experts
+        super().__init__(config_copy, causal=causal, layer_idx=layer_idx)
+        del config_copy
 
-        self.gate = nn.Linear(hidden_size, num_experts, bias=False)
+        self.gate = ParameterizedLinear(self.hidden_size, self.num_experts, bias=False)
 
     def forward(
         self,
@@ -105,7 +82,7 @@ class DenseMoA_SDPA(SDPA):
             attn_mask=attention_mask,
             dropout_p=self.attn_pdrop if self.training else 0,
             is_causal=self.causal if attention_mask is None else False,
-            scale=None if self.scale_attn_weights else 1,
+            scale=self.attention_multiplier if self.scale_attn_weights else 1,
         )
 
         # ==========================================================================================

@@ -60,7 +60,7 @@ class SDPA(Attention):
             attn_mask=attention_mask,
             dropout_p=self.attn_pdrop if self.training else 0,
             is_causal=self.causal if attention_mask is None else False,
-            scale=None if self.scale_attn_weights else 1,
+            scale=self.attention_multiplier if self.scale_attn_weights else 1,
         )
 
         # ==========================================================================================

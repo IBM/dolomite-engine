@@ -7,7 +7,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import get_normalization_function
+from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ..gpt_megatron import GPTMegatronConfig, GPTMegatronModel, GPTMegatronPreTrainedModel
 from .config import GPTMultiLayerConfig
 from .layer import GPTMultiLayerBlock
@@ -30,6 +30,7 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
+        self.initializer_range = config.initializer_range
 
         assert (
             self.embed_dim % self.num_heads == 0
@@ -37,7 +38,7 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
 
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
+        self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
         self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
 

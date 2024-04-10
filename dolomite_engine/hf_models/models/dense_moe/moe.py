@@ -1,35 +1,28 @@
+from copy import deepcopy
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
+from ...modeling_utils import ParameterizedLinear
 from ..gpt_megatron.mlp import MLP
+from .config import DenseMoEConfig
 from .inference import mask_probability
 
 
 class DenseMoE(MLP):
-    def __init__(
-        self,
-        hidden_size: int,
-        intermediate_size: int,
-        num_experts: int,
-        activation_function: str,
-        add_bias: bool = True,
-        residual_dropout: float = 0.1,
-        inference_method: dict = None,
-    ) -> None:
-        super().__init__(
-            hidden_size,
-            num_experts * intermediate_size,
-            activation_function,
-            add_bias,
-            residual_dropout,
-        )
+    def __init__(self, config: DenseMoEConfig, inference_method: dict = None) -> None:
+        hidden_size = config.n_embd
 
-        self.num_experts = num_experts
-        self.intermediate_size = intermediate_size
+        self.num_experts = config.num_experts
+        self.intermediate_size = config.n_inner
         self.inference_method = inference_method
 
-        self.gate = nn.Linear(hidden_size, num_experts, bias=False)
+        config_copy = deepcopy(config)
+        config_copy.n_inner = self.num_experts * self.intermediate_size
+        super().__init__(config_copy)
+        del config_copy
+
+        self.gate = ParameterizedLinear(hidden_size, self.num_experts, bias=False)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         # ==========================================================================================

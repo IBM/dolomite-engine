@@ -26,6 +26,7 @@ class SparseMoEBlock(nn.Module):
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
         self.layer_idx = layer_idx
+        self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
             config.normalization_function,
@@ -42,16 +43,7 @@ class SparseMoEBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = SparseMoE(
-            config.hidden_size,
-            intermediate_size=self.inner_dim,
-            num_experts=config.num_experts,
-            top_k=config.num_experts_per_tok,
-            activation_function=config.activation_function,
-            normalize_expert_weights=config.normalize_expert_weights,
-            add_bias=config.add_bias,
-            residual_dropout=config.resid_pdrop,
-        )
+        self.mlp = SparseMoE(config)
 
     def forward(
         self,
@@ -82,6 +74,10 @@ class SparseMoEBlock(nn.Module):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
+
+        if self.m_residual is not None:
+            attn_output = attn_output * self.m_residual
+
         # residual connection
         hidden_states = attn_output + residual
 
@@ -93,6 +89,10 @@ class SparseMoEBlock(nn.Module):
             hidden_states = self.ln_2(hidden_states)
 
         feed_forward_hidden_states, router_logits = self.mlp(hidden_states)
+
+        if self.m_residual is not None:
+            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+
         # residual connection
         hidden_states = residual + feed_forward_hidden_states
 

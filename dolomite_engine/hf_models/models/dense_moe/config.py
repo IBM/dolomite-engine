@@ -30,6 +30,7 @@ class DenseMoEConfig(PretrainedConfig):
         layer_norm_epsilon: float = 0.00001,
         initializer_range: float = 0.02,
         scale_attn_weights: bool = True,
+        attention_multiplier: float = None,
         use_cache: bool = True,
         bos_token_id: int = 50256,
         eos_token_id: int = 50256,
@@ -44,6 +45,9 @@ class DenseMoEConfig(PretrainedConfig):
         num_experts: int = 8,
         output_router_logits: bool = False,
         router_aux_loss_coef: float = 0.001,
+        m_emb: float = None,
+        m_width: float = None,
+        m_residual: float = None,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -60,6 +64,7 @@ class DenseMoEConfig(PretrainedConfig):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_range = initializer_range
         self.scale_attn_weights = scale_attn_weights
+        self.attention_multiplier = attention_multiplier
         self.use_cache = use_cache
         self.attention_softmax_in_fp32 = attention_softmax_in_fp32
         self.scale_attention_softmax_in_fp32 = scale_attention_softmax_in_fp32
@@ -68,6 +73,10 @@ class DenseMoEConfig(PretrainedConfig):
         self.add_bias = add_bias
         self.rope_theta = rope_theta
         self.rope_scaling = rope_scaling
+        self.m_emb = m_emb
+        self.m_width = m_width
+        self.m_residual = m_residual
+        self.init_method = None
 
         position_embedding_type = PositionEmbeddingType(position_embedding_type)
 
