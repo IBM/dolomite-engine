@@ -24,10 +24,7 @@ def import_from_huggingface_llama(pretrained_model_name_or_path: str, save_path:
         AttentionHeadType(config.attention_head_type),
     )
 
-    model = AutoModelForCausalLM.from_config(config)
-    model.load_state_dict(state_dict)
-    model.save_pretrained(save_path)
-
+    safetensors_weight_manager.save_state_dict(state_dict, save_path)
     config.save_pretrained(save_path)
 
     if tokenizer is not None:
