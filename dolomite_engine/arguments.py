@@ -22,6 +22,7 @@ from .enums import (
     LRDecaySchedule,
     Mode,
     PaddingSide,
+    ParamsGroupMethod,
     TuningMethod,
 )
 from .utils import get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
@@ -250,6 +251,8 @@ class DatasetArgs(BaseArgs):
 class OptimizerArgs(BaseArgs):
     # optimizer class
     class_name: str = "ApexFusedAdam"
+    # how to create param groups
+    params_group_method: ParamsGroupMethod = None
     # class args for optimizer
     class_args: dict = {
         "lr": 1e-5,

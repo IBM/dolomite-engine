@@ -5,8 +5,7 @@ from typing import Tuple
 
 import torch
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.distributed.fsdp import MixedPrecision as FSDP_MixedPrecision
-from torch.distributed.fsdp import ShardingStrategy
+from torch.distributed.fsdp import MixedPrecision, ShardingStrategy
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -32,13 +31,9 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 _FSDP_MIXED_PRECISION_POLICIES = {
-    torch.float32: FSDP_MixedPrecision(
-        param_dtype=torch.float32, reduce_dtype=torch.float32, buffer_dtype=torch.float32
-    ),
-    torch.float16: FSDP_MixedPrecision(
-        param_dtype=torch.float16, reduce_dtype=torch.float16, buffer_dtype=torch.float16
-    ),
-    torch.bfloat16: FSDP_MixedPrecision(
+    torch.float32: MixedPrecision(param_dtype=torch.float32, reduce_dtype=torch.float32, buffer_dtype=torch.float32),
+    torch.float16: MixedPrecision(param_dtype=torch.float16, reduce_dtype=torch.float16, buffer_dtype=torch.float16),
+    torch.bfloat16: MixedPrecision(
         param_dtype=torch.bfloat16, reduce_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16
     ),
 }
@@ -95,13 +90,14 @@ def wrap_model_for_distributed_training(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
             cpu_offload=cpu_offload,
-            trainable_parameters=model.parameters(),
+            model=model,
             num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
             num_constant_steps=args.lr_scheduler_args.num_constant_steps,
             num_decay_steps=args.lr_scheduler_args.num_decay_steps,
             num_training_steps=args.training_parameters.num_training_steps,
             lr_decay_style=args.lr_scheduler_args.lr_decay_style,
             lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+            params_group_method=args.optimizer_args.params_group_method,
         )
 
         from deepspeed import initialize as deepspeed_initialize
@@ -177,13 +173,14 @@ def wrap_model_for_distributed_training(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
             cpu_offload=cpu_offload,
-            trainable_parameters=model.parameters(),
+            model=model,
             num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
             num_constant_steps=args.lr_scheduler_args.num_constant_steps,
             num_decay_steps=args.lr_scheduler_args.num_decay_steps,
             num_training_steps=args.training_parameters.num_training_steps,
             lr_decay_style=args.lr_scheduler_args.lr_decay_style,
             lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+            params_group_method=args.optimizer_args.params_group_method,
         )
 
     return model, optimizer, lr_scheduler
