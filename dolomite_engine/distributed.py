@@ -213,7 +213,7 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
                 # # whether to use quantized gradients (ZeRO++)
                 "zero_quantized_gradients": args.distributed_args.zero_quantized_gradients,
             },
-            "train_micro_batch_size_per_gpu": args.training_parameters.batch_size_per_gpu,
+            "train_micro_batch_size_per_gpu": args.training_parameters.micro_batch_size,
             "gradient_accumulation_steps": args.training_parameters.gradient_accumulation_steps,
             "gradient_clipping": args.training_parameters.gradient_clipping,
         }

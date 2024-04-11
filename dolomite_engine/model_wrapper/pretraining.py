@@ -58,7 +58,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
 
         if self.use_padding_free_transformer:
-            batch_size = args.training_parameters.batch_size_per_gpu
+            batch_size = args.training_parameters.micro_batch_size
             sequence_length = args.datasets[0].class_args.get("sequence_length")
 
             self.register_buffer(

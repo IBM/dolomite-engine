@@ -52,7 +52,7 @@ logging_args:
 training_parameters:
   num_training_steps: 25000
   eval_interval: 250000
-  batch_size_per_gpu: 1
+  micro_batch_size: 1
   gradient_accumulation_steps: 2
 
 optimizer_args:

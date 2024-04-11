@@ -94,10 +94,10 @@ def train(
         eval_steps = args.datasets[0].class_args.get("eval_steps")
         evaluate(val_dataloaders, model, starting_iteration, experiments_tracker, eval_steps, group_names)
 
-    batch_size_per_gpu = args.training_parameters.batch_size_per_gpu
+    micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-    model_flops = model.get_model_tflops(batch_size_per_gpu * gradient_accumulation_steps, sequence_length)
-    tokens_per_batch = batch_size_per_gpu * gradient_accumulation_steps * get_world_size() * sequence_length
+    model_flops = model.get_model_tflops(micro_batch_size * gradient_accumulation_steps, sequence_length)
+    tokens_per_batch = micro_batch_size * gradient_accumulation_steps * get_world_size() * sequence_length
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
@@ -138,7 +138,7 @@ def train(
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
-            consumed_samples = global_step * args.training_parameters.batch_size_per_gpu * get_world_size()
+            consumed_samples = global_step * micro_batch_size * get_world_size()
             save_checkpoint(
                 args, model, optimizer, lr_scheduler, None, global_step, {"consumed_samples": consumed_samples}
             )

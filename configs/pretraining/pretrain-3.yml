@@ -80,7 +80,7 @@ logging_args:
 training_parameters:
   num_training_steps: 100
   eval_interval: 50
-  batch_size_per_gpu: 6
+  micro_batch_size: 6
 
 optimizer_args:
   class_name: ApexFusedAdam

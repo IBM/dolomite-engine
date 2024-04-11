@@ -27,7 +27,7 @@ save_args:
 training_parameters:
   num_training_steps: 22500
   eval_interval: 2500
-  batch_size_per_gpu: 2
+  micro_batch_size: 2
   gradient_accumulation_steps: 4
 
 optimizer_args:

@@ -76,11 +76,11 @@ def get_dataloader(
         drop_last=False,
     )
 
-    batch_size_per_gpu = args.training_parameters.batch_size_per_gpu
+    micro_batch_size = args.training_parameters.micro_batch_size
 
     dataloader = DataLoader(
         blended_dataset,
-        batch_size=batch_size_per_gpu,
+        batch_size=micro_batch_size,
         sampler=sampler,
         collate_fn=partial(
             collate_fn,
@@ -97,16 +97,16 @@ def get_dataloader(
         total_samples_seen = (
             args.training_parameters.num_training_steps
             * args.training_parameters.gradient_accumulation_steps
-            * batch_size_per_gpu
+            * micro_batch_size
             * get_world_size()
         )
     else:
-        if len(blended_dataset) % (batch_size_per_gpu * get_world_size()) == 0:
-            num_steps = len(blended_dataset) // (batch_size_per_gpu * get_world_size())
+        if len(blended_dataset) % (micro_batch_size * get_world_size()) == 0:
+            num_steps = len(blended_dataset) // (micro_batch_size * get_world_size())
         else:
-            num_steps = (len(blended_dataset) // (batch_size_per_gpu * get_world_size())) + 1
+            num_steps = (len(blended_dataset) // (micro_batch_size * get_world_size())) + 1
 
-        total_samples_seen = num_steps * batch_size_per_gpu * get_world_size()
+        total_samples_seen = num_steps * micro_batch_size * get_world_size()
 
     log_rank_0(logging.INFO, "*" * 57)
     log_rank_0(logging.INFO, f"total samples seen = {total_samples_seen}")

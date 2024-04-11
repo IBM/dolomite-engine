@@ -185,7 +185,7 @@ class TrainingParameters(BaseArgs):
     # interval for evaluation
     eval_interval: Optional[int] = None
     # batch size per GPU for ZeRO-DP
-    batch_size_per_gpu: int = None
+    micro_batch_size: int = None
     # whether to use val dataset for validation during training
     eval_during_training: bool = True
     # masking methodology of loss function input
@@ -195,7 +195,7 @@ class TrainingParameters(BaseArgs):
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
-            [(self.num_training_steps, "num_training_steps"), (self.batch_size_per_gpu, "batch_size_per_gpu")]
+            [(self.num_training_steps, "num_training_steps"), (self.micro_batch_size, "micro_batch_size")]
         )
 
         # eval_interval

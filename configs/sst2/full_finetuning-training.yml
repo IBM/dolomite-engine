@@ -25,7 +25,7 @@ save_args:
 training_parameters:
   num_training_steps: 4000
   eval_interval: 500
-  batch_size_per_gpu: 8
+  micro_batch_size: 8
 
 optimizer_args:
   class_name: ApexFusedAdam
