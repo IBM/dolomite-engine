@@ -13,6 +13,8 @@ class GPTMultiLayerForCausalLM(GPTMultiLayerPreTrainedModel, GPTMegatronForCausa
         self.transformer = GPTMultiLayerModel(config, **kwargs)
         self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False, std=config.initializer_range)
 
+        self.m_width = config.m_width
+
         # Initialize weights and apply final processing
         self.post_init()
 

@@ -1,7 +1,6 @@
 from typing import List, Tuple, Union
 
 import torch
-import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 

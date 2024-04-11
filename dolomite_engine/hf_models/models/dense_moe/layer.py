@@ -1,7 +1,5 @@
-import torch
 import torch.nn as nn
 
-from ...enums import PositionEmbeddingType
 from ...modeling_utils import get_normalization_function
 from ..moe_megablocks.layer import SparseMoEBlock
 from .config import DenseMoEConfig

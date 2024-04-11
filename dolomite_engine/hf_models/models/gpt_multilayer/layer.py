@@ -25,6 +25,7 @@ class MultiLayer(nn.Module):
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
         self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
+        self.m_residual = config.m_residual
 
         self._use_eager_attention = attention_implementation == "eager"
         self._use_sdpa = attention_implementation == "sdpa"
@@ -80,6 +81,10 @@ class MultiLayer(nn.Module):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
+
+        if self.m_residual is not None:
+            attn_output = attn_output * self.m_residual
+
         hidden_states = attn_output + residual
         if joint_residual is not None:
             hidden_states = hidden_states + joint_residual
@@ -92,6 +97,10 @@ class MultiLayer(nn.Module):
             hidden_states = self.ln_2(hidden_states)
 
         feed_forward_hidden_states = self.mlp(hidden_states)
+
+        if self.m_residual is not None:
+            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+
         # residual connection
         hidden_states = residual + feed_forward_hidden_states
         return hidden_states
