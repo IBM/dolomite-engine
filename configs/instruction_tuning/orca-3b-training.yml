@@ -1,0 +1,47 @@
+datasets:
+  - class_name: SlimOrcaDataset
+    data_name: dolly
+    output_format: " __output__"
+    data_sampling_ratio: 1
+    max_input_tokens: 1536
+    max_output_tokens: 512
+
+model_args:
+  model_name: bigscience/bloom-560m
+  model_class: AutoModelForCausalLM
+  dtype: bfloat16
+  config_extras:
+    aux_loss_weight: 0
+    gate_type: topk-ste
+
+tuning_args:
+  tuning_method: full_finetuning
+
+logging_args:
+  experiment_name: gma-bloom-560m-dolly
+
+save_args:
+  save_path: checkpoints/560m
+  save_interval: 2500
+
+training_parameters:
+  num_training_steps: 22500
+  eval_interval: 2500
+  batch_size_per_gpu: 2
+  gradient_accumulation_steps: 4
+
+optimizer_args:
+  class_name: ApexFusedAdam
+  class_args:
+    lr: 1e-5
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    eps: 1e-10
+
+lr_scheduler_args:
+  lr_schedule: cosine
+
+distributed_args:
+  distributed_backend: torch
