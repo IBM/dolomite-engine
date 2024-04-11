@@ -2,10 +2,17 @@ import torch
 import torch.nn as nn
 
 
-try:
+def is_apex_persistent_layernorm_available() -> bool:
+    try:
+        from apex.contrib.layer_norm.layer_norm import FastLayerNormFN
+
+        return True
+    except ImportError:
+        return False
+
+
+if is_apex_persistent_layernorm_available():
     from apex.contrib.layer_norm.layer_norm import FastLayerNormFN
-except:
-    FastLayerNormFN = None
 
 
 _PERSISTENT_LAYERNORM_ALLOWED_HIDDEN_STATES = [
@@ -38,7 +45,7 @@ _PERSISTENT_LAYERNORM_ALLOWED_HIDDEN_STATES = [
 
 class ApexPersistentLayerNorm(nn.LayerNorm):
     def __init__(self, normalized_shape: int, eps: float = 0.00001) -> None:
-        if FastLayerNormFN is None:
+        if not is_apex_persistent_layernorm_available():
             raise ImportError("build apex from source with --fast_layer_norm")
 
         super().__init__(normalized_shape, eps=eps)

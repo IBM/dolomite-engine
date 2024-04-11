@@ -3,9 +3,8 @@ from typing import Tuple
 import torch
 import torch.distributed
 
+from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ..modeling_utils import ParameterizedLinear
-from ..parallel import ProcessGroupManager
-from ..safetensors import SafeTensorsWeightsManager
 from .random import CUDA_RNGStatesTracker
 
 

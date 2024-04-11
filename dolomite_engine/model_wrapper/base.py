@@ -16,7 +16,7 @@ from ..enums import (
 )
 from ..hf_models import is_padding_free_transformer_supported
 from ..hf_models.modeling_utils import is_glu
-from ..utils import log_rank_0, register_profiler, register_timer, warn_rank_0
+from ..utils import log_rank_0, register_profiler, register_timer
 
 
 class ModelWrapper(torch.nn.Module):
@@ -250,7 +250,7 @@ class ModelWrapper(torch.nn.Module):
         else:
             self.input_device = 0
             if not torch.cuda.is_available():
-                warn_rank_0("no CUDA device found, running on CPU")
+                log_rank_0(logging.WARN, "no CUDA device found, running on CPU")
                 self.input_device = "cpu"
 
     def save_pretrained(self, save_path: str) -> None:

@@ -3,9 +3,9 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
+from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import Attention, ParameterizedLinear
-from ...safetensors import SafeTensorsWeightsManager
 from ..dropout import Dropout_TP
 from ..TP import ColumnParallelLinear, CopyToTensorParallelRegion, RowParallelLinear, get_tensor_parallel_group_manager
 

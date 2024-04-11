@@ -1,5 +1,3 @@
-from typing import List, Tuple
-
 import torch
 
 from ..utils import register_profiler, register_timer

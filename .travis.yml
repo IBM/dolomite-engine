@@ -5,7 +5,7 @@ install:
   - bash miniconda.sh -b -p /opt/conda
   - export PATH=/opt/conda/envs/test/bin:/opt/conda/bin:${PATH}
   - conda create -n test python=3.11 pip -y
-  - pip install torch transformers pytest parameterized
+  - pip install torch transformers pytest parameterized pydantic pynvml
 
 script:
   - make install

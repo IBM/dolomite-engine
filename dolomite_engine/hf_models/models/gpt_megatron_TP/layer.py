@@ -1,9 +1,9 @@
 import torch.nn as nn
 
+from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from ...modeling_utils_TP import get_attention_module
-from ...safetensors import SafeTensorsWeightsManager
 from ..gpt_megatron import GPTMegatronConfig
 from ..gpt_megatron.layer import GPTMegatronBlock
 from .mlp import MLP_TP

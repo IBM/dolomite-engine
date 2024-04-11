@@ -3,15 +3,14 @@ from typing import Tuple
 import torch
 from transformers import DynamicCache
 
+from ....utils import is_flash_attention_available
 from ...enums import PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
 from .base import Attention
 
 
-try:
+if is_flash_attention_available():
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
-except ImportError:
-    flash_attn_varlen_func = None
 
 
 class PaddingFreeAttention(Attention):

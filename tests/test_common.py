@@ -9,13 +9,8 @@ import torch
 from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    GPTMegatronConfig,
-    MoEMegablocksConfig,
-    PositionEmbeddingType,
-    SafeTensorsWeightsManager,
-)
+from dolomite_engine import SafeTensorsWeightsManager
+from dolomite_engine.hf_models import AttentionHeadType, GPTMegatronConfig, MoEMegablocksConfig, PositionEmbeddingType
 from dolomite_engine.hf_models.config import MegatronConfig
 
 

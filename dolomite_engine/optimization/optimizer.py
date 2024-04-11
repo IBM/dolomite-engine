@@ -1,3 +1,5 @@
+import logging
+
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -12,19 +14,21 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, register_profiler, register_timer
 
-try:
+
+if is_apex_available():
     from apex.optimizers import FusedAdam as ApexFusedAdam
     from apex.optimizers import FusedLAMB as ApexFusedLAMB
     from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
     from apex.optimizers import FusedSGD as ApexFusedSGD
-except:
+else:
     ApexFusedAdam = None
     ApexFusedLAMB = None
     ApexFusedNovoGrad = None
     ApexFusedSGD = None
 
-try:
+if is_deepspeed_available():
     from deepspeed.ops.adagrad import DeepSpeedCPUAdagrad
     from deepspeed.ops.adam import DeepSpeedCPUAdam
     from deepspeed.ops.adam import FusedAdam as DeepSpeedFusedAdam
@@ -32,7 +36,7 @@ try:
     from deepspeed.runtime.fp16.onebit import OnebitAdam as DeepSpeedOnebitAdam
     from deepspeed.runtime.fp16.onebit import OnebitLamb as DeepSpeedOnebitLAMB
     from deepspeed.runtime.fp16.onebit import ZeroOneAdam as DeepSpeedZeroOneAdam
-except:
+else:
     DeepSpeedCPUAdagrad = None
     DeepSpeedCPUAdam = None
     DeepSpeedFusedAdam = None
@@ -40,8 +44,6 @@ except:
     DeepSpeedOnebitAdam = None
     DeepSpeedOnebitLAMB = None
     DeepSpeedZeroOneAdam = None
-
-from ..utils import register_profiler, register_timer, warn_rank_0
 
 
 _OPTIMIZER_CLASSES = {
@@ -98,8 +100,9 @@ def get_optimizer(
         raise ImportError("relevant package for the optimizer is not installed")
 
     if cpu_offload and optimizer_class not in [DeepSpeedCPUAdam, DeepSpeedCPUAdagrad]:
-        warn_rank_0(
-            "cpu offloading enabled with an unsupported optimizer, weird behaviour or performance drop might be observed"
+        log_rank_0(
+            logging.WARN,
+            "cpu offloading enabled with an unsupported optimizer, weird behaviour or performance drop might be observed",
         )
 
     optimizer = optimizer_class(parameters, **optimizer_class_args)

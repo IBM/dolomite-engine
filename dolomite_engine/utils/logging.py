@@ -1,8 +1,6 @@
 import logging
 from warnings import warn
 
-import wandb
-from aim import Run as AimRun
 from pydantic import BaseModel
 from tqdm import tqdm
 
@@ -74,10 +72,18 @@ class ExperimentsTracker:
         self.experiments_tracker_name = experiments_tracker_name
         self.tracking_enabled = experiments_tracker_name is not None
 
+        from .packages import is_aim_available, is_wandb_available
+
         if experiments_tracker_name == ExperimentsTrackerName.aim:
+            if is_aim_available():
+                from aim import Run as AimRun
+
             assert experiment is not None and project is not None
             self.run: AimRun = run_rank_n(AimRun)(experiment=experiment, repo=project)
         elif experiments_tracker_name == ExperimentsTrackerName.wandb:
+            if is_wandb_available():
+                import wandb
+
             self.run = run_rank_n(wandb.init)(name=experiment, project=project)
         elif experiments_tracker_name is not None:
             raise ValueError(f"unexpected experiments_tracker ({experiments_tracker_name})")

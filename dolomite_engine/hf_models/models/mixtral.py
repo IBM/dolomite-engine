@@ -1,11 +1,11 @@
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, MixtralConfig
 
+from ...utils import SafeTensorsWeightsManager
 from ..enums import AttentionHeadType
 from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..safetensors import SafeTensorsWeightsManager
 from ..utils import download_repo
 from .gpt_megatron import interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
 from .moe_megablocks import MoEMegablocksConfig

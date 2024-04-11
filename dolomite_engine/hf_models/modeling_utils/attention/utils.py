@@ -3,13 +3,12 @@ from typing import Tuple
 import torch
 import torch.nn.functional as F
 
+from ....utils import is_flash_attention_available
 
-try:
+
+if is_flash_attention_available():
     from einops import rearrange
     from flash_attn.bert_padding import IndexFirstAxis
-except:
-    rearrange = None
-    IndexFirstAxis = None
 
 
 def unpad_tensor(

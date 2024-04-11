@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from ....utils import SafeTensorsWeightsManager
 from ...modeling_utils import get_activation_function, is_glu
 from ...modeling_utils_TP import (
     ColumnParallelLinear,
@@ -9,7 +10,6 @@ from ...modeling_utils_TP import (
     get_tensor_parallel_group_manager,
     tensor_parallel_split_safetensor_slice,
 )
-from ...safetensors import SafeTensorsWeightsManager
 from ..gpt_megatron.mlp import MLP
 
 

@@ -5,8 +5,8 @@ from typing import List, Tuple, Union
 import torch
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+from ....utils import SafeTensorsWeightsManager
 from ...modeling_utils import ParameterizedLinear
-from ...safetensors import SafeTensorsWeightsManager
 from ..gpt_megatron import GPTMegatronConfig, GPTMegatronForCausalLM, GPTMegatronPreTrainedModel
 from .base import GPTMegatronModel_TP
 

@@ -194,9 +194,7 @@ class TrainingParameters(BaseArgs):
     gradient_clipping: float = 1
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None(
-            [(self.num_training_steps, "num_training_steps"), (self.micro_batch_size, "micro_batch_size")]
-        )
+        _check_not_None([(self.num_training_steps, "num_training_steps"), (self.micro_batch_size, "micro_batch_size")])
 
         # eval_interval
         if self.eval_during_training:

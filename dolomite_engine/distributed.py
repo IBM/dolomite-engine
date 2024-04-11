@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from functools import partial
 from typing import Tuple
@@ -15,7 +16,7 @@ from .enums import DistributedBackend
 from .gradient_checkpointing import apply_gradient_checkpointing
 from .model_wrapper import ModelWrapper
 from .optimization import get_optimizer_and_lr_scheduler
-from .utils import get_module_class_from_name, warn_rank_0
+from .utils import get_module_class_from_name, log_rank_0
 
 
 _DEEPSPEED_CONFIG: dict = None
@@ -74,9 +75,9 @@ def wrap_model_for_distributed_training(
 
     if args.model_args.dtype in [torch.float16, torch.bfloat16]:
         if args.distributed_args.communication_dtype != torch.float32:
-            warn_rank_0(
-                f"using ({args.distributed_args.communication_dtype}) with mixed precision training in "
-                f"({args.model_args.dtype}), recommended is to use ({torch.float32})"
+            log_rank_0(
+                logging.WARN,
+                f"using ({args.distributed_args.communication_dtype}) with mixed precision training in ({args.model_args.dtype}), recommended is to use ({torch.float32})",
             )
 
     assert args.distributed_args.zero_hpz_partition_size in [

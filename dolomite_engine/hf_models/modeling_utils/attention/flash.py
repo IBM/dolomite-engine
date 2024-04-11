@@ -1,19 +1,16 @@
 import torch
 from transformers import DynamicCache
 
+from ....utils import is_flash_attention_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
 from .base import Attention
 from .utils import unpad_tensor
 
 
-try:
+if is_flash_attention_available():
     from flash_attn.bert_padding import IndexFirstAxis, pad_input
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
-except ImportError:
-    flash_attn_varlen_func = None
-    pad_input = None
-    IndexFirstAxis = None
 
 
 class FlashAttention2(Attention):

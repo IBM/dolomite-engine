@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
+from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_tensor_parallel_group_manager
-from ...safetensors import SafeTensorsWeightsManager
 from ..gpt_megatron import GPTMegatronConfig, GPTMegatronModel, GPTMegatronPreTrainedModel
 from .layer import GPTMegatronBlock_TP
 

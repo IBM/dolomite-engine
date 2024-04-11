@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ..safetensors import SafeTensorsWeightsManager
+from ...utils import SafeTensorsWeightsManager
 from .TP import ReduceFromTensorParallelRegion, get_tensor_parallel_group_manager
 
 

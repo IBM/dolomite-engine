@@ -1,17 +1,14 @@
 import torch
 
-from ....enums import AttentionHeadType, PositionEmbeddingType
+from .....utils import is_flash_attention_available
+from ....enums import PositionEmbeddingType
 from ....modeling_utils import apply_rotary_pos_emb, unpad_tensor
 from .base import MultiLayerAttention
 
 
-try:
+if is_flash_attention_available():
     from flash_attn.bert_padding import IndexFirstAxis, pad_input
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
-except ImportError:
-    flash_attn_varlen_func = None
-    pad_input = None
-    IndexFirstAxis = None
 
 
 class MultiLayerFlashAttention2(MultiLayerAttention):
