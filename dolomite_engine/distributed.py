@@ -113,9 +113,12 @@ def wrap_model_for_distributed_training(
         )
 
         if args.distributed_args.gradient_checkpointing_method is not None:
+            assert len(block_names) == 1
+
             apply_gradient_checkpointing(
                 model,
                 args.distributed_args.gradient_checkpointing_method,
+                block_name=block_names[0],
                 **args.distributed_args.gradient_checkpointing_args,
             )
 

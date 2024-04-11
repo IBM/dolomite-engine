@@ -158,6 +158,12 @@ class ModelWrapper(torch.nn.Module):
         else:
             self.model = _get_model(torch_dtype=self.dtype)
 
+        num_parameters = 0
+        for param in self.model.parameters():
+            num_parameters += param.numel()
+
+        log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")
+
     @register_profiler("generate")
     @register_timer("generate")
     def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
@@ -215,10 +221,6 @@ class ModelWrapper(torch.nn.Module):
         model_flops /= 10**12
 
         return model_flops
-
-    def reset_parameters(self) -> None:
-        if hasattr(self.model, "reset_parameters"):
-            self.model.reset_parameters()
 
     def _override_embedding_forward_with_neft_forward(self, neft_alpha: float):
         if not hasattr(self.model, "get_input_embeddings"):

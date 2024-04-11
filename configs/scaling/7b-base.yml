@@ -39,6 +39,7 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: false
+    apply_residual_connection_post_layernorm: false
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     bos_token_id: 0
@@ -82,7 +83,7 @@ training_parameters:
   num_training_steps: 2500
   eval_interval: 2500000
   batch_size_per_gpu: 1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 2
 
 optimizer_args:
   class_name: ApexFusedAdam
