@@ -43,7 +43,7 @@ class SparseMoEBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = SparseMoE(config)
+        self.mlp = SparseMoE(config, use_padding_free_transformer=use_padding_free_transformer)
 
     def forward(
         self,

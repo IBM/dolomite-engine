@@ -17,11 +17,6 @@ class MoEMegablocksPreTrainedModel(GPTMegatronPreTrainedModel):
     config_class = MoEMegablocksConfig
     _no_split_modules = ["SparseMoEBlock"]
 
-    def __init__(self, config: MoEMegablocksConfig, *inputs, **kwargs):
-        super().__init__(config, *inputs, **kwargs)
-
-        assert not self._use_padding_free_transformer, "padding_free input layout doesn't work for MoE layer currently"
-
     def get_moe_loss(
         self,
         lm_logits: torch.Tensor,
@@ -54,6 +49,7 @@ class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
         self.num_key_value_heads = config.num_key_value_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
+        self.mask_value = None
 
         assert (
             self.embed_dim % self.num_heads == 0

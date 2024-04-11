@@ -10,7 +10,7 @@ from .config import MoEMegablocksConfig
 
 
 class SparseMoE(nn.Module):
-    def __init__(self, config: MoEMegablocksConfig) -> None:
+    def __init__(self, config: MoEMegablocksConfig, use_padding_free_transformer: bool) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size
@@ -30,10 +30,15 @@ class SparseMoE(nn.Module):
         # shared bias amoung experts (Megablocks has shared bias for some reason)
         self.bias = nn.Parameter(torch.zeros(hidden_size)) if config.add_bias else None
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        batch_size, sequence_length, hidden_dim = hidden_states.shape
+        self._use_padding_free_transformer = use_padding_free_transformer
 
-        hidden_states = hidden_states.view(-1, hidden_dim)
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if self._use_padding_free_transformer:
+            _, hidden_dim = hidden_states.shape
+        else:
+            batch_size, sequence_length, hidden_dim = hidden_states.shape
+            hidden_states = hidden_states.view(-1, hidden_dim)
+
         # router_logits -> (batch_size * sequence_length, num_experts)
         router_logits = self.gate(hidden_states)
 
@@ -79,7 +84,8 @@ class SparseMoE(nn.Module):
             # the `top_x` tensor here.
             final_hidden_states.index_add_(0, top_x, current_hidden_states.to(hidden_states.dtype))
 
-        final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
+        if not self._use_padding_free_transformer:
+            final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
 
         if self.bias is not None:
             final_hidden_states += self.bias

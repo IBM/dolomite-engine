@@ -2,7 +2,6 @@
 GPTMegatron classes form the basis for Megatron-based models. The code is derived from GPTBigCode classes.
 """
 
-import math
 import warnings
 from typing import List, Tuple, Union
 
@@ -15,7 +14,6 @@ from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import (
     Alibi,
-    Attention,
     ParameterizedEmbedding,
     ParameterizedLinear,
     RMSNorm,
@@ -26,7 +24,6 @@ from ...modeling_utils import (
 from ...utils import check_list_type, flatten_and_convert_to_tensors
 from .config import GPTMegatronConfig
 from .layer import GPTMegatronBlock
-from .mlp import MLP
 
 
 class GPTMegatronPreTrainedModel(PreTrainedModel):
