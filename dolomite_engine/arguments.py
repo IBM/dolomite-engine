@@ -178,6 +178,8 @@ class SaveArgs(BaseArgs):
     save_path: str = None
     # interval for checkpointing
     save_interval: int = None
+    # whether to save optimizer
+    save_optimizer: bool = True
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.save_path, "save_path"), (self.save_interval, "save_interval")])
@@ -188,9 +190,24 @@ class LoadArgs(BaseArgs):
     load_path: str = None
     # iteration to load
     iteration: int = None
+    # whether to load optimizer
+    load_optimizer: bool = True
+    # whether to load lr_scheduler
+    load_lr_scheduler: bool = True
+    # whether to load rng state
+    load_rng_state: bool = True
+    # whether to resume dataloader
+    load_dataloader_state: bool = True
+    # whether to resume experiments tracker
+    load_experiments_tracker_state: bool = True
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.load_path, "load_path")])
+
+        if not self.load_optimizer:
+            assert (
+                not self.load_lr_scheduler
+            ), "lr_scheduler loading doesn't make sense if you aren't loading optimizer"
 
 
 class DatasetArgs(BaseArgs):

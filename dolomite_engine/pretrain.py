@@ -140,7 +140,6 @@ def train(
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
-            consumed_samples = global_step * micro_batch_size * gradient_accumulation_steps * get_world_size()
             save_checkpoint(
                 args,
                 model,
@@ -149,8 +148,9 @@ def train(
                 None,
                 experiments_tracker,
                 global_step,
-                {"consumed_samples": consumed_samples},
+                {"consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * get_world_size()},
             )
+
             start_time = time.perf_counter()
             steps_since_start_time = 0
 

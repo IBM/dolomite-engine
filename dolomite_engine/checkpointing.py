@@ -52,7 +52,7 @@ def save_checkpoint(
     """
 
     distributed_backend = args.distributed_args.distributed_backend
-    stage = args.distributed_args.stage
+    save_optimizer = args.save_args.save_optimizer
 
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
@@ -61,23 +61,22 @@ def save_checkpoint(
         from deepspeed import DeepSpeedEngine
 
         assert isinstance(model, DeepSpeedEngine)
+        assert save_optimizer
 
         model.save_checkpoint(args.save_args.save_path, tag=_get_checkpoint_tag(iteration))
     elif distributed_backend == DistributedBackend.torch:
         assert isinstance(model, FSDP)
 
-        if stage == 0:
+        # TODO add support for local state dict
+        with FSDP.state_dict_type(
+            model,
+            state_dict_type=StateDictType.FULL_STATE_DICT,
+            state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
+        ):
             run_rank_n(torch.save)(model.state_dict(), _get_model_path(save_path))
-            run_rank_n(torch.save)(optimizer.state_dict(), _get_optimizer_path(save_path))
-        else:
-            # TODO add support for local state dict
-            with FSDP.state_dict_type(
-                model,
-                state_dict_type=StateDictType.FULL_STATE_DICT,
-                state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
-                optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
-            ):
-                run_rank_n(torch.save)(model.state_dict(), _get_model_path(save_path))
+
+            if save_optimizer:
                 run_rank_n(torch.save)(
                     FSDP.optim_state_dict(model=model, optim=optimizer), _get_optimizer_path(save_path)
                 )
@@ -148,7 +147,11 @@ def load_checkpoint_for_training(
         return
 
     distributed_backend = args.distributed_args.distributed_backend
-    stage = args.distributed_args.stage
+    load_optimizer = args.load_args.load_optimizer
+    load_lr_scheduler = args.load_args.load_lr_scheduler
+    load_rng_state = args.load_args.load_rng_state
+    load_dataloader_state = args.load_args.load_dataloader_state
+    load_experiments_tracker_state = args.load_args.load_experiments_tracker_state
 
     iteration = args.load_args.iteration
     if iteration is None:
@@ -163,47 +166,52 @@ def load_checkpoint_for_training(
 
         assert isinstance(model, DeepSpeedEngine)
 
-        model.load_checkpoint(args.load_args.load_path, tag=_get_checkpoint_tag(iteration))
+        model.load_checkpoint(
+            args.load_args.load_path,
+            tag=_get_checkpoint_tag(iteration),
+            load_optimizer_states=load_optimizer,
+            load_lr_scheduler_states=load_lr_scheduler,
+        )
     elif distributed_backend == DistributedBackend.torch:
         assert isinstance(model, FSDP)
 
-        if stage == 0:
+        # TODO add support for local state dict
+        with FSDP.state_dict_type(
+            model,
+            state_dict_type=StateDictType.FULL_STATE_DICT,
+            state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
+            optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
+        ):
             model.load_state_dict(torch.load(_get_model_path(load_path)))
-            optimizer.load_state_dict(torch.load(_get_optimizer_path(load_path)))
-        else:
-            # TODO add support for local state dict
-            with FSDP.state_dict_type(
-                model,
-                state_dict_type=StateDictType.FULL_STATE_DICT,
-                state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
-                optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
-            ):
-                model.load_state_dict(torch.load(_get_model_path(load_path)))
+
+            if load_optimizer:
                 optimizer.load_state_dict(
                     FSDP.optim_state_dict_to_load(
                         model=model, optim=optimizer, optim_state_dict=torch.load(_get_optimizer_path(load_path))
                     )
                 )
 
-        lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+        if load_lr_scheduler:
+            lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
     else:
         raise ValueError(f"unexpected distributed_backend ({distributed_backend})")
 
-    rng_state = torch.load(_get_rng_state_path(load_path))
-    random.setstate(rng_state["random_rng_state"])
-    np.random.set_state(rng_state["np_rng_state"])
-    torch.set_rng_state(rng_state["torch_rng_state"])
-    torch.cuda.set_rng_state(rng_state["cuda_rng_state"])
+    if load_rng_state:
+        rng_state = torch.load(_get_rng_state_path(load_path))
+        random.setstate(rng_state["random_rng_state"])
+        np.random.set_state(rng_state["np_rng_state"])
+        torch.set_rng_state(rng_state["torch_rng_state"])
+        torch.cuda.set_rng_state(rng_state["cuda_rng_state"])
 
     metadata = None
     if os.path.isfile(_get_metadata_path(load_path)):
         metadata = json.load(open(_get_metadata_path(load_path), "r"))
 
-    if train_dataloader is not None:
+    if load_dataloader_state and train_dataloader is not None:
         train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
 
     experiments_tracker_json = None
-    if os.path.exists(_get_experiments_tracker_path(load_path)):
+    if load_experiments_tracker_state and os.path.exists(_get_experiments_tracker_path(load_path)):
         experiments_tracker_json = json.load(open(_get_experiments_tracker_path(load_path), "r"))
 
     return iteration, metadata, experiments_tracker_json
