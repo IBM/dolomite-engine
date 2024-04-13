@@ -221,7 +221,7 @@ def train(
             evaluate(val_dataloader, model, global_step, experiments_tracker)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
-            save_checkpoint(args, model, optimizer, lr_scheduler, train_dataloader, global_step)
+            save_checkpoint(args, model, optimizer, lr_scheduler, train_dataloader, experiments_tracker, global_step)
 
 
 @register_profiler("evaluate_dataset")
@@ -305,11 +305,17 @@ def main() -> None:
     log_model(model)
 
     starting_iteration = 0
+    experiments_tracker_state_dict = None
     if args.load_args is not None:
-        starting_iteration, _ = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, train_dataloader)
+        starting_iteration, _, experiments_tracker_state_dict = load_checkpoint_for_training(
+            args, model, optimizer, lr_scheduler, train_dataloader
+        )
 
     experiments_tracker = ExperimentsTracker(
-        args.logging_args.experiment_name, args.logging_args.project, args.logging_args.experiments_tracker_name
+        args.logging_args.experiments_tracker_name,
+        args.logging_args.aim_args,
+        args.logging_args.wandb_args,
+        checkpoint_metadata=experiments_tracker_state_dict,
     )
     # track all hyperparams in args
     experiments_tracker.log_args(args)

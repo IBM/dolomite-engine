@@ -43,7 +43,9 @@ def track_val_metrics(
         message += f", group_name = {group_name}"
 
     log_rank_0(logging.INFO, message)
-    experiments_tracker.track({"loss": val_loss}, step=global_step, context=f"val-{group_name}")
+    experiments_tracker.track(
+        {"loss" if group_name is None else f"loss-{group_name}": val_loss}, step=global_step, context="val"
+    )
 
 
 def train(
@@ -138,9 +140,16 @@ def train(
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
-            consumed_samples = global_step * micro_batch_size * get_world_size()
+            consumed_samples = global_step * micro_batch_size * gradient_accumulation_steps * get_world_size()
             save_checkpoint(
-                args, model, optimizer, lr_scheduler, None, global_step, {"consumed_samples": consumed_samples}
+                args,
+                model,
+                optimizer,
+                lr_scheduler,
+                None,
+                experiments_tracker,
+                global_step,
+                {"consumed_samples": consumed_samples},
             )
             start_time = time.perf_counter()
             steps_since_start_time = 0
@@ -213,15 +222,21 @@ def main() -> None:
 
     starting_iteration = 0
     metadata = None
+    experiments_tracker_state_dict = None
     if args.load_args is not None:
-        starting_iteration, metadata = load_checkpoint_for_training(args, model, optimizer, lr_scheduler, None)
+        starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
+            args, model, optimizer, lr_scheduler, None
+        )
 
     train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
         args, model.tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
     experiments_tracker = ExperimentsTracker(
-        args.logging_args.experiment_name, args.logging_args.project, args.logging_args.experiments_tracker_name
+        args.logging_args.experiments_tracker_name,
+        args.logging_args.aim_args,
+        args.logging_args.wandb_args,
+        checkpoint_metadata=experiments_tracker_state_dict,
     )
     # track all hyperparams in args
     experiments_tracker.log_args(args)

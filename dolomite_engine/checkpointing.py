@@ -17,7 +17,7 @@ from .arguments import ExportArgs, InferenceArgs, TrainingArgs, get_args_file_ex
 from .data import DataLoader
 from .enums import ArgsFileExtension, DistributedBackend, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, get_model
-from .utils import get_global_rank, load_yaml, register_timer, run_rank_n
+from .utils import ExperimentsTracker, get_global_rank, load_yaml, register_timer, run_rank_n
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
@@ -31,8 +31,9 @@ def save_checkpoint(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
+    experiments_tracker: ExperimentsTracker,
     iteration: int,
-    metadata: dict = {},
+    metadata: dict = None,
 ) -> None:
     """save checkpoint during training
 
@@ -42,6 +43,7 @@ def save_checkpoint(
         optimizer (Optimizer): optimizer to save
         lr_scheduler (LambdaLR): learning rate scheduler to save
         train_dataloader (DataLoader): train dataloader to save
+        experiments_tracker (ExperimentsTracker): experiment tracker to save
         iteration (int): current iteration
         metadata (dict): extra stuff to store
 
@@ -99,19 +101,23 @@ def save_checkpoint(
         os.makedirs(os.path.dirname(dataloader_path), exist_ok=True)
         torch.save(train_dataloader.state_dict(), dataloader_path)
 
+    if experiments_tracker is not None:
+        run_rank_n(json.dump)(
+            experiments_tracker.state_dict(), run_rank_n(open)(_get_experiments_tracker_path(save_path), "w"), indent=4
+        )
+
     if metadata is not None:
-        json.dump(metadata, open(_get_metadata_path(save_path), "w"), indent=4)
+        run_rank_n(json.dump)(metadata, run_rank_n(open)(_get_metadata_path(save_path), "w"), indent=4)
+
+    save_args(args, save_path, mode=Mode.training)
 
     dist.barrier()
 
-    if get_global_rank() == 0:
-        json.dump(
-            {"latest_checkpointed_iteration": iteration},
-            open(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
-            indent=4,
-        )
-
-    save_args(args, save_path, mode=Mode.training)
+    run_rank_n(json.dump)(
+        {"latest_checkpointed_iteration": iteration},
+        run_rank_n(open)(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
+        indent=4,
+    )
 
 
 @register_timer("load_checkpoint_for_training")
@@ -135,7 +141,7 @@ def load_checkpoint_for_training(
         ValueError: if unexpected distributed backend is found
 
     Returns:
-        Tuple[int, dict]: checkpointed iteration, metadata
+        Tuple[int, dict, dict]: checkpointed iteration, metadata, experiments_tracker state dict
     """
 
     if args.load_args is None or args.load_args.load_path is None:
@@ -173,8 +179,10 @@ def load_checkpoint_for_training(
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
             ):
                 model.load_state_dict(torch.load(_get_model_path(load_path)))
-                FSDP.optim_state_dict_to_load(
-                    model=model, optim=optimizer, optim_state_dict=torch.load(_get_optimizer_path(load_path))
+                optimizer.load_state_dict(
+                    FSDP.optim_state_dict_to_load(
+                        model=model, optim=optimizer, optim_state_dict=torch.load(_get_optimizer_path(load_path))
+                    )
                 )
 
         lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
@@ -194,7 +202,11 @@ def load_checkpoint_for_training(
     if train_dataloader is not None:
         train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
 
-    return iteration, metadata
+    experiments_tracker_json = None
+    if os.path.exists(_get_experiments_tracker_path(load_path)):
+        experiments_tracker_json = json.load(open(_get_experiments_tracker_path(load_path), "r"))
+
+    return iteration, metadata, experiments_tracker_json
 
 
 def load_checkpoint_for_inference(
@@ -297,6 +309,10 @@ def _get_rng_state_path(path: str) -> str:
 
 def _get_latest_checkpointed_iterations_path(path: str) -> str:
     return os.path.join(path, "latest_checkpointed_iteration.json")
+
+
+def _get_experiments_tracker_path(path: str) -> str:
+    return os.path.join(path, "experiments_tracker.json")
 
 
 def _get_metadata_path(path: str) -> str:

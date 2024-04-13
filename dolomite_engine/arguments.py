@@ -1,14 +1,11 @@
 import json
 import logging
 from argparse import ArgumentParser
-from copy import deepcopy
-from enum import Enum
 from typing import Any, List, Optional, Tuple, Union
 
 import torch
 import transformers
 from peft import PromptTuningInit
-from pydantic import BaseModel, ConfigDict
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
@@ -25,7 +22,7 @@ from .enums import (
     ParamsGroupMethod,
     TuningMethod,
 )
-from .utils import get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
+from .utils import BaseArgs, get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
 
 
 _ARGS_FILE_EXTENSION: ArgsFileExtension = None
@@ -34,32 +31,6 @@ _ARGS_FILE_EXTENSION: ArgsFileExtension = None
 def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
     for obj, name in object_name_list:
         assert obj is not None, f"{name} cannot be None"
-
-
-class BaseArgs(BaseModel):
-    model_config = ConfigDict(extra="forbid", protected_namespaces=())
-
-    def to_dict(self) -> dict:
-        copied = deepcopy(self)
-
-        for key, value in copied:
-            if isinstance(value, BaseArgs):
-                result = value.to_dict()
-            elif isinstance(value, list):
-                result = []
-                for v in value:
-                    if isinstance(v, BaseArgs):
-                        result.append(v.to_dict())
-            elif isinstance(value, Enum):
-                result = value.value
-            elif isinstance(value, type):
-                result = value.__name__
-            else:
-                result = value
-
-            setattr(copied, key, result)
-
-        return vars(copied)
 
 
 class RandomArgs(BaseArgs):
@@ -322,17 +293,45 @@ class DistributedArgs(BaseArgs):
             ], f"unexpected dtype '{self.communication_dtype}'"
 
 
+class AimArgs(BaseArgs):
+    # aim repo, experiment logs are saved here
+    repo: str = None
+    # name of the experiment
+    experiment: str = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.repo, "repo"), (self.experiment, "experiment")])
+
+
+class WandBArgs(BaseArgs):
+    # aim repo, experiment logs are saved here
+    project: str = None
+    # name of the experiment
+    name: str = None
+    # run hash for the experiment
+    entity: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.project, "project"), (self.name, "name")])
+
+
 class LoggingArgs(BaseArgs):
     # logging level
     logging_level: str = "INFO"
     # log interval
     log_interval: int = 1
-    # aim repo, experiment logs are saved here
-    project: Optional[str] = None
-    # name of the experiment
-    experiment_name: Optional[str] = None
-    # tracker to use for experiment tracking
+    # arguments if using aim
+    aim_args: Optional[AimArgs] = None
+    # arguments if using wandb
+    wandb_args: Optional[WandBArgs] = None
+    # experiment tracker to use (aim or wandb)
     experiments_tracker_name: Optional[ExperimentsTrackerName] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.experiments_tracker_name == ExperimentsTrackerName.aim:
+            _check_not_None([(self.aim_args, "aim_args")])
+        elif self.experiments_tracker_name == ExperimentsTrackerName.wandb:
+            _check_not_None([(self.wandb_args, "wandb_args")])
 
 
 class ResearchArgs(BaseArgs):

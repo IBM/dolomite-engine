@@ -69,3 +69,10 @@ except ImportError:
 
 def is_wandb_available() -> bool:
     return _IS_WANDB_AVAILABLE
+
+
+if is_aim_available():
+    from aim import Run as AimRun
+
+if is_wandb_available():
+    import wandb
