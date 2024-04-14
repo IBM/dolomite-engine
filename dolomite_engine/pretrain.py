@@ -38,7 +38,7 @@ def track_val_metrics(
         group_name (str): group name for the validation / test set
     """
 
-    message = f"step = {global_step}, val_loss = {val_loss}"
+    message = f"step = {global_step}, val_loss = {val_loss:.4f}"
     if group_name is not None:
         message += f", group_name = {group_name}"
 
@@ -109,7 +109,7 @@ def train(
         global_step += 1
         steps_since_start_time += 1
 
-        loss_step = train_step(
+        loss_step, grad_norm_step = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -121,17 +121,20 @@ def train(
 
         if global_step % log_interval == 0:
             time_elapsed = time.perf_counter() - start_time
+            step_time = time_elapsed / steps_since_start_time
 
             track_train_metrics(
                 global_step=global_step,
                 train_loss_step=loss_step,
+                grad_norm_step=grad_norm_step,
                 current_lr=model.lr_scheduler.get_lr()[0]
                 if distributed_backend == DistributedBackend.deepspeed
                 else lr_scheduler.get_lr()[0],
                 experiments_tracker=experiments_tracker,
                 loss_running_mean_tracker=loss_running_mean_tracker,
                 flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
-                tokens_per_day=tokens_per_batch * steps_since_start_time / time_elapsed * 86400 / 1e9,
+                billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
+                step_time=step_time,
             )
             start_time = time.perf_counter()
             steps_since_start_time = 0

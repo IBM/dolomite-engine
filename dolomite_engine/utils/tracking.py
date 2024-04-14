@@ -21,7 +21,6 @@ class RunningMean:
         self.loss_sum = 0
         self.window = window
 
-    @run_rank_n
     def add_loss(self, loss: float) -> float:
         """accumulates loss of the current step to the running mean
 
