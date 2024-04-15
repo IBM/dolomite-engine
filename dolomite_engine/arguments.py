@@ -1,4 +1,3 @@
-import json
 import logging
 from argparse import ArgumentParser
 from typing import Any, List, Optional, Tuple, Union
@@ -10,7 +9,6 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import (
-    ArgsFileExtension,
     AttentionImplementation,
     DistributedBackend,
     ExperimentsTrackerName,
@@ -23,9 +21,6 @@ from .enums import (
     TuningMethod,
 )
 from .utils import BaseArgs, get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
-
-
-_ARGS_FILE_EXTENSION: ArgsFileExtension = None
 
 
 def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
@@ -484,19 +479,11 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
         Union[TrainingArgs, InferenceArgs, ExportArgs]: args for training / inference
     """
 
-    global _ARGS_FILE_EXTENSION
-
     parser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="path for the config")
     args = parser.parse_args()
 
-    if args.config.endswith("json"):
-        config: dict = json.load(open(args.config, "r"))
-        _ARGS_FILE_EXTENSION = ArgsFileExtension.json
-    elif args.config.endswith("yaml") or args.config.endswith("yml"):
-        config: dict = load_yaml(args.config)
-        _ARGS_FILE_EXTENSION = ArgsFileExtension.yaml
-
+    config: dict = load_yaml(args.config)
     args: Union[TrainingArgs, InferenceArgs, ExportArgs] = _MODE_ARGS_MAP[mode](**config)
 
     set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
@@ -551,11 +538,6 @@ def log_args(args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
         for l in line:
             log_rank_0(logging.INFO, l)
     log_rank_0(logging.INFO, "-------------------- end of arguments ---------------------")
-
-
-def get_args_file_extension() -> ArgsFileExtension:
-    assert _ARGS_FILE_EXTENSION is not None, "args file extesnion is not set"
-    return _ARGS_FILE_EXTENSION
 
 
 def _check_datasets(datasets: List[DatasetArgs]) -> None:

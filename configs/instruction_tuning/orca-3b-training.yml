@@ -17,9 +17,6 @@ model_args:
 tuning_args:
   tuning_method: full_finetuning
 
-logging_args:
-  experiment_name: gma-bloom-560m-dolly
-
 save_args:
   save_path: checkpoints/560m
   save_interval: 2500

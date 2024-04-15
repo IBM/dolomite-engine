@@ -15,9 +15,6 @@ model_args:
 tuning_args:
   tuning_method: full_finetuning
 
-logging_args:
-  experiment_name: sst2-bloom-560m-full_finetuning
-
 save_args:
   save_path: checkpoints/full_finetuning
   save_interval: 500

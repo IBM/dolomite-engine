@@ -1,7 +1,6 @@
 import logging
 from warnings import warn
 
-from .packages import is_colorlog_available
 from .ranks import get_world_size, run_rank_n
 
 
@@ -12,6 +11,8 @@ def set_logger(level: int = logging.INFO, colored_log: bool = False) -> None:
     stream = logging.StreamHandler()
 
     if colored_log:
+        from .packages import is_colorlog_available
+
         assert is_colorlog_available(), "pip package colorlog is needed for colored logging"
         from colorlog import ColoredFormatter
 

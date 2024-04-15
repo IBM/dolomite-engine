@@ -72,11 +72,6 @@ class DistributedBackend(str, Enum):
     torch = "torch"
 
 
-class ArgsFileExtension(str, Enum):
-    json = "json"
-    yaml = "yaml"
-
-
 class LossMask(str, Enum):
     """Type of loss masking method"""
 

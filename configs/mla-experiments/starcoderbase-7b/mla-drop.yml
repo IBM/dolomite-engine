@@ -45,10 +45,6 @@ save_args:
   save_path: /mayank-pvc/checkpoints/mla-experiments/starcoderbase-7b-mla-drop
   save_interval: 2500
 
-logging_args:
-  log_interval: 10
-  experiments_tracker_name: wandb
-
 training_parameters:
   num_training_steps: 25000
   eval_interval: 250000

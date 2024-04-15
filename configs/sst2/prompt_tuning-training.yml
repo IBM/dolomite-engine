@@ -19,9 +19,6 @@ tuning_args:
     prompt_tuning_init_text: "Classify the sentiment of the sentence:"
     num_virtual_tokens: 8
 
-logging_args:
-  experiment_name: sst2-bloom-560m-prompt_tuning
-
 save_args:
   save_path: checkpoints/prompt_tuning
   save_interval: 500

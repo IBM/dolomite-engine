@@ -13,9 +13,9 @@ from torch.distributed.fsdp import StateDictType
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
-from .arguments import ExportArgs, InferenceArgs, TrainingArgs, get_args_file_extension
+from .arguments import ExportArgs, InferenceArgs, TrainingArgs
 from .data import DataLoader
-from .enums import ArgsFileExtension, DistributedBackend, Mode, TuningMethod
+from .enums import DistributedBackend, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, get_model
 from .utils import ExperimentsTracker, get_global_rank, load_yaml, register_timer, run_rank_n
 
@@ -273,18 +273,9 @@ def save_args(args: Union[TrainingArgs, InferenceArgs], save_path: str, mode: Mo
         save_path (str): save location on disk
     """
 
-    args_file_extension = get_args_file_extension()
-    args = args.to_dict()
-
     file_prefix = _TRAINING_CONFIG_PREFIX if mode == Mode.training else _INFERENCE_CONFIG_PREFIX
-    save_path = os.path.join(save_path, f"{file_prefix}.{args_file_extension.value}")
-
-    if args_file_extension == ArgsFileExtension.json:
-        json.dump(args, open(save_path, "w"), indent=4)
-    elif args_file_extension == ArgsFileExtension.yaml:
-        yaml.dump(args, open(save_path, "w"), indent=2)
-    else:
-        raise ValueError(f"unexpected file extension ({args_file_extension})")
+    save_path = os.path.join(save_path, f"{file_prefix}.yml")
+    yaml.dump(args.to_dict(), open(save_path, "w"), indent=2)
 
 
 def _get_checkpoint_tag(iteration: int) -> str:

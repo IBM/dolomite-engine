@@ -113,9 +113,6 @@ save_args:
   save_path: checkpoints
   save_interval: 50
 
-logging_args:
-  experiment_name: starcoder-15b-8k
-
 training_parameters:
   num_training_steps: 100
   eval_interval: 50
