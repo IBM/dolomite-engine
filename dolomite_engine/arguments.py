@@ -343,6 +343,8 @@ class LoggingArgs(BaseArgs):
     wandb_args: Optional[WandBArgs] = None
     # experiment tracker to use (aim or wandb)
     experiments_tracker_name: Optional[ExperimentsTrackerName] = None
+    # whether to use colored logs
+    use_colored_logs: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         if self.experiments_tracker_name == ExperimentsTrackerName.aim:
@@ -497,7 +499,7 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
 
     args: Union[TrainingArgs, InferenceArgs, ExportArgs] = _MODE_ARGS_MAP[mode](**config)
 
-    set_logger(args.logging_args.logging_level)
+    set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
     log_args(args)
 
     return args

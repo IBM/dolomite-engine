@@ -71,8 +71,15 @@ def is_wandb_available() -> bool:
     return _IS_WANDB_AVAILABLE
 
 
-if is_aim_available():
-    from aim import Run as AimRun
+try:
+    import colorlog
 
-if is_wandb_available():
-    import wandb
+    _IS_COLORLOG_AVAILABLE = True
+except ImportError:
+    _IS_COLORLOG_AVAILABLE = False
+
+    warn_rank_0("colorlog is not installed")
+
+
+def is_colorlog_available() -> bool:
+    return _IS_COLORLOG_AVAILABLE

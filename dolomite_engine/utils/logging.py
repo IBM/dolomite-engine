@@ -1,19 +1,24 @@
 import logging
 from warnings import warn
 
+from .packages import is_colorlog_available
 from .ranks import get_world_size, run_rank_n
 
 
 _LOGGER: logging.Logger = None
 
 
-def set_logger(level: int = logging.INFO) -> None:
-    # format: str = "%(asctime)s - [%(levelname)s]: %(message)s"
-    logging.basicConfig(
-        level=level,
-        handlers=[logging.StreamHandler()],
-        format="%(asctime)s - [%(levelname)s] - (%(filename)s:%(lineno)d): %(message)s",
-    )
+def set_logger(level: int = logging.INFO, colored_log: bool = False) -> None:
+    stream = logging.StreamHandler()
+
+    if colored_log:
+        assert is_colorlog_available(), "pip package colorlog is needed for colored logging"
+        from colorlog import ColoredFormatter
+
+        stream.setFormatter(ColoredFormatter("%(asctime)s - %(log_color)s[%(levelname)-8s] ▶%(reset)s %(message)s"))
+        logging.basicConfig(level=level, handlers=[stream])
+    else:
+        logging.basicConfig(level=level, handlers=[stream], format="%(asctime)s - [%(levelname)-8s] ▶ %(message)s")
 
     global _LOGGER
     _LOGGER = run_rank_n(logging.getLogger)()
