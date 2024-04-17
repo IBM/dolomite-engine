@@ -10,7 +10,6 @@ datasets:
 model_args:
   model_name: bigscience/bloom-560m
   model_class: AutoModelForCausalLM
-  dtype: bfloat16
 
 tuning_args:
   tuning_method: prompt_tuning
@@ -40,3 +39,6 @@ optimizer_args:
 
 lr_scheduler_args:
   lr_decay_style: cosine
+
+mixed_precision_args:
+  dtype: bf16

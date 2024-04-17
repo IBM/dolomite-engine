@@ -23,9 +23,5 @@ class ModelWrapperForFinetuning(ModelWrapper):
 
         model_outputs = self.model(**batch)
 
-        if type(model_outputs) is tuple:
-            loss = model_outputs[0]
-        else:
-            loss = model_outputs.loss
-
+        loss = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.loss
         return loss

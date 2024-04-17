@@ -34,7 +34,6 @@ model_args:
   model_class: AutoModelForCausalLM
   model_name: /mayank-pvc/checkpoints/starcoderbase-7b
   efficient_cpu_initialization: false
-  dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
@@ -64,6 +63,9 @@ optimizer_args:
 lr_scheduler_args:
   lr_decay_style: cosine
   num_warmup_steps: 2000
+
+mixed_precision_args:
+  dtype: bf16
 
 distributed_args:
   distributed_backend: torch

@@ -11,17 +11,23 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import DataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
-from .enums import DatasetSplit, DistributedBackend, Mode
+from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .utils import (
     ExperimentsTracker,
     RunningMean,
     init_distributed,
+    is_transformer_engine_available,
     log_rank_0,
     register_profiler,
     register_timer,
     setup_tf32,
 )
+
+
+if is_transformer_engine_available():
+    import transformer_engine.pytorch as te
+    from transformer_engine.common.recipe import DelayedScaling, Format
 
 
 def track_train_metrics(
@@ -113,6 +119,7 @@ def train_step(
     train_dataloader: DataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
+    train_step_context: contextlib.AbstractContextManager,
 ) -> Tuple[float, float]:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -138,7 +145,8 @@ def train_step(
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
             batch = next(train_dataloader)
-            loss_micro_step = model(batch)
+            with train_step_context:
+                loss_micro_step = model(batch)
             loss += loss_micro_step
 
             # compute gradients
@@ -151,7 +159,8 @@ def train_step(
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
     batch = next(train_dataloader)
-    loss_micro_step = model(batch)
+    with train_step_context:
+        loss_micro_step = model(batch)
     loss += loss_micro_step
 
     # compute gradients
@@ -222,9 +231,20 @@ def train(
     if eval_during_training:
         evaluate(val_dataloader, model, starting_iteration, experiments_tracker)
 
+    train_step_context = contextlib.nullcontext
+    use_nvte_fp8 = (
+        args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
+    )
+
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
+
+        if use_nvte_fp8:
+            train_step_context = te.fp8_autocast(
+                enabled=True,
+                fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
+            )
 
         loss_step, grad_norm_step = train_step(
             model=model,
@@ -234,6 +254,7 @@ def train(
             train_dataloader=train_dataloader_infinite,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
+            train_step_context=train_step_context,
         )
 
         if global_step % log_interval == 0:

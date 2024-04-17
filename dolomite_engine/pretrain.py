@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import time
 from typing import List
@@ -12,7 +13,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import get_megatron_gpt_dataloaders
 from .distributed import wrap_model_for_distributed_training
-from .enums import DistributedBackend, Mode
+from .enums import DistributedBackend, FP8Backend, Mode
 from .finetune import track_train_metrics, train_step
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .utils import (
@@ -20,10 +21,16 @@ from .utils import (
     RunningMean,
     get_world_size,
     init_distributed,
+    is_transformer_engine_available,
     log_rank_0,
     register_profiler,
     setup_tf32,
 )
+
+
+if is_transformer_engine_available():
+    import transformer_engine.pytorch as te
+    from transformer_engine.common.recipe import DelayedScaling, Format
 
 
 def track_val_metrics(
@@ -103,11 +110,21 @@ def train(
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
+    train_step_context = contextlib.nullcontext
+    use_nvte_fp8 = (
+        args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
+    )
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
+
+        if use_nvte_fp8:
+            train_step_context = te.fp8_autocast(
+                enabled=True,
+                fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
+            )
 
         loss_step, grad_norm_step = train_step(
             model=model,
@@ -117,6 +134,7 @@ def train(
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
+            train_step_context=train_step_context,
         )
 
         if global_step % log_interval == 0:

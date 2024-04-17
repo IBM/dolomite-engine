@@ -72,6 +72,11 @@ class DistributedBackend(str, Enum):
     torch = "torch"
 
 
+class FP8Backend(str, Enum):
+    msamp = "msamp"
+    nvte = "nvte"
+
+
 class LossMask(str, Enum):
     """Type of loss masking method"""
 

@@ -1,7 +1,6 @@
 from .arguments import get_args
 from .checkpointing import load_checkpoint_for_inference
 from .enums import Mode
-from .model_wrapper import get_model
 
 
 def main() -> None:

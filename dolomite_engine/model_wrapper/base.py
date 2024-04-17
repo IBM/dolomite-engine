@@ -16,7 +16,7 @@ from ..enums import (
 )
 from ..hf_models import is_padding_free_transformer_supported
 from ..hf_models.modeling_utils import is_glu
-from ..utils import log_rank_0, register_profiler, register_timer
+from ..utils import log_rank_0, register_profiler, register_timer, string_to_torch_dtype
 
 
 class ModelWrapper(torch.nn.Module):
@@ -69,7 +69,7 @@ class ModelWrapper(torch.nn.Module):
 
         self.is_encoder_decoder = self.config.is_encoder_decoder
         self.tuning_method = args.tuning_args.tuning_method
-        self.dtype = args.model_args.dtype
+        self.dtype = args.mixed_precision_args.dtype
 
         tokenizer_name = args.tokenizer_args.tokenizer_name
         if tokenizer_name is None:
@@ -156,7 +156,13 @@ class ModelWrapper(torch.nn.Module):
                     else:
                         self.model = _get_model(device_map=self.input_device)
         else:
-            self.model = _get_model(torch_dtype=self.dtype)
+            if self.dtype == "fp8":
+                log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")
+                torch_dtype = torch.float16
+            else:
+                torch_dtype = string_to_torch_dtype(self.dtype)
+
+            self.model = _get_model(torch_dtype=torch_dtype)
 
         num_parameters = 0
         for param in self.model.parameters():

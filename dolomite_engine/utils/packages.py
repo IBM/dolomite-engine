@@ -83,3 +83,31 @@ except ImportError:
 
 def is_colorlog_available() -> bool:
     return _IS_COLORLOG_AVAILABLE
+
+
+try:
+    import transformer_engine
+
+    _IS_TRANSFORMER_ENGINE_AVAILABLE = True
+except ImportError:
+    _IS_TRANSFORMER_ENGINE_AVAILABLE = False
+
+    warn_rank_0("Nvidia transformer engine is not installed")
+
+
+def is_transformer_engine_available() -> bool:
+    return _IS_TRANSFORMER_ENGINE_AVAILABLE
+
+
+try:
+    import msamp
+
+    _IS_MS_AMP_AVAILABLE = True
+except ImportError:
+    _IS_MS_AMP_AVAILABLE = False
+
+    warn_rank_0("Microsoft AMP is not installed")
+
+
+def is_ms_amp_available() -> bool:
+    return _IS_MS_AMP_AVAILABLE

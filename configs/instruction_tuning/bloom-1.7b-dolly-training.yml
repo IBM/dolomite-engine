@@ -11,7 +11,6 @@ datasets:
 model_args:
   model_name: bigscience/bloom-1b7
   model_class: AutoModelForCausalLM
-  dtype: bfloat16
 
 tuning_args:
   tuning_method: full_finetuning
@@ -35,6 +34,9 @@ optimizer_args:
       - 0.9
       - 0.95
     eps: 1e-10
+
+mixed_precision_args:
+  dtype: bf16
 
 lr_scheduler_args:
   lr_decay_style: cosine

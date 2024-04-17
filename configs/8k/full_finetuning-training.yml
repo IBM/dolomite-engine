@@ -8,7 +8,6 @@ datasets:
 model_args:
   model_name: bigcode/starcoder
   model_class: GPTMegatronForCausalLM
-  dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
@@ -36,6 +35,9 @@ optimizer_args:
 
 lr_scheduler_args:
   lr_decay_style: cosine
+
+mixed_precision_args:
+  dtype: bf16
 
 distributed_args:
   distributed_backend: deepspeed

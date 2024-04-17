@@ -10,15 +10,15 @@ from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
-from .arguments import TrainingArgs
-from .enums import DistributedBackend
-from .gradient_checkpointing import apply_gradient_checkpointing
-from .model_wrapper import ModelWrapper
-from .optimization import get_optimizer_and_lr_scheduler
-from .utils import get_module_class_from_name, log_rank_0
+from ..arguments import TrainingArgs
+from ..enums import DistributedBackend, FP8Backend
+from ..gradient_checkpointing import apply_gradient_checkpointing
+from ..model_wrapper import ModelWrapper
+from ..optimization import get_optimizer_and_lr_scheduler
+from ..utils import get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from .deepspeed import get_deepspeed_config
+from .fp8 import convert_model_to_transformer_engine
 
-
-_DEEPSPEED_CONFIG: dict = None
 
 _STAGE_FULL_SHARDING_STRATEGY_MAP = {
     2: ShardingStrategy.SHARD_GRAD_OP,
@@ -31,23 +31,9 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 _FSDP_MIXED_PRECISION_POLICIES = {
-    torch.float32: MixedPrecision(param_dtype=torch.float32, reduce_dtype=torch.float32, buffer_dtype=torch.float32),
-    torch.float16: MixedPrecision(param_dtype=torch.float16, reduce_dtype=torch.float16, buffer_dtype=torch.float16),
-    torch.bfloat16: MixedPrecision(
-        param_dtype=torch.bfloat16, reduce_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16
-    ),
-}
-
-_DEEPSPEED_MIXED_PRECISION_CONFIG = {
-    torch.float32: {},
-    torch.float16: {"fp16": {"enabled": True, "auto_cast": True}},
-    torch.bfloat16: {"bf16": {"enabled": True}},
-}
-
-_TORCH_DTYPE_TO_STR = {
-    torch.float32: "fp32",
-    torch.float16: "fp16",
-    torch.bfloat16: "bf16",
+    "fp32": MixedPrecision(param_dtype=torch.float32, reduce_dtype=torch.float32, buffer_dtype=torch.float32),
+    "fp16": MixedPrecision(param_dtype=torch.float16, reduce_dtype=torch.float16, buffer_dtype=torch.float16),
+    "bf16": MixedPrecision(param_dtype=torch.bfloat16, reduce_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16),
 }
 
 
@@ -67,13 +53,20 @@ def wrap_model_for_distributed_training(
     stage = args.distributed_args.stage
     cpu_offload = args.distributed_args.cpu_offload
     torch_compile = args.distributed_args.torch_compile
+    dtype = args.mixed_precision_args.dtype
+    communication_dtype = args.distributed_args.communication_dtype
+    fp8_backend = args.mixed_precision_args.fp8_backend
 
-    if args.model_args.dtype in [torch.float16, torch.bfloat16]:
-        if args.distributed_args.communication_dtype != torch.float32:
+    if dtype in ["fp16", "bf16"]:
+        if communication_dtype != "fp32":
             log_rank_0(
                 logging.WARN,
-                f"using ({args.distributed_args.communication_dtype}) with mixed precision training in ({args.model_args.dtype}), recommended is to use ({torch.float32})",
+                f"using ({communication_dtype}) with mixed precision training in ({dtype}), recommended is to use ({torch.float32})",
             )
+
+    if dtype == "fp8" and fp8_backend == FP8Backend.nvte:
+        convert_model_to_transformer_engine(model)
+        dtype = "bf16"
 
     assert args.distributed_args.zero_hpz_partition_size in [
         1,
@@ -136,16 +129,16 @@ def wrap_model_for_distributed_training(
 
                 sharding_strategy = _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
 
-        mixed_precision_policy = deepcopy(_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype])
-        if args.distributed_args.communication_dtype is not None:
-            mixed_precision_policy.reduce_dtype = args.distributed_args.communication_dtype
+        mixed_precision_policy = deepcopy(_FSDP_MIXED_PRECISION_POLICIES[dtype])
+        if communication_dtype is not None:
+            mixed_precision_policy.reduce_dtype = string_to_torch_dtype(communication_dtype)
 
         efficient_cpu_initialization = args.model_args.efficient_cpu_initialization
 
         model = FSDP(
             model,
             sharding_strategy=sharding_strategy,
-            mixed_precision=_FSDP_MIXED_PRECISION_POLICIES[args.model_args.dtype],
+            mixed_precision=mixed_precision_policy,
             auto_wrap_policy=partial(
                 transformer_auto_wrap_policy,
                 transformer_layer_cls=[get_module_class_from_name(model, name) for name in block_names],
@@ -184,50 +177,3 @@ def wrap_model_for_distributed_training(
         )
 
     return model, optimizer, lr_scheduler
-
-
-def get_deepspeed_config(args: TrainingArgs) -> dict:
-    """generate deepspeed config from the args
-
-    Args:
-        args (TrainingArgs): arguments based on training mode
-
-    Returns:
-        dict: deepspeed config
-    """
-
-    global _DEEPSPEED_CONFIG
-
-    if _DEEPSPEED_CONFIG is None:
-        config = {
-            "zero_optimization": {
-                "stage": args.distributed_args.stage,
-                "overlap_comm": args.distributed_args.overlap_comm,
-                "contiguous_gradients": args.distributed_args.contiguous_gradients,
-                # hierarchical partioning for ZeRO (HSDP)
-                "zero_hpz_partition_size": args.distributed_args.zero_hpz_partition_size,
-                # whether to use quantized weights (ZeRO++)
-                "zero_quantized_weights": args.distributed_args.zero_quantized_weights,
-                # # whether to use quantized gradients (ZeRO++)
-                "zero_quantized_gradients": args.distributed_args.zero_quantized_gradients,
-            },
-            "train_micro_batch_size_per_gpu": args.training_parameters.micro_batch_size,
-            "gradient_accumulation_steps": args.training_parameters.gradient_accumulation_steps,
-            "gradient_clipping": args.training_parameters.gradient_clipping,
-        }
-
-        dtype_config: dict = deepcopy(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.model_args.dtype])
-        if args.distributed_args.communication_dtype is not None:
-            dtype_str = _TORCH_DTYPE_TO_STR[args.distributed_args.communication_dtype]
-            dtype_config.update({"data_types": {"grad_accum_dtype": dtype_str}, "communication_data_type": dtype_str})
-        config.update(dtype_config)
-
-        # cpu offload
-        if args.distributed_args.cpu_offload:
-            cpu_params = {"device": "cpu", "pin_memory": True}
-            config["zero_optimization"]["offload_param"] = cpu_params
-            config["zero_optimization"]["offload_optimizer"] = cpu_params
-
-        _DEEPSPEED_CONFIG = config
-
-    return _DEEPSPEED_CONFIG

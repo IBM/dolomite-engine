@@ -43,11 +43,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         else:
             model_outputs = self.model(input_ids=input_ids)
 
-        if type(model_outputs) is tuple:
-            logits = model_outputs[0]
-        else:
-            logits = model_outputs.logits
-
+        logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
         return loss

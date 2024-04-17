@@ -4,6 +4,7 @@ from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
 from ..enums import Mode, TuningMethod
+from ..utils import string_to_torch_dtype
 from .finetuning import ModelWrapperForFinetuning
 
 
@@ -40,5 +41,7 @@ class ModelWrapperForPEFT(ModelWrapperForFinetuning):
                 lora_dropout=args.lora_dropout,
             )
 
-        self.model = args.model_args.model_class.from_pretrained(**model_kwargs, torch_dtype=self.dtype)
+        self.model = args.model_args.model_class.from_pretrained(
+            **model_kwargs, torch_dtype=string_to_torch_dtype(self.dtype)
+        )
         self.model = get_peft_model(self.model, self.peft_config)

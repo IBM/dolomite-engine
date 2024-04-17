@@ -9,7 +9,6 @@ datasets:
 model_args:
   model_name: bigscience/bloom-560m
   model_class: AutoModelForCausalLM
-  dtype: bfloat16
   config_extras:
     aux_loss_weight: 0
     gate_type: topk-ste
@@ -39,6 +38,9 @@ optimizer_args:
 
 lr_scheduler_args:
   lr_schedule: cosine
+
+mixed_precision_args:
+  dtype: bf16
 
 distributed_args:
   distributed_backend: torch

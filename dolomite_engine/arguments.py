@@ -2,7 +2,6 @@ import logging
 from argparse import ArgumentParser
 from typing import Any, List, Optional, Tuple, Union
 
-import torch
 import transformers
 from peft import PromptTuningInit
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -12,6 +11,7 @@ from .enums import (
     AttentionImplementation,
     DistributedBackend,
     ExperimentsTrackerName,
+    FP8Backend,
     GradientCheckpointingMethod,
     LossMask,
     LRDecaySchedule,
@@ -20,7 +20,7 @@ from .enums import (
     ParamsGroupMethod,
     TuningMethod,
 )
-from .utils import BaseArgs, get_world_size, load_yaml, log_rank_0, run_rank_n, set_logger
+from .utils import BaseArgs, get_world_size, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
 def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
@@ -49,8 +49,6 @@ class ModelArgs(BaseArgs):
     pretrained_config: Optional[dict] = None
     # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
     model_class: str = None
-    # dtype to use for training / inference
-    dtype: str = "float32"
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
     # attention implementation (only works with GPTMegatronForCausalLM)
@@ -75,15 +73,6 @@ class ModelArgs(BaseArgs):
         ], f"unexpected model_class ({self.model_class})"
 
         self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(transformers, self.model_class)
-
-        # dtype
-        self.dtype = getattr(torch, self.dtype)
-        assert self.dtype in [torch.float32, torch.float16, torch.bfloat16], f"unexpected dtype '{self.dtype}'"
-
-    def to_dict(self) -> dict:
-        result = super().to_dict()
-        result["dtype"] = str(self.dtype).split(".")[1]
-        return result
 
 
 class PromptTuningArgs(BaseArgs):
@@ -261,6 +250,21 @@ class LRSchedulerArgs(BaseArgs):
     lr_decay_factor: float = 0.1
 
 
+class MixedPrecisionArgs(BaseArgs):
+    # dtype to use for training / inference
+    dtype: str = "fp32"
+    # fp8 backend
+    fp8_backend: FP8Backend = None
+
+    def model_post_init(self, __context: Any) -> None:
+        # dtype
+        self.dtype = normalize_dtype_string(self.dtype)
+
+        # fp8_backend
+        if self.dtype != "fp8":
+            assert self.fp8_backend is None, "fp8_backend specified without fp8 dtype"
+
+
 class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
@@ -297,12 +301,7 @@ class DistributedArgs(BaseArgs):
 
         # communication dtype
         if self.communication_dtype is not None:
-            self.communication_dtype = getattr(torch, self.communication_dtype)
-            assert self.communication_dtype in [
-                torch.float32,
-                torch.float16,
-                torch.bfloat16,
-            ], f"unexpected dtype '{self.communication_dtype}'"
+            self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
 
 class AimArgs(BaseArgs):
@@ -377,6 +376,8 @@ class TrainingArgs(BaseArgs):
     training_parameters: Optional[TrainingParameters] = None
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
+    # mixed precision related arguments
+    mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # distributed training related arguments
     distributed_args: DistributedArgs = DistributedArgs()
     # research args
@@ -427,6 +428,8 @@ class InferenceArgs(BaseArgs):
     load_args: Optional[LoadArgs] = None
     # generation parameters
     generation_parameters: GenerationParameters = None
+    # mixed precision related arguments
+    mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
     # output dir
