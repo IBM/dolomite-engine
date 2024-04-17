@@ -105,18 +105,6 @@ If you don't need any reformatting, leave the arguments `--input_format` and `--
 Please note that the user is expected to provide this at both training and inference time. \
 Try not to have trailing spaces in `input_format`, if you need a space between input and output, the space should be part of the `output_format`.
 
-# Tracking experiments
-The repository also supports [aim](https://github.com/aimhubio/aim) and [wandb](https://wandb.ai/) based experiment tracking. For viewing the aim dashboard, simply run
-```shell
-aim up --host <HOST_ADDRESS> --port <HOST_PORT> --repo <PATH_TO_AIM_REPO>
-```
-This brings up an awesome UI like this:
-![image](https://user-images.githubusercontent.com/13848158/136374529-af267918-5dc6-4a4e-8ed2-f6333a332f96.gif)
-
-# Contribution
-Feel free to open any issues and open pull requests to contribute code :)
-[![Build Status](https://v3.travis.ibm.com/ai-models-architectures/IBM-models.svg?token=j27SP2KbYBa6fwpWWtcX&branch=main)](https://v3.travis.ibm.com/ai-models-architectures/IBM-models)
-
 # HuggingFace compatible custom models
 
 ## Best training efficiency
