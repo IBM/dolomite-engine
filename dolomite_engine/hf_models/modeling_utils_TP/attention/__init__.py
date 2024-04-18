@@ -2,12 +2,11 @@ from ...config import MegatronConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from .base import Attention_TP
 from .flash import FlashAttention2_TP
-from .math import MathAttention_TP
 from .sdpa import SDPA_TP
 
 
 _ATTENTION_MODULES = {
-    "eager": MathAttention_TP,
+    "eager": Attention_TP,
     "sdpa": SDPA_TP,
     "flash_attention_2": FlashAttention2_TP,
 }

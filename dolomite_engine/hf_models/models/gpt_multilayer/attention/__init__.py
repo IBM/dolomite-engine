@@ -1,13 +1,12 @@
 from ..config import GPTMultiLayerConfig
 from .base import KeyValueProjection, MultiLayerAttention
 from .flash import MultiLayerFlashAttention2
-from .math import MultiLayerMathAttention
 from .padding_free import KeyValuePaddingFreeProjection, MultiLayerPaddingFreeAttention
 from .sdpa import MultiLayerSDPA
 
 
 _ATTENTION_MODULES = {
-    "eager": MultiLayerMathAttention,
+    "eager": MultiLayerAttention,
     "sdpa": MultiLayerSDPA,
     "flash_attention_2": MultiLayerFlashAttention2,
 }

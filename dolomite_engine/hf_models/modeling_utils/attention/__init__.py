@@ -7,7 +7,6 @@ from ...config import MegatronConfig
 from ...enums import AttentionHeadType
 from .base import Attention
 from .flash import FlashAttention2
-from .math import MathAttention
 from .padding_free import PaddingFreeAttention
 from .sdpa import SDPA
 from .utils import (
@@ -23,7 +22,7 @@ from .utils import (
 
 
 _ATTENTION_MODULES = {
-    "eager": MathAttention,
+    "eager": Attention,
     "sdpa": SDPA,
     "flash_attention_2": FlashAttention2,
 }

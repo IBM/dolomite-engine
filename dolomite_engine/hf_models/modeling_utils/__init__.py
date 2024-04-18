@@ -3,7 +3,6 @@ from .attention import (
     SDPA,
     Attention,
     FlashAttention2,
-    MathAttention,
     PaddingFreeAttention,
     get_attention_module,
     interleave_query_key_value_tensor_for_attention,

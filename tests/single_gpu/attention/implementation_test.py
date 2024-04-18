@@ -9,4 +9,7 @@ class AttentionImplementationTest(TestCommons):
         model = self.from_config(config, attn_implementation="eager")
 
         model_repr = str(model)
-        assert "MathAttention" in model_repr
+        assert "Attention" in model_repr
+        assert "SDPA" not in str(model)
+        assert "FlashAttention2" not in str(model)
+        assert "PaddingFreeAttention" not in str(model)
