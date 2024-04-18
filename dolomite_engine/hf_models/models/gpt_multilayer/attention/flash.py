@@ -2,12 +2,12 @@ import torch
 
 from .....utils import is_flash_attention_available
 from ....enums import PositionEmbeddingType
-from ....modeling_utils import apply_rotary_pos_emb, unpad_tensor
+from ....modeling_utils import apply_rotary_pos_emb, get_unpad_data
 from .base import MultiLayerAttention
 
 
 if is_flash_attention_available():
-    from flash_attn.bert_padding import IndexFirstAxis, pad_input
+    from flash_attn.bert_padding import IndexFirstAxis, pad_input, unpad_input
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
@@ -38,7 +38,7 @@ class MultiLayerFlashAttention2(MultiLayerAttention):
 
         batch_size, query_length = query.shape[:2]
         key_length = key.shape[1]
-        _, indices_k, cu_seqlens_k, max_seqlen_k = unpad_tensor(None, attention_mask)
+        indices_k, cu_seqlens_k, max_seqlen_k = get_unpad_data(attention_mask)
 
         # TODO: figure out a way to move this outside
         key = IndexFirstAxis.apply(
@@ -65,7 +65,7 @@ class MultiLayerFlashAttention2(MultiLayerAttention):
         else:
             # The -q_len: slice assumes left padding.
             attention_mask = attention_mask[:, -query_length:]
-            query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_tensor(query, attention_mask)
+            query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_input(query, attention_mask)
 
         attn_output = flash_attn_varlen_func(
             query,

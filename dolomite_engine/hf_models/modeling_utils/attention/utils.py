@@ -3,26 +3,18 @@ from typing import Tuple
 import torch
 import torch.nn.functional as F
 
-from ....utils import is_flash_attention_available
 
-
-if is_flash_attention_available():
-    from einops import rearrange
-    from flash_attn.bert_padding import IndexFirstAxis
-
-
-def unpad_tensor(
-    hidden_states: torch.Tensor, attention_mask: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
+# Copied from transformers.models.llama.modeling_llama._get_unpad_data
+def get_unpad_data(attention_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    max_seqlen = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.torch.int32), (1, 0))
-
-    if hidden_states is not None:
-        hidden_states = IndexFirstAxis.apply(rearrange(hidden_states, "b s ... -> (b s) ..."), indices)
-
-    return hidden_states, indices, cu_seqlens, max_seqlen
+    max_seqlen_in_batch = seqlens_in_batch.max().item()
+    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
+    return (
+        indices,
+        cu_seqlens,
+        max_seqlen_in_batch,
+    )
 
 
 def interleave_query_key_value_tensor_for_mha(

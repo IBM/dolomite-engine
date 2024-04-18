@@ -5,11 +5,11 @@ from ....utils import is_flash_attention_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
 from .base import Attention
-from .utils import unpad_tensor
+from .utils import get_unpad_data
 
 
 if is_flash_attention_available():
-    from flash_attn.bert_padding import IndexFirstAxis, pad_input
+    from flash_attn.bert_padding import IndexFirstAxis, pad_input, unpad_input
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
@@ -68,7 +68,7 @@ class FlashAttention2(Attention):
 
         batch_size, query_length = query.shape[:2]
         key_length = key.shape[1]
-        _, indices_k, cu_seqlens_k, max_seqlen_k = unpad_tensor(None, attention_mask)
+        indices_k, cu_seqlens_k, max_seqlen_k = get_unpad_data(attention_mask)
 
         key = IndexFirstAxis.apply(
             key.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
@@ -94,7 +94,7 @@ class FlashAttention2(Attention):
         else:
             # The -q_len: slice assumes left padding.
             attention_mask = attention_mask[:, -query_length:]
-            query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_tensor(query, attention_mask)
+            query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_input(query, attention_mask)
 
         # ==========================================================================================
         # query -> (total_q, num_heads, head_dim)
