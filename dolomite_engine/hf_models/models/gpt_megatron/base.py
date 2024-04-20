@@ -8,6 +8,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 from transformers import DynamicCache, PreTrainedModel
+from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
@@ -174,6 +175,7 @@ class GPTMegatronPreTrainedModel(PreTrainedModel):
 
 class GPTMegatronModel(GPTMegatronPreTrainedModel):
     _keys_to_ignore_on_load_missing = ["attn.masked_bias"]
+    mask_value = None
 
     def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
@@ -182,7 +184,6 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
-        self.mask_value = None
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
@@ -477,11 +478,11 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                 # so, input_ids is of shape (s1 + s2 + ... + sb)
                 batch_size = cu_seqlens.shape[0] - 1
             else:
-                batch_size = input_ids.shape[0]
+                batch_size = input_shape[0]
         elif inputs_embeds is not None:
             # TODO special handling for padding free transformer needed here if we support inputs_embeds argument
             input_shape = inputs_embeds.size()[:-1]
-            batch_size = inputs_embeds.shape[0]
+            batch_size = input_shape[0]
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
@@ -586,8 +587,12 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                     self._get_mask_value(attention_mask.device, hidden_states.dtype),
                 )
         else:
-            attention_mask = self._prepare_causal_attention_mask(
-                attention_mask, batch_size, query_length, key_length, device
+            attention_mask = _prepare_4d_causal_attention_mask(
+                attention_mask=attention_mask,
+                input_shape=input_shape,
+                inputs_embeds=hidden_states,
+                past_key_values_length=past_length,
+                sliding_window=None,
             )
 
         return (

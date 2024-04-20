@@ -3,8 +3,8 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import DynamicCache
-from transformers.models.gpt_bigcode.modeling_gpt_bigcode import upcast_masked_softmax, upcast_softmax
 
 from ...config import MegatronConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
@@ -20,7 +20,6 @@ class Attention(nn.Module):
         super().__init__()
 
         self.causal = causal
-        self.mask_value = None
         self.hidden_size = config.n_embd
         self.num_heads = config.n_head
         self.num_key_value_heads = config.num_key_value_heads
@@ -176,12 +175,6 @@ class Attention(nn.Module):
 
         return query, key, value
 
-    def _get_mask_value(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-        # torch.where expects a tensor. We use a cache to avoid recreating it every time.
-        if self.mask_value is None or self.mask_value.dtype != dtype or self.mask_value.device != device:
-            self.mask_value = torch.full([], torch.finfo(torch.float16).min, dtype=dtype, device=device)
-        return self.mask_value
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -221,15 +214,14 @@ class Attention(nn.Module):
 
         dtype = query.dtype
         softmax_dtype = torch.float32 if self.attention_softmax_in_fp32 else dtype
-        upcast = dtype != softmax_dtype
 
-        unscale = self.layer_idx + 1 if self.scale_attention_softmax_in_fp32 and upcast else 1
-        scale_factor = 1 / unscale
         if self.scale_attn_weights:
             if self.attention_multiplier is None:
-                scale_factor /= self.head_dim**0.5
+                scale_factor = 1 / self.head_dim**0.5
             else:
-                scale_factor *= self.attention_multiplier
+                scale_factor = self.attention_multiplier
+        else:
+            scale_factor = 1
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
@@ -262,7 +254,7 @@ class Attention(nn.Module):
             beta = 0
         else:
             attn_weights = alibi_bias.view(batch_size * self.num_heads, query_length, key_length)
-            beta = 1 / unscale
+            beta = 1
 
         attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=scale_factor).view(
             batch_size, self.num_heads, query_length, key_length
@@ -272,22 +264,12 @@ class Attention(nn.Module):
         # attn_weights -> (batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
-        if upcast:
-            # Use a fused kernel to prevent a large overhead from casting and scaling.
-            # Sub-optimal when the key length is not a multiple of 8.
-            if attention_mask is None:
-                attn_weights = upcast_softmax(attn_weights, unscale, softmax_dtype)
-            else:
-                mask_value = self._get_mask_value(attn_weights.device, softmax_dtype)
-                attn_weights = upcast_masked_softmax(attn_weights, attention_mask, mask_value, unscale, softmax_dtype)
-        else:
-            if attention_mask is not None:
-                mask_value = self._get_mask_value(attn_weights.device, softmax_dtype)
+        attn_weights = attn_weights.to(softmax_dtype)
 
-                # The fused kernel is very slow when the key length is not a multiple of 8, so we skip fusion.
-                attn_weights = torch.where(attention_mask, attn_weights, mask_value)
+        if attention_mask is not None:
+            attn_weights = attn_weights + attention_mask
 
-            attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+        attn_weights = F.softmax(attn_weights, dim=-1).to(dtype)
 
         attn_weights = self.attn_dropout(attn_weights)
 
