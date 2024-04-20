@@ -180,7 +180,6 @@ class Attention(nn.Module):
         hidden_states: torch.Tensor,
         past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
-        alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
@@ -247,16 +246,11 @@ class Attention(nn.Module):
         # value -> (batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
-        if alibi_bias is None:
-            attn_weights = torch.empty(
-                (batch_size * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
-            )
-            beta = 0
-        else:
-            attn_weights = alibi_bias.view(batch_size * self.num_heads, query_length, key_length)
-            beta = 1
+        attn_weights = torch.empty(
+            (batch_size * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
+        )
 
-        attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=scale_factor).view(
+        attn_weights = torch.baddbmm(attn_weights, query, key, beta=0, alpha=scale_factor).view(
             batch_size, self.num_heads, query_length, key_length
         )
 

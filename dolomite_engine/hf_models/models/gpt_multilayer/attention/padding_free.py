@@ -17,13 +17,10 @@ class MultiLayerPaddingFreeAttention(MultiLayerAttention):
         key: torch.Tensor,
         value: torch.Tensor,
         attention_mask: torch.Tensor = None,
-        alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
-        assert alibi_bias is None
-
         total_q = hidden_states.shape[0]
 
         query = self.q_attn(hidden_states)

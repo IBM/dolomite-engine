@@ -109,7 +109,6 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
             hidden_states,
             attention_mask,
             position_ids,
-            alibi_bias,
             rope_cos_sin,
             past_key_values,
         ) = self._prepare_a_bunch_of_stuff(
@@ -138,7 +137,6 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
-                alibi_bias=alibi_bias,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,

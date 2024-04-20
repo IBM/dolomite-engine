@@ -19,13 +19,10 @@ class FlashAttention2(Attention):
         hidden_states: torch.Tensor,
         past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
-        alibi_bias: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
-        assert alibi_bias is None
-
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
