@@ -24,7 +24,6 @@ class MultiLayer(nn.Module):
 
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
-        self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
         self.m_residual = config.m_residual
 
         self._use_eager_attention = attention_implementation == "eager"
@@ -63,12 +62,8 @@ class MultiLayer(nn.Module):
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
-        if self.apply_residual_connection_post_layernorm:
-            hidden_states = self.ln_1(hidden_states)
-            residual = hidden_states
-        else:
-            residual = hidden_states
-            hidden_states = self.ln_1(hidden_states)
+        residual = hidden_states
+        hidden_states = self.ln_1(hidden_states)
 
         attn_output = self.attn(
             hidden_states,
@@ -87,12 +82,8 @@ class MultiLayer(nn.Module):
         if joint_residual is not None:
             hidden_states = hidden_states + joint_residual
 
-        if self.apply_residual_connection_post_layernorm:
-            hidden_states = self.ln_2(hidden_states)
-            residual = hidden_states
-        else:
-            residual = hidden_states
-            hidden_states = self.ln_2(hidden_states)
+        residual = hidden_states
+        hidden_states = self.ln_2(hidden_states)
 
         feed_forward_hidden_states = self.mlp(hidden_states)
 

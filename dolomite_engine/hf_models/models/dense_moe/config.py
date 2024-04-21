@@ -37,7 +37,6 @@ class DenseMoEConfig(PretrainedConfig):
         pad_token_id: int = 50256,
         attention_softmax_in_fp32: bool = True,
         scale_attention_softmax_in_fp32: bool = True,
-        apply_residual_connection_post_layernorm: bool = False,
         add_bias: bool = True,
         position_embedding_type: str = "learned_absolute",
         rope_theta: int = 10000,
@@ -68,7 +67,6 @@ class DenseMoEConfig(PretrainedConfig):
         self.use_cache = use_cache
         self.attention_softmax_in_fp32 = attention_softmax_in_fp32
         self.scale_attention_softmax_in_fp32 = scale_attention_softmax_in_fp32
-        self.apply_residual_connection_post_layernorm = apply_residual_connection_post_layernorm
         self.position_embedding_type = position_embedding_type
         self.add_bias = add_bias
         self.rope_theta = rope_theta

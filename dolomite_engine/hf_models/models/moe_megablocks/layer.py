@@ -24,7 +24,6 @@ class SparseMoEBlock(nn.Module):
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
@@ -57,12 +56,8 @@ class SparseMoEBlock(nn.Module):
     ) -> Union[
         Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     ]:
-        if self.apply_residual_connection_post_layernorm:
-            hidden_states = self.ln_1(hidden_states)
-            residual = hidden_states
-        else:
-            residual = hidden_states
-            hidden_states = self.ln_1(hidden_states)
+        residual = hidden_states
+        hidden_states = self.ln_1(hidden_states)
 
         attn_output = self.attn(
             hidden_states,
@@ -79,12 +74,8 @@ class SparseMoEBlock(nn.Module):
         # residual connection
         hidden_states = attn_output + residual
 
-        if self.apply_residual_connection_post_layernorm:
-            hidden_states = self.ln_2(hidden_states)
-            residual = hidden_states
-        else:
-            residual = hidden_states
-            hidden_states = self.ln_2(hidden_states)
+        residual = hidden_states
+        hidden_states = self.ln_2(hidden_states)
 
         feed_forward_hidden_states, router_logits = self.mlp(hidden_states)
 

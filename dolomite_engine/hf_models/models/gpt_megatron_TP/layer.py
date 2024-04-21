@@ -23,7 +23,6 @@ class GPTMegatronBlock_TP(GPTMegatronBlock):
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
         self.layer_idx = layer_idx
 
         self.ln_1 = get_normalization_function(

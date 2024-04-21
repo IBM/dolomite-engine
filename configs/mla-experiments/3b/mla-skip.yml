@@ -39,7 +39,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    apply_residual_connection_post_layernorm: false
     attention_softmax_in_fp32: true
     attn_pdrop: 0.1
     bos_token_id: 0
