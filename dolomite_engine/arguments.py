@@ -55,8 +55,8 @@ class ModelArgs(BaseArgs):
     attention_implementation: Optional[AttentionImplementation] = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
-    # use lower memory to initialize model on CPU
-    efficient_cpu_initialization: bool = False
+    # use lower memory to initialize model
+    efficient_initialization: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.model_class, "model_class")])

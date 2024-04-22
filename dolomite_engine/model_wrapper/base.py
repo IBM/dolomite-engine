@@ -39,22 +39,9 @@ class ModelWrapper(torch.nn.Module):
         self.model_class = args.model_args.model_class
         self.gradient_checkpointing_method = args.distributed_args.gradient_checkpointing_method
         self.gradient_checkpointing_args = args.distributed_args.gradient_checkpointing_args
-
-        self._setup_input_device()
-
-        self.distributed_backend = None
-        self.stage = None
-        if self.mode == Mode.training:
-            self.distributed_backend = args.distributed_args.distributed_backend
-            self.stage = args.distributed_args.stage
-
-        if self.model_name is None:
-            self.config = AutoConfig.for_model(**args.model_args.pretrained_config)
-        else:
-            self.config = AutoConfig.from_pretrained(
-                self.model_name, trust_remote_code=args.model_args.trust_remote_code
-            )
-        log_rank_0(logging.INFO, self.config)
+        self.efficient_initialization = args.model_args.efficient_initialization
+        self.tuning_method = args.tuning_args.tuning_method
+        self.dtype = args.mixed_precision_args.dtype
 
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
@@ -67,21 +54,18 @@ class ModelWrapper(torch.nn.Module):
                 self.attention_implementation == AttentionImplementation.flash_attention_2
             ), "padding free transformer only works with flash attention"
 
+        self._setup_input_device()
+
+        self.distributed_backend = None
+        self.stage = None
+        if self.mode == Mode.training:
+            self.distributed_backend = args.distributed_args.distributed_backend
+            self.stage = args.distributed_args.stage
+
+        self._setup_config(args)
         self.is_encoder_decoder = self.config.is_encoder_decoder
-        self.tuning_method = args.tuning_args.tuning_method
-        self.dtype = args.mixed_precision_args.dtype
 
-        tokenizer_name = args.tokenizer_args.tokenizer_name
-        if tokenizer_name is None:
-            tokenizer_name = self.model_name
-        assert tokenizer_name is not None, "pass a tokenizer"
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-        self.padding_side = PaddingSide(
-            self.tokenizer.padding_side
-            if args.tokenizer_args.padding_side is None
-            else args.tokenizer_args.padding_side
-        )
-
+        self._setup_tokenizer(args)
         self._setup_model(args)
 
         self.loss_mask = None
@@ -106,69 +90,6 @@ class ModelWrapper(torch.nn.Module):
 
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
-
-    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
-        if self.model_name is None:
-            model_kwargs = {"config": self.config}
-        else:
-            model_kwargs = {
-                "pretrained_model_name_or_path": self.model_name,
-                "trust_remote_code": args.model_args.trust_remote_code,
-            }
-
-        model_kwargs["use_cache"] = self.mode == Mode.inference
-        if self.attention_implementation is not None:
-            model_kwargs["attn_implementation"] = self.attention_implementation.value
-        if self.use_padding_free_transformer:
-            model_kwargs["use_padding_free_transformer"] = True
-
-        def _get_model(**extras):
-            if self.model_name is None:
-                model = args.model_args.model_class.from_config(**model_kwargs, **extras)
-            else:
-                model = args.model_args.model_class.from_pretrained(**model_kwargs, **extras)
-
-            return model
-
-        if self.mode == Mode.training:
-            # this tells from_pretrained to instantiate directly on gpus
-            # this only instantiates a single instance of the model across the ranks
-            if self.distributed_backend == DistributedBackend.deepspeed:
-                if args.model_args.efficient_cpu_initialization:
-                    from ..distributed import get_deepspeed_config
-
-                    self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
-
-                self.model = _get_model()
-            elif self.distributed_backend == DistributedBackend.torch:
-                # DDP
-                if self.stage == 0:
-                    with torch.device(self.input_device):
-                        self.model = _get_model()
-                # FSDP
-                else:
-                    if args.model_args.efficient_cpu_initialization:
-                        assert self.model_name is None
-
-                        with torch.device("meta"):
-                            self.model = _get_model()
-                        self.model = self.model.to_empty(device=self.input_device)
-                    else:
-                        self.model = _get_model(device_map=self.input_device)
-        else:
-            if self.dtype == "fp8":
-                log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")
-                torch_dtype = torch.float16
-            else:
-                torch_dtype = string_to_torch_dtype(self.dtype)
-
-            self.model = _get_model(torch_dtype=torch_dtype)
-
-        num_parameters = 0
-        for param in self.model.parameters():
-            num_parameters += param.numel()
-
-        log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")
 
     @register_profiler("generate")
     @register_timer("generate")
@@ -262,3 +183,90 @@ class ModelWrapper(torch.nn.Module):
     def save_pretrained(self, save_path: str) -> None:
         self.tokenizer.save_pretrained(save_path)
         self.model.save_pretrained(save_path)
+
+    def _setup_config(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+        if self.model_name is None:
+            self.config = AutoConfig.for_model(**args.model_args.pretrained_config)
+        else:
+            self.config = AutoConfig.from_pretrained(
+                self.model_name, trust_remote_code=args.model_args.trust_remote_code
+            )
+        log_rank_0(logging.INFO, self.config)
+
+    def _setup_tokenizer(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+        tokenizer_name = args.tokenizer_args.tokenizer_name if self.model_name is None else self.model_name
+        assert tokenizer_name is not None, "pass a tokenizer"
+
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+        self.padding_side = PaddingSide(
+            self.tokenizer.padding_side
+            if args.tokenizer_args.padding_side is None
+            else args.tokenizer_args.padding_side
+        )
+
+    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+        if self.model_name is None:
+            model_kwargs = {"config": self.config}
+        else:
+            model_kwargs = {
+                "pretrained_model_name_or_path": self.model_name,
+                "trust_remote_code": args.model_args.trust_remote_code,
+            }
+
+        model_kwargs["use_cache"] = self.mode == Mode.inference
+        if self.attention_implementation is not None:
+            model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if self.use_padding_free_transformer:
+            model_kwargs["use_padding_free_transformer"] = True
+
+        def _get_model(**extras):
+            if self.model_name is None:
+                model = args.model_args.model_class.from_config(**model_kwargs, **extras)
+            else:
+                model = args.model_args.model_class.from_pretrained(**model_kwargs, **extras)
+
+            return model
+
+        if self.mode == Mode.training:
+            # this tells from_pretrained to instantiate directly on gpus
+            # this only instantiates a single instance of the model across the ranks
+            if self.distributed_backend == DistributedBackend.deepspeed:
+                if self.efficient_initialization:
+                    from ..distributed import get_deepspeed_config
+
+                    self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
+
+                self.model = _get_model()
+            elif self.distributed_backend == DistributedBackend.torch:
+                # DDP
+                if self.stage == 0:
+                    assert (
+                        not self.efficient_initialization
+                    ), "efficient_initialization is not meant to be used with DDP"
+
+                    self.model = _get_model(device_map=self.input_device)
+                # FSDP
+                else:
+                    if self.efficient_initialization:
+                        assert self.model_name is None
+
+                        with torch.device("meta"):
+                            self.model = _get_model()
+                        self.model = self.model.to_empty(device=self.input_device)
+                    else:
+                        self.model = _get_model(device_map=self.input_device)
+        else:
+            if self.dtype == "fp8":
+                log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")
+                torch_dtype = torch.float16
+            else:
+                torch_dtype = string_to_torch_dtype(self.dtype)
+
+            self.model = _get_model(torch_dtype=torch_dtype)
+
+        num_parameters = 0
+        for param in self.model.parameters():
+            num_parameters += param.numel()
+
+        log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")

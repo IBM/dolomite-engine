@@ -231,7 +231,7 @@ def train(
     if eval_during_training:
         evaluate(val_dataloader, model, starting_iteration, experiments_tracker)
 
-    train_step_context = contextlib.nullcontext
+    train_step_context = contextlib.nullcontext()
     use_nvte_fp8 = (
         args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
     )

@@ -33,7 +33,7 @@ datasets:
 model_args:
   model_class: AutoModelForCausalLM
   model_name: /mayank-pvc/checkpoints/starcoderbase-7b-mla-drop
-  efficient_cpu_initialization: false
+  efficient_initialization: false
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 

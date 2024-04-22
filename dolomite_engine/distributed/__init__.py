@@ -93,15 +93,6 @@ def wrap_model_for_distributed_training(
             params_group_method=args.optimizer_args.params_group_method,
         )
 
-        from deepspeed import initialize as deepspeed_initialize
-
-        model, _, _, _ = deepspeed_initialize(
-            model=model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            config=get_deepspeed_config(args),
-        )
-
         if args.distributed_args.gradient_checkpointing_method is not None:
             assert len(block_names) == 1
 
@@ -111,6 +102,15 @@ def wrap_model_for_distributed_training(
                 block_name=block_names[0],
                 **args.distributed_args.gradient_checkpointing_args,
             )
+
+        from deepspeed import initialize as deepspeed_initialize
+
+        model, _, _, _ = deepspeed_initialize(
+            model=model,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            config=get_deepspeed_config(args),
+        )
 
         # we don't need the optimizer and scheduler when using deepspeed backend
         optimizer = None
@@ -133,8 +133,6 @@ def wrap_model_for_distributed_training(
         if communication_dtype is not None:
             mixed_precision_policy.reduce_dtype = string_to_torch_dtype(communication_dtype)
 
-        efficient_cpu_initialization = args.model_args.efficient_cpu_initialization
-
         model = FSDP(
             model,
             sharding_strategy=sharding_strategy,
@@ -146,7 +144,7 @@ def wrap_model_for_distributed_training(
             device_id=torch.cuda.current_device(),
             limit_all_gathers=True,
             use_orig_params=True,
-            sync_module_states=efficient_cpu_initialization,
+            sync_module_states=args.model_args.efficient_initialization,
         )
 
         if args.distributed_args.gradient_checkpointing_method is not None:
