@@ -363,36 +363,52 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
             return cos, sin
 
     def _prepare_causal_attention_mask(
-        self, attention_mask: torch.Tensor, inputs_embeds: torch.Tensor, past_length: int
+        self, attention_mask: torch.Tensor, batch_size: int, query_length: int, key_length: int, device: torch.device
     ) -> torch.Tensor:
-        batch_size, query_length = inputs_embeds.shape[:2]
-        device = inputs_embeds.device
+        past_length = key_length - query_length
 
-        # prepare causal mask only if not using flash attention
-        if self._use_flash_attention_2:
+        # ==========================================================================================
+        # attention_mask -> (batch_size, key_length)
+        # ==========================================================================================
+
+        if query_length > 1:
+            # (query_length, key_length)
+            causal_mask = torch.empty((query_length, key_length), dtype=torch.bool, device=device)
+            causal_mask[:, past_length:] = torch.tril(
+                torch.ones(query_length, query_length, dtype=torch.bool, device=device)
+            )
+
+            if past_length > 0:
+                causal_mask[:, :past_length] = True
+
+            # (query_length, key_length) -> (1, query_length, key_length)
+            causal_mask = causal_mask.unsqueeze(0)
+
             if attention_mask is None:
-                attention_mask = torch.ones(batch_size, query_length, device=device)
-        elif self._use_padding_free_transformer:
-            # no attention_mask is needed for list inputs
-            attention_mask = None
-        elif self._use_sdpa:
-            attention_mask = _prepare_4d_causal_attention_mask_for_sdpa(
-                attention_mask=attention_mask,
-                input_shape=(batch_size, query_length),
-                inputs_embeds=inputs_embeds,
-                past_key_values_length=past_length,
-                sliding_window=None,
-            )
+                # (1, query_length, key_length) -> (batch_size, query_length, key_length)
+                causal_mask = causal_mask.expand(batch_size, -1, -1)
+            else:
+                # (1, query_length, key_length) & (batch_size, 1, key_length) -> (batch_size, query_length, key_length)
+                causal_mask = causal_mask & attention_mask.unsqueeze(1).to(torch.bool)
         else:
-            attention_mask = _prepare_4d_causal_attention_mask(
-                attention_mask=attention_mask,
-                input_shape=(batch_size, query_length),
-                inputs_embeds=inputs_embeds,
-                past_key_values_length=past_length,
-                sliding_window=None,
-            )
+            if attention_mask is None:
+                # (batch_size, query_length, key_length)
+                causal_mask = torch.ones(batch_size, query_length, key_length, dtype=torch.bool, device=device)
+            else:
+                # (batch_size, query_length, key_length)
+                causal_mask = attention_mask.unsqueeze(1).to(dtype=torch.bool, device=device)
 
-        return attention_mask
+        # ==========================================================================================
+        # attention_mask -> (batch_size, query_length, key_length)
+        # ==========================================================================================
+
+        causal_mask = causal_mask.unsqueeze(1)
+
+        # ==========================================================================================
+        # attention_mask -> (batch_size, 1, query_length, key_length)
+        # ==========================================================================================
+
+        return causal_mask
 
     def _get_initial_hidden_state(
         self,
@@ -552,10 +568,35 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         #     rope_cos_sin -> 2 * (key_length, head_dim)
         # ==========================================================================================
 
-        attention_mask = self._prepare_causal_attention_mask(attention_mask, hidden_states, past_length)
+        # prepare causal mask only if not using flash attention
+        if self._use_flash_attention_2:
+            if attention_mask is None:
+                attention_mask = torch.ones_like(input_ids)
+        elif self._use_padding_free_transformer:
+            # no attention_mask is needed for list inputs
+            attention_mask = None
+        elif self._use_sdpa:
+            # we use the causal/non-causal argument of SDPA for attention in this case
+            if attention_mask is not None:
+                attention_mask = self._prepare_causal_attention_mask(
+                    attention_mask, batch_size, query_length, key_length, device
+                )
 
-        if alibi_bias is not None:
-            attention_mask = attention_mask + alibi_bias
+                attention_mask = torch.where(
+                    attention_mask,
+                    ~attention_mask if alibi_bias is None else alibi_bias,
+                    self._get_mask_value(attention_mask.device, hidden_states.dtype),
+                )
+        else:
+            attention_mask = self._prepare_causal_attention_mask(
+                attention_mask, batch_size, query_length, key_length, device
+            )
+
+            attention_mask = torch.where(
+                attention_mask,
+                ~attention_mask if alibi_bias is None else alibi_bias,
+                self._get_mask_value(attention_mask.device, hidden_states.dtype),
+            )
 
         return (
             output_hidden_states,

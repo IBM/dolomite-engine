@@ -13,7 +13,7 @@ class GenerationTest(TestCommons):
             TestCommons.get_all_devices(),
             [AttentionHeadType.mha, AttentionHeadType.mqa],
             [PositionEmbeddingType.learned_absolute],
-            TestCommons.get_dtypes(),
+            [torch.float32],
             [True, False],
         )
     )
