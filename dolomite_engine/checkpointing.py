@@ -230,12 +230,8 @@ def load_checkpoint_for_inference(
     load_path = args.load_args.load_path
     iteration = args.load_args.iteration
 
-    args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.json")
-    if os.path.isfile(args_file):
-        args_from_checkpoint = json.load(open(args_file, "r"))
-    else:
-        args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yaml")
-        args_from_checkpoint = load_yaml(args_file)
+    args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yml")
+    args_from_checkpoint = load_yaml(args_file)
 
     args_from_checkpoint: TrainingArgs = TrainingArgs(**args_from_checkpoint)
 
@@ -253,8 +249,10 @@ def load_checkpoint_for_inference(
             model.load_state_dict(state, strict=False)
         elif model.tuning_method in [TuningMethod.pretraining, TuningMethod.full_finetuning]:
             dtype = string_to_torch_dtype(model.dtype)
-            for key in state:
+            for key in list(state.keys()):
                 state[key] = state[key].to(dtype)
+                # fix for gradient checkpointing
+                state[key.replace("._checkpoint_wrapped_module", "")] = state.pop(key)
 
             model.load_state_dict(state)
     elif distributed_backend == DistributedBackend.torch:

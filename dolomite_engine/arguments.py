@@ -277,7 +277,7 @@ class DistributedArgs(BaseArgs):
     # train with CPU offloading to save GPU memory
     cpu_offload: bool = False
     # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
-    gradient_checkpointing_method: GradientCheckpointingMethod = None
+    gradient_checkpointing_method: Optional[GradientCheckpointingMethod] = None
     # gradient checkpointint args
     gradient_checkpointing_args: dict = {}
     # hierarchical partioning for ZeRO (HSDP)
