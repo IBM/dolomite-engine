@@ -17,7 +17,7 @@ from .arguments import ExportArgs, InferenceArgs, TrainingArgs
 from .data import DataLoader
 from .enums import DistributedBackend, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, get_model
-from .utils import ExperimentsTracker, get_global_rank, load_yaml, register_timer, run_rank_n
+from .utils import ExperimentsTracker, get_global_rank, load_yaml, register_timer, run_rank_n, string_to_torch_dtype
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
@@ -252,8 +252,9 @@ def load_checkpoint_for_inference(
         if model.tuning_method == TuningMethod.prompt_tuning:
             model.load_state_dict(state, strict=False)
         elif model.tuning_method in [TuningMethod.pretraining, TuningMethod.full_finetuning]:
+            dtype = string_to_torch_dtype(model.dtype)
             for key in state:
-                state[key] = state[key].to(model.dtype)
+                state[key] = state[key].to(dtype)
 
             model.load_state_dict(state)
     elif distributed_backend == DistributedBackend.torch:

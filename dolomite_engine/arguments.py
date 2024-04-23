@@ -224,7 +224,7 @@ class OptimizerArgs(BaseArgs):
     # optimizer class
     class_name: str = "ApexFusedAdam"
     # how to create param groups
-    params_group_method: ParamsGroupMethod = None
+    params_group_method: Optional[ParamsGroupMethod] = None
     # class args for optimizer
     class_args: dict = {
         "lr": 1e-5,
@@ -254,7 +254,7 @@ class MixedPrecisionArgs(BaseArgs):
     # dtype to use for training / inference
     dtype: str = "fp32"
     # fp8 backend
-    fp8_backend: FP8Backend = None
+    fp8_backend: Optional[FP8Backend] = None
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
