@@ -34,59 +34,44 @@ TEST_HIDDEN_SIZES = [
 ]
 
 
-class LayerNormTest(TestCommons):
-    @parameterized.expand(TestCommons.make_args_matrix([torch.device("cuda")], TEST_HIDDEN_SIZES))
-    def test_torch_apex_equivalence(self, device: torch.device, hidden_size: int) -> None:
+class NormTest(TestCommons):
+    def _test_equivalance(
+        self, device: torch.device, hidden_size: int, normalization_function: str, normalization_implementation: str
+    ) -> None:
         self.skip_test_if_device_unavailable(device)
 
         x = torch.randn(100, hidden_size, device=device)
 
-        torch_layernorm = get_normalization_function(
-            "layernorm", hidden_size, normalization_implementation="torch"
+        torch_norm = get_normalization_function(
+            normalization_function, hidden_size, normalization_implementation="torch"
         ).to(device)
-        torch_output = torch_layernorm(x)
+        torch_output = torch_norm(x)
 
-        apex_layernorm = get_normalization_function("layernorm", hidden_size, normalization_implementation="apex").to(
-            device
-        )
-        apex_output = apex_layernorm(x)
+        custom_norm = get_normalization_function(
+            normalization_function, hidden_size, normalization_implementation=normalization_implementation
+        ).to(device)
+        custom_output = custom_norm(x)
 
-        self.assert_equal_tensors(torch_output, apex_output, False)
+        self.assert_equal_tensors(torch_output, custom_output, False)
 
     @parameterized.expand(TestCommons.make_args_matrix([torch.device("cuda")], TEST_HIDDEN_SIZES))
-    def test_torch_apex_persistent_equivalence(self, device: torch.device, hidden_size: int) -> None:
-        self.skip_test_if_device_unavailable(device)
+    def test_torch_layernorm_apex_layernorm_equivalence(self, device: torch.device, hidden_size: int) -> None:
+        self._test_equivalance(device, hidden_size, "layernorm", "apex")
 
-        x = torch.randn(100, hidden_size, device=device)
-
-        torch_layernorm = get_normalization_function(
-            "layernorm", hidden_size, normalization_implementation="torch"
-        ).to(device)
-        torch_output = torch_layernorm(x)
-
-        apex_layernorm = get_normalization_function(
-            "layernorm", hidden_size, normalization_implementation="apex_persistent"
-        ).to(device)
-        apex_output = apex_layernorm(x)
-
-        self.assert_equal_tensors(torch_output, apex_output, False)
-
-
-class RMSNormTest(TestCommons):
     @parameterized.expand(TestCommons.make_args_matrix([torch.device("cuda")], TEST_HIDDEN_SIZES))
-    def test_torch_apex_equivalence(self, device: torch.device, hidden_size: int) -> None:
-        self.skip_test_if_device_unavailable(device)
+    def test_torch_layernorm_apex_persistent_layernorm_equivalence(
+        self, device: torch.device, hidden_size: int
+    ) -> None:
+        self._test_equivalance(device, hidden_size, "layernorm", "apex_persistent")
 
-        x = torch.randn(100, hidden_size, device=device)
+    @parameterized.expand(TestCommons.make_args_matrix([torch.device("cuda")], TEST_HIDDEN_SIZES))
+    def test_torch_rmsnorm_apex_rmsnorm_equivalence(self, device: torch.device, hidden_size: int) -> None:
+        self._test_equivalance(device, hidden_size, "rmsnorm", "apex")
 
-        torch_rmsnorm = get_normalization_function("rmsnorm", hidden_size, normalization_implementation="torch").to(
-            device
+    @parameterized.expand(
+        TestCommons.make_args_matrix(
+            [torch.device("cuda")], [1024, 1536, 2048, 2304, 3072, 3840, 4096, 5120, 6144, 8192]
         )
-        torch_output = torch_rmsnorm(x)
-
-        apex_rmsnorm = get_normalization_function("rmsnorm", hidden_size, normalization_implementation="apex").to(
-            device
-        )
-        apex_output = apex_rmsnorm(x)
-
-        self.assert_equal_tensors(torch_output, apex_output, False)
+    )
+    def test_torch_rmsnorm_torchtitan_rmsnorm_equivalence(self, device: torch.device, hidden_size: int) -> None:
+        self._test_equivalance(device, hidden_size, "rmsnorm", "torchtitan")

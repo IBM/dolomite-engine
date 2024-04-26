@@ -55,5 +55,4 @@ class ApexPersistentLayerNorm(nn.LayerNorm):
         ), "persistent layernorm kernel is not avilable for the specified hidden dimension"
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = FastLayerNormFN.apply(input, self.weight, self.bias, self.eps, True)
-        return input
+        return FastLayerNormFN.apply(input, self.weight, self.bias, self.eps, True)

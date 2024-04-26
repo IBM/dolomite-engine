@@ -24,5 +24,4 @@ class ApexRMSNorm(RMSNorm):
         super().__init__(normalized_shape, eps=eps)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = FusedRMSNormAffineMixedDtypesFunction.apply(input, self.weight, self.normalized_shape, self.eps, True)
-        return input
+        return FusedRMSNormAffineMixedDtypesFunction.apply(input, self.weight, self.normalized_shape, self.eps, True)

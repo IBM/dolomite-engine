@@ -10,6 +10,7 @@ from .packages import (
     is_flash_attention_available,
     is_ms_amp_available,
     is_transformer_engine_available,
+    is_triton_available,
 )
 from .parallel import ProcessGroupManager
 from .pydantic import BaseArgs

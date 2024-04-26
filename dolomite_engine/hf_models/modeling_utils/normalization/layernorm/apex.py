@@ -23,7 +23,4 @@ class ApexLayerNorm(nn.LayerNorm):
         super().__init__(normalized_shape, eps=eps)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = FusedLayerNormAffineFunction.apply(
-            input, self.weight, self.bias, self.normalized_shape, self.eps, True
-        )
-        return input
+        return FusedLayerNormAffineFunction.apply(input, self.weight, self.bias, self.normalized_shape, self.eps, True)

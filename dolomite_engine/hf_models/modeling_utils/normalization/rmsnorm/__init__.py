@@ -2,12 +2,10 @@ import torch.nn as nn
 
 from .apex import ApexRMSNorm
 from .base import RMSNorm
+from .torchtitan import TorchTitanRMSNorm
 
 
-_RMSNORM_MODULES = {
-    "torch": RMSNorm,
-    "apex": ApexRMSNorm,
-}
+_RMSNORM_MODULES = {"torch": RMSNorm, "apex": ApexRMSNorm, "torchtitan": TorchTitanRMSNorm}
 
 
 def get_rmsnorm(

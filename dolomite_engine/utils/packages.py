@@ -111,3 +111,17 @@ except ImportError:
 
 def is_ms_amp_available() -> bool:
     return _IS_MS_AMP_AVAILABLE
+
+
+try:
+    import triton
+
+    _IS_TRITON_AVAILABLE = True
+except ImportError:
+    _IS_TRITON_AVAILABLE = False
+
+    warn_rank_0("OpenAI triton is not installed")
+
+
+def is_triton_available() -> bool:
+    return _IS_TRITON_AVAILABLE
