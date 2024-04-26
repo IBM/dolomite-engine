@@ -249,6 +249,10 @@ def main() -> None:
             args, model, optimizer, lr_scheduler, None
         )
 
+        # metadata field contains the dataloader state so we need to reset it here
+        if not args.load_args.load_dataloader_state and metadata is not None:
+            metadata["consumed_samples"] = 0
+
     train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
         args, model.tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )

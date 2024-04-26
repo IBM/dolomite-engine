@@ -181,7 +181,7 @@ class ModelWrapper(torch.nn.Module):
                 self.input_device = "cpu"
 
     def save_pretrained(self, save_path: str) -> None:
-        self.tokenizer.save_pretrained(save_path)
+        self.tokenizer.save_pretrained(save_path, legacy_format=False)
         self.model.save_pretrained(save_path)
 
     def _setup_config(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:

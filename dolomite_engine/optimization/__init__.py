@@ -78,8 +78,8 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
         ), "params in groups don't sum up to total parameters"
 
         trainable_parameters_or_param_groups = [
-            {"params": list(mup_group.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
             {"params": normal_group},
+            {"params": list(mup_group.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
         ]
     else:
         raise ValueError(f"unexpected params_group_method ({params_group_method})")

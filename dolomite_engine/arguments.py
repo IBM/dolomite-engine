@@ -173,7 +173,7 @@ class LoadArgs(BaseArgs):
     # path to load checkpoints
     load_path: str = None
     # iteration to load
-    iteration: int = None
+    iteration: Optional[int] = None
     # whether to load optimizer
     load_optimizer: bool = True
     # whether to load lr_scheduler
@@ -184,6 +184,8 @@ class LoadArgs(BaseArgs):
     load_dataloader_state: bool = True
     # whether to resume experiments tracker
     load_experiments_tracker_state: bool = True
+    # whether to load starting iteration
+    load_starting_iteration: bool = True
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.load_path, "load_path")])
@@ -458,6 +460,8 @@ class ExportArgs(BaseArgs):
     load_args: LoadArgs = None
     # export path
     export_path: str = None
+    # mixed precision related arguments
+    mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
 

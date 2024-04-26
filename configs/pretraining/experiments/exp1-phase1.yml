@@ -1,0 +1,117 @@
+datasets:
+  # class_name, data_name & data_sampling_ratio are not used but need to be passed to avoid errors
+  - class_name: MegatronDataset
+    data_name: Megatron
+    data_sampling_ratio: 1
+    class_args:
+      eval_steps: 2
+      data_cache_path: cache
+      # Option 1: data loading using --data-path with single file
+      data_path:
+        - 56
+        - /proj/datasets/training_data_starcoder_cleaned_0324/redpajama-cc
+        - 20
+        - /proj/datasets/training_data_starcoder_cleaned_0324/starcoder-codepile-v02-L1-noGPL
+        - 5
+        - /proj/datasets/training_data_starcoder_cleaned_0324/dataset=webhose-1-en
+        - 3
+        - /proj/datasets/training_data_starcoder_cleaned_0324/dataset=uspto-1-en
+        - 5
+        - /proj/datasets/training_data_starcoder_cleaned_0324/peS2o+Arxiv+IEEE+DMMath+FinancialResearchPaper+Paperwithcode
+        - 1
+        - /proj/datasets/training_data_starcoder_cleaned_0324/dataset=wikimedia-1-en
+        - 2
+        - /proj/datasets/training_data_starcoder_cleaned_0324/Openwebmath_filtered+Algebraic-stack+Stackexchange
+        - 2
+        - /proj/datasets/training_data_starcoder_cleaned_0324/books_redpajama+doabooks
+        - 2
+        - /proj/datasets/training_data_starcoder_cleaned_0324/dataset=freelaw-1-en
+        - 2
+        - /proj/datasets/training_data_starcoder_cleaned_0324/dataset=pubmedcentral-1-en
+        - 2
+        - /proj/datasets/training_data_starcoder_cleaned_0324/EDGAR+Secfiling+FIDC+Earningcalltranscript
+      split: 100,0,0
+      sequence_length: 4096
+
+tokenizer_args:
+  tokenizer_name: bigcode/starcoder
+
+model_args:
+  model_class: AutoModelForCausalLM
+  pretrained_config:
+    activation_function: swiglu
+    add_bias: false
+    attention_softmax_in_fp32: true
+    attn_pdrop: 0
+    embd_pdrop: 0
+    resid_pdrop: 0
+    initializer_range: 0.02
+    layer_norm_epsilon: 1e-05
+    model_type: gpt_megatron
+    n_embd: 2560
+    n_head: 32
+    n_inner: 8192
+    n_layer: 32
+    n_positions: 4096
+    normalization_function: rmsnorm
+    position_embedding_type: rope
+    rope_theta: 10000
+    scale_attention_softmax_in_fp32: true
+    attention_head_type: mha
+    scale_attn_weights: true
+    vocab_size: 50304
+    m_width: 10
+    init_method: mup
+    tie_word_embeddings: false
+  efficient_cpu_initialization: false
+  attention_implementation: flash_attention_2
+  use_padding_free_transformer: true
+
+tuning_args:
+  tuning_method: pretraining
+
+save_args:
+  save_path: /proj/checkpoints/mayank/dolomite-exp1
+  save_interval: 5000
+
+load_args:
+  load_path: /proj/checkpoints/mayank/dolomite-exp1
+
+logging_args:
+  log_interval: 10
+  experiments_tracker_name: wandb
+  wandb_args:
+    project: granite-3b-experiments
+    name: dolomite-exp1
+
+training_parameters:
+  num_training_steps: 250000
+  eval_interval: 2500000
+  micro_batch_size: 2
+  gradient_accumulation_steps: 2
+  eval_during_training: false
+
+optimizer_args:
+  params_group_method: mup
+  class_name: ApexFusedAdam
+  class_args:
+    lr: 0.0035
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    eps: 1e-10
+
+lr_scheduler_args:
+  lr_decay_style: exponential
+  num_warmup_steps: 2500
+  num_constant_steps: 247500
+  num_decay_steps: 0
+
+mixed_precision_args:
+  dtype: bf16
+
+distributed_args:
+  distributed_backend: torch
+  stage: 3
+  zero_hpz_partition_size: 8
