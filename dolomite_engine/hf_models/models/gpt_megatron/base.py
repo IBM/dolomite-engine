@@ -8,11 +8,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 from transformers import DynamicCache, PreTrainedModel
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_causal_attention_mask,
-    _prepare_4d_causal_attention_mask_for_sdpa,
-)
-from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
@@ -243,7 +239,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, BaseModelOutputWithPastAndCrossAttentions]:
+    ) -> Union[Tuple, BaseModelOutputWithPast]:
         (
             output_hidden_states,
             use_cache,
@@ -304,7 +300,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         if not return_dict:
             return tuple(v for v in [hidden_states, past_key_values, all_hidden_states] if v is not None)
 
-        return BaseModelOutputWithPastAndCrossAttentions(
+        return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
             hidden_states=all_hidden_states,
@@ -569,13 +565,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         # ==========================================================================================
 
         # prepare causal mask only if not using flash attention
-        if self._use_flash_attention_2:
-            if attention_mask is None:
-                attention_mask = torch.ones_like(input_ids)
-        elif self._use_padding_free_transformer:
-            # no attention_mask is needed for list inputs
-            attention_mask = None
-        elif self._use_sdpa:
+        if self._use_sdpa:
             # we use the causal/non-causal argument of SDPA for attention in this case
             if attention_mask is not None:
                 attention_mask = self._prepare_causal_attention_mask(
@@ -587,7 +577,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
                     ~attention_mask if alibi_bias is None else alibi_bias,
                     self._get_mask_value(attention_mask.device, hidden_states.dtype),
                 )
-        else:
+        elif self._use_eager_attention:
             attention_mask = self._prepare_causal_attention_mask(
                 attention_mask, batch_size, query_length, key_length, device
             )

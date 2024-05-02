@@ -4,7 +4,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
@@ -100,7 +100,7 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, BaseModelOutputWithPastAndCrossAttentions]:
+    ) -> Union[Tuple, BaseModelOutputWithPast]:
         (
             output_hidden_states,
             use_cache,
@@ -152,7 +152,7 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
         if not return_dict:
             return tuple(v for v in [hidden_states, past_key_values, all_hidden_states] if v is not None)
 
-        return BaseModelOutputWithPastAndCrossAttentions(
+        return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
             hidden_states=all_hidden_states,

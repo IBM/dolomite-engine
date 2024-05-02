@@ -29,6 +29,9 @@ class MultiLayerPaddingFreeAttention(MultiLayerAttention):
         if self.position_embedding_type == PositionEmbeddingType.rope:
             query = apply_rotary_pos_emb(query, rope_cos_sin)
 
+        softmax_scale = self._get_softmax_scale()
+        dropout_p = self.attn_pdrop if self.training else 0
+
         attn_output = flash_attn_varlen_func(
             query,
             key,
@@ -37,8 +40,8 @@ class MultiLayerPaddingFreeAttention(MultiLayerAttention):
             cu_seqlens_k=cu_seqlens,
             max_seqlen_q=max_seqlen,
             max_seqlen_k=max_seqlen,
-            dropout_p=self.attn_pdrop if self.training else 0,
-            softmax_scale=self.attention_multiplier if self.scale_attn_weights else 1,
+            dropout_p=dropout_p,
+            softmax_scale=softmax_scale,
             causal=self.causal,
         )
 

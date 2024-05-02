@@ -9,8 +9,8 @@ from .utils import get_unpad_data
 
 
 if is_flash_attention_available():
-    from flash_attn.bert_padding import IndexFirstAxis, pad_input, unpad_input
-    from flash_attn.flash_attn_interface import flash_attn_varlen_func
+    from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
+    from flash_attn.flash_attn_interface import flash_attn_func, flash_attn_varlen_func
 
 
 class FlashAttention2(Attention):
@@ -63,60 +63,71 @@ class FlashAttention2(Attention):
         # value -> (batch_size, key_length, num_heads, head_dim)
         # ==========================================================================================
 
+        softmax_scale = self._get_softmax_scale()
+        dropout_p = self.attn_pdrop if self.training else 0
+
         batch_size, query_length = query.shape[:2]
-        key_length = key.shape[1]
-        indices_k, cu_seqlens_k, max_seqlen_k = get_unpad_data(attention_mask)
 
-        key = IndexFirstAxis.apply(
-            key.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
-        )
-        value = IndexFirstAxis.apply(
-            value.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
-        )
-
-        if query_length == key_length:
-            query = IndexFirstAxis.apply(
-                query.reshape(batch_size * key_length, self.num_heads, self.head_dim), indices_k
+        if attention_mask is None:
+            attn_output = flash_attn_func(
+                query, key, value, dropout_p=dropout_p, softmax_scale=softmax_scale, causal=self.causal
             )
-            cu_seqlens_q = cu_seqlens_k
-            max_seqlen_q = max_seqlen_k
-            indices_q = indices_k
-        elif query_length == 1:
-            max_seqlen_q = 1
-            cu_seqlens_q = torch.arange(
-                batch_size + 1, dtype=torch.int32, device=query.device
-            )  # There is a memcpy here, that is very bad.
-            indices_q = cu_seqlens_q[:-1]
-            query = query.squeeze(1)
         else:
-            # The -q_len: slice assumes left padding.
-            attention_mask = attention_mask[:, -query_length:]
-            query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_input(query, attention_mask)
+            key_length = key.shape[1]
 
-        # ==========================================================================================
-        # query -> (total_q, num_heads, head_dim)
-        # key -> (total_q, num_heads, head_dim)
-        # value -> (total_q, num_heads, head_dim)
-        # ==========================================================================================
+            indices_k, cu_seqlens_k, max_seqlen_k = get_unpad_data(attention_mask)
 
-        attn_output = flash_attn_varlen_func(
-            query,
-            key,
-            value,
-            cu_seqlens_q=cu_seqlens_q,
-            cu_seqlens_k=cu_seqlens_k,
-            max_seqlen_q=max_seqlen_q,
-            max_seqlen_k=max_seqlen_k,
-            dropout_p=self.attn_pdrop if self.training else 0,
-            softmax_scale=self.attention_multiplier if self.scale_attn_weights else 1,
-            causal=self.causal,
-        )
+            key = index_first_axis(
+                key.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
+            )
+            value = index_first_axis(
+                value.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
+            )
 
-        # ==========================================================================================
-        # attn_output -> (total_q, num_heads, head_dim)
-        # ==========================================================================================
+            if query_length == key_length:
+                query = index_first_axis(
+                    query.reshape(batch_size * key_length, self.num_heads, self.head_dim), indices_k
+                )
+                cu_seqlens_q = cu_seqlens_k
+                max_seqlen_q = max_seqlen_k
+                indices_q = indices_k
+            elif query_length == 1:
+                max_seqlen_q = 1
+                cu_seqlens_q = torch.arange(
+                    batch_size + 1, dtype=torch.int32, device=query.device
+                )  # There is a memcpy here, that is very bad.
+                indices_q = cu_seqlens_q[:-1]
+                query = query.squeeze(1)
+            else:
+                # The -q_len: slice assumes left padding.
+                attention_mask = attention_mask[:, -query_length:]
+                query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_input(query, attention_mask)
 
-        attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
+            # ==========================================================================================
+            # query -> (total_q, num_heads, head_dim)
+            # key -> (total_q, num_heads, head_dim)
+            # value -> (total_q, num_heads, head_dim)
+            # ==========================================================================================
+
+            attn_output = flash_attn_varlen_func(
+                query,
+                key,
+                value,
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_k,
+                dropout_p=dropout_p,
+                softmax_scale=softmax_scale,
+                causal=self.causal,
+            )
+
+            # ==========================================================================================
+            # attn_output -> (total_q, num_heads, head_dim)
+            # ==========================================================================================
+
+            attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
+
         attn_output = attn_output.view(batch_size, query_length, -1)
 
         # ==========================================================================================

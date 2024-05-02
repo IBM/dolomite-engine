@@ -2,7 +2,7 @@ from typing import List, Tuple, Union
 
 import torch
 from transformers import DynamicCache
-from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
+from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
 from .base import GPTMegatronModel, GPTMegatronPreTrainedModel
@@ -98,7 +98,7 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
         return_dict: bool = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
+    ) -> Union[Tuple, CausalLMOutputWithPast]:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -152,7 +152,7 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
             output = (lm_logits,) + transformer_outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
-        return CausalLMOutputWithCrossAttentions(
+        return CausalLMOutputWithPast(
             loss=loss,
             logits=lm_logits,
             past_key_values=transformer_outputs.past_key_values,

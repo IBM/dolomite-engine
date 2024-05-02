@@ -84,14 +84,6 @@ class MultiLayerAttention(nn.Module):
         dtype = query.dtype
         softmax_dtype = torch.float32 if self.attention_softmax_in_fp32 else dtype
 
-        if self.scale_attn_weights:
-            if self.attention_multiplier is None:
-                scale_factor = 1 / self.head_dim**0.5
-            else:
-                scale_factor = self.attention_multiplier
-        else:
-            scale_factor = 1
-
         batch_size = query.shape[0]
         query_length = query.shape[2]
         key_length = key.shape[-1]
@@ -108,7 +100,7 @@ class MultiLayerAttention(nn.Module):
             attn_weights = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
             beta = 1
 
-        attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=scale_factor).view(
+        attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
             batch_size, self.num_heads, query_length, key_length
         )
 
@@ -124,6 +116,17 @@ class MultiLayerAttention(nn.Module):
         attn_output = self.resid_dropout(attn_output)
 
         return attn_output
+
+    def _get_softmax_scale(self, return_none_allowed: bool = True) -> float:
+        if self.scale_attn_weights:
+            if self.attention_multiplier is None:
+                softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
+            else:
+                softmax_scale = self.attention_multiplier
+        else:
+            softmax_scale = 1
+
+        return softmax_scale
 
 
 class KeyValueProjection(nn.Module):

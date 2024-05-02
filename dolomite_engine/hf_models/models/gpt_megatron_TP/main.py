@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Tuple, Union
 
 import torch
-from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
+from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ....utils import SafeTensorsWeightsManager
 from ...modeling_utils import ParameterizedLinear
@@ -51,7 +51,7 @@ class GPTMegatronForCausalLM_TP(GPTMegatronForCausalLM):
         output_attentions: bool = None,
         output_hidden_states: bool = None,
         return_dict: bool = None,
-    ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
+    ) -> Union[Tuple, CausalLMOutputWithPast]:
         if labels is not None:
             # TODO investigate how to implement VocabParallelCrossEntropy and how to keep weights tied
             # we can also drop the lm_head entirely if that works

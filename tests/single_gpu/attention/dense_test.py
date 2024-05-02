@@ -290,3 +290,41 @@ class AttentionTestForDenseModel(TestCommons):
             atol_bfloat16=5e-3,
         )
         self.assert_equal_tensors(sdpa_loss, flash_loss, False)
+
+    @parameterized.expand(
+        TestCommons.make_args_matrix(
+            [torch.device("cuda")],
+            TestCommons.get_attention_head_types(),
+            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            [torch.float16, torch.bfloat16],
+        )
+    )
+    def test_flash_attention_equivalence_with_and_without_attention_masks(
+        self,
+        device: torch.device,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        torch_dtype: torch.dtype,
+    ) -> None:
+        self.skip_test_if_device_unavailable(device)
+
+        set_seed(SEED)
+
+        input_ids, _, labels = self.get_dummy_inputs(device)
+        config = self.get_dense_test_config(attention_head_type, position_embedding_type, num_layers=1)
+
+        attention_mask = torch.ones_like(input_ids)
+
+        model = self.from_config(config, torch_dtype=torch_dtype, attn_implementation="flash_attention_2").to(device)
+        model.eval()
+
+        output_with_mask = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        logits_with_mask = output_with_mask.logits
+        loss_with_mask = output_with_mask.loss
+
+        output_without_mask = model(input_ids=input_ids, labels=labels)
+        logits_without_mask = output_without_mask.logits
+        loss_without_mask = output_without_mask.loss
+
+        self.assert_equal_tensors(logits_with_mask, logits_without_mask, True)
+        self.assert_equal_tensors(loss_with_mask, loss_without_mask, True)

@@ -24,113 +24,111 @@ if is_triton_available():
     import triton
     import triton.language as tl
 
+    @triton.autotune(
+        configs=[
+            triton.Config({}, num_warps=1),
+            triton.Config({}, num_warps=2),
+            triton.Config({}, num_warps=4),
+            triton.Config({}, num_warps=8),
+            triton.Config({}, num_warps=16),
+            triton.Config({}, num_warps=32),
+        ],
+        key=["N"],
+    )
+    @triton.jit
+    def _rms_norm_fwd_kernel(
+        X,
+        stride_x,
+        Y,
+        stride_y,
+        W,
+        Rstd,
+        eps,
+        M,  # num rows
+        N,  # num cols
+        block_N: tl.constexpr,
+    ):
+        row = tl.program_id(0)
+        cols = tl.arange(0, block_N)
 
-@triton.autotune(
-    configs=[
-        triton.Config({}, num_warps=1),
-        triton.Config({}, num_warps=2),
-        triton.Config({}, num_warps=4),
-        triton.Config({}, num_warps=8),
-        triton.Config({}, num_warps=16),
-        triton.Config({}, num_warps=32),
-    ],
-    key=["N"],
-)
-@triton.jit
-def _rms_norm_fwd_kernel(
-    X,
-    stride_x,
-    Y,
-    stride_y,
-    W,
-    Rstd,
-    eps,
-    M,  # num rows
-    N,  # num cols
-    block_N: tl.constexpr,
-):
-    row = tl.program_id(0)
-    cols = tl.arange(0, block_N)
-
-    # Load input data and weights
-    mask = cols < N
-    x = tl.load(X + row * stride_x + cols, mask=mask, other=0.0).to(tl.float32)
-    w = tl.load(W + cols, mask=mask, other=0.0).to(tl.float32)
-
-    # Compute mean and variance
-    xbar = tl.where(cols < N, x, 0.0)
-    var = tl.sum(xbar * xbar, axis=0) / N
-    rstd = 1 / tl.sqrt(var + eps)
-
-    # Store the reciprocal standard deviation
-    tl.store(Rstd + row, rstd)
-
-    # Normalize and apply linear transformation
-    x_hat = x * rstd
-    y = x_hat * w
-
-    # Write output
-    tl.store(Y + row * stride_y + cols, y, mask=mask)
-
-
-@triton.autotune(
-    configs=[
-        triton.Config({}, num_warps=1),
-        triton.Config({}, num_warps=2),
-        triton.Config({}, num_warps=4),
-        triton.Config({}, num_warps=8),
-        triton.Config({}, num_warps=16),
-        triton.Config({}, num_warps=32),
-    ],
-    key=["N"],
-)
-@triton.jit
-def _rms_norm_bwd_kernel_sm(
-    X,
-    stride_x,
-    W,
-    DY,
-    stride_dy,
-    DX,
-    stride_dx,
-    Rstd,
-    DW,
-    eps,
-    M,  # num rows
-    N,  # num cols
-    rows_per_program,
-    block_N: tl.constexpr,
-):
-    row_block_id = tl.program_id(0)
-    row_start = row_block_id * rows_per_program
-    cols = tl.arange(0, block_N)
-    mask = cols < N
-
-    # Load weights
-    w = tl.load(W + cols, mask=mask, other=0.0).to(tl.float32)
-
-    # Accumulate gradients for weights
-    dw = tl.zeros((block_N,), dtype=tl.float32)
-
-    row_end = min(row_start + rows_per_program, M)
-    for row in range(row_start, row_end):
-        # Load input, output gradient, and reciprocal standard deviation
+        # Load input data and weights
+        mask = cols < N
         x = tl.load(X + row * stride_x + cols, mask=mask, other=0.0).to(tl.float32)
-        dy = tl.load(DY + row * stride_dy + cols, mask=mask, other=0.0).to(tl.float32)
-        rstd = tl.load(Rstd + row)
+        w = tl.load(W + cols, mask=mask, other=0.0).to(tl.float32)
 
-        # Compute normalized input and gradients
+        # Compute mean and variance
+        xbar = tl.where(cols < N, x, 0.0)
+        var = tl.sum(xbar * xbar, axis=0) / N
+        rstd = 1 / tl.sqrt(var + eps)
+
+        # Store the reciprocal standard deviation
+        tl.store(Rstd + row, rstd)
+
+        # Normalize and apply linear transformation
         x_hat = x * rstd
-        wdy = w * dy
-        dw += dy * x_hat
-        c1 = tl.sum(x_hat * wdy, axis=0) / N
-        dx = (wdy - x_hat * c1) * rstd
+        y = x_hat * w
 
-        # Store input gradient
-        tl.store(DX + row * stride_dx + cols, dx, mask=mask)
+        # Write output
+        tl.store(Y + row * stride_y + cols, y, mask=mask)
 
-    # Store weight gradients
-    tl.store(DW + row_block_id * N + cols, dw, mask=mask)
+    @triton.autotune(
+        configs=[
+            triton.Config({}, num_warps=1),
+            triton.Config({}, num_warps=2),
+            triton.Config({}, num_warps=4),
+            triton.Config({}, num_warps=8),
+            triton.Config({}, num_warps=16),
+            triton.Config({}, num_warps=32),
+        ],
+        key=["N"],
+    )
+    @triton.jit
+    def _rms_norm_bwd_kernel_sm(
+        X,
+        stride_x,
+        W,
+        DY,
+        stride_dy,
+        DX,
+        stride_dx,
+        Rstd,
+        DW,
+        eps,
+        M,  # num rows
+        N,  # num cols
+        rows_per_program,
+        block_N: tl.constexpr,
+    ):
+        row_block_id = tl.program_id(0)
+        row_start = row_block_id * rows_per_program
+        cols = tl.arange(0, block_N)
+        mask = cols < N
+
+        # Load weights
+        w = tl.load(W + cols, mask=mask, other=0.0).to(tl.float32)
+
+        # Accumulate gradients for weights
+        dw = tl.zeros((block_N,), dtype=tl.float32)
+
+        row_end = min(row_start + rows_per_program, M)
+        for row in range(row_start, row_end):
+            # Load input, output gradient, and reciprocal standard deviation
+            x = tl.load(X + row * stride_x + cols, mask=mask, other=0.0).to(tl.float32)
+            dy = tl.load(DY + row * stride_dy + cols, mask=mask, other=0.0).to(tl.float32)
+            rstd = tl.load(Rstd + row)
+
+            # Compute normalized input and gradients
+            x_hat = x * rstd
+            wdy = w * dy
+            dw += dy * x_hat
+            c1 = tl.sum(x_hat * wdy, axis=0) / N
+            dx = (wdy - x_hat * c1) * rstd
+
+            # Store input gradient
+            tl.store(DX + row * stride_dx + cols, dx, mask=mask)
+
+        # Store weight gradients
+        tl.store(DW + row_block_id * N + cols, dw, mask=mask)
 
 
 class _TorchTitanRMSNorm(torch.autograd.Function):
