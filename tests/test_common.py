@@ -76,6 +76,9 @@ class TestCommons(TestCase):
             activation_function=activation_function,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
+            bos_token_id=0,
+            eos_token_id=1,
+            pad_token_id=2,
         )
 
     @staticmethod
@@ -104,6 +107,9 @@ class TestCommons(TestCase):
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             num_experts=num_experts,
+            bos_token_id=0,
+            eos_token_id=1,
+            pad_token_id=2,
         )
 
     def get_dummy_inputs(

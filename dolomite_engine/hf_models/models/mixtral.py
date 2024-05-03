@@ -1,4 +1,4 @@
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, MixtralConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, MixtralConfig
 
 from ...utils import SafeTensorsWeightsManager
 from ..enums import AttentionHeadType
@@ -26,11 +26,14 @@ def import_from_huggingface_mixtral(pretrained_model_name_or_path: str, save_pat
         AttentionHeadType(config.attention_head_type),
     )
 
-    safetensors_weight_manager.save_state_dict(state_dict, save_path)
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     config.save_pretrained(save_path)
 
+    generation_config = GenerationConfig.from_model_config(config)
+    generation_config.save_pretrained(save_path)
+
     if tokenizer is not None:
-        tokenizer.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
 def _import_config_from_huggingface(original_config: MixtralConfig) -> MoEMegablocksConfig:
@@ -66,6 +69,9 @@ def _import_config_from_huggingface(original_config: MixtralConfig) -> MoEMegabl
         num_experts_per_tok=original_config.num_experts_per_tok,
         output_router_logits=original_config.output_router_logits,
         router_aux_loss_coef=original_config.router_aux_loss_coef,
+        bos_token_id=original_config.bos_token_id,
+        eos_token_id=original_config.eos_token_id,
+        pad_token_id=original_config.pad_token_id,
     )
 
     return config
@@ -148,15 +154,15 @@ def export_to_huggingface_mixtral(pretrained_model_name_or_path: str, save_path:
         AttentionHeadType(config.attention_head_type),
     )
 
-    model = AutoModelForCausalLM.from_config(original_config)
-    model.load_state_dict(state_dict)
-    model.save_pretrained(save_path)
-
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     original_config.save_pretrained(save_path)
+
+    original_generation_config = GenerationConfig.from_model_config(original_config)
+    original_generation_config.save_pretrained(save_path)
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-        tokenizer.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path, legacy_format=False)
     except:
         pass
 
@@ -187,6 +193,9 @@ def _export_config_to_huggingface(config: MoEMegablocksConfig) -> MixtralConfig:
         num_experts_per_tok=config.num_experts_per_tok,
         output_router_logits=config.output_router_logits,
         router_aux_loss_coef=config.router_aux_loss_coef,
+        bos_token_id=config.bos_token_id,
+        eos_token_id=config.eos_token_id,
+        pad_token_id=config.pad_token_id,
     )
 
     return original_config

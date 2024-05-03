@@ -1,4 +1,4 @@
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, LlamaConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, LlamaConfig
 
 from ...utils import SafeTensorsWeightsManager
 from ..enums import AttentionHeadType
@@ -24,11 +24,14 @@ def import_from_huggingface_llama(pretrained_model_name_or_path: str, save_path:
         AttentionHeadType(config.attention_head_type),
     )
 
-    safetensors_weight_manager.save_state_dict(state_dict, save_path)
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     config.save_pretrained(save_path)
 
+    generation_config = GenerationConfig.from_model_config(config)
+    generation_config.save_pretrained(save_path)
+
     if tokenizer is not None:
-        tokenizer.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
 def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTMegatronConfig:
@@ -40,6 +43,8 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTMegatron
         attention_head_type = "mqa"
     elif original_config.num_attention_heads > original_config.num_key_value_heads:
         attention_head_type = "gqa"
+
+    assert original_config.mlp_bias == original_config.attention_bias
 
     config = GPTMegatronConfig(
         vocab_size=original_config.vocab_size,
@@ -61,6 +66,9 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTMegatron
         rope_theta=original_config.rope_theta,
         rope_scaling=original_config.rope_scaling,
         attn_pdrop=original_config.attention_dropout,
+        bos_token_id=original_config.bos_token_id,
+        eos_token_id=original_config.eos_token_id,
+        pad_token_id=original_config.pad_token_id,
     )
 
     return config
@@ -94,9 +102,19 @@ def _import_state_dict_from_huggingface(
             safetensors_weight_manager.get_tensor(f"model.layers.{layer_idx}.mlp.up_proj.weight"),
             safetensors_weight_manager.get_tensor(f"model.layers.{layer_idx}.mlp.gate_proj.weight"),
         )
+        if f"model.layers.{layer_idx}.mlp.up_proj.bias" in safetensors_weight_manager:
+            state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.bias"] = interleave_up_gate_tensor_for_mlp(
+                safetensors_weight_manager.get_tensor(f"model.layers.{layer_idx}.mlp.up_proj.bias"),
+                safetensors_weight_manager.get_tensor(f"model.layers.{layer_idx}.mlp.gate_proj.bias"),
+            )
+
         state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = safetensors_weight_manager.get_tensor(
             f"model.layers.{layer_idx}.mlp.down_proj.weight"
         )
+        if f"model.layers.{layer_idx}.mlp.down_proj.bias" in safetensors_weight_manager:
+            state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.bias"] = safetensors_weight_manager.get_tensor(
+                f"model.layers.{layer_idx}.mlp.down_proj.bias"
+            )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
             safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
@@ -107,9 +125,26 @@ def _import_state_dict_from_huggingface(
             head_dim,
             attention_head_type,
         )
+        if f"model.layers.{layer_idx}.self_attn.q_proj.bias" in safetensors_weight_manager:
+            state_dict[
+                f"transformer.h.{layer_idx}.attn.c_attn.bias"
+            ] = interleave_query_key_value_tensor_for_attention(
+                safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.bias"),
+                safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.bias"),
+                safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.bias"),
+                num_heads,
+                num_key_value_heads,
+                head_dim,
+                attention_head_type,
+            )
+
         state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = safetensors_weight_manager.get_tensor(
             f"model.layers.{layer_idx}.self_attn.o_proj.weight"
         )
+        if f"model.layers.{layer_idx}.self_attn.o_proj.bias" in safetensors_weight_manager:
+            state_dict[f"transformer.h.{layer_idx}.attn.c_proj.bias"] = safetensors_weight_manager.get_tensor(
+                f"model.layers.{layer_idx}.self_attn.o_proj.bias"
+            )
 
     return state_dict
 
@@ -128,15 +163,15 @@ def export_to_huggingface_llama(pretrained_model_name_or_path: str, save_path: s
         AttentionHeadType(config.attention_head_type),
     )
 
-    model = AutoModelForCausalLM.from_config(original_config)
-    model.load_state_dict(state_dict)
-    model.save_pretrained(save_path)
-
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     original_config.save_pretrained(save_path)
+
+    original_generation_config = GenerationConfig.from_model_config(original_config)
+    original_generation_config.save_pretrained(save_path)
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-        tokenizer.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path, legacy_format=False)
     except:
         pass
 
@@ -163,6 +198,10 @@ def _export_config_to_huggingface(config: GPTMegatronConfig) -> LlamaConfig:
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
         attention_dropout=config.attn_pdrop,
+        mlp_bias=config.add_bias,
+        bos_token_id=config.bos_token_id,
+        eos_token_id=config.eos_token_id,
+        pad_token_id=config.pad_token_id,
     )
 
     return original_config
@@ -198,9 +237,20 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.mlp.up_proj.weight"] = up_weight
         state_dict[f"model.layers.{layer_idx}.mlp.gate_proj.weight"] = gate_weight
 
+        if f"transformer.h.{layer_idx}.mlp.c_fc.bias" in safetensors_weight_manager:
+            up_bias, gate_bias = split_up_gate_tensor_for_mlp(
+                safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.bias")
+            )
+            state_dict[f"model.layers.{layer_idx}.mlp.up_proj.bias"] = up_bias
+            state_dict[f"model.layers.{layer_idx}.mlp.gate_proj.bias"] = gate_bias
+
         state_dict[f"model.layers.{layer_idx}.mlp.down_proj.weight"] = safetensors_weight_manager.get_tensor(
             f"transformer.h.{layer_idx}.mlp.c_proj.weight"
         )
+        if f"transformer.h.{layer_idx}.mlp.c_proj.bias" in safetensors_weight_manager:
+            state_dict[f"model.layers.{layer_idx}.mlp.down_proj.bias"] = safetensors_weight_manager.get_tensor(
+                f"transformer.h.{layer_idx}.mlp.c_proj.bias"
+            )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
             safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),
@@ -213,8 +263,24 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = key_weight
         state_dict[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = value_weight
 
+        if f"transformer.h.{layer_idx}.attn.c_attn.bias" in safetensors_weight_manager:
+            query_bias, key_bias, value_bias = split_query_key_value_tensor_for_attention(
+                safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.bias"),
+                num_heads,
+                num_key_value_heads,
+                head_dim,
+                attention_head_type,
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.q_proj.bias"] = query_bias
+            state_dict[f"model.layers.{layer_idx}.self_attn.k_proj.bias"] = key_bias
+            state_dict[f"model.layers.{layer_idx}.self_attn.v_proj.bias"] = value_bias
+
         state_dict[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = safetensors_weight_manager.get_tensor(
             f"transformer.h.{layer_idx}.attn.c_proj.weight"
         )
+        if f"transformer.h.{layer_idx}.attn.c_proj.bias" in safetensors_weight_manager:
+            state_dict[f"model.layers.{layer_idx}.self_attn.o_proj.bias"] = safetensors_weight_manager.get_tensor(
+                f"transformer.h.{layer_idx}.attn.c_proj.bias"
+            )
 
     return state_dict

@@ -75,7 +75,7 @@ class SafeTensorsWeightsManager:
     def save_state_dict(state_dict: dict, save_path: str) -> None:
         os.makedirs(save_path)
 
-        shards, index = shard_checkpoint(state_dict, weights_name=SAFE_WEIGHTS_NAME)
+        shards, index = shard_checkpoint(state_dict, max_shard_size="5GB", weights_name=SAFE_WEIGHTS_NAME)
 
         for shard_file, shard in shards.items():
             save_file(shard, os.path.join(save_path, shard_file), metadata={"format": "pt"})

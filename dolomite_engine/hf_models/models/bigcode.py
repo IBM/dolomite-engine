@@ -1,6 +1,6 @@
 import shutil
 
-from transformers import AutoConfig, AutoTokenizer, GPTBigCodeConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig
 
 from ..enums import AttentionHeadType, PositionEmbeddingType
 from .gpt_megatron import GPTMegatronConfig
@@ -13,9 +13,12 @@ def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_pat
     config = _import_config_from_huggingface(original_config)
     config.save_pretrained(save_path)
 
+    generation_config = GenerationConfig.from_model_config(config)
+    generation_config.save_pretrained(save_path)
+
     try:
         tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-        tokenizer.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path, legacy_format=False)
     except:
         pass
 
@@ -41,6 +44,9 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTMeg
         initializer_range=original_config.initializer_range,
         attn_pdrop=original_config.attn_pdrop,
         resid_pdrop=original_config.resid_pdrop,
+        bos_token_id=original_config.bos_token_id,
+        eos_token_id=original_config.eos_token_id,
+        pad_token_id=original_config.pad_token_id,
     )
 
     return config
@@ -53,9 +59,12 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
     original_config = _export_config_to_huggingface(config)
     original_config.save_pretrained(save_path)
 
+    original_generation_config = GenerationConfig.from_model_config(original_config)
+    original_generation_config.save_pretrained(save_path)
+
     try:
         tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-        tokenizer.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path, legacy_format=False)
     except:
         pass
 
@@ -81,12 +90,13 @@ def _export_config_to_huggingface(config: GPTMegatronConfig) -> GPTBigCodeConfig
         initializer_range=config.initializer_range,
         scale_attn_weights=config.scale_attn_weights,
         use_cache=config.use_cache,
-        bos_token_id=config.bos_token_id,
-        eos_token_id=config.eos_token_id,
         attention_softmax_in_fp32=config.attention_softmax_in_fp32,
         scale_attention_softmax_in_fp32=config.scale_attention_softmax_in_fp32,
         multi_query=config.multi_query,
         tie_word_embeddings=config.tie_word_embeddings,
+        bos_token_id=config.bos_token_id,
+        eos_token_id=config.eos_token_id,
+        pad_token_id=config.pad_token_id,
     )
 
     return original_config

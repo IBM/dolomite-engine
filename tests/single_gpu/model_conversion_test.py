@@ -31,13 +31,17 @@ class ModelConversionTest(TestCommons):
         )
 
     @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
+        TestCommons.make_args_matrix(
+            TestCommons.get_all_devices(), TestCommons.get_attention_head_types(), [True, False]
+        )
     )
-    def test_llama_model_conversion(self, device: torch.device, attention_head_type: AttentionHeadType) -> None:
+    def test_llama_model_conversion(
+        self, device: torch.device, attention_head_type: AttentionHeadType, add_bias: bool
+    ) -> None:
         megatron_config = self.get_dense_test_config(
             attention_head_type,
             PositionEmbeddingType.rope,
-            add_bias=False,
+            add_bias=add_bias,
             activation_function="swiglu",
             normalization_function="rmsnorm",
         )
