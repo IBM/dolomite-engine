@@ -149,7 +149,7 @@ training_parameters:
 
 optimizer_args:
   params_group_method: mup
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 0.0035
     weight_decay: 0.1

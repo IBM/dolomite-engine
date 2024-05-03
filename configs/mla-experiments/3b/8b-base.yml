@@ -81,7 +81,7 @@ training_parameters:
   gradient_accumulation_steps: 2
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 3e-4
     weight_decay: 0.1

@@ -224,7 +224,7 @@ class DatasetArgs(BaseArgs):
 
 class OptimizerArgs(BaseArgs):
     # optimizer class
-    class_name: str = "ApexFusedAdam"
+    class_name: str = "TorchAdamW"
     # how to create param groups
     params_group_method: Optional[ParamsGroupMethod] = None
     # class args for optimizer

@@ -24,7 +24,7 @@ training_parameters:
   micro_batch_size: 8
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 1e-5
     weight_decay: 0.1
