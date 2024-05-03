@@ -24,7 +24,7 @@ def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_pat
 
 
 def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTMegatronConfig:
-    assert original_config.activation_function == "gelu_pytorch_tanh"
+    assert original_config.activation_function in ["gelu_pytorch_tanh", "gelu"]
 
     config = GPTMegatronConfig(
         vocab_size=original_config.vocab_size,
