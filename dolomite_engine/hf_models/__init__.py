@@ -28,7 +28,7 @@ from .models import (
     import_from_huggingface_llama,
     import_from_huggingface_mixtral,
 )
-from .register_hf import is_padding_free_transformer_supported, register_model_classes
+from .register_hf import is_custom_model, register_model_classes
 
 
 register_model_classes()

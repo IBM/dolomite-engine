@@ -15,7 +15,7 @@ from ..enums import DistributedBackend, FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..model_wrapper import ModelWrapper
 from ..optimization import get_optimizer_and_lr_scheduler
-from ..utils import get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from ..utils import get_global_rank, get_module_class_from_name, log_rank_0, string_to_torch_dtype
 from .deepspeed import get_deepspeed_config
 from .fp8 import convert_model_to_transformer_engine
 
@@ -133,6 +133,17 @@ def wrap_model_for_distributed_training(
         if communication_dtype is not None:
             mixed_precision_policy.reduce_dtype = string_to_torch_dtype(communication_dtype)
 
+        def _param_init(module):
+            if args.model_args.model_name is None:
+                module = module.to_empty(device=torch.cuda.current_device())
+
+                if hasattr(module, "reset_parameters"):
+                    with torch.no_grad():
+                        module.reset_parameters()
+            else:
+                if args.model_args.efficient_initialization and get_global_rank() != 0:
+                    module = module.to_empty(device=torch.cuda.current_device())
+
         model = FSDP(
             model,
             sharding_strategy=sharding_strategy,
@@ -144,7 +155,9 @@ def wrap_model_for_distributed_training(
             device_id=torch.cuda.current_device(),
             limit_all_gathers=True,
             use_orig_params=True,
+            # https://github.com/meta-llama/llama-recipes/blob/492455dc080f6c25f356e283e443be0cce86aaeb/src/llama_recipes/finetuning.py#L191
             sync_module_states=args.model_args.efficient_initialization,
+            param_init_fn=_param_init,
         )
 
         if args.distributed_args.gradient_checkpointing_method is not None:

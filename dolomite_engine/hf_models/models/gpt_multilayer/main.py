@@ -11,7 +11,11 @@ class GPTMultiLayerForCausalLM(GPTMultiLayerPreTrainedModel, GPTMegatronForCausa
         GPTMultiLayerPreTrainedModel.__init__(self, config, **kwargs)
 
         self.transformer = GPTMultiLayerModel(config, **kwargs)
-        self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False, std=config.initializer_range)
+
+        if not self._tied_word_embeddings:
+            self.lm_head = ParameterizedLinear(
+                config.n_embd, config.vocab_size, bias=False, std=config.initializer_range
+            )
 
         self.m_width = config.m_width
 

@@ -57,6 +57,8 @@ class ModelArgs(BaseArgs):
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
     efficient_initialization: bool = False
+    # whether to initialize on CPU
+    initialize_on_cpu: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.model_class, "model_class")])

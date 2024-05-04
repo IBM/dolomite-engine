@@ -53,6 +53,8 @@ class GPTMegatronPreTrainedModel(PreTrainedModel):
         self._use_flash_attention_2 = self.attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
 
+        self._tied_word_embeddings = config.tie_word_embeddings
+
         if self._use_padding_free_transformer:
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 

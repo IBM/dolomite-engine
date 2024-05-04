@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union
 
 import torch
+import torch.nn.functional as F
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
@@ -15,7 +16,11 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
     def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
         self.transformer = GPTMegatronModel(config, **kwargs)
-        self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False, std=config.initializer_range)
+
+        if not self._tied_word_embeddings:
+            self.lm_head = ParameterizedLinear(
+                config.n_embd, config.vocab_size, bias=False, std=config.initializer_range
+            )
 
         self.m_width = config.m_width
 
@@ -29,10 +34,12 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
         self.transformer.wte = value
 
     def get_output_embeddings(self) -> ParameterizedLinear:
-        return self.lm_head
+        if not self._tied_word_embeddings:
+            return self.lm_head
 
     def set_output_embeddings(self, new_embeddings: ParameterizedLinear) -> None:
-        self.lm_head = new_embeddings
+        if not self._tied_word_embeddings:
+            self.lm_head = new_embeddings
 
     # FIXME typing
     def prepare_inputs_for_generation(
@@ -141,7 +148,11 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = (
+            F.linear(hidden_states, self.transformer.wte.weight)
+            if self._tied_word_embeddings
+            else self.lm_head(hidden_states)
+        )
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width

@@ -14,9 +14,9 @@ from ..enums import (
     Mode,
     PaddingSide,
 )
-from ..hf_models import is_padding_free_transformer_supported
+from ..hf_models import is_custom_model
 from ..hf_models.modeling_utils import is_glu
-from ..utils import log_rank_0, register_profiler, register_timer, string_to_torch_dtype
+from ..utils import get_global_rank, log_rank_0, register_profiler, register_timer, string_to_torch_dtype
 
 
 class ModelWrapper(torch.nn.Module):
@@ -40,21 +40,11 @@ class ModelWrapper(torch.nn.Module):
         self.gradient_checkpointing_method = args.distributed_args.gradient_checkpointing_method
         self.gradient_checkpointing_args = args.distributed_args.gradient_checkpointing_args
         self.efficient_initialization = args.model_args.efficient_initialization
+        self.initialize_on_cpu = args.model_args.initialize_on_cpu
         self.tuning_method = args.tuning_args.tuning_method
         self.dtype = args.mixed_precision_args.dtype
-
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
-        if self.use_padding_free_transformer:
-            assert is_padding_free_transformer_supported(
-                self.model_class, self.config.model_type
-            ), "padding free transformer is not supported with the specified model"
-
-            assert (
-                self.attention_implementation == AttentionImplementation.flash_attention_2
-            ), "padding free transformer only works with flash attention"
-
-        self._setup_input_device()
 
         self.distributed_backend = None
         self.stage = None
@@ -62,8 +52,20 @@ class ModelWrapper(torch.nn.Module):
             self.distributed_backend = args.distributed_args.distributed_backend
             self.stage = args.distributed_args.stage
 
+        self._setup_input_device()
+
         self._setup_config(args)
+        self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
+
+        if self.use_padding_free_transformer:
+            assert is_custom_model(
+                self.model_class, self.config.model_type
+            ), "padding free transformer is not supported with the specified model"
+
+            assert (
+                self.attention_implementation == AttentionImplementation.flash_attention_2
+            ), "padding free transformer only works with flash attention"
 
         self._setup_tokenizer(args)
         self._setup_model(args)
@@ -229,33 +231,36 @@ class ModelWrapper(torch.nn.Module):
             return model
 
         if self.mode == Mode.training:
-            # this tells from_pretrained to instantiate directly on gpus
-            # this only instantiates a single instance of the model across the ranks
             if self.distributed_backend == DistributedBackend.deepspeed:
                 if self.efficient_initialization:
                     from ..distributed import get_deepspeed_config
 
                     self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
-                self.model = _get_model()
-            elif self.distributed_backend == DistributedBackend.torch:
-                # DDP
-                if self.stage == 0:
-                    assert (
-                        not self.efficient_initialization
-                    ), "efficient_initialization is not meant to be used with DDP"
-
-                    self.model = _get_model(device_map=self.input_device)
-                # FSDP
+                    # model is initialized on meta device here due to the HfDeepSpeedConfig object created above
+                    self.model = _get_model()
                 else:
-                    if self.efficient_initialization:
-                        assert self.model_name is None
+                    self.model = _get_model() if self.initialize_on_cpu else _get_model(device_map=self.input_device)
+            elif self.distributed_backend == DistributedBackend.torch:
+                if self.efficient_initialization:
+                    if self.tie_word_embeddings:
+                        assert is_custom_model(
+                            self.model_class, self.config.model_type
+                        ), "either there should be no weight tying or the model should be a custom class"
 
+                    if self.model_name is None:
                         with torch.device("meta"):
                             self.model = _get_model()
-                        self.model = self.model.to_empty(device=self.input_device)
                     else:
-                        self.model = _get_model(device_map=self.input_device)
+                        if get_global_rank() == 0:
+                            self.model = (
+                                _get_model() if self.initialize_on_cpu else _get_model(device_map=self.input_device)
+                            )
+                        else:
+                            with torch.device("meta"):
+                                self.model = _get_model()
+                else:
+                    self.model = _get_model() if self.initialize_on_cpu else _get_model(device_map=self.input_device)
         else:
             if self.dtype == "fp8":
                 log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")
@@ -263,7 +268,11 @@ class ModelWrapper(torch.nn.Module):
             else:
                 torch_dtype = string_to_torch_dtype(self.dtype)
 
-            self.model = _get_model(torch_dtype=torch_dtype)
+            self.model = (
+                _get_model(torch_dtype=torch_dtype)
+                if self.initialize_on_cpu
+                else _get_model(device_map=self.input_device, torch_dtype=torch_dtype)
+            )
 
         num_parameters = 0
         for param in self.model.parameters():

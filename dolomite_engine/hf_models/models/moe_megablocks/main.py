@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union
 
 import torch
+import torch.nn.functional as F
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ...modeling_utils import ParameterizedLinear
@@ -14,7 +15,11 @@ class MoEMegablocksForCausalLM(MoEMegablocksPreTrainedModel, GPTMegatronForCausa
         MoEMegablocksPreTrainedModel.__init__(self, config, **kwargs)
 
         self.transformer = MoEMegablocksModel(config, **kwargs)
-        self.lm_head = ParameterizedLinear(config.n_embd, config.vocab_size, bias=False, std=config.initializer_range)
+
+        if not self._tied_word_embeddings:
+            self.lm_head = ParameterizedLinear(
+                config.n_embd, config.vocab_size, bias=False, std=config.initializer_range
+            )
 
         self.router_aux_loss_coef = config.router_aux_loss_coef
         self.num_experts = config.num_experts
@@ -94,7 +99,11 @@ class MoEMegablocksForCausalLM(MoEMegablocksPreTrainedModel, GPTMegatronForCausa
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = (
+            F.linear(hidden_states, self.transformer.wte.weight)
+            if self._tied_word_embeddings
+            else self.lm_head(hidden_states)
+        )
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width

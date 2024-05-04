@@ -41,7 +41,7 @@ def register_model_classes() -> None:
         _CUSTOM_MODEL_CLASSES.append(auto_model_for_causal_lm_class)
 
 
-def is_padding_free_transformer_supported(
+def is_custom_model(
     model_class: Union[Type[AutoModelForCausalLM], Type[AutoModelForSeq2SeqLM]], model_type: str
 ) -> bool:
     return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
