@@ -1,6 +1,0 @@
-load_args:
-  load_path: /proj/checkpoints/mayank/dolomite-exp1-p2
-  iteration: 62500
-
-mixed_precision_args:
-  dtype: fp32
