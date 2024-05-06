@@ -43,6 +43,8 @@ class ModelWrapper(torch.nn.Module):
         self.initialize_on_cpu = args.model_args.initialize_on_cpu
         self.tuning_method = args.tuning_args.tuning_method
         self.dtype = args.mixed_precision_args.dtype
+        self.reset_attention_mask = args.model_args.reset_attention_mask
+        self.reset_position_ids = args.model_args.reset_position_ids
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
 
@@ -112,13 +114,13 @@ class ModelWrapper(torch.nn.Module):
         for i in batch:
             batch[i] = batch[i].to(self.input_device)
 
-        generated = self.model.generate(**batch, **generate_kwargs, eos_token_id=self.tokenizer.eos_token_id)
+        generated = self.model.generate(**batch, **generate_kwargs, eos_token_id=self.eos_token_id)
 
         if not self.is_encoder_decoder:
             generated = generated[:, batch["input_ids"].shape[1] :]
 
         # add 1 since eos token to also count eos in generated tokens
-        num_generated_tokens = ((generated != self.tokenizer.eos_token_id).sum(dim=-1) + 1).tolist()
+        num_generated_tokens = ((generated != self.eos_token_id).sum(dim=-1) + 1).tolist()
         generated_text = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
 
         return generated_text, num_generated_tokens
@@ -206,6 +208,7 @@ class ModelWrapper(torch.nn.Module):
             if args.tokenizer_args.padding_side is None
             else args.tokenizer_args.padding_side
         )
+        self.eos_token_id = self.tokenizer.eos_token_id
 
     def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
         if self.model_name is None:

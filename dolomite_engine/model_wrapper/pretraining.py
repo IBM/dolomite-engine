@@ -34,14 +34,15 @@ class ModelWrapperForPretraining(ModelWrapper):
         labels = tokens[:, 1:]
 
         if self.use_padding_free_transformer:
-            model_outputs = self.model(
-                input_ids=input_ids.reshape(-1),
-                position_ids=self.position_ids,
-                cu_seqlens=self.cu_seqlens,
-                max_seqlen=self.max_seqlen,
-            )
+            input_ids, cu_seqlens, max_seqlen, position_ids = self._get_padding_free_inputs(input_ids)
         else:
-            model_outputs = self.model(input_ids=input_ids)
+            cu_seqlens = None
+            max_seqlen = None
+            position_ids = None
+
+        model_outputs = self.model(
+            input_ids=input_ids, position_ids=position_ids, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
+        )
 
         logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
@@ -57,18 +58,64 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch_size = args.training_parameters.micro_batch_size
             sequence_length = args.datasets[0].class_args.get("sequence_length")
 
-            self.register_buffer(
-                "cu_seqlens",
-                torch.arange(
-                    0, batch_size * sequence_length + 1, sequence_length, dtype=torch.int32, device=self.input_device
-                ),
-                persistent=False,
-            )
-            self.register_buffer(
-                "max_seqlen", torch.tensor(sequence_length, device=self.input_device), persistent=False
-            )
-            self.register_buffer(
-                "position_ids",
-                torch.arange(0, sequence_length, 1, device=self.input_device).repeat(batch_size),
-                persistent=False,
-            )
+            if not self.reset_attention_mask:
+                self.register_buffer(
+                    "cu_seqlens",
+                    torch.arange(
+                        0,
+                        batch_size * sequence_length + 1,
+                        sequence_length,
+                        dtype=torch.int32,
+                        device=self.input_device,
+                    ),
+                    persistent=False,
+                )
+                self.register_buffer(
+                    "max_seqlen", torch.tensor(sequence_length, device=self.input_device), persistent=False
+                )
+
+            if self.reset_position_ids:
+                assert self.reset_attention_mask, "reset_attention_mask should be specified with reset_position_ids"
+            else:
+                self.register_buffer(
+                    "position_ids",
+                    torch.arange(0, sequence_length, 1, device=self.input_device).repeat(batch_size),
+                    persistent=False,
+                )
+        else:
+            assert (
+                not self.reset_attention_mask
+            ), "currently reset_attention_mask is only implemented for padding free transformer"
+            assert (
+                not self.reset_position_ids
+            ), "currently reset_position_ids is only implemented for padding free transformer"
+
+    def _get_padding_free_inputs(self, input_ids: torch.Tensor) -> torch.Tensor:
+        batch_size, sequence_length = input_ids.shape
+        input_ids = input_ids.reshape(-1)
+
+        if self.reset_attention_mask:
+            num_tokens_in_batch = batch_size * sequence_length
+
+            document_end_positions = input_ids == self.eos_token_id
+            for i in range(sequence_length - 1, num_tokens_in_batch, sequence_length):
+                document_end_positions[i] = 1
+            cu_seqlens = document_end_positions.nonzero(as_tuple=True)[0] + 1
+            cu_seqlens = torch.cat([torch.tensor([0], device=input_ids.device), cu_seqlens])
+            cu_seqlens = cu_seqlens.to(torch.int32)
+
+            seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
+            max_seqlen = seqlen.max()
+
+            if self.reset_position_ids:
+                position_ids = torch.cat(
+                    [torch.arange(0, i, 1, dtype=torch.int32, device=input_ids.device) for i in seqlen]
+                )
+            else:
+                position_ids = self.position_ids
+        else:
+            cu_seqlens = self.cu_seqlens
+            max_seqlen = self.max_seqlen
+            position_ids = self.position_ids
+
+        return input_ids, cu_seqlens, max_seqlen, position_ids
