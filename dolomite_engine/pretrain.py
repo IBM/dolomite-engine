@@ -95,7 +95,7 @@ def train(
     if val_weighted_split_paths is not None:
         group_names = [key for key in val_weighted_split_paths.keys()[0]]
 
-    loss_running_mean_tracker = RunningMean(window=args.logging_args.log_interval)
+    loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
 
     model.train()
 

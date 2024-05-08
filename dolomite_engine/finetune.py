@@ -221,7 +221,7 @@ def train(
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
-    loss_running_mean_tracker = RunningMean(window=args.logging_args.log_interval)
+    loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
 
     model.train()
 
