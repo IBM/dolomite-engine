@@ -5,12 +5,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ...modeling_utils import ParameterizedLinear
-from ..gpt_megatron.mlp import MLP
-from .config import MoEMegablocksConfig
+from ..gpt_dolomite.mlp import MLP
+from .config import MoEDolomiteConfig
 
 
 class SparseMoE(nn.Module):
-    def __init__(self, config: MoEMegablocksConfig, use_padding_free_transformer: bool) -> None:
+    def __init__(self, config: MoEDolomiteConfig, use_padding_free_transformer: bool) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size

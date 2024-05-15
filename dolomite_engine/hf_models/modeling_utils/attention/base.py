@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import DynamicCache
 
-from ...config import MegatronConfig
+from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ..linear import ParameterizedLinear
 from ..position_embedding import apply_rotary_pos_emb
@@ -14,9 +14,7 @@ from .utils import repeat_key_value
 
 
 class Attention(nn.Module):
-    """Attention class used by all Megatron models"""
-
-    def __init__(self, config: MegatronConfig, causal: bool, layer_idx: int = None) -> None:
+    def __init__(self, config: CommonConfig, causal: bool, layer_idx: int = None) -> None:
         super().__init__()
 
         self.causal = causal

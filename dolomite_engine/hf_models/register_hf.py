@@ -6,22 +6,22 @@ from .models import (
     DenseMoEConfig,
     DenseMoEForCausalLM,
     DenseMoEModel,
-    GPTMegatronConfig,
-    GPTMegatronForCausalLM,
-    GPTMegatronModel,
+    GPTDolomiteConfig,
+    GPTDolomiteForCausalLM,
+    GPTDolomiteModel,
     GPTMultiLayerConfig,
     GPTMultiLayerForCausalLM,
     GPTMultiLayerModel,
-    MoEMegablocksConfig,
-    MoEMegablocksForCausalLM,
-    MoEMegablocksModel,
+    MoEDolomiteConfig,
+    MoEDolomiteForCausalLM,
+    MoEDolomiteModel,
 )
 
 
 # (AutoConfig, AutoModel, AutoModelForCausalLM)
 _CUSTOM_MODEL_REGISTRY = [
-    (GPTMegatronConfig, GPTMegatronModel, GPTMegatronForCausalLM),
-    (MoEMegablocksConfig, MoEMegablocksModel, MoEMegablocksForCausalLM),
+    (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
+    (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTMultiLayerConfig, GPTMultiLayerModel, GPTMultiLayerForCausalLM),
     (DenseMoEConfig, DenseMoEModel, DenseMoEForCausalLM),
 ]

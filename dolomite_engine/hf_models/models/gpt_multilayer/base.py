@@ -8,21 +8,21 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..gpt_megatron import GPTMegatronConfig, GPTMegatronModel, GPTMegatronPreTrainedModel
+from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .config import GPTMultiLayerConfig
 from .layer import GPTMultiLayerBlock
 
 
-class GPTMultiLayerPreTrainedModel(GPTMegatronPreTrainedModel):
+class GPTMultiLayerPreTrainedModel(GPTDolomitePreTrainedModel):
     config_class = GPTMultiLayerConfig
     _no_split_modules = ["GPTMultiLayerBlock"]
 
-    def __init__(self, config: GPTMegatronConfig, *inputs, **kwargs):
-        GPTMegatronPreTrainedModel.__init__(self, config, *inputs, **kwargs)
+    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
+        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
         self.sharing_pattern = config.sharing_pattern
 
 
-class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTMegatronModel):
+class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTDolomiteModel):
     def __init__(self, config: GPTMultiLayerConfig, **kwargs) -> None:
         GPTMultiLayerPreTrainedModel.__init__(self, config, **kwargs)
 

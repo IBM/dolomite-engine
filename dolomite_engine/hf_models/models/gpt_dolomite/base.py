@@ -1,7 +1,3 @@
-"""
-GPTMegatron classes form the basis for Megatron-based models. The code is derived from GPTBigCode classes.
-"""
-
 import warnings
 from typing import List, Tuple, Union
 
@@ -22,25 +18,25 @@ from ...modeling_utils import (
     get_normalization_function,
 )
 from ...utils import check_list_type, flatten_and_convert_to_tensors
-from .config import GPTMegatronConfig
-from .layer import GPTMegatronBlock
+from .config import GPTDolomiteConfig
+from .layer import GPTDolomiteBlock
 
 
-class GPTMegatronPreTrainedModel(PreTrainedModel):
+class GPTDolomitePreTrainedModel(PreTrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
     """
 
-    config_class = GPTMegatronConfig
+    config_class = GPTDolomiteConfig
     base_model_prefix = "transformer"
     causal = True
-    _no_split_modules = ["GPTMegatronBlock"]
+    _no_split_modules = ["GPTDolomiteBlock"]
     _skip_keys_device_placement = "past_key_values"
     _supports_sdpa = True
     _supports_flash_attn_2 = True
 
-    def __init__(self, config: GPTMegatronConfig, *inputs, **kwargs):
+    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
 
         self.normalization_implementation = kwargs.get(
@@ -173,10 +169,10 @@ class GPTMegatronPreTrainedModel(PreTrainedModel):
         return input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen
 
 
-class GPTMegatronModel(GPTMegatronPreTrainedModel):
+class GPTDolomiteModel(GPTDolomitePreTrainedModel):
     mask_value = None
 
-    def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:
+    def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
 
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
@@ -197,7 +193,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
         self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList(
             [
-                GPTMegatronBlock(
+                GPTDolomiteBlock(
                     config,
                     self.normalization_implementation,
                     self.attention_implementation,
@@ -490,7 +486,7 @@ class GPTMegatronModel(GPTMegatronPreTrainedModel):
 
         if self._use_padding_free_transformer:
             assert position_ids is not None, (
-                "GPTMegatronModel needs position_ids from outside when using flash attention with List[List[int]] "
+                "GPTDolomiteModel needs position_ids from outside when using flash attention with List[List[int]] "
                 "inputs"
             )
         else:

@@ -23,7 +23,7 @@ def compile_helpers() -> None:
     """Compile C++ helper functions at runtime. Make sure this is invoked on a single process."""
 
     try:
-        from engine.data.megatron import helpers
+        from dolomite_engine.data.megatron import helpers
     except ImportError:
         if get_global_rank() % torch.cuda.device_count() == 0:
             command = ["make", "-C", os.path.abspath(os.path.dirname(__file__))]

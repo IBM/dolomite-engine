@@ -1,12 +1,12 @@
 from typing import Tuple
 
 from ...modeling_utils import ParameterizedLinear
-from ..gpt_megatron import GPTMegatronForCausalLM
+from ..gpt_dolomite import GPTDolomiteForCausalLM
 from .base import GPTMultiLayerModel, GPTMultiLayerPreTrainedModel
 from .config import GPTMultiLayerConfig
 
 
-class GPTMultiLayerForCausalLM(GPTMultiLayerPreTrainedModel, GPTMegatronForCausalLM):
+class GPTMultiLayerForCausalLM(GPTMultiLayerPreTrainedModel, GPTDolomiteForCausalLM):
     def __init__(self, config: GPTMultiLayerConfig, **kwargs) -> None:
         GPTMultiLayerPreTrainedModel.__init__(self, config, **kwargs)
 

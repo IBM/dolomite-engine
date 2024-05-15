@@ -11,8 +11,6 @@ from ..TP import ColumnParallelLinear, CopyToTensorParallelRegion, RowParallelLi
 
 
 class Attention_TP(Attention):
-    """Tensor Parallel Attention class used by all Megatron TP models"""
-
     def __init__(
         self,
         hidden_size: int,

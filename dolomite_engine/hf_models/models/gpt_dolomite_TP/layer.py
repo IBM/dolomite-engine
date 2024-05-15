@@ -4,15 +4,15 @@ from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from ...modeling_utils_TP import get_attention_module
-from ..gpt_megatron import GPTMegatronConfig
-from ..gpt_megatron.layer import GPTMegatronBlock
+from ..gpt_dolomite import GPTDolomiteConfig
+from ..gpt_dolomite.layer import GPTDolomiteBlock
 from .mlp import MLP_TP
 
 
-class GPTMegatronBlock_TP(GPTMegatronBlock):
+class GPTDolomiteBlock_TP(GPTDolomiteBlock):
     def __init__(
         self,
-        config: GPTMegatronConfig,
+        config: GPTDolomiteConfig,
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,

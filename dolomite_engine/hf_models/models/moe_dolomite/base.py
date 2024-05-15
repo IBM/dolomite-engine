@@ -8,13 +8,13 @@ from transformers.models.mixtral.modeling_mixtral import load_balancing_loss_fun
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..gpt_megatron import GPTMegatronModel, GPTMegatronPreTrainedModel
-from .config import MoEMegablocksConfig
+from ..gpt_dolomite import GPTDolomiteModel, GPTDolomitePreTrainedModel
+from .config import MoEDolomiteConfig
 from .layer import SparseMoEBlock
 
 
-class MoEMegablocksPreTrainedModel(GPTMegatronPreTrainedModel):
-    config_class = MoEMegablocksConfig
+class MoEDolomitePreTrainedModel(GPTDolomitePreTrainedModel):
+    config_class = MoEDolomiteConfig
     _no_split_modules = ["SparseMoEBlock"]
 
     def get_moe_loss(
@@ -39,9 +39,9 @@ class MoEMegablocksPreTrainedModel(GPTMegatronPreTrainedModel):
         return loss, load_balancing_loss
 
 
-class MoEMegablocksModel(MoEMegablocksPreTrainedModel, GPTMegatronModel):
-    def __init__(self, config: MoEMegablocksConfig, **kwargs) -> None:
-        MoEMegablocksPreTrainedModel.__init__(self, config, **kwargs)
+class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
+    def __init__(self, config: MoEDolomiteConfig, **kwargs) -> None:
+        MoEDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size

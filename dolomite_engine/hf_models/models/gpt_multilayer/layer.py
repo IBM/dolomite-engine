@@ -6,7 +6,7 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_normalization_function, repeat_key_value
-from ..gpt_megatron.mlp import MLP
+from ..gpt_dolomite.mlp import MLP
 from .attention import get_attention_module, get_key_value_projection
 from .config import GPTMultiLayerConfig
 

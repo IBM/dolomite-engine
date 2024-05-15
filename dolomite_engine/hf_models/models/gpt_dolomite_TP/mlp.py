@@ -10,7 +10,7 @@ from ...modeling_utils_TP import (
     get_tensor_parallel_group_manager,
     tensor_parallel_split_safetensor_slice,
 )
-from ..gpt_megatron.mlp import MLP
+from ..gpt_dolomite.mlp import MLP
 
 
 class MLP_TP(MLP):

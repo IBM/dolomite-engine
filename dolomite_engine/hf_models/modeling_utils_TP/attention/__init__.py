@@ -1,4 +1,4 @@
-from ...config import MegatronConfig
+from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from .base import Attention_TP
 from .flash import FlashAttention2_TP
@@ -13,7 +13,7 @@ _ATTENTION_MODULES = {
 
 
 def get_attention_module(
-    config: MegatronConfig,
+    config: CommonConfig,
     causal: bool,
     attention_implementation: str,
     use_padding_free_transformer: bool,

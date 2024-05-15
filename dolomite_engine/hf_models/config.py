@@ -3,7 +3,7 @@ from transformers import PretrainedConfig
 from .enums import AttentionHeadType, PositionEmbeddingType
 
 
-class MegatronConfig(PretrainedConfig):
+class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
     attribute_map = {
         "hidden_size": "n_embd",

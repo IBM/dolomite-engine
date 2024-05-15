@@ -3,7 +3,7 @@ import shutil
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig
 
 from ..enums import AttentionHeadType, PositionEmbeddingType
-from .gpt_megatron import GPTMegatronConfig
+from .gpt_dolomite import GPTDolomiteConfig
 
 
 def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -23,10 +23,10 @@ def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_pat
         pass
 
 
-def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTMegatronConfig:
+def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDolomiteConfig:
     assert original_config.activation_function in ["gelu_pytorch_tanh", "gelu"]
 
-    config = GPTMegatronConfig(
+    config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
         n_positions=original_config.n_positions,
         n_embd=original_config.n_embd,
@@ -55,7 +55,7 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTMeg
 def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
     shutil.copytree(pretrained_model_name_or_path, save_path)
 
-    config: GPTMegatronConfig = AutoConfig.from_pretrained(save_path)
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(save_path)
     original_config = _export_config_to_huggingface(config)
     original_config.save_pretrained(save_path)
 
@@ -69,7 +69,7 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
         pass
 
 
-def _export_config_to_huggingface(config: GPTMegatronConfig) -> GPTBigCodeConfig:
+def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
     assert config.activation_function == "gelu_pytorch_tanh"
     assert config.normalization_function == "layernorm"
     assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]

@@ -8,19 +8,19 @@ from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_tensor_parallel_group_manager
-from ..gpt_megatron import GPTMegatronConfig, GPTMegatronModel, GPTMegatronPreTrainedModel
-from .layer import GPTMegatronBlock_TP
+from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
+from .layer import GPTDolomiteBlock_TP
 
 
-class GPTMegatronModel_TP(GPTMegatronModel):
+class GPTDolomiteModel_TP(GPTDolomiteModel):
     def __init__(
         self,
-        config: GPTMegatronConfig,
+        config: GPTDolomiteConfig,
         tensor_parallel_vocab_matrix: bool = False,
         tensor_parallel_position_embedding_matrix: bool = False,
         **kwargs,
     ) -> None:
-        GPTMegatronPreTrainedModel.__init__(self, config, **kwargs)
+        GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
         self.tensor_parallel_vocab_matrix = tensor_parallel_vocab_matrix
         self.tensor_parallel_position_embedding_matrix = tensor_parallel_position_embedding_matrix
@@ -41,7 +41,7 @@ class GPTMegatronModel_TP(GPTMegatronModel):
         self.drop = Dropout_TP(config.embd_pdrop)
         self.h = nn.ModuleList(
             [
-                GPTMegatronBlock_TP(
+                GPTDolomiteBlock_TP(
                     config,
                     self.normalization_implementation,
                     self.attention_implementation,

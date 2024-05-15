@@ -1,10 +1,10 @@
 from os import PathLike
 from typing import List
 
-from ...config import MegatronConfig
+from ...config import CommonConfig
 
 
-class GPTMultiLayerConfig(MegatronConfig):
+class GPTMultiLayerConfig(CommonConfig):
     model_type = "gpt_multilayer"
 
     def __init__(

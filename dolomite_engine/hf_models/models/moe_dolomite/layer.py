@@ -6,14 +6,14 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
-from .config import MoEMegablocksConfig
+from .config import MoEDolomiteConfig
 from .moe import SparseMoE
 
 
 class SparseMoEBlock(nn.Module):
     def __init__(
         self,
-        config: MoEMegablocksConfig,
+        config: MoEDolomiteConfig,
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,

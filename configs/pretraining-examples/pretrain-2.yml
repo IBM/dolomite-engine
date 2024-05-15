@@ -23,7 +23,7 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    model_type: gpt_megatron
+    model_type: gpt_dolomite
     vocab_size: 50257
     n_positions: 2048
     n_embd: 768

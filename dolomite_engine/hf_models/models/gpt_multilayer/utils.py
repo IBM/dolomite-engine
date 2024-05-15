@@ -5,14 +5,14 @@ from transformers import AutoModelForCausalLM
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import split_query_key_value_tensor_for_attention
-from ..gpt_megatron import GPTMegatronConfig, GPTMegatronForCausalLM
+from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM
 from .config import GPTMultiLayerConfig
 from .main import GPTMultiLayerForCausalLM
 
 
-def convert_gpt_megatron_to_gpt_multilayer(
-    original_config: GPTMegatronConfig,
-    original_model: GPTMegatronForCausalLM,
+def convert_gpt_dolomite_to_gpt_multilayer(
+    original_config: GPTDolomiteConfig,
+    original_model: GPTDolomiteForCausalLM,
     sharing_pattern: List[int] = None,
     **kwargs,
 ) -> GPTMultiLayerForCausalLM:

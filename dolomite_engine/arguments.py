@@ -51,7 +51,7 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
-    # attention implementation (only works with GPTMegatronForCausalLM)
+    # attention implementation (only works with GPTDolomiteForCausalLM)
     attention_implementation: Optional[AttentionImplementation] = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False

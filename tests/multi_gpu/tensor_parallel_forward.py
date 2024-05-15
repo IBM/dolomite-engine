@@ -7,8 +7,8 @@ import torch.distributed
 from dolomite_engine import (
     AttentionHeadType,
     CUDA_RNGStatesTracker,
-    GPTMegatronConfig,
-    GPTMegatronForCausalLM_TP,
+    GPTDolomiteConfig,
+    GPTDolomiteForCausalLM_TP,
     ProcessGroupManager,
     SafeTensorsWeightsManager,
     set_cuda_rng_tracker,
@@ -49,7 +49,7 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 4
 
-config = GPTMegatronConfig(
+config = GPTDolomiteConfig(
     attention_head_type=args.attention_head_type,
     n_layer=1,
     position_embedding_type=args.position_embedding_type,
@@ -76,7 +76,7 @@ torch.distributed.barrier()
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
-    model_tp = GPTMegatronForCausalLM_TP(
+    model_tp = GPTDolomiteForCausalLM_TP(
         config,
         tensor_parallel_vocab_matrix=False,
         tensor_parallel_position_embedding_matrix=False,

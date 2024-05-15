@@ -1,10 +1,10 @@
 import torch
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import GPTMegatronConfig
+from dolomite_engine.hf_models import GPTDolomiteConfig
 
 
-config = GPTMegatronConfig(
+config = GPTDolomiteConfig(
     vocab_size=65024,
     n_positions=4096,
     n_embd=8192,

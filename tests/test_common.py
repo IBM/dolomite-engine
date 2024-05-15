@@ -10,8 +10,8 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.hf_models import AttentionHeadType, GPTMegatronConfig, MoEMegablocksConfig, PositionEmbeddingType
-from dolomite_engine.hf_models.config import MegatronConfig
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig, PositionEmbeddingType
+from dolomite_engine.hf_models.config import CommonConfig
 
 
 class TestCommons(TestCase):
@@ -62,8 +62,8 @@ class TestCommons(TestCase):
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
-    ) -> GPTMegatronConfig:
-        return GPTMegatronConfig(
+    ) -> GPTDolomiteConfig:
+        return GPTDolomiteConfig(
             vocab_size=2048,
             n_positions=1024,
             n_embd=32,
@@ -91,8 +91,8 @@ class TestCommons(TestCase):
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
-    ) -> MoEMegablocksConfig:
-        return MoEMegablocksConfig(
+    ) -> MoEDolomiteConfig:
+        return MoEDolomiteConfig(
             vocab_size=2048,
             n_positions=1024,
             n_embd=32,
@@ -129,7 +129,7 @@ class TestCommons(TestCase):
 
     def model_conversion_test(
         self,
-        megatron_config: MegatronConfig,
+        dolomite_config: CommonConfig,
         export_to_huggingface_function: Callable,
         import_from_huggingface_function: Callable,
         device: torch.device,
@@ -137,15 +137,15 @@ class TestCommons(TestCase):
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
-        megatron_model = self.from_config(megatron_config).to(device)
-        megatron_model.eval()
+        dolomite_model = self.from_config(dolomite_config).to(device)
+        dolomite_model.eval()
 
         with tempfile.TemporaryDirectory() as tmp_path:
             save_path = os.path.join(tmp_path, "save")
             export_path = os.path.join(tmp_path, "export")
             import_path = os.path.join(tmp_path, "import")
 
-            megatron_model.save_pretrained(save_path, safe_serialization=True)
+            dolomite_model.save_pretrained(save_path, safe_serialization=True)
 
             export_to_huggingface_function(save_path, export_path)
             import_from_huggingface_function(export_path, import_path)
@@ -161,18 +161,18 @@ class TestCommons(TestCase):
         hf_logits = hf_output.logits
         hf_loss = hf_output.loss
 
-        megatron_output = megatron_model(
+        dolomite_output = dolomite_model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels, return_dict=True
         )
-        megatron_logits = megatron_output.logits
-        megatron_loss = megatron_output.loss
+        dolomite_logits = dolomite_output.logits
+        dolomite_loss = dolomite_output.loss
 
         # we don't care about what happens on masked values (they don't match btw)
         hf_logits[attention_mask == 0] = 0
-        megatron_logits[attention_mask == 0] = 0
+        dolomite_logits[attention_mask == 0] = 0
 
         self.assert_equal_tensors(
-            megatron_logits,
+            dolomite_logits,
             hf_logits,
             exact_match,
             rtol_float32=0,
@@ -183,7 +183,7 @@ class TestCommons(TestCase):
             atol_bfloat16=3e-7,
         )
         self.assert_equal_tensors(
-            megatron_loss,
+            dolomite_loss,
             hf_loss,
             exact_match,
             rtol_float32=0,

@@ -5,16 +5,16 @@ import torch.nn.functional as F
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ...modeling_utils import ParameterizedLinear
-from ..gpt_megatron import GPTMegatronForCausalLM
-from .base import MoEMegablocksModel, MoEMegablocksPreTrainedModel
-from .config import MoEMegablocksConfig
+from ..gpt_dolomite import GPTDolomiteForCausalLM
+from .base import MoEDolomiteModel, MoEDolomitePreTrainedModel
+from .config import MoEDolomiteConfig
 
 
-class MoEMegablocksForCausalLM(MoEMegablocksPreTrainedModel, GPTMegatronForCausalLM):
-    def __init__(self, config: MoEMegablocksConfig, **kwargs) -> None:
-        MoEMegablocksPreTrainedModel.__init__(self, config, **kwargs)
+class MoEDolomiteForCausalLM(MoEDolomitePreTrainedModel, GPTDolomiteForCausalLM):
+    def __init__(self, config: MoEDolomiteConfig, **kwargs) -> None:
+        MoEDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
-        self.transformer = MoEMegablocksModel(config, **kwargs)
+        self.transformer = MoEDolomiteModel(config, **kwargs)
 
         if not self._tied_word_embeddings:
             self.lm_head = ParameterizedLinear(

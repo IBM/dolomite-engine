@@ -6,14 +6,14 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
-from .base import GPTMegatronModel, GPTMegatronPreTrainedModel
-from .config import GPTMegatronConfig
+from .base import GPTDolomiteModel, GPTDolomitePreTrainedModel
+from .config import GPTDolomiteConfig
 
 
-class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
-    def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:
+class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel):
+    def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
-        self.transformer = GPTMegatronModel(config, **kwargs)
+        self.transformer = GPTDolomiteModel(config, **kwargs)
 
         if not self._tied_word_embeddings:
             self.lm_head = ParameterizedLinear(

@@ -4,13 +4,13 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
-from ...config import MegatronConfig
 from ...enums import InitMethod
 from ...modeling_utils import ParameterizedLinear, get_activation_function, is_glu
+from .config import GPTDolomiteConfig
 
 
 class MLP(nn.Module):
-    def __init__(self, config: MegatronConfig) -> None:
+    def __init__(self, config: GPTDolomiteConfig) -> None:
         super().__init__()
 
         hidden_size = config.n_embd

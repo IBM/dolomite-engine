@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 
-from ...config import MegatronConfig
+from ...config import CommonConfig
 from ...enums import AttentionHeadType
 from .base import Attention
 from .flash import FlashAttention2
@@ -43,7 +43,7 @@ _SPLIT_FUNCTIONS = {
 
 
 def get_attention_module(
-    config: MegatronConfig,
+    config: CommonConfig,
     causal: bool,
     attention_implementation: str,
     use_padding_free_transformer: bool,

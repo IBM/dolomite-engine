@@ -4,7 +4,7 @@ from transformers import AutoTokenizer
 
 from dolomite_engine import (
     CUDA_RNGStatesTracker,
-    GPTMegatronForCausalLM_TP,
+    GPTDolomiteForCausalLM_TP,
     ProcessGroupManager,
     set_cuda_rng_tracker,
     set_tensor_parallel_group_manager,
@@ -32,7 +32,7 @@ set_cuda_rng_tracker(cuda_rng_tracker)
 
 model_name = "checkpoints-13b-8k/iter_00300000"
 
-model = GPTMegatronForCausalLM_TP.from_pretrained(model_name)
+model = GPTDolomiteForCausalLM_TP.from_pretrained(model_name)
 
 # set model to eval mode
 model.eval()

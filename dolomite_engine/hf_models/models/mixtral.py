@@ -7,8 +7,8 @@ from ..modeling_utils import (
     split_query_key_value_tensor_for_attention,
 )
 from ..utils import download_repo
-from .gpt_megatron import interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
-from .moe_megablocks import MoEMegablocksConfig
+from .gpt_dolomite import interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
+from .moe_dolomite import MoEDolomiteConfig
 
 
 def import_from_huggingface_mixtral(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -36,7 +36,7 @@ def import_from_huggingface_mixtral(pretrained_model_name_or_path: str, save_pat
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: MixtralConfig) -> MoEMegablocksConfig:
+def _import_config_from_huggingface(original_config: MixtralConfig) -> MoEDolomiteConfig:
     assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
@@ -46,7 +46,7 @@ def _import_config_from_huggingface(original_config: MixtralConfig) -> MoEMegabl
     elif original_config.num_attention_heads > original_config.num_key_value_heads:
         attention_head_type = "gqa"
 
-    config = MoEMegablocksConfig(
+    config = MoEDolomiteConfig(
         vocab_size=original_config.vocab_size,
         n_positions=original_config.max_position_embeddings,
         n_embd=original_config.hidden_size,
@@ -140,7 +140,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_mixtral(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: MoEMegablocksConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: MoEDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weight_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
@@ -167,7 +167,7 @@ def export_to_huggingface_mixtral(pretrained_model_name_or_path: str, save_path:
         pass
 
 
-def _export_config_to_huggingface(config: MoEMegablocksConfig) -> MixtralConfig:
+def _export_config_to_huggingface(config: MoEDolomiteConfig) -> MixtralConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"

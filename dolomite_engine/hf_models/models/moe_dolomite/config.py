@@ -1,8 +1,8 @@
-from ...config import MegatronConfig
+from ...config import CommonConfig
 
 
-class MoEMegablocksConfig(MegatronConfig):
-    model_type = "moe_megablocks"
+class MoEDolomiteConfig(CommonConfig):
+    model_type = "moe_dolomite"
 
     def __init__(
         self,

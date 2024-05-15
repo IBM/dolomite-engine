@@ -7,23 +7,23 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ....utils import SafeTensorsWeightsManager
 from ...modeling_utils import ParameterizedLinear
-from ..gpt_megatron import GPTMegatronConfig, GPTMegatronForCausalLM, GPTMegatronPreTrainedModel
-from .base import GPTMegatronModel_TP
+from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM, GPTDolomitePreTrainedModel
+from .base import GPTDolomiteModel_TP
 
 
-class GPTMegatronForCausalLM_TP(GPTMegatronForCausalLM):
+class GPTDolomiteForCausalLM_TP(GPTDolomiteForCausalLM):
     def __init__(
         self,
-        config: GPTMegatronConfig,
+        config: GPTDolomiteConfig,
         tensor_parallel_vocab_matrix: bool = False,
         tensor_parallel_position_embedding_matrix: bool = False,
         **kwargs,
     ) -> None:
-        GPTMegatronPreTrainedModel.__init__(self, config, **kwargs)
+        GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
         self.tensor_parallel_vocab_matrix = tensor_parallel_vocab_matrix
 
-        self.transformer = GPTMegatronModel_TP(
+        self.transformer = GPTDolomiteModel_TP(
             config,
             tensor_parallel_vocab_matrix=tensor_parallel_vocab_matrix,
             tensor_parallel_position_embedding_matrix=tensor_parallel_position_embedding_matrix,
@@ -89,12 +89,12 @@ class GPTMegatronForCausalLM_TP(GPTMegatronForCausalLM):
         torch_dtype: torch.dtype = torch.float32,
         tensor_parallel_vocab_matrix: bool = False,
         tensor_parallel_position_embedding_matrix: bool = False,
-    ) -> GPTMegatronForCausalLM_TP:
+    ) -> GPTDolomiteForCausalLM_TP:
         # use dummy tensors to avoid initializing model here
         with torch.device("meta"):
-            config = GPTMegatronConfig.from_pretrained(model_name)
+            config = GPTDolomiteConfig.from_pretrained(model_name)
             # try sharding vocab matrices if really struggling for memory
-            model = GPTMegatronForCausalLM_TP(
+            model = GPTDolomiteForCausalLM_TP(
                 config,
                 tensor_parallel_vocab_matrix=tensor_parallel_vocab_matrix,
                 tensor_parallel_position_embedding_matrix=tensor_parallel_position_embedding_matrix,

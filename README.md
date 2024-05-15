@@ -112,7 +112,7 @@ To get best training efficiency, we use [padding free transformers](https://hugg
 
 ```python
 import torch
-from dolomite_engine.hf_models import GPTMegatronForCausalLM
+from dolomite_engine.hf_models import GPTDolomiteForCausalLM
 
 
 # we need unpadded lists here for avoiding any useless computations on pad tokens
@@ -121,7 +121,7 @@ labels = [[-100, -100, -100, 4, 5, 0], [-100, -100, 8, 0]]
 
 # this will throw a warning saying that the model is of gpt_bigcode class
 # ignore the warning
-model = GPTMegatronForCausalLM.from_pretrained(
+model = GPTDolomiteForCausalLM.from_pretrained(
     "bigcode/starcoder",
     attn_implementation="flash_attention_2"
     use_padding_free_transformer=True,

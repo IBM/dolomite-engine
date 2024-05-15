@@ -1,10 +1,16 @@
 import os
 import tempfile
+
 import torch
 from parameterized import parameterized
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import AttentionHeadType, DenseMoEConfig, PositionEmbeddingType, export_to_huggingface_bigcode
+from dolomite_engine.hf_models import (
+    AttentionHeadType,
+    DenseMoEConfig,
+    PositionEmbeddingType,
+    export_to_huggingface_bigcode,
+)
 
 from ..test_common import TestCommons
 
@@ -30,25 +36,25 @@ class GenerationTest(TestCommons):
         self.skip_test_if_device_unavailable(device)
         self.skip_test_if_layernorm_kernel_unavailable(device, torch_dtype)
 
-        megatron_config = self.get_dense_test_config(attention_head_type, position_embedding_type)
-        megatron_config.use_cache = use_cache
+        dolomite_config = self.get_dense_test_config(attention_head_type, position_embedding_type)
+        dolomite_config.use_cache = use_cache
 
-        megatron_model = self.from_config(megatron_config, torch_dtype=torch_dtype).to(device)
-        megatron_model.eval()
+        dolomite_model = self.from_config(dolomite_config, torch_dtype=torch_dtype).to(device)
+        dolomite_model.eval()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            megatron_path = os.path.join(tmpdir, "megatron")
+            dolomite_path = os.path.join(tmpdir, "dolomite")
             bigcode_path = os.path.join(tmpdir, "bigcode")
 
-            megatron_model.save_pretrained(megatron_path)
-            export_to_huggingface_bigcode(megatron_path, bigcode_path)
+            dolomite_model.save_pretrained(dolomite_path)
+            export_to_huggingface_bigcode(dolomite_path, bigcode_path)
 
             bigcode_model = AutoModelForCausalLM.from_pretrained(bigcode_path).to(device)
             bigcode_model.eval()
 
         input_ids, attention_mask, _ = self.get_dummy_inputs(device)
 
-        megatron_output = megatron_model.generate(
+        dolomite_output = dolomite_model.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
             use_cache=use_cache,
@@ -63,11 +69,11 @@ class GenerationTest(TestCommons):
             output_scores=True,
         )
 
-        assert megatron_output.sequences.equal(bigcode_output.sequences)
+        assert dolomite_output.sequences.equal(bigcode_output.sequences)
 
-        for megatron_token_score, bigcode_token_score in zip(megatron_output.scores, bigcode_output.scores):
+        for dolomite_token_score, bigcode_token_score in zip(dolomite_output.scores, bigcode_output.scores):
             self.assert_equal_tensors(
-                megatron_token_score,
+                dolomite_token_score,
                 bigcode_token_score,
                 False,
                 rtol_float32=0,

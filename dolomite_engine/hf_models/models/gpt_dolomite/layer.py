@@ -6,18 +6,18 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
-from .config import GPTMegatronConfig
+from .config import GPTDolomiteConfig
 from .mlp import MLP
 
 
-class GPTMegatronBlock(nn.Module):
+class GPTDolomiteBlock(nn.Module):
     """
     Layer implementation for the transformer block
     """
 
     def __init__(
         self,
-        config: GPTMegatronConfig,
+        config: GPTDolomiteConfig,
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,

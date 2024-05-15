@@ -6,12 +6,12 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ...modeling_utils import ParameterizedLinear
-from ..gpt_megatron import GPTMegatronForCausalLM
+from ..gpt_dolomite import GPTDolomiteForCausalLM
 from .base import DenseMoEModel, DenseMoEPreTrainedModel
 from .config import DenseMoEConfig
 
 
-class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTMegatronForCausalLM):
+class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTDolomiteForCausalLM):
     def __init__(self, config: DenseMoEConfig, **kwargs) -> None:
         DenseMoEPreTrainedModel.__init__(self, config, **kwargs)
 

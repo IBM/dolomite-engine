@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 
 from ...modeling_utils import ParameterizedLinear
-from ..gpt_megatron.mlp import MLP
+from ..gpt_dolomite.mlp import MLP
 from .config import DenseMoEConfig
 from .inference import mask_probability
 

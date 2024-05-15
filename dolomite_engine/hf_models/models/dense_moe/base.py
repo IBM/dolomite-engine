@@ -2,24 +2,24 @@ import torch.nn as nn
 
 from ...enums import PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..gpt_megatron import GPTMegatronPreTrainedModel
-from ..moe_megablocks import MoEMegablocksModel, MoEMegablocksPreTrainedModel
+from ..gpt_dolomite import GPTDolomitePreTrainedModel
+from ..moe_dolomite import MoEDolomiteModel, MoEDolomitePreTrainedModel
 from .config import DenseMoEConfig
 from .layer import DenseMoEBlock
 
 
-class DenseMoEPreTrainedModel(MoEMegablocksPreTrainedModel):
+class DenseMoEPreTrainedModel(MoEDolomitePreTrainedModel):
     config_class = DenseMoEConfig
     _no_split_modules = ["DenseMoEBlock"]
 
     def __init__(self, config: DenseMoEConfig, *inputs, **kwargs):
-        GPTMegatronPreTrainedModel.__init__(self, config, *inputs, **kwargs)
+        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
 
         assert self._use_sdpa, "only SDPA is supported for dense_moe"
         self.inference_method = kwargs.get("inference_method")
 
 
-class DenseMoEModel(DenseMoEPreTrainedModel, MoEMegablocksModel):
+class DenseMoEModel(DenseMoEPreTrainedModel, MoEDolomiteModel):
     def __init__(self, config: DenseMoEConfig, **kwargs) -> None:
         DenseMoEPreTrainedModel.__init__(self, config, **kwargs)
 

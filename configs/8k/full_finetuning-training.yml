@@ -7,7 +7,7 @@ datasets:
 
 model_args:
   model_name: bigcode/starcoder
-  model_class: GPTMegatronForCausalLM
+  model_class: GPTDolomiteForCausalLM
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
