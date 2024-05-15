@@ -168,14 +168,12 @@ class GPTMegatronPreTrainedModel(PreTrainedModel):
 
         error_message = "{variable} is only supported with math attention"
 
-        if output_attentions:
-            assert self._use_eager_attention, error_message.format(variable="output_attentions")
+        assert not output_attentions
 
         return input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen
 
 
 class GPTMegatronModel(GPTMegatronPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["attn.masked_bias"]
     mask_value = None
 
     def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:

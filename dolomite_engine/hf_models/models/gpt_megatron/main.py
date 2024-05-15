@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -11,8 +11,6 @@ from .config import GPTMegatronConfig
 
 
 class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
-    _keys_to_ignore_on_load_missing = [r"attn.masked_bias", r"attn.bias", r"lm_head.weight"]
-
     def __init__(self, config: GPTMegatronConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
         self.transformer = GPTMegatronModel(config, **kwargs)
@@ -43,12 +41,16 @@ class GPTMegatronForCausalLM(GPTMegatronPreTrainedModel):
 
     # FIXME typing
     def prepare_inputs_for_generation(
-        self, input_ids: torch.Tensor, past_key_values=None, inputs_embeds: torch.Tensor = None, **kwargs
+        self,
+        input_ids: torch.Tensor,
+        past_key_values: Optional[DynamicCache] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> dict:
         token_type_ids = kwargs.get("token_type_ids", None)
         # Omit tokens covered by past_key_values
         if past_key_values:
-            past_length = past_key_values[0][0].shape[2]
+            past_length = past_key_values.get_seq_length()
 
             # Some generation methods already pass only the last input ID
             if input_ids.shape[1] > past_length:
