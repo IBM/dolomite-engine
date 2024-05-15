@@ -91,6 +91,7 @@ def wrap_model_for_distributed_training(
             lr_decay_style=args.lr_scheduler_args.lr_decay_style,
             lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
             params_group_method=args.optimizer_args.params_group_method,
+            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
         )
 
         if args.distributed_args.gradient_checkpointing_method is not None:
@@ -185,6 +186,7 @@ def wrap_model_for_distributed_training(
             lr_decay_style=args.lr_scheduler_args.lr_decay_style,
             lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
             params_group_method=args.optimizer_args.params_group_method,
+            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
         )
 
     return model, optimizer, lr_scheduler

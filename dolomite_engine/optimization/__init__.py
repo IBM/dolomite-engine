@@ -24,6 +24,7 @@ def get_optimizer_and_lr_scheduler(
     lr_decay_style: LRDecaySchedule,
     lr_decay_factor: float,
     params_group_method: ParamsGroupMethod,
+    extra_lr_scheduler_args: dict,
 ) -> Tuple[Optimizer, LambdaLR]:
     trainable_parameters_or_param_groups = _get_param_groups(model, optimizer_class_args, params_group_method)
 
@@ -42,6 +43,7 @@ def get_optimizer_and_lr_scheduler(
         num_training_steps=num_training_steps,
         lr_decay_style=lr_decay_style,
         lr_decay_factor=lr_decay_factor,
+        extra_lr_scheduler_args=extra_lr_scheduler_args,
     )
 
     return optimizer, lr_scheduler

@@ -256,6 +256,9 @@ class LRSchedulerArgs(BaseArgs):
     lr_decay_style: LRDecaySchedule = LRDecaySchedule.cosine
     # decay factor * max_lr = min_lr (ratio of min_lr and max_lr)
     lr_decay_factor: float = 0.1
+    # coefficients to use in advanced LR schedules, including power
+    # {"a": batch_size, "b": -0.51, "c": batch_size * sequence_length}
+    extra_lr_scheduler_args: dict = {}
 
 
 class MixedPrecisionArgs(BaseArgs):

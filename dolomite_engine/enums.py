@@ -11,9 +11,10 @@ class GradientCheckpointingMethod(Enum):
 
 class LRDecaySchedule(str, Enum):
     constant = "constant"
-    linear = "linear"
     cosine = "cosine"
     exponential = "exponential"
+    linear = "linear"
+    power = "power"
 
 
 class AttentionImplementation(Enum):
