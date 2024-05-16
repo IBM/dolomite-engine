@@ -125,7 +125,7 @@ Please note that the user is expected to provide this at both training and infer
 
 Try not to have trailing spaces in `input_format`, if you need a space between input and output, the space should be part of the `output_format` as in the above example.
 
-> [!IMPORTANT]
+> [!TIP]
 > Alternatively, you can also add your own dataclass in the repository if you don't want to use the jsonlines dataset.
 
 Currently, the repo has following implemented dataclasses:
