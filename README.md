@@ -31,7 +31,7 @@ import_from_huggingface_llama(
     save_path="dolomite_compatible_model"
 )
 ```
-> Once done training, you can convert the model back to the HF class as:
+Once done training, you can convert the model back to the HF class as:
 ```python
 from dolomite_engine.hf_models import export_to_huggingface_llama
 
