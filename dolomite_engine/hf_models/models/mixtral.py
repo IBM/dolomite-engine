@@ -107,20 +107,20 @@ def _import_state_dict_from_huggingface(
         )
 
         for expert_idx in range(num_experts):
-            state_dict[
-                f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_fc.weight"
-            ] = interleave_up_gate_tensor_for_mlp(
-                safetensors_weight_manager.get_tensor(
-                    f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"
-                ),
-                safetensors_weight_manager.get_tensor(
-                    f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"
-                ),
+            state_dict[f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_fc.weight"] = (
+                interleave_up_gate_tensor_for_mlp(
+                    safetensors_weight_manager.get_tensor(
+                        f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"
+                    ),
+                    safetensors_weight_manager.get_tensor(
+                        f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"
+                    ),
+                )
             )
-            state_dict[
-                f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_proj.weight"
-            ] = safetensors_weight_manager.get_tensor(
-                f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"
+            state_dict[f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_proj.weight"] = (
+                safetensors_weight_manager.get_tensor(
+                    f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"
+                )
             )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
@@ -222,9 +222,9 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.input_layernorm.weight"] = safetensors_weight_manager.get_tensor(
             f"transformer.h.{layer_idx}.ln_1.weight"
         )
-        state_dict[
-            f"model.layers.{layer_idx}.post_attention_layernorm.weight"
-        ] = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
+        state_dict[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = (
+            safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
+        )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"] = safetensors_weight_manager.get_tensor(
             f"transformer.h.{layer_idx}.mlp.gate.weight"
@@ -239,10 +239,10 @@ def _export_state_dict_to_huggingface(
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"] = up_weight
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"] = gate_weight
 
-            state_dict[
-                f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"
-            ] = safetensors_weight_manager.get_tensor(
-                f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_proj.weight"
+            state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"] = (
+                safetensors_weight_manager.get_tensor(
+                    f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_proj.weight"
+                )
             )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(

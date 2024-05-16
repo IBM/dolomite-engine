@@ -7,5 +7,8 @@ install-dev:
 test:
 	pytest tests
 
+update-precommit:
+	pre-commit autoupdate
+
 style:
 	pre-commit run --all-files

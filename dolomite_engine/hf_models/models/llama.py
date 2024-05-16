@@ -126,16 +126,16 @@ def _import_state_dict_from_huggingface(
             attention_head_type,
         )
         if f"model.layers.{layer_idx}.self_attn.q_proj.bias" in safetensors_weight_manager:
-            state_dict[
-                f"transformer.h.{layer_idx}.attn.c_attn.bias"
-            ] = interleave_query_key_value_tensor_for_attention(
-                safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.bias"),
-                safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.bias"),
-                safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.bias"),
-                num_heads,
-                num_key_value_heads,
-                head_dim,
-                attention_head_type,
+            state_dict[f"transformer.h.{layer_idx}.attn.c_attn.bias"] = (
+                interleave_query_key_value_tensor_for_attention(
+                    safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.bias"),
+                    safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.bias"),
+                    safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.bias"),
+                    num_heads,
+                    num_key_value_heads,
+                    head_dim,
+                    attention_head_type,
+                )
             )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = safetensors_weight_manager.get_tensor(
@@ -227,9 +227,9 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.input_layernorm.weight"] = safetensors_weight_manager.get_tensor(
             f"transformer.h.{layer_idx}.ln_1.weight"
         )
-        state_dict[
-            f"model.layers.{layer_idx}.post_attention_layernorm.weight"
-        ] = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
+        state_dict[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = (
+            safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
+        )
 
         up_weight, gate_weight = split_up_gate_tensor_for_mlp(
             safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.weight")

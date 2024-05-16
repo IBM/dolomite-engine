@@ -145,7 +145,7 @@ def get_datasets_list(
     num_virtual_tokens = (
         args.tuning_args.prompt_tuning_args.num_virtual_tokens
         if args.tuning_args.tuning_method == TuningMethod.prompt_tuning
-        else None,
+        else None
     )
 
     datasets_list = []

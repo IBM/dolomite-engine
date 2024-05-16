@@ -7,11 +7,9 @@ from ...utils import is_transformer_engine_available
 if is_transformer_engine_available():
     import transformer_engine.pytorch as te
 
-    class TranformerEngineFP8Linear(te.Linear):
-        ...
+    class TranformerEngineFP8Linear(te.Linear): ...
 
-    class TranformerEngineFP8LayerNorm(te.LayerNorm):
-        ...
+    class TranformerEngineFP8LayerNorm(te.LayerNorm): ...
 
 
 @torch.no_grad()

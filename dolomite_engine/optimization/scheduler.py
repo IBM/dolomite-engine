@@ -43,8 +43,7 @@ class _LRScheduler(LambdaLR):
 
         super().__init__(optimizer, self._lr_lambda)
 
-    def _lr_lambda(num_steps: int):
-        ...
+    def _lr_lambda(num_steps: int): ...
 
 
 class ConstantScheduler(_LRScheduler):

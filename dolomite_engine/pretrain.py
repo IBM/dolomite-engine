@@ -145,9 +145,11 @@ def train(
                 global_step=global_step,
                 train_loss_step=loss_step,
                 grad_norm_step=grad_norm_step,
-                current_lr=model.lr_scheduler.get_lr()[0]
-                if distributed_backend == DistributedBackend.deepspeed
-                else lr_scheduler.get_lr()[0],
+                current_lr=(
+                    model.lr_scheduler.get_lr()[0]
+                    if distributed_backend == DistributedBackend.deepspeed
+                    else lr_scheduler.get_lr()[0]
+                ),
                 experiments_tracker=experiments_tracker,
                 loss_running_mean_tracker=loss_running_mean_tracker,
                 flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,

@@ -5,8 +5,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
-import torch
-
 from ...utils import get_global_rank, log_rank_0
 from .utils import Split, normalize
 

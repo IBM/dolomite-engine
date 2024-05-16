@@ -10,7 +10,7 @@ from typing import List
 import numpy
 import torch
 
-from ...utils import get_global_rank, log_rank_0, run_rank_n
+from ...utils import get_global_rank, log_rank_0
 
 
 class Split(Enum):
