@@ -11,6 +11,8 @@ from .config import GPTDolomiteConfig
 
 
 class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel):
+    _tied_weights_keys = ["lm_head.weight"]
+
     def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
         self.transformer = GPTDolomiteModel(config, **kwargs)
