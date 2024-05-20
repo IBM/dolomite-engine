@@ -3,7 +3,7 @@ import shutil
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig
 
 from ..enums import AttentionHeadType, PositionEmbeddingType
-from .gpt_dolomite import GPTDolomiteConfig
+from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:

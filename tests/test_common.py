@@ -10,7 +10,14 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig, PositionEmbeddingType
+from dolomite_engine.hf_models import (
+    AttentionHeadType,
+    GPTDolomiteConfig,
+    MoEDolomiteConfig,
+    PositionEmbeddingType,
+    export_to_huggingface,
+    import_from_huggingface,
+)
 from dolomite_engine.hf_models.config import CommonConfig
 
 
@@ -128,12 +135,7 @@ class TestCommons(TestCase):
         return input_ids, attention_mask, labels
 
     def model_conversion_test(
-        self,
-        dolomite_config: CommonConfig,
-        export_to_huggingface_function: Callable,
-        import_from_huggingface_function: Callable,
-        device: torch.device,
-        exact_match: bool = True,
+        self, dolomite_config: CommonConfig, model_type: str, device: torch.device, exact_match: bool = True
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
@@ -147,8 +149,8 @@ class TestCommons(TestCase):
 
             dolomite_model.save_pretrained(save_path, safe_serialization=True)
 
-            export_to_huggingface_function(save_path, export_path)
-            import_from_huggingface_function(export_path, import_path)
+            export_to_huggingface(save_path, export_path, model_type=model_type)
+            import_from_huggingface(export_path, import_path)
 
             assert self.compare_saved_models(save_path, import_path)
 

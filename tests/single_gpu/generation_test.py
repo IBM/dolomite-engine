@@ -5,12 +5,7 @@ import torch
 from parameterized import parameterized
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    DenseMoEConfig,
-    PositionEmbeddingType,
-    export_to_huggingface_bigcode,
-)
+from dolomite_engine.hf_models import AttentionHeadType, DenseMoEConfig, PositionEmbeddingType, export_to_huggingface
 
 from ..test_common import TestCommons
 
@@ -47,7 +42,7 @@ class GenerationTest(TestCommons):
             bigcode_path = os.path.join(tmpdir, "bigcode")
 
             dolomite_model.save_pretrained(dolomite_path)
-            export_to_huggingface_bigcode(dolomite_path, bigcode_path)
+            export_to_huggingface(dolomite_path, bigcode_path, model_type="gpt_bigcode")
 
             bigcode_model = AutoModelForCausalLM.from_pretrained(bigcode_path).to(device)
             bigcode_model.eval()

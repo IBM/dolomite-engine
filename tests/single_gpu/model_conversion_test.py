@@ -1,16 +1,7 @@
 import torch
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    PositionEmbeddingType,
-    export_to_huggingface_bigcode,
-    export_to_huggingface_llama,
-    export_to_huggingface_mixtral,
-    import_from_huggingface_bigcode,
-    import_from_huggingface_llama,
-    import_from_huggingface_mixtral,
-)
+from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 
 from ..test_common import TestCommons
 
@@ -23,11 +14,7 @@ class ModelConversionTest(TestCommons):
         dolomite_config = self.get_dense_test_config(attention_head_type, PositionEmbeddingType.learned_absolute)
 
         self.model_conversion_test(
-            dolomite_config=dolomite_config,
-            export_to_huggingface_function=export_to_huggingface_bigcode,
-            import_from_huggingface_function=import_from_huggingface_bigcode,
-            device=device,
-            exact_match=False,
+            dolomite_config=dolomite_config, model_type="gpt_bigcode", device=device, exact_match=False
         )
 
     @parameterized.expand(
@@ -47,11 +34,7 @@ class ModelConversionTest(TestCommons):
         )
 
         self.model_conversion_test(
-            dolomite_config=dolomite_config,
-            export_to_huggingface_function=export_to_huggingface_llama,
-            import_from_huggingface_function=import_from_huggingface_llama,
-            device=device,
-            exact_match=False,
+            dolomite_config=dolomite_config, model_type="llama", device=device, exact_match=False
         )
 
     @parameterized.expand(
@@ -67,9 +50,5 @@ class ModelConversionTest(TestCommons):
         )
 
         self.model_conversion_test(
-            dolomite_config=dolomite_config,
-            export_to_huggingface_function=export_to_huggingface_mixtral,
-            import_from_huggingface_function=import_from_huggingface_mixtral,
-            device=device,
-            exact_match=False,
+            dolomite_config=dolomite_config, model_type="mixtral", device=device, exact_match=False
         )

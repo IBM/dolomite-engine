@@ -24,20 +24,21 @@ This repository works with all HuggingFace models (text-to-text only for the mom
 > [!TIP]
 > You might be able to enjoy additional memory and computation savings when finetuning your models using the [padding free transformers optimization](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This optimization is currently only supported for decoder models and requires converting your model (say LLama-3 for example) to a [custom class](dolomite_engine/hf_models/models/gpt_dolomite/) implemented in this repo. This is completely optional and not required for finetuning. The conversion can be achieved as follows:
 ```python
-from dolomite_engine.hf_models import import_from_huggingface_llama
+from dolomite_engine.hf_models import import_from_huggingface
 
-import_from_huggingface_llama(
+import_from_huggingface(
     pretrained_model_name_or_path="meta-llama/Meta-Llama-3-8B",
     save_path="dolomite_compatible_model"
 )
 ```
 Once done training, you can convert the model back to the HF class as:
 ```python
-from dolomite_engine.hf_models import export_to_huggingface_llama
+from dolomite_engine.hf_models import export_to_huggingface
 
-export_to_huggingface_llama(
+export_to_huggingface(
     pretrained_model_name_or_path="trained_checkpoint",
-    save_path="hf_compatible_model"
+    save_path="hf_compatible_model",
+    model_type="llama",
 )
 ```
 
