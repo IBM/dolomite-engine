@@ -3,10 +3,10 @@ import torch.nn.functional as F
 
 from ....enums import PositionEmbeddingType
 from ....modeling_utils import apply_rotary_pos_emb
-from .base import MultiLayerAttention
+from .base import CrossLayerAttention
 
 
-class MultiLayerSDPA(MultiLayerAttention):
+class CrossLayerSDPA(CrossLayerAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,

@@ -1,29 +1,29 @@
-from ..config import GPTMultiLayerConfig
-from .base import KeyValueProjection, MultiLayerAttention
-from .flash import MultiLayerFlashAttention2
-from .padding_free import KeyValuePaddingFreeProjection, MultiLayerPaddingFreeAttention
-from .sdpa import MultiLayerSDPA
+from ..config import GPTCrossLayerConfig
+from .base import CrossLayerAttention, KeyValueProjection
+from .flash import CrossLayerFlashAttention2
+from .padding_free import CrossLayerPaddingFreeAttention, KeyValuePaddingFreeProjection
+from .sdpa import CrossLayerSDPA
 
 
 _ATTENTION_MODULES = {
-    "eager": MultiLayerAttention,
-    "sdpa": MultiLayerSDPA,
-    "flash_attention_2": MultiLayerFlashAttention2,
+    "eager": CrossLayerAttention,
+    "sdpa": CrossLayerSDPA,
+    "flash_attention_2": CrossLayerFlashAttention2,
 }
 
 
 def get_attention_module(
-    config: GPTMultiLayerConfig,
+    config: GPTCrossLayerConfig,
     causal: bool,
     attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
-) -> MultiLayerAttention:
+) -> CrossLayerAttention:
     if use_padding_free_transformer:
         assert (
             attention_implementation == "flash_attention_2"
         ), "padding free transformer only works with flash attention"
-        attention_class = MultiLayerPaddingFreeAttention
+        attention_class = CrossLayerPaddingFreeAttention
     else:
         attention_class = _ATTENTION_MODULES[attention_implementation]
 
@@ -38,8 +38,8 @@ _KEY_VALUE_PROJECTION_MODULES = {
 
 
 def get_key_value_projection(
-    config: GPTMultiLayerConfig, attention_implementation: str, use_padding_free_transformer: bool
-) -> MultiLayerAttention:
+    config: GPTCrossLayerConfig, attention_implementation: str, use_padding_free_transformer: bool
+) -> CrossLayerAttention:
     if use_padding_free_transformer:
         assert (
             attention_implementation == "flash_attention_2"

@@ -3,14 +3,14 @@ import torch
 from .....utils import is_flash_attention_available
 from ....enums import PositionEmbeddingType
 from ....modeling_utils import apply_rotary_pos_emb
-from .base import KeyValueProjection, MultiLayerAttention
+from .base import CrossLayerAttention, KeyValueProjection
 
 
 if is_flash_attention_available():
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
-class MultiLayerPaddingFreeAttention(MultiLayerAttention):
+class CrossLayerPaddingFreeAttention(CrossLayerAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,

@@ -8,13 +8,13 @@ from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_normalization_function, repeat_key_value
 from ..gpt_dolomite.mlp import MLP
 from .attention import get_attention_module, get_key_value_projection
-from .config import GPTMultiLayerConfig
+from .config import GPTCrossLayerConfig
 
 
-class MultiLayer(nn.Module):
+class CrossLayer(nn.Module):
     def __init__(
         self,
-        config: GPTMultiLayerConfig,
+        config: GPTCrossLayerConfig,
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
@@ -95,10 +95,10 @@ class MultiLayer(nn.Module):
         return hidden_states
 
 
-class GPTMultiLayerBlock(nn.Module):
+class GPTCrossLayerBlock(nn.Module):
     def __init__(
         self,
-        config: GPTMultiLayerConfig,
+        config: GPTCrossLayerConfig,
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
@@ -127,7 +127,7 @@ class GPTMultiLayerBlock(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                MultiLayer(
+                CrossLayer(
                     config,
                     normalization_implementation,
                     attention_implementation,

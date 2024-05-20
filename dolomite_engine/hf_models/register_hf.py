@@ -6,12 +6,12 @@ from .models import (
     DenseMoEConfig,
     DenseMoEForCausalLM,
     DenseMoEModel,
+    GPTCrossLayerConfig,
+    GPTCrossLayerForCausalLM,
+    GPTCrossLayerModel,
     GPTDolomiteConfig,
     GPTDolomiteForCausalLM,
     GPTDolomiteModel,
-    GPTMultiLayerConfig,
-    GPTMultiLayerForCausalLM,
-    GPTMultiLayerModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
     MoEDolomiteModel,
@@ -22,7 +22,7 @@ from .models import (
 _CUSTOM_MODEL_REGISTRY = [
     (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
-    (GPTMultiLayerConfig, GPTMultiLayerModel, GPTMultiLayerForCausalLM),
+    (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (DenseMoEConfig, DenseMoEModel, DenseMoEForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []

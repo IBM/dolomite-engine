@@ -9,22 +9,22 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
-from .config import GPTMultiLayerConfig
-from .layer import GPTMultiLayerBlock
+from .config import GPTCrossLayerConfig
+from .layer import GPTCrossLayerBlock
 
 
-class GPTMultiLayerPreTrainedModel(GPTDolomitePreTrainedModel):
-    config_class = GPTMultiLayerConfig
-    _no_split_modules = ["GPTMultiLayerBlock"]
+class GPTCrossLayerPreTrainedModel(GPTDolomitePreTrainedModel):
+    config_class = GPTCrossLayerConfig
+    _no_split_modules = ["GPTCrossLayerBlock"]
 
     def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
         GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
         self.sharing_pattern = config.sharing_pattern
 
 
-class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTDolomiteModel):
-    def __init__(self, config: GPTMultiLayerConfig, **kwargs) -> None:
-        GPTMultiLayerPreTrainedModel.__init__(self, config, **kwargs)
+class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
+    def __init__(self, config: GPTCrossLayerConfig, **kwargs) -> None:
+        GPTCrossLayerPreTrainedModel.__init__(self, config, **kwargs)
 
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
@@ -63,7 +63,7 @@ class GPTMultiLayerModel(GPTMultiLayerPreTrainedModel, GPTDolomiteModel):
 
         self.h = nn.ModuleList(
             [
-                GPTMultiLayerBlock(
+                GPTCrossLayerBlock(
                     config,
                     self.normalization_implementation,
                     self.attention_implementation,

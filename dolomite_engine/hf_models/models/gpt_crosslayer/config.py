@@ -4,8 +4,8 @@ from typing import List
 from ...config import CommonConfig
 
 
-class GPTMultiLayerConfig(CommonConfig):
-    model_type = "gpt_multilayer"
+class GPTCrossLayerConfig(CommonConfig):
+    model_type = "gpt_crosslayer"
 
     def __init__(
         self,

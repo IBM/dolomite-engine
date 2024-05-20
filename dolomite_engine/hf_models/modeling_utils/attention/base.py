@@ -83,12 +83,7 @@ class Attention(nn.Module):
         std = self.initializer_range / math.sqrt(2 * self.n_layer)
         if self.init_method == InitMethod.mup:
             std /= math.sqrt(self.m_width)
-        self.c_proj = ParameterizedLinear(
-            self.hidden_size,
-            self.hidden_size,
-            bias=self.add_bias,
-            std=std,
-        )
+        self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop

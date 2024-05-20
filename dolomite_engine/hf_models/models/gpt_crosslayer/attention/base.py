@@ -6,11 +6,11 @@ import torch.nn.functional as F
 
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear, apply_rotary_pos_emb, get_normalization_function
-from ..config import GPTMultiLayerConfig
+from ..config import GPTCrossLayerConfig
 
 
-class MultiLayerAttention(nn.Module):
-    def __init__(self, config: GPTMultiLayerConfig, causal: bool, layer_idx: int = None) -> None:
+class CrossLayerAttention(nn.Module):
+    def __init__(self, config: GPTCrossLayerConfig, causal: bool, layer_idx: int = None) -> None:
         super().__init__()
 
         self.causal = causal
@@ -130,7 +130,7 @@ class MultiLayerAttention(nn.Module):
 
 
 class KeyValueProjection(nn.Module):
-    def __init__(self, config: GPTMultiLayerConfig) -> None:
+    def __init__(self, config: GPTCrossLayerConfig) -> None:
         super().__init__()
 
         self.num_heads = config.n_head

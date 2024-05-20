@@ -2,15 +2,15 @@ from typing import Tuple
 
 from ...modeling_utils import ParameterizedLinear
 from ..gpt_dolomite import GPTDolomiteForCausalLM
-from .base import GPTMultiLayerModel, GPTMultiLayerPreTrainedModel
-from .config import GPTMultiLayerConfig
+from .base import GPTCrossLayerModel, GPTCrossLayerPreTrainedModel
+from .config import GPTCrossLayerConfig
 
 
-class GPTMultiLayerForCausalLM(GPTMultiLayerPreTrainedModel, GPTDolomiteForCausalLM):
-    def __init__(self, config: GPTMultiLayerConfig, **kwargs) -> None:
-        GPTMultiLayerPreTrainedModel.__init__(self, config, **kwargs)
+class GPTCrossLayerForCausalLM(GPTCrossLayerPreTrainedModel, GPTDolomiteForCausalLM):
+    def __init__(self, config: GPTCrossLayerConfig, **kwargs) -> None:
+        GPTCrossLayerPreTrainedModel.__init__(self, config, **kwargs)
 
-        self.transformer = GPTMultiLayerModel(config, **kwargs)
+        self.transformer = GPTCrossLayerModel(config, **kwargs)
 
         if not self._tied_word_embeddings:
             self.lm_head = ParameterizedLinear(
