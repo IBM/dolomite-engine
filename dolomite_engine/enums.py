@@ -43,13 +43,6 @@ class Mode(str, Enum):
     export = "export"
 
 
-class PaddingSide(str, Enum):
-    """padding side for the tokenizer"""
-
-    left = "left"
-    right = "right"
-
-
 class DatasetKeys(str, Enum):
     """standard keys in the dataset"""
 

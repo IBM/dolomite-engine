@@ -6,14 +6,7 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
-from ..enums import (
-    AttentionImplementation,
-    DistributedBackend,
-    GradientCheckpointingMethod,
-    LossMask,
-    Mode,
-    PaddingSide,
-)
+from ..enums import AttentionImplementation, DistributedBackend, GradientCheckpointingMethod, LossMask, Mode
 from ..hf_models import is_custom_model
 from ..hf_models.modeling_utils import is_glu
 from ..utils import get_global_rank, log_rank_0, register_profiler, register_timer, string_to_torch_dtype
@@ -202,12 +195,6 @@ class ModelWrapper(torch.nn.Module):
         assert tokenizer_name is not None, "pass a tokenizer"
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-
-        self.padding_side = PaddingSide(
-            self.tokenizer.padding_side
-            if args.tokenizer_args.padding_side is None
-            else args.tokenizer_args.padding_side
-        )
         self.eos_token_id = self.tokenizer.eos_token_id
 
     def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:

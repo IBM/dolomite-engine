@@ -5,7 +5,7 @@ from typing import Iterable, List, Tuple, Union
 from transformers import AutoTokenizer
 
 from ..arguments import InferenceArgs, TrainingArgs
-from ..enums import DatasetSplit, Mode, PaddingSide, TuningMethod
+from ..enums import DatasetSplit, Mode, TuningMethod
 from ..utils import get_world_size, log_rank_0
 from .base import BaseDataset, BlendedDatasets
 from .dataloader import DataLoader
@@ -34,7 +34,6 @@ def get_dataloader(
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
-    padding_side: PaddingSide,
 ) -> Tuple[DataLoader]:
     """prepares datasets and sampler
 
@@ -85,7 +84,6 @@ def get_dataloader(
         collate_fn=partial(
             collate_fn,
             mode=mode,
-            padding_side=padding_side,
             loss_mask=args.training_parameters.loss_mask,
             eos_token_id=tokenizer.eos_token_id,
             is_encoder_decoder=is_encoder_decoder,
