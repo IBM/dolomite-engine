@@ -26,13 +26,14 @@ def set_logger(level: int = logging.INFO, colored_log: bool = False) -> None:
 
 
 def get_logger() -> logging.Logger:
-    assert _LOGGER is not None
     return _LOGGER
 
 
 @run_rank_n
 def log_rank_0(level: int, msg: str) -> None:
-    return get_logger().log(level=level, msg=msg, stacklevel=3)
+    logger = get_logger()
+    if logger is not None:
+        logger.log(level=level, msg=msg, stacklevel=3)
 
 
 @run_rank_n

@@ -6,7 +6,7 @@ from transformers import AutoTokenizer
 
 from ..arguments import InferenceArgs, TrainingArgs
 from ..enums import DatasetSplit, Mode, TuningMethod
-from ..utils import get_world_size, log_rank_0
+from ..utils import get_global_rank, get_world_size, log_rank_0
 from .base import BaseDataset, BlendedDatasets
 from .dataloader import DataLoader
 from .debug import DebugDataset
@@ -70,6 +70,8 @@ def get_dataloader(
         dataset=blended_dataset,
         data_sampling_ratios=[1] if len(datasets_list) == 1 else data_sampling_ratios,
         ignore_sampling_proportion_for_validation=args.training_parameters.ignore_sampling_proportion_for_validation,
+        num_replicas=get_world_size(),
+        rank=get_global_rank(),
         shuffle=split == DatasetSplit.train,
         seed=args.random_args.seed,
         drop_last=False,
