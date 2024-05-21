@@ -9,14 +9,12 @@ from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
 from ..enums import AttentionImplementation, DistributedBackend, GradientCheckpointingMethod, LossMask, Mode
 from ..hf_models import is_custom_model
 from ..hf_models.modeling_utils import is_glu
-from ..utils import get_global_rank, log_rank_0, register_profiler, register_timer, string_to_torch_dtype
+from ..utils import get_global_rank, log_rank_0, string_to_torch_dtype
 
 
 class ModelWrapper(torch.nn.Module):
     """Model class which wraps any HuggingFace model"""
 
-    @register_profiler("initialize_model")
-    @register_timer("initialize_model")
     def __init__(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], mode: Mode):
         """initializes a Model wrapper for a HuggingFace model
 
@@ -88,8 +86,6 @@ class ModelWrapper(torch.nn.Module):
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
 
-    @register_profiler("generate")
-    @register_timer("generate")
     def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
         """generate function for a batch
 

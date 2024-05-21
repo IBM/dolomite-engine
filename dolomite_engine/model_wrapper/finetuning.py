@@ -4,7 +4,6 @@ import torch
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
 from ..enums import Mode
-from ..utils import register_profiler, register_timer
 from .base import ModelWrapper
 
 
@@ -15,8 +14,6 @@ class ModelWrapperForFinetuning(ModelWrapper):
         assert not self.reset_attention_mask, "reset_attention_mask is only supported with pretraining"
         assert not self.reset_position_ids, "reset_position_ids is only supported with pretraining"
 
-    @register_profiler("forward_pass")
-    @register_timer("forward_pass")
     def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 

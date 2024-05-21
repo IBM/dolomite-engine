@@ -23,7 +23,6 @@ from .utils import (
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
-    register_profiler,
     setup_tf32,
 )
 
@@ -181,7 +180,6 @@ def train(
         evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
 
-@register_profiler("evaluate_dataset")
 @torch.no_grad()
 def evaluate(
     val_dataloaders: List[DataLoader],

@@ -19,8 +19,6 @@ from .utils import (
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
-    register_profiler,
-    register_timer,
     setup_tf32,
 )
 
@@ -109,8 +107,6 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
     experiments_tracker.track({"loss": val_loss}, step=global_step, context="val")
 
 
-@register_profiler("train_step")
-@register_timer("train_step")
 def train_step(
     model: ModelWrapperForFinetuning,
     optimizer: Optimizer,
@@ -278,7 +274,6 @@ def train(
             save_checkpoint(args, model, optimizer, lr_scheduler, train_dataloader, experiments_tracker, global_step)
 
 
-@register_profiler("evaluate_dataset")
 @torch.no_grad()
 def evaluate(
     val_dataloader: DataLoader,

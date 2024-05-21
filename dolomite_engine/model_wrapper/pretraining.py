@@ -4,13 +4,10 @@ import torch
 import torch.nn.functional as F
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
-from ..utils import register_profiler, register_timer
 from .base import ModelWrapper
 
 
 class ModelWrapperForPretraining(ModelWrapper):
-    @register_profiler("forward_pass")
-    @register_timer("forward_pass")
     def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 

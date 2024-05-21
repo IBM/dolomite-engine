@@ -3,7 +3,6 @@ import torch.distributed as dist
 
 from .logging import log_rank_0, print_rank_0, set_logger
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
-from .monitoring import register_profiler, register_timer
 from .packages import (
     is_apex_available,
     is_deepspeed_available,

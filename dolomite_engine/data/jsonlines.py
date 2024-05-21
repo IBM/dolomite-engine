@@ -2,7 +2,6 @@ import glob
 import os
 from typing import List
 
-import jsonlines
 from transformers import AutoTokenizer
 
 from ..enums import DatasetKeys, DatasetSplit, Mode, TuningMethod
@@ -45,6 +44,8 @@ class JSONLinesDataset(BaseDataset):
         self.examples = self.prepare_examples()
 
     def prepare_examples(self) -> List[dict]:
+        import jsonlines
+
         assert "data_path" in self.class_args, "JSONLinesDataset requires additional class_args `data_path`"
 
         examples = []

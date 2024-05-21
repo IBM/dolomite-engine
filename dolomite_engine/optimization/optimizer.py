@@ -14,7 +14,7 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
-from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, register_profiler, register_timer
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
 
 
 if is_apex_available():
@@ -76,8 +76,6 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-@register_profiler("setup_optimizer")
-@register_timer("setup_optimizer")
 def get_optimizer(
     optimizer_class_name: str, optimizer_class_args: dict, cpu_offload: bool, parameters: list
 ) -> Optimizer:

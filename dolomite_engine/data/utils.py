@@ -3,11 +3,8 @@ from typing import List
 import torch
 
 from ..enums import LossMask, Mode
-from ..utils import register_profiler, register_timer
 
 
-@register_profiler("collate_fn")
-@register_timer("collate_fn")
 def collate_fn(
     batch: List[dict],
     mode: Mode,
