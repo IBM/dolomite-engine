@@ -345,9 +345,9 @@ class BlendedMegatronDatasetBuilder(object):
             dataset = None
 
             # First, build on rank 0
-            if caching_allowed and self.config.is_built_on_rank():
+            if caching_allowed and self.config.is_built_on_rank:
                 try:
-                    dataset = cls(**kwargs, caching_allowed=caching_allowed)
+                    dataset = cls(**kwargs, caching_allowed=True)
                 except OSError as err:
                     log = (
                         f"Failed to write dataset materials to the data cache directory. "
@@ -360,7 +360,7 @@ class BlendedMegatronDatasetBuilder(object):
             dist.barrier()
 
             # After, build on other ranks
-            if not caching_allowed and self.config.is_built_on_rank():
+            if not caching_allowed and self.config.is_built_on_rank:
                 dataset = cls(**kwargs, caching_allowed=False)
 
             return dataset
@@ -369,7 +369,7 @@ class BlendedMegatronDatasetBuilder(object):
 
     def _get_indexed_dataset(self, path_prefix: str) -> Optional[MMapIndexedDataset]:
         indexed_dataset = None
-        if not dist.is_initialized() or self.config.is_built_on_rank():
+        if not dist.is_initialized() or self.config.is_built_on_rank:
             indexed_dataset = MMapIndexedDataset(path_prefix, self.cls.is_multimodal())
 
         return indexed_dataset

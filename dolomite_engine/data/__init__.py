@@ -1,21 +1,23 @@
 import logging
 from functools import partial
-from typing import Iterable, List, Tuple, Union
+from typing import List, Tuple, Union
 
+import torch
+import torch.distributed
 from transformers import AutoTokenizer
 
 from ..arguments import InferenceArgs, TrainingArgs
 from ..enums import DatasetSplit, Mode, TuningMethod
-from ..utils import get_global_rank, get_world_size, log_rank_0
+from ..utils import get_global_rank, get_world_size, log_rank_0, run_rank_n
 from .base import BaseDataset, BlendedDatasets
-from .dataloader import DataLoader
+from .dataloader import DispatchingDataLoader, ResumableDataLoader
 from .debug import DebugDataset
 from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
 from .jsonlines import JSONLinesDataset
 from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
 from .sst2 import SST2Dataset
-from .utils import collate_fn
+from .utils import collate_fn, infinite_iterator
 
 
 _DATASETS_LIST = {
@@ -26,95 +28,6 @@ _DATASETS_LIST = {
     "SlimOrcaDataset": SlimOrcaDataset,
     "SST2Dataset": SST2Dataset,
 }
-
-
-def get_dataloader(
-    args: Union[TrainingArgs, InferenceArgs],
-    split: DatasetSplit,
-    mode: Mode,
-    tokenizer: AutoTokenizer,
-    is_encoder_decoder: bool,
-) -> Tuple[DataLoader]:
-    """prepares datasets and sampler
-
-    Args:
-        args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
-        split (DatasetSplit): train / val / test split
-        mode (Mode): training / inference mode
-        tokenizer (AutoTokenizer): tokenizer
-        is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
-
-    Returns:
-        Tuple[DataLoader]: dataloader for a blended dataset
-    """
-
-    assert mode == Mode.training, "blended dataset is only supported in training mode"
-
-    datasets_list, data_sampling_ratios = get_datasets_list(
-        args=args,
-        split=split,
-        mode=Mode.training,
-        tokenizer=tokenizer,
-        is_encoder_decoder=is_encoder_decoder,
-    )
-
-    if len(datasets_list) == 0:
-        return None
-
-    blended_dataset = BlendedDatasets(datasets=datasets_list, split=split)
-
-    log_rank_0(logging.INFO, f"{'-' * 25} {split.value} {'-' * 25}")
-    log_rank_0(logging.INFO, blended_dataset)
-
-    sampler = BlendedDistributedSampler(
-        dataset=blended_dataset,
-        data_sampling_ratios=[1] if len(datasets_list) == 1 else data_sampling_ratios,
-        ignore_sampling_proportion_for_validation=args.training_parameters.ignore_sampling_proportion_for_validation,
-        num_replicas=get_world_size(),
-        rank=get_global_rank(),
-        shuffle=split == DatasetSplit.train,
-        seed=args.random_args.seed,
-        drop_last=False,
-    )
-
-    micro_batch_size = args.training_parameters.micro_batch_size
-
-    dataloader = DataLoader(
-        blended_dataset,
-        batch_size=micro_batch_size,
-        sampler=sampler,
-        collate_fn=partial(
-            collate_fn,
-            mode=mode,
-            loss_mask=args.training_parameters.loss_mask,
-            eos_token_id=tokenizer.eos_token_id,
-            is_encoder_decoder=is_encoder_decoder,
-            use_padding_free_transformer=args.model_args.use_padding_free_transformer,
-        ),
-    )
-
-    if split == DatasetSplit.train:
-        total_samples_seen = (
-            args.training_parameters.num_training_steps
-            * args.training_parameters.gradient_accumulation_steps
-            * micro_batch_size
-            * get_world_size()
-        )
-    else:
-        if len(blended_dataset) % (micro_batch_size * get_world_size()) == 0:
-            num_steps = len(blended_dataset) // (micro_batch_size * get_world_size())
-        else:
-            num_steps = (len(blended_dataset) // (micro_batch_size * get_world_size())) + 1
-
-        total_samples_seen = num_steps * micro_batch_size * get_world_size()
-
-    log_rank_0(logging.INFO, "*" * 57)
-    log_rank_0(logging.INFO, f"total samples seen = {total_samples_seen}")
-    log_rank_0(logging.INFO, f"total epochs for the dataset mixture = {total_samples_seen / len(blended_dataset)}")
-    log_rank_0(logging.INFO, sampler)
-    log_rank_0(logging.INFO, "-" * 57)
-
-    return dataloader
 
 
 def get_datasets_list(
@@ -186,19 +99,211 @@ def get_datasets_list(
     return datasets_list, data_sampling_ratios
 
 
-def infinite_iterator(x: Iterable) -> Iterable:
-    """converts and iterable into a non-ending infinite iterable
+def get_dataloader(
+    args: Union[TrainingArgs, InferenceArgs],
+    split: DatasetSplit,
+    mode: Mode,
+    tokenizer: AutoTokenizer,
+    is_encoder_decoder: bool,
+) -> Tuple[ResumableDataLoader]:
+    """prepares datasets and sampler
 
     Args:
-        x (Iterable): the iterable to convert
+        args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
+        split (DatasetSplit): train / val / test split
+        mode (Mode): training / inference mode
+        tokenizer (AutoTokenizer): tokenizer
+        is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
 
     Returns:
-        Iterable: the converted iterable
-
-    Yields:
-        Iterator[Iterable]: an element from the original iterator
+        Tuple[ResumableDataLoader]: dataloader for a blended dataset
     """
 
-    while True:
-        for i in x:
-            yield i
+    assert mode == Mode.training, "blended dataset is only supported in training mode"
+
+    if args.distributed_args.dispatching_dataloader:
+        dataloader = _get_dispatching_dataloader(
+            args, split=split, mode=mode, tokenizer=tokenizer, is_encoder_decoder=is_encoder_decoder
+        )
+    else:
+        dataloader = _get_non_dispatching_dataloader(
+            args, split=split, mode=mode, tokenizer=tokenizer, is_encoder_decoder=is_encoder_decoder
+        )
+
+    return dataloader
+
+
+def _get_dispatching_dataloader(
+    args: Union[TrainingArgs, InferenceArgs],
+    split: DatasetSplit,
+    mode: Mode,
+    tokenizer: AutoTokenizer,
+    is_encoder_decoder: bool,
+) -> Tuple[ResumableDataLoader]:
+    micro_batch_size = args.training_parameters.micro_batch_size
+
+    num_ranks_per_node = torch.cuda.device_count()
+    node_rank = get_global_rank() // num_ranks_per_node
+    num_nodes = get_world_size() // num_ranks_per_node
+
+    def _get_source_ranks_broadcast_ranks_broadcast_groups():
+        result = []
+        for i in range(num_nodes):
+            source = i * num_ranks_per_node
+            ranks = list(range(source, source + num_ranks_per_node))
+            result.append((source, ranks, torch.distributed.new_group(ranks)))
+        return result
+
+    source_ranks_broadcast_ranks_broadcast_groups = _get_source_ranks_broadcast_ranks_broadcast_groups()
+
+    # check if node's first rank
+    if get_global_rank() == node_rank * num_ranks_per_node:
+        datasets_list, data_sampling_ratios = get_datasets_list(
+            args=args,
+            split=split,
+            mode=Mode.training,
+            tokenizer=tokenizer,
+            is_encoder_decoder=is_encoder_decoder,
+        )
+
+        if len(datasets_list) == 0:
+            return None
+
+        blended_dataset = BlendedDatasets(datasets=datasets_list, split=split)
+        data_sampling_ratios = [1] if len(datasets_list) == 1 else data_sampling_ratios
+
+        # each node is given a data sampler
+        # TODO modify this when we add model parallelism
+
+        # sampler routes to the dispatching parent worker
+        sampler = BlendedDistributedSampler(
+            dataset=blended_dataset,
+            data_sampling_ratios=data_sampling_ratios,
+            num_replicas=num_nodes,
+            rank=node_rank,
+            ignore_sampling_proportion_for_validation=args.training_parameters.ignore_sampling_proportion_for_validation,
+            shuffle=split == DatasetSplit.train,
+            seed=args.random_args.seed,
+            drop_last=False,
+        )
+    else:
+        blended_dataset = None
+        data_sampling_ratios = None
+        sampler = None
+
+    # dataloader does local dispatching and thus needs source_rank and broadcast_ranks
+    dataloader = DispatchingDataLoader(
+        blended_dataset,
+        batch_size=micro_batch_size,
+        sampler=sampler,
+        collate_fn=partial(
+            collate_fn,
+            mode=mode,
+            loss_mask=args.training_parameters.loss_mask,
+            eos_token_id=tokenizer.eos_token_id,
+            is_encoder_decoder=is_encoder_decoder,
+            use_padding_free_transformer=args.model_args.use_padding_free_transformer,
+        ),
+        source_ranks_broadcast_ranks_broadcast_groups=source_ranks_broadcast_ranks_broadcast_groups,
+    )
+
+    _log_dataset(
+        blended_dataset=blended_dataset,
+        sampler=sampler,
+        split=split,
+        num_training_steps=args.training_parameters.num_training_steps,
+        gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
+        micro_batch_size=args.training_parameters.micro_batch_size,
+    )
+
+    return dataloader
+
+
+def _get_non_dispatching_dataloader(
+    args: Union[TrainingArgs, InferenceArgs],
+    split: DatasetSplit,
+    mode: Mode,
+    tokenizer: AutoTokenizer,
+    is_encoder_decoder: bool,
+) -> Tuple[ResumableDataLoader]:
+    micro_batch_size = args.training_parameters.micro_batch_size
+
+    datasets_list, data_sampling_ratios = get_datasets_list(
+        args=args,
+        split=split,
+        mode=Mode.training,
+        tokenizer=tokenizer,
+        is_encoder_decoder=is_encoder_decoder,
+    )
+
+    if len(datasets_list) == 0:
+        return None
+
+    blended_dataset = BlendedDatasets(datasets=datasets_list, split=split)
+
+    # routing to data parallel worker is done by sampler
+    sampler = BlendedDistributedSampler(
+        dataset=blended_dataset,
+        data_sampling_ratios=[1] if len(datasets_list) == 1 else data_sampling_ratios,
+        num_replicas=get_world_size(),
+        rank=get_global_rank(),
+        ignore_sampling_proportion_for_validation=args.training_parameters.ignore_sampling_proportion_for_validation,
+        shuffle=split == DatasetSplit.train,
+        seed=args.random_args.seed,
+        drop_last=False,
+    )
+
+    # dataloader is unaware of data parallel routing
+    dataloader = ResumableDataLoader(
+        blended_dataset,
+        batch_size=micro_batch_size,
+        sampler=sampler,
+        collate_fn=partial(
+            collate_fn,
+            mode=mode,
+            loss_mask=args.training_parameters.loss_mask,
+            eos_token_id=tokenizer.eos_token_id,
+            is_encoder_decoder=is_encoder_decoder,
+            use_padding_free_transformer=args.model_args.use_padding_free_transformer,
+        ),
+    )
+
+    _log_dataset(
+        blended_dataset=blended_dataset,
+        sampler=sampler,
+        split=split,
+        num_training_steps=args.training_parameters.num_training_steps,
+        gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
+        micro_batch_size=args.training_parameters.micro_batch_size,
+    )
+
+    return dataloader
+
+
+@run_rank_n
+def _log_dataset(
+    blended_dataset: BlendedDatasets,
+    sampler: BlendedDistributedSampler,
+    split: DatasetSplit,
+    num_training_steps: int,
+    gradient_accumulation_steps: int,
+    micro_batch_size: int,
+) -> None:
+    log_rank_0(logging.INFO, f"{'-' * 25} {split.value} {'-' * 25}")
+    log_rank_0(logging.INFO, blended_dataset)
+
+    if split == DatasetSplit.train:
+        total_samples_seen = num_training_steps * gradient_accumulation_steps * micro_batch_size * get_world_size()
+    else:
+        if len(blended_dataset) % (micro_batch_size * get_world_size()) == 0:
+            num_steps = len(blended_dataset) // (micro_batch_size * get_world_size())
+        else:
+            num_steps = (len(blended_dataset) // (micro_batch_size * get_world_size())) + 1
+
+        total_samples_seen = num_steps * micro_batch_size * get_world_size()
+
+    log_rank_0(logging.INFO, "*" * 57)
+    log_rank_0(logging.INFO, f"total samples seen = {total_samples_seen}")
+    log_rank_0(logging.INFO, f"total epochs for the dataset mixture = {total_samples_seen / len(blended_dataset)}")
+    log_rank_0(logging.INFO, sampler)
+    log_rank_0(logging.INFO, "-" * 57)

@@ -1,8 +1,9 @@
 datasets:
-  - class_name: SST2Dataset
-    data_name: sst2
-    input_format: "Classify the sentiment of the sentence:\n__input__\nSentiment:"
-    output_format: " __output__"
+  - class_name: DebugDataset
+    class_args:
+      num_examples: 100
+      token_id: 0
+    data_name: debug
     data_sampling_ratio: 1
     max_input_tokens: 1024
     max_output_tokens: 128

@@ -15,7 +15,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import ExportArgs, InferenceArgs, TrainingArgs
-from .data import DataLoader
+from .data import ResumableDataLoader
 from .enums import DistributedBackend, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, get_model
 from .utils import ExperimentsTracker, get_global_rank, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
@@ -30,7 +30,7 @@ def save_checkpoint(
     model: ModelWrapper,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
-    train_dataloader: DataLoader,
+    train_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
     iteration: int,
     metadata: dict = None,
@@ -124,7 +124,7 @@ def load_checkpoint_for_training(
     model: ModelWrapper,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
-    train_dataloader: DataLoader,
+    train_dataloader: ResumableDataLoader,
 ) -> Tuple[int, dict]:
     """load checkpoint for training
 
@@ -133,7 +133,7 @@ def load_checkpoint_for_training(
         model (ModelWrapper): model to load
         optimizer (Optimizer): optimizer to save
         lr_scheduler (LambdaLR): learning rate scheduler to load
-        train_dataloader (DataLoader): train dataloader to load
+        train_dataloader (ResumableDataLoader): train dataloader to load
 
     Raises:
         ValueError: if unexpected distributed backend is found

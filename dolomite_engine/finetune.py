@@ -9,7 +9,7 @@ from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
-from .data import DataLoader, get_dataloader, infinite_iterator
+from .data import ResumableDataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
@@ -112,7 +112,7 @@ def train_step(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     distributed_backend: DistributedBackend,
-    train_dataloader: DataLoader,
+    train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
     train_step_context: contextlib.AbstractContextManager,
@@ -124,7 +124,7 @@ def train_step(
         optimizer (Optimizer): optimizer
         lr_scheduler (LamdaLR): learning rate scheduler
         distributed_backend (DistributedBackend): distributed backend
-        train_dataloader (DataLoader): training dataloader
+        train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
 
@@ -189,8 +189,8 @@ def train(
     model: ModelWrapperForFinetuning,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
-    train_dataloader: DataLoader,
-    val_dataloader: DataLoader,
+    train_dataloader: ResumableDataLoader,
+    val_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
     starting_iteration: int = 0,
 ) -> None:
@@ -201,8 +201,8 @@ def train(
         model (ModelWrapperForFinetuning): model
         optimizer (Optimizer): optimizer
         lr_scheduler (LRScheduler): learning rate scheduler
-        train_dataloader (DataLoader): training dataloader
-        val_dataloader (DataLoader): validation dataloader
+        train_dataloader (ResumableDataLoader): training dataloader
+        val_dataloader (ResumableDataLoader): validation dataloader
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
@@ -276,7 +276,7 @@ def train(
 
 @torch.no_grad()
 def evaluate(
-    val_dataloader: DataLoader,
+    val_dataloader: ResumableDataLoader,
     model: ModelWrapperForFinetuning,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
@@ -284,7 +284,7 @@ def evaluate(
     """main validation loop for the program
 
     Args:
-        val_dataloader (DataLoader): validation dataloader
+        val_dataloader (ResumableDataLoader): validation dataloader
         model (ModelWrapperForFinetuning): model
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker

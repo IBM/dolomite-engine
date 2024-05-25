@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterable, List
 
 import torch
 
@@ -82,3 +82,21 @@ def collate_fn(
         result["labels"] = labels
 
     return result
+
+
+def infinite_iterator(x: Iterable) -> Iterable:
+    """converts and iterable into a non-ending infinite iterable
+
+    Args:
+        x (Iterable): the iterable to convert
+
+    Returns:
+        Iterable: the converted iterable
+
+    Yields:
+        Iterator[Iterable]: an element from the original iterator
+    """
+
+    while True:
+        for i in x:
+            yield i

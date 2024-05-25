@@ -1,6 +1,7 @@
 import math
 from typing import Iterator, List
 
+import numpy as np
 import torch
 from torch.utils.data import DistributedSampler
 
@@ -15,9 +16,9 @@ class BlendedDistributedSampler(DistributedSampler):
         self,
         dataset: BlendedDatasets,
         data_sampling_ratios: List[int],
+        num_replicas: int,
+        rank: int,
         ignore_sampling_proportion_for_validation: bool = True,
-        num_replicas: int = None,
-        rank: int = None,
         shuffle: bool = True,
         seed: int = 0,
         drop_last: bool = False,
@@ -38,12 +39,19 @@ class BlendedDistributedSampler(DistributedSampler):
             self.generator = torch.Generator()
             self.generator.manual_seed(seed)
 
+        self.start_indices = np.cumsum([0] + self.num_examples_in_each_dataset[:-1]).tolist()
         # this is just needed to store the state
         self.index = 0
 
-    def get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int) -> torch.Tensor:
+    def _get_indices_in_data_subset(self, num_samples_in_subset: int, subset_size: int) -> torch.Tensor:
+        if self.shuffle:
+            self.generator.manual_seed(self.seed + self.epoch)
+
         if num_samples_in_subset < subset_size:
-            sampler = torch.randperm(subset_size, generator=self.generator)[:num_samples_in_subset]
+            if self.shuffle:
+                sampler = torch.randperm(subset_size, generator=self.generator)[:num_samples_in_subset]
+            else:
+                sampler = torch.arange(num_samples_in_subset)
         else:
             num_concats = num_samples_in_subset // subset_size
             padding = num_samples_in_subset - num_concats * subset_size
@@ -51,39 +59,44 @@ class BlendedDistributedSampler(DistributedSampler):
             sampler = torch.tensor(sampler)
 
             if padding > 0:
-                padding_samples = torch.randperm(subset_size, generator=self.generator)[:padding]
+                if self.shuffle:
+                    padding_samples = torch.randperm(subset_size, generator=self.generator)[:padding]
+                else:
+                    padding_samples = torch.arange(padding)
+
                 sampler = torch.cat([sampler, padding_samples])
 
         return sampler
 
     def __iter__(self) -> Iterator[int]:
+        indices = []
+        for dataset_index in range(self.num_datasets):
+            sampler = self._get_indices_in_data_subset(
+                self.num_samples_by_dataset[dataset_index], self.num_examples_in_each_dataset[dataset_index]
+            )
+            sampler += self.start_indices[dataset_index]
+
+            indices.extend(sampler.tolist())
+
         if self.shuffle:
-            data_samples = []
-
-            for i in range(self.num_datasets):
-                self.generator.manual_seed(self.seed + self.epoch)
-                sampler = self.get_indices_in_data_subset(
-                    self.num_samples_by_dataset[i], self.num_examples_in_each_dataset[i]
-                )
-                sampler += self.dataset.start_indices[i]
-
-                data_samples.extend(sampler.tolist())
-
             self.generator.manual_seed(self.seed + self.epoch)
-            indices = torch.randperm(len(data_samples), generator=self.generator).tolist()
-        else:
-            indices = list(range(len(self.dataset)))
 
-        if not self.drop_last:
+            # permute the sample indices
+            indices = torch.tensor(indices)
+            indices = indices[torch.randperm(len(indices), generator=self.generator)]
+            indices = indices.tolist()
+
+        if self.drop_last:
+            # remove tail of data to make it evenly divisible.
+            indices = indices[: self.total_size]
+        else:
             # add extra samples to make it evenly divisible
             padding_size = self.total_size - len(indices)
             if padding_size <= len(indices):
                 indices += indices[:padding_size]
             else:
                 indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
-        else:
-            # remove tail of data to make it evenly divisible.
-            indices = indices[: self.total_size]
+
         assert len(indices) == self.total_size
 
         # subsample
@@ -93,11 +106,7 @@ class BlendedDistributedSampler(DistributedSampler):
         self.index = 0
         for i in indices:
             self.index += 1
-
-            if self.shuffle:
-                yield data_samples[i]
-            else:
-                yield i
+            yield i
 
         self.set_epoch(self.epoch + 1)
 

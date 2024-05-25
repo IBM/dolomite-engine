@@ -298,6 +298,8 @@ class DistributedArgs(BaseArgs):
     communication_dtype: Optional[str] = None
     # whether to use torch.compile
     torch_compile: bool = False
+    # whether to use a dispatching dataloader
+    dispatching_dataloader: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.zero_hpz_partition_size, "zero_hpz_partition_size")])

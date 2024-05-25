@@ -8,7 +8,7 @@ from typing import Dict, Tuple
 import numpy
 from transformers import AutoTokenizer
 
-from ...utils import log_rank_0, print_rank_0
+from ...utils import log_rank_0
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .indexed_dataset import MMapIndexedDataset
 from .megatron_dataset import MegatronDataset
@@ -398,8 +398,6 @@ class GPTDataset(MegatronDataset):
 
         log_rank_0(logging.INFO, f"> total number of samples: {sample_index.shape[0] - 1}")
         log_rank_0(logging.INFO, f"> total number of epochs: {num_epochs}")
-
-        print_rank_0()
 
         return document_index, sample_index, shuffle_index
 

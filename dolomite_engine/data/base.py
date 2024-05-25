@@ -1,6 +1,5 @@
-from typing import List
+from typing import List, Tuple
 
-import numpy as np
 import torch
 from transformers import AutoTokenizer
 
@@ -153,9 +152,8 @@ class BlendedDatasets(torch.utils.data.Dataset):
         self.split = split
         self.datasets = datasets
 
-        num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
-        self.num_examples = sum(num_examples_in_each_dataset)
-        self.start_indices = np.cumsum([0] + num_examples_in_each_dataset[:-1]).tolist()
+        self.num_examples = sum(self.get_num_examples_in_each_dataset())
+        self.indexing_array = self._get_indexing_array()
 
     def get_num_datasets(self) -> int:
         """returns the number of datasets in the mixture
@@ -181,25 +179,22 @@ class BlendedDatasets(torch.utils.data.Dataset):
     def load_state_dict(self, state_dict: dict) -> None:
         return
 
+    def _get_indexing_array(self) -> List[Tuple[int]]:
+        num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
+
+        indexing_array = []
+        for dataset_index, num_examples in enumerate(num_examples_in_each_dataset):
+            for example_id in range(num_examples):
+                indexing_array.append((dataset_index, example_id))
+
+        return indexing_array
+
     def __len__(self) -> int:
         return self.num_examples
 
     def __getitem__(self, index: int) -> dict:
-        num_datasets = self.get_num_datasets()
-
-        # get the dataset the example belongs to
-        dataset_index = num_datasets - 1
-        for i in range(num_datasets):
-            if index < self.start_indices[i]:
-                dataset_index = i - 1
-                break
-
-        # get the position of the example in the specific dataset
-        index -= self.start_indices[dataset_index]
-
-        # get the example
-        example = self.datasets[dataset_index][index]
-
+        dataset_index, example_index = self.indexing_array[index]
+        example = self.datasets[dataset_index][example_index]
         return example
 
     def __repr__(self) -> str:
@@ -272,16 +267,3 @@ def get_max_output_length(
             max_output_tokens -= num_virtual_tokens
 
     return max_output_tokens
-
-
-# def _binary_search_index(x: List[int], i: int) -> int:
-#     middle = len(x) // 2
-
-#     if x[middle] <= i < x[middle + 1]:
-#         result = middle
-#     elif x[middle] <= i:
-#         result = middle + _binary_search_index(x[middle + 1:], i)
-#     elif x[middle] > i:
-#         result = _binary_search_index(x[:middle], i)
-
-#     return result

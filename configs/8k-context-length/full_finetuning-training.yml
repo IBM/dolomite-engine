@@ -1,5 +1,7 @@
 datasets:
   - class_name: DebugDataset
+    class_args:
+      num_examples: 100
     data_name: debug
     data_sampling_ratio: 1
     max_input_tokens: 4096
