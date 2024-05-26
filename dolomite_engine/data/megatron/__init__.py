@@ -8,7 +8,7 @@ from transformers import AutoTokenizer
 from ...arguments import TrainingArgs
 from ...defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from ...utils import get_global_rank, get_world_size, log_rank_0
-from ..dataloader import DispatchingDataLoader, ResumableDataLoader
+from ..dataloader import DispatchingDataLoader, ResumableDataLoader, broadcast_in_local_data_group
 from .blended_megatron_dataset_builder import BlendedMegatronDatasetBuilder
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .gpt_dataset import GPTDataset
@@ -142,6 +142,15 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
     def _get_dataloader(dataset: GPTDataset, consumed_samples: int):
         # we use batch sampler here to match the data order of NVIDIA's megatron repo
         if dispatching_dataloader:
+            is_dataset_none_on_source_rank = [dataset is None if is_built_on_rank else False]
+            broadcast_in_local_data_group(
+                is_dataset_none_on_source_rank, source_ranks_broadcast_ranks_broadcast_groups, is_tensor=False
+            )
+            is_dataset_none_on_source_rank = is_dataset_none_on_source_rank[0]
+
+            if is_dataset_none_on_source_rank:
+                return None
+
             if is_built_on_rank:
                 assert dataset is not None, "dataset shouldn't be None when is_built_on_rank is True"
 
@@ -166,7 +175,8 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                 keys=["text"],
             )
         else:
-            assert dataset is not None
+            if dataset is None:
+                return None
 
             batch_sampler = MegatronBatchSampler(
                 total_samples=len(dataset),
