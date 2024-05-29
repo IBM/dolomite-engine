@@ -1,7 +1,7 @@
 import os
 from typing import Callable
 
-import torch.distributed as dist
+import torch.distributed
 
 
 _WORLD_SIZE: int = None
@@ -67,13 +67,13 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
     def func_rank_n(*args, **kwargs):
         output = func(*args, **kwargs)
         if barrier:
-            dist.barrier()
+            torch.distributed.barrier()
         return output
 
     # a dummy method that doesn't do anything
     def func_rank_other(*args, **kwargs):
         if barrier:
-            dist.barrier()
+            torch.distributed.barrier()
 
     if get_global_rank() == rank:
         return func_rank_n

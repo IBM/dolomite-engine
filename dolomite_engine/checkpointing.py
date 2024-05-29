@@ -6,7 +6,7 @@ from typing import Tuple, Union
 
 import numpy as np
 import torch
-import torch.distributed as dist
+import torch.distributed
 import yaml
 from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -110,7 +110,7 @@ def save_checkpoint(
 
     save_args(args, save_path, mode=Mode.training)
 
-    dist.barrier()
+    torch.distributed.barrier()
 
     run_rank_n(json.dump)(
         {"latest_checkpointed_iteration": iteration},

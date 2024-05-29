@@ -1,5 +1,5 @@
 import torch
-import torch.distributed as dist
+import torch.distributed
 
 from .logging import log_rank_0, print_rank_0, print_ranks_all, set_logger
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
@@ -23,7 +23,7 @@ from .yaml import load_yaml
 def init_distributed() -> None:
     """intialize distributed"""
 
-    dist.init_process_group("nccl", rank=get_global_rank(), world_size=get_world_size())
+    torch.distributed.init_process_group("nccl", rank=get_global_rank(), world_size=get_world_size())
     torch.cuda.set_device(get_local_rank())
 
 
