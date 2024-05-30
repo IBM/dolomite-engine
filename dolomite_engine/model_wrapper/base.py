@@ -132,9 +132,12 @@ class ModelWrapper(torch.nn.Module):
 
         forward_flops = attention_flops + mlp_flops
 
-        backward_flops = 2 * forward_flops
         if self.gradient_checkpointing_method == GradientCheckpointingMethod.block:
-            backward_flops = forward_flops / self.gradient_checkpointing_args.get("checkpoint_every", 1)
+            num_layers_checkpointed = l // self.gradient_checkpointing_args.get("checkpoint_every", 1)
+            fraction_of_layers_checkpointed = num_layers_checkpointed / l
+            backward_flops = (2 + fraction_of_layers_checkpointed) * forward_flops
+        else:
+            backward_flops = 2 * forward_flops
 
         model_flops = l * (forward_flops + backward_flops)
         model_flops += 6 * b * s * h * v
