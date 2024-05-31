@@ -54,8 +54,6 @@ class ModelArgs(BaseArgs):
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
     efficient_initialization: bool = False
-    # whether to initialize on CPU
-    initialize_on_cpu: bool = False
     # whether to reset attention masks for pretraining
     reset_attention_mask: bool = False
     # whether to reset position ids for pretraining

@@ -24,7 +24,6 @@ class ModelWrapperForPEFT(ModelWrapperForFinetuning):
                 "trust_remote_code": args.model_args.trust_remote_code,
             }
 
-        model_kwargs["use_cache"] = self.mode == Mode.inference
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
 

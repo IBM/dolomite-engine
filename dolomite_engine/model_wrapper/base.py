@@ -31,7 +31,6 @@ class ModelWrapper(torch.nn.Module):
         self.gradient_checkpointing_method = args.distributed_args.gradient_checkpointing_method
         self.gradient_checkpointing_args = args.distributed_args.gradient_checkpointing_args
         self.efficient_initialization = args.model_args.efficient_initialization
-        self.initialize_on_cpu = args.model_args.initialize_on_cpu
         self.tuning_method = args.tuning_args.tuning_method
         self.dtype = args.mixed_precision_args.dtype
         self.reset_attention_mask = args.model_args.reset_attention_mask
@@ -115,6 +114,9 @@ class ModelWrapper(torch.nn.Module):
         return generated_text, num_generated_tokens
 
     def get_model_tflops(self, batch_size: int, sequence_length: int) -> None:
+        if not is_custom_model(self.model_class, self.config.model_type):
+            return 0
+
         b = batch_size
         s = sequence_length
         h = self.config.n_embd
@@ -205,19 +207,17 @@ class ModelWrapper(torch.nn.Module):
                 "trust_remote_code": args.model_args.trust_remote_code,
             }
 
-        model_kwargs["use_cache"] = self.mode == Mode.inference
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
 
         def _get_model(**extras):
-            if self.model_name is None:
-                model = args.model_args.model_class.from_config(**model_kwargs, **extras)
-            else:
-                model = args.model_args.model_class.from_pretrained(**model_kwargs, **extras)
-
-            return model
+            return (
+                self.model_class.from_config(**model_kwargs, **extras)
+                if self.model_name is None
+                else self.model_class.from_pretrained(**model_kwargs, **extras)
+            )
 
         if self.mode == Mode.training:
             if self.distributed_backend == DistributedBackend.deepspeed:
@@ -226,30 +226,23 @@ class ModelWrapper(torch.nn.Module):
 
                     self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
 
-                    # model is initialized on meta device here due to the HfDeepSpeedConfig object created above
-                    self.model = _get_model()
-                else:
-                    self.model = _get_model() if self.initialize_on_cpu else _get_model(device_map=self.input_device)
+                self.model = _get_model()
             elif self.distributed_backend == DistributedBackend.torch:
                 if self.efficient_initialization:
-                    if self.tie_word_embeddings:
-                        assert is_custom_model(
-                            self.model_class, self.config.model_type
-                        ), "either there should be no weight tying or the model should be a custom class"
-
                     if self.model_name is None:
                         with torch.device("meta"):
                             self.model = _get_model()
                     else:
-                        if get_global_rank() == 0:
-                            self.model = (
-                                _get_model() if self.initialize_on_cpu else _get_model(device_map=self.input_device)
-                            )
-                        else:
-                            with torch.device("meta"):
+                        if is_custom_model(self.model_class, self.config.model_type):
+                            if get_global_rank() == 0:
                                 self.model = _get_model()
+                            else:
+                                with torch.device("meta"):
+                                    self.model = _get_model()
+                        else:
+                            self.model = _get_model(low_cpu_mem_usage=True)
                 else:
-                    self.model = _get_model() if self.initialize_on_cpu else _get_model(device_map=self.input_device)
+                    self.model = _get_model()
         else:
             if self.dtype == "fp8":
                 log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")
@@ -257,11 +250,7 @@ class ModelWrapper(torch.nn.Module):
             else:
                 torch_dtype = string_to_torch_dtype(self.dtype)
 
-            self.model = (
-                _get_model(torch_dtype=torch_dtype)
-                if self.initialize_on_cpu
-                else _get_model(device_map=self.input_device, torch_dtype=torch_dtype)
-            )
+            self.model = _get_model(device_map=self.input_device, torch_dtype=torch_dtype)
 
         num_parameters = 0
         for param in self.model.parameters():

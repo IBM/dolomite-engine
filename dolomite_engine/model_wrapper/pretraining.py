@@ -32,14 +32,12 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if self.use_padding_free_transformer:
             input_ids, cu_seqlens, max_seqlen, position_ids = self._get_padding_free_inputs(input_ids)
-        else:
-            cu_seqlens = None
-            max_seqlen = None
-            position_ids = None
 
-        model_outputs = self.model(
-            input_ids=input_ids, position_ids=position_ids, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
-        )
+            model_outputs = self.model(
+                input_ids=input_ids, position_ids=position_ids, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
+            )
+        else:
+            model_outputs = self.model(input_ids=input_ids)
 
         logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
