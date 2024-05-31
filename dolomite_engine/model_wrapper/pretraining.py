@@ -3,11 +3,18 @@ from typing import Union
 import torch
 import torch.nn.functional as F
 
+from dolomite_engine.enums import Mode
+
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
 from .base import ModelWrapper
 
 
 class ModelWrapperForPretraining(ModelWrapper):
+    def __init__(self, args: TrainingArgs | InferenceArgs | ExportArgs, mode: Mode):
+        super().__init__(args, mode)
+
+        self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
+
     def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 
@@ -40,6 +47,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             model_outputs = self.model(input_ids=input_ids)
 
         logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
+        if self.upcast_logits_for_loss:
+            logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
         return loss

@@ -70,6 +70,8 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
             ]
         )
 
+        self.upcast_logits_for_loss = config.upcast_logits_for_loss
+
     def _init_weights(self, module: nn.Module) -> None:
         if isinstance(module, (ParameterizedEmbedding, ParameterizedLinear, nn.LayerNorm, RMSNorm, Alibi, RoPE)):
             module.reset_parameters()
@@ -94,6 +96,8 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
 
         # Flatten the tokens
         loss_fct = nn.CrossEntropyLoss()
+        if self.upcast_logits_for_loss:
+            shift_logits = shift_logits.float()
         loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
         return loss

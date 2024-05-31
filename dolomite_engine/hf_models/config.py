@@ -45,6 +45,7 @@ class CommonConfig(PretrainedConfig):
         m_width: float = None,
         m_residual: float = None,
         init_method: str = None,
+        upcast_logits_for_loss: bool = False,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -75,6 +76,7 @@ class CommonConfig(PretrainedConfig):
         self.m_width = m_width
         self.m_residual = m_residual
         self.init_method = init_method
+        self.upcast_logits_for_loss = upcast_logits_for_loss
 
         if self.attention_multiplier is not None:
             assert self.scale_attn_weights

@@ -47,6 +47,7 @@ class DenseMoEConfig(PretrainedConfig):
         m_emb: float = None,
         m_width: float = None,
         m_residual: float = None,
+        upcast_logits_for_loss: bool = False,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -75,6 +76,7 @@ class DenseMoEConfig(PretrainedConfig):
         self.m_width = m_width
         self.m_residual = m_residual
         self.init_method = None
+        self.upcast_logits_for_loss = upcast_logits_for_loss
 
         position_embedding_type = PositionEmbeddingType(position_embedding_type)
 
