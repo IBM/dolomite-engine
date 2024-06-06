@@ -95,7 +95,7 @@ model_args:
       - 30
       - 30
     vocab_size: 50304
-  efficient_cpu_initialization: false
+  efficient_initialization: false
   dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true

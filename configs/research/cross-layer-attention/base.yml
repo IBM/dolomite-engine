@@ -62,7 +62,7 @@ model_args:
     scale_attention_softmax_in_fp32: true
     scale_attn_weights: true
     vocab_size: 50304
-  efficient_cpu_initialization: false
+  efficient_initialization: false
   dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true

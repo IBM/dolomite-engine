@@ -1,15 +1,14 @@
-import glob
-import os
 from typing import List
 
+from datasets import load_dataset
 from transformers import AutoTokenizer
 
 from ..enums import DatasetKeys, DatasetSplit, Mode, TuningMethod
 from .base import BaseDataset
 
 
-class JSONLinesDataset(BaseDataset):
-    """A dataset for loading JSON lines files"""
+class HuggingFaceDataset(BaseDataset):
+    """A dataset class to load any HuggingFace dataset, expects a tuple of input and output keys"""
 
     def __init__(
         self,
@@ -44,25 +43,21 @@ class JSONLinesDataset(BaseDataset):
         self.examples = self.prepare_examples()
 
     def prepare_examples(self) -> List[dict]:
-        import jsonlines
+        assert "data_path" in self.class_args, "`data_path` is not specified"
 
-        assert "data_path" in self.class_args, "JSONLinesDataset requires additional class_args `data_path`"
+        data_path: str = self.class_args.get("data_path")
+        input_key: str = self.class_args.get("input_key", DatasetKeys.input.value)
+        output_key: str = self.class_args.get("output_key", DatasetKeys.output.value)
+
+        split = "validation" if self.split == DatasetSplit.val else self.split.value
+        dataset = load_dataset(data_path)[split]
 
         examples = []
-        data_files = glob.glob(os.path.join(self.class_args["data_path"], self.split.value, "*.jsonl"))
+        for raw_example in dataset:
+            input = self.construct_input_from_format(raw_example[input_key])
+            output = self.construct_output_from_format(raw_example[output_key]) if self.mode == Mode.training else None
 
-        for filename in data_files:
-            json_file = jsonlines.open(filename, "r")
-
-            for raw_example in json_file:
-                input = self.construct_input_from_format(raw_example[DatasetKeys.input.value])
-                output = (
-                    self.construct_output_from_format(raw_example[DatasetKeys.output.value])
-                    if self.mode == Mode.training
-                    else None
-                )
-
-                example = self.get_input_output_token_ids(input, output)
-                examples.append(example)
+            example = self.get_input_output_token_ids(input, output)
+            examples.append(example)
 
         return examples

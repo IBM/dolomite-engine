@@ -27,7 +27,7 @@ This repository works with all HuggingFace models (text-to-text only for the mom
 from dolomite_engine.hf_models import import_from_huggingface
 
 import_from_huggingface(
-    pretrained_model_name_or_path="meta-llama/Meta-Llama-3-8B",
+    pretrained_model_name_or_path="ibm-granite/granite-3b-code-base",
     save_path="dolomite_compatible_model"
 )
 ```
@@ -97,9 +97,12 @@ The data directory should obey the following structure:
  ┃ ┗ 📜filename3.jsonl
  ┗ 📂val
  ┃ ┣ 📜filename1.jsonl
+ ┃ ┣ 📜filename2.jsonl
+ ┃ ┣ 📜filename3.jsonl
  ┣ 📂test
  ┃ ┣ 📜filename1.jsonl
  ┃ ┣ 📜filename2.jsonl
+ ┃ ┣ 📜filename3.jsonl
 ```
 Filenames can be anything as long as there are no whitespaces in them. Each line in each file should be a json (jsonlines file format) with the entries looking like:
 ```json
@@ -127,14 +130,14 @@ Please note that the user is expected to provide this at both training and infer
 Try not to have trailing spaces in `input_format`, if you need a space between input and output, the space should be part of the `output_format` as in the above example.
 
 > [!TIP]
-> Alternatively, you can also add your own dataclass in the repository if you don't want to use the jsonlines dataset.
+> Alternatively, you can also add your own dataset class in the repository if you don't want to use the jsonlines format or need custom logic to load your own dataset.
 
 Currently, the repo has following implemented dataclasses:
 ```text
 AlpacaDataset
 DebugDataset
 DollyDataset
-JSONLinesDataset
+HuggingFaceDataset
 SlimOrcaDataset
 SST2Dataset
 ```
