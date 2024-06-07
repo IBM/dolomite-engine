@@ -47,10 +47,6 @@ class CopyToTensorParallelRegion(torch.autograd.Function):
     """Pass the input to the model parallel region."""
 
     @staticmethod
-    def symbolic(graph, input: torch.Tensor) -> torch.Tensor:
-        return input
-
-    @staticmethod
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         return input
 
@@ -61,10 +57,6 @@ class CopyToTensorParallelRegion(torch.autograd.Function):
 
 class ReduceFromTensorParallelRegion(torch.autograd.Function):
     """All-reduce the input from the model parallel region."""
-
-    @staticmethod
-    def symbolic(graph, input: torch.Tensor) -> torch.Tensor:
-        return _reduce(input)
 
     @staticmethod
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:

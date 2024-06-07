@@ -1,7 +1,5 @@
 from typing import Tuple
 
-from ...utils import get_global_rank, get_world_size
-
 
 class MegatronBatchSampler:
     def __init__(

@@ -54,4 +54,4 @@ def print_ranks_all(*args, **kwargs) -> None:
 def warn_rank_0(*args, **kwargs) -> None:
     """warn on a single process"""
 
-    warn(*args, **kwargs)
+    warn(*args, **kwargs, stacklevel=3)

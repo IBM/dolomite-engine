@@ -207,6 +207,25 @@ class _IndexWriter:
             curr_ptr += length * itemsize
         return list_ptr
 
+    # TODO the following code might accelerate this function
+    # def _sequence_pointers(self, sequence_lengths: List[int]) -> List[int]:
+    #     """Build the sequence pointers per the sequence lengths and dtype size
+
+    #     Args:
+    #         sequence_lengths (List[int]): The length of each sequence
+
+    #     Returns:
+    #         List[int]: The pointer to the beginning of each sequence
+    #     """
+    #     itemsize = DType.size(self.dtype)
+    #     sequence_lengths = numpy.array(sequence_lengths)
+
+    #     ptrs = sequence_lengths * itemsize
+    #     ptrs = ptrs.cumsum()
+    #     ptrs = [0] + ptrs.tolist()[:-1]
+
+    #     return ptrs
+
 
 class _IndexReader:
     """class to read the index (.idx) file
@@ -312,7 +331,7 @@ class _IndexReader:
             idx (int): The index into the dataset
 
         Returns:
-            Tuple[numpy.int32, numpy.int64, Optional[numpy.int8]]: The pointer, length and mode at
+            Tuple[numpy.int64, numpy.int32, Optional[numpy.int8]]: The pointer, length and mode at
             the index
         """
         return (

@@ -22,7 +22,9 @@ def get_args() -> Namespace:
 
 
 def main() -> None:
-    dataset = MMapIndexedDataset("a_text")
+    args = get_args()
+
+    dataset = MMapIndexedDataset(args.path_prefix)
 
     log_rank_0(logging.INFO, f"number of documents in the dataset = {len(dataset)}")
 
