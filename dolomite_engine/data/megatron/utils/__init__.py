@@ -9,7 +9,7 @@ import numpy
 import torch
 from torch.utils.cpp_extension import load as load_cpp_extension
 
-from ...utils import log_rank_0
+from ....utils import log_rank_0
 
 
 class Split(Enum):
