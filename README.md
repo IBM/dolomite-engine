@@ -5,6 +5,9 @@
 </p>
 
 
+# Getting Started
+Run `make install` or `pip install -r requirements.txt` to install the requirements for this repository.
+
 # Distributed finetuning
 This repository is meant for finetuning large language models (of any scale) using multiple backends. The following backends are currently supported:
 
