@@ -1,7 +1,7 @@
 <h1 align="center" style="font-size: 50px;">Dolomite Engine</h1>
 
 <p align="center">
-  <img src="assets/dolomite.png" width="300px" height="300px">
+  <img src="assets/dolomite.jpeg" width="300px" height="300px">
 </p>
 
 
