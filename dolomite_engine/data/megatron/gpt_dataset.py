@@ -346,7 +346,7 @@ class GPTDataset(MegatronDataset):
             log_rank_0(logging.INFO, f"\tBuild and save the sample index to {os.path.basename(path_to_sample_index)}")
             t_beg = time.time()
 
-            assert document_index.dtype == numpy.int32
+            assert document_index.dtype == numpy.int64
             assert self.indexed_dataset.sequence_lengths.dtype == numpy.int32
             sample_index = build_sample_idx(
                 self.indexed_dataset.sequence_lengths,
@@ -467,7 +467,7 @@ def _build_document_index(
         document_index = numpy.mgrid[0:num_epochs, 0 : len(documents)][1]
         document_index[:] = documents
         document_index = document_index.reshape(-1)
-        document_index = document_index.astype(numpy.int32)
+        document_index = document_index.astype(numpy.int64)
         numpy_random_state.shuffle(document_index)
         return document_index
 

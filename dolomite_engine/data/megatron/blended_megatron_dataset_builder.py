@@ -195,12 +195,17 @@ class BlendedMegatronDatasetBuilder(object):
                 split_idx_bounds = _get_split_indices(split, indexed_dataset.sequence_lengths.shape[0])
             else:
                 split_idx_bounds = _get_split_indices(split, indexed_dataset.document_indices.shape[0] - 1)
+
+            assert (
+                max(split_idx_bounds) <= numpy.iinfo(numpy.int64).max
+            ), "split_idx_bounds are assumed to be smaller than the max value of np.int64"
+
             split_indices = [
                 numpy.arange(
                     start=split_idx_bounds[i],
                     stop=split_idx_bounds[i + 1],
                     step=1,
-                    dtype=numpy.int32,
+                    dtype=numpy.int64,
                 )
                 for i, _ in enumerate(Split)
             ]
@@ -301,7 +306,12 @@ class BlendedMegatronDatasetBuilder(object):
             )
             start = int(start * num_elements)
             end = int(end * num_elements)
-            split_indices = numpy.arange(start=start, stop=end, step=1, dtype=numpy.int32)
+
+            assert (
+                max([start, end]) <= numpy.iinfo(numpy.int64).max
+            ), "split_indices's bounds are assumed to be smaller than the max value of np.int64"
+
+            split_indices = numpy.arange(start=start, stop=end, step=1, dtype=numpy.int64)
 
         megatron_dataset = None
         if start != end:
