@@ -8,7 +8,7 @@ from transformers import AutoTokenizer
 from ...arguments import TrainingArgs
 from ...defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from ...utils import get_global_rank, get_world_size, log_rank_0
-from ..dataloader import DispatchingDataLoader, ResumableDataLoader, broadcast_in_local_data_group
+from ..dataloader import DispatchingDataLoader, ResumableDataLoader, get_source_and_broadcast_group
 from .blended_megatron_dataset_builder import BlendedMegatronDatasetBuilder
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .gpt_dataset import GPTDataset
@@ -37,15 +37,15 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
         node_rank = get_global_rank() // num_ranks_per_node
         num_nodes = get_world_size() // num_ranks_per_node
 
-        def _get_source_ranks_broadcast_ranks_broadcast_groups():
-            result = []
+        def _get_source_broadcast_mapping() -> dict:
+            result = {}
             for i in range(num_nodes):
                 source = i * num_ranks_per_node
                 ranks = list(range(source, source + num_ranks_per_node))
-                result.append((source, ranks, torch.distributed.new_group(ranks)))
+                result[source] = torch.distributed.new_group(ranks)
             return result
 
-        source_ranks_broadcast_ranks_broadcast_groups = _get_source_ranks_broadcast_ranks_broadcast_groups()
+        source_broadcast_mapping = _get_source_broadcast_mapping()
 
         is_built_on_rank = get_global_rank() == node_rank * num_ranks_per_node
     else:
@@ -143,8 +143,9 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
         # we use batch sampler here to match the data order of NVIDIA's megatron repo
         if dispatching_dataloader:
             is_dataset_none_on_source_rank = [dataset is None if is_built_on_rank else False]
-            broadcast_in_local_data_group(
-                is_dataset_none_on_source_rank, source_ranks_broadcast_ranks_broadcast_groups, is_tensor=False
+            _, _source_rank, _, _broadcast_group = get_source_and_broadcast_group(source_broadcast_mapping)
+            torch.distributed.broadcast_object_list(
+                is_dataset_none_on_source_rank, src=_source_rank, group=_broadcast_group
             )
             is_dataset_none_on_source_rank = is_dataset_none_on_source_rank[0]
 
@@ -171,7 +172,8 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                 batch_sampler=batch_sampler,
                 num_workers=class_args.get("num_workers", 2),
                 pin_memory=True,
-                source_ranks_broadcast_ranks_broadcast_groups=source_ranks_broadcast_ranks_broadcast_groups,
+                source_broadcast_mapping=source_broadcast_mapping,
+                broadcast_world_size=num_ranks_per_node,
                 keys=["text"],
             )
         else:
