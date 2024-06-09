@@ -26,6 +26,9 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
     assert args.datasets[0].input_format == INPUT_FORMAT
     assert args.datasets[0].output_format == OUTPUT_FORMAT
 
+    micro_batch_size = args.training_parameters.micro_batch_size
+    sequence_length = class_args.get("sequence_length")
+
     compile_helpers()
 
     log_rank_0(logging.INFO, "> building train, validation, and test datasets for GPT ...")
@@ -55,7 +58,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
         GPTDataset,
         sizes=_get_train_val_test_samples(
             args.training_parameters.num_training_steps,
-            args.training_parameters.micro_batch_size,
+            micro_batch_size,
             args.training_parameters.gradient_accumulation_steps,
             args.training_parameters.eval_interval,
             class_args.get("eval_steps"),
@@ -64,7 +67,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
             # the dataset is None if is_built_on_rank is False
             is_built_on_rank=is_built_on_rank,
             random_seed=class_args.get("seed", args.random_args.seed),
-            sequence_length=class_args.get("sequence_length"),
+            sequence_length=sequence_length,
             blend=class_args.get("data_path"),
             blend_per_split=[
                 class_args.get("train_data_path"),
@@ -158,7 +161,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                 batch_sampler = MegatronBatchSampler(
                     total_samples=len(dataset),
                     consumed_samples=consumed_samples,
-                    micro_batch_size=args.training_parameters.micro_batch_size * num_ranks_per_node,
+                    micro_batch_size=micro_batch_size * num_ranks_per_node,
                     num_replicas=num_nodes,
                     rank=node_rank,
                 )
@@ -174,6 +177,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                 pin_memory=True,
                 source_broadcast_mapping=source_broadcast_mapping,
                 broadcast_world_size=num_ranks_per_node,
+                static_shape_per_rank=(micro_batch_size, sequence_length + 1),
                 keys=["text"],
             )
         else:
@@ -183,7 +187,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
             batch_sampler = MegatronBatchSampler(
                 total_samples=len(dataset),
                 consumed_samples=consumed_samples,
-                micro_batch_size=args.training_parameters.micro_batch_size,
+                micro_batch_size=micro_batch_size,
                 num_replicas=get_world_size(),
                 rank=get_global_rank(),
             )

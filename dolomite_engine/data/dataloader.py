@@ -30,6 +30,7 @@ class DispatchingDataLoader(ResumableDataLoader):
         drop_last: bool = False,
         source_broadcast_mapping: dict[int, ProcessGroup] = None,
         broadcast_world_size: int = None,
+        static_shape_per_rank: tuple[int, int] = None,
         keys: List[str] = ["input_ids", "attention_mask", "labels"],
     ) -> None:
         self.broadcast_world_size = broadcast_world_size
@@ -55,6 +56,10 @@ class DispatchingDataLoader(ResumableDataLoader):
         torch.distributed.broadcast(_length, src=self.source_rank, group=self.broadcast_group)
         self._length = _length.item()
 
+        self.global_static_shape = None
+        if static_shape_per_rank is not None:
+            self.global_static_shape = (static_shape_per_rank[0] * self.broadcast_world_size, static_shape_per_rank[1])
+
         self.keys = keys
 
     def __iter__(self):
@@ -63,9 +68,12 @@ class DispatchingDataLoader(ResumableDataLoader):
         for batch in iterator:
             # if using dynamic shapes at every batch or when batch buffer is None during static batch, we need to get shape
             # send/recv tensor shapes
-            batch_shape = [batch[self.keys[0]].shape if self.is_source else None]
-            torch.distributed.broadcast_object_list(batch_shape, src=self.source_rank, group=self.broadcast_group)
-            batch_shape = batch_shape[0]
+            if self.global_static_shape is None:
+                batch_shape = [batch[self.keys[0]].shape if self.is_source else None]
+                torch.distributed.broadcast_object_list(batch_shape, src=self.source_rank, group=self.broadcast_group)
+                batch_shape = batch_shape[0]
+            else:
+                batch_shape = self.global_static_shape
 
             if self.is_source:
                 for key in self.keys:
