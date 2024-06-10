@@ -298,6 +298,8 @@ class DistributedArgs(BaseArgs):
     torch_compile: bool = False
     # whether to use a dispatching dataloader
     dispatching_dataloader: bool = False
+    # distributed timeout for NCCL in minutes
+    timeout_minutes: Optional[int] = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.zero_hpz_partition_size, "zero_hpz_partition_size")])

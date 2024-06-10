@@ -233,7 +233,7 @@ def main() -> None:
     args: TrainingArgs = get_args(mode)
 
     # initialize distributed with nccl for multi-node communications
-    init_distributed()
+    init_distributed(args.distributed_args.timeout_minutes)
     set_seed(args.random_args.seed)
 
     model = get_model(args, mode)

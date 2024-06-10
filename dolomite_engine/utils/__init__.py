@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import torch
 import torch.distributed
 
@@ -20,10 +22,15 @@ from .wrapper import get_module_class_from_name
 from .yaml import load_yaml
 
 
-def init_distributed() -> None:
+def init_distributed(timeout_minutes: int = None) -> None:
     """intialize distributed"""
 
-    torch.distributed.init_process_group("nccl", rank=get_global_rank(), world_size=get_world_size())
+    if timeout_minutes is not None:
+        timeout_minutes = timedelta(timeout_minutes)
+
+    torch.distributed.init_process_group(
+        "nccl", rank=get_global_rank(), world_size=get_world_size(), timeout=timeout_minutes
+    )
     torch.cuda.set_device(get_local_rank())
 
 
