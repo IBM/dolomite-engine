@@ -32,7 +32,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         tokens: torch.Tensor = batch["text"]
         if not tokens.is_cuda:
-            tokens = tokens.to(self.input_device)
+            tokens = tokens.to(torch.cuda.current_device())
 
         input_ids = tokens[:, :-1]
         labels = tokens[:, 1:]
@@ -70,12 +70,12 @@ class ModelWrapperForPretraining(ModelWrapper):
                         batch_size * sequence_length + 1,
                         sequence_length,
                         dtype=torch.int32,
-                        device=self.input_device,
+                        device=torch.cuda.current_device(),
                     ),
                     persistent=False,
                 )
                 self.register_buffer(
-                    "max_seqlen", torch.tensor(sequence_length, device=self.input_device), persistent=False
+                    "max_seqlen", torch.tensor(sequence_length, device=torch.cuda.current_device()), persistent=False
                 )
 
             if self.reset_position_ids:
@@ -83,7 +83,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             else:
                 self.register_buffer(
                     "position_ids",
-                    torch.arange(0, sequence_length, 1, device=self.input_device).repeat(batch_size),
+                    torch.arange(0, sequence_length, 1, device=torch.cuda.current_device()).repeat(batch_size),
                     persistent=False,
                 )
         else:

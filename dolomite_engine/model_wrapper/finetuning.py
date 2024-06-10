@@ -26,7 +26,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
 
         if not self.use_padding_free_transformer:
             for i in batch:
-                batch[i] = batch[i].to(self.input_device)
+                batch[i] = batch[i].to(torch.cuda.current_device())
 
         model_outputs = self.model(**batch)
 

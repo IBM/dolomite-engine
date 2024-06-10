@@ -245,7 +245,7 @@ def load_checkpoint_for_inference(
     distributed_backend = args_from_checkpoint.distributed_args.distributed_backend
 
     model = get_model(args_from_checkpoint, mode)
-    model = model.to(model.input_device)
+    model = model.to(torch.cuda.current_device())
 
     if distributed_backend == DistributedBackend.deepspeed:
         from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint

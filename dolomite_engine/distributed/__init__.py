@@ -16,6 +16,7 @@ from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..model_wrapper import ModelWrapper
 from ..optimization import get_optimizer_and_lr_scheduler
 from ..utils import get_global_rank, get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from .communication import Communication
 from .deepspeed import get_deepspeed_config
 from .fp8 import convert_model_to_transformer_engine
 

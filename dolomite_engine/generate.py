@@ -2,6 +2,8 @@ import json
 import os
 from typing import List
 
+import torch
+
 from .arguments import InferenceArgs, get_args
 from .checkpointing import load_checkpoint_for_inference, save_args
 from .data import BaseDataset, get_datasets_list
@@ -67,9 +69,12 @@ def main() -> None:
 
     args: InferenceArgs = get_args(mode)
 
+    # hardcoded single GPU assumed for inference
+    torch.cuda.set_device(0)
+
     if args.load_args is None:
         model = get_model(args, mode)
-        model = model.to(model.input_device)
+        model = model.to(torch.cuda.current_device())
 
         datasets_list, _ = get_datasets_list(
             args,

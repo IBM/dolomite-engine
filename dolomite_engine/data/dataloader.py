@@ -5,6 +5,7 @@ import torch.distributed
 from torch.distributed import ProcessGroup
 from torch.utils.data import DataLoader, Dataset, Sampler
 
+from ..distributed import Communication
 from ..utils import get_global_rank
 
 
@@ -69,9 +70,10 @@ class DispatchingDataLoader(ResumableDataLoader):
             # if using dynamic shapes at every batch or when batch buffer is None during static batch, we need to get shape
             # send/recv tensor shapes
             if self.global_static_shape is None:
-                batch_shape = [batch[self.keys[0]].shape if self.is_source else None]
-                torch.distributed.broadcast_object_list(batch_shape, src=self.source_rank, group=self.broadcast_group)
-                batch_shape = batch_shape[0]
+                batch_shape = batch[self.keys[0]].shape if self.is_source else None
+                batch_shape = Communication.broadcast_object(
+                    batch_shape, src=self.source_rank, group=self.broadcast_group
+                )
             else:
                 batch_shape = self.global_static_shape
 

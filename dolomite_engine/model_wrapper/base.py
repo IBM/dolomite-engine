@@ -44,8 +44,6 @@ class ModelWrapper(torch.nn.Module):
             self.distributed_backend = args.distributed_args.distributed_backend
             self.stage = args.distributed_args.stage
 
-        self._setup_input_device()
-
         self._setup_config(args)
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
@@ -100,7 +98,7 @@ class ModelWrapper(torch.nn.Module):
             raise NotImplementedError("padding free transformer doesn't support generation")
 
         for i in batch:
-            batch[i] = batch[i].to(self.input_device)
+            batch[i] = batch[i].to(torch.cuda.current_device())
 
         generated = self.model.generate(**batch, **generate_kwargs, eos_token_id=self.eos_token_id)
 
@@ -168,15 +166,6 @@ class ModelWrapper(torch.nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
-
-    def _setup_input_device(self) -> None:
-        if self.mode == Mode.training:
-            self.input_device = torch.cuda.current_device()
-        else:
-            self.input_device = 0
-            if not torch.cuda.is_available():
-                log_rank_0(logging.WARN, "no CUDA device found, running on CPU")
-                self.input_device = "cpu"
 
     def save_pretrained(self, save_path: str) -> None:
         self.tokenizer.save_pretrained(save_path, legacy_format=False)
@@ -250,7 +239,7 @@ class ModelWrapper(torch.nn.Module):
             else:
                 torch_dtype = string_to_torch_dtype(self.dtype)
 
-            self.model = _get_model(device_map=self.input_device, torch_dtype=torch_dtype)
+            self.model = _get_model(device_map=torch.cuda.current_device(), torch_dtype=torch_dtype)
 
         num_parameters = 0
         for param in self.model.parameters():
