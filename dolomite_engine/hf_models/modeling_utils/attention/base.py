@@ -22,10 +22,11 @@ class Attention(nn.Module):
         self.num_heads = config.n_head
         self.num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
-        self.initializer_range = config.initializer_range
-        self.m_width = config.m_width
-        self.n_layer = config.n_layer
-        self.init_method = config.init_method
+
+        initializer_range = config.initializer_range
+        m_width = config.m_width
+        n_layer = config.n_layer
+        init_method = InitMethod(config.init_method)
 
         assert (
             self.hidden_size % self.num_heads == 0
@@ -70,9 +71,9 @@ class Attention(nn.Module):
 
         # note that the actual layout is different for the output and depends on whether we are using MHA, MQA or GQA
         # (self.hidden_size + 2 * self.num_key_value_heads * self.head_dim) is just the actual number output features
-        std = self.initializer_range
-        if self.init_method == InitMethod.mup:
-            std /= math.sqrt(self.m_width)
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.c_attn = ParameterizedLinear(
             self.hidden_size,
             self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
@@ -80,9 +81,9 @@ class Attention(nn.Module):
             std=std,
         )
 
-        std = self.initializer_range / math.sqrt(2 * self.n_layer)
-        if self.init_method == InitMethod.mup:
-            std /= math.sqrt(self.m_width)
+        std = initializer_range / math.sqrt(2 * n_layer)
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
 
         self.attn_pdrop = config.attn_pdrop

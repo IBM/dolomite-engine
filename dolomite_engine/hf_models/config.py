@@ -1,6 +1,6 @@
 from transformers import PretrainedConfig
 
-from .enums import AttentionHeadType, PositionEmbeddingType
+from .enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 
 
 class CommonConfig(PretrainedConfig):
@@ -44,7 +44,7 @@ class CommonConfig(PretrainedConfig):
         m_emb: float = None,
         m_width: float = None,
         m_residual: float = None,
-        init_method: str = None,
+        init_method: str = "normal",
         upcast_logits_for_loss: bool = False,
         **kwargs,
     ) -> None:
@@ -81,6 +81,8 @@ class CommonConfig(PretrainedConfig):
         if self.attention_multiplier is not None:
             assert self.scale_attn_weights
 
+        # check if enums are valid
+        init_method = InitMethod(init_method)
         attention_head_type = AttentionHeadType(attention_head_type)
         position_embedding_type = PositionEmbeddingType(position_embedding_type)
 

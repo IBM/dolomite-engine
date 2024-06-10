@@ -75,7 +75,7 @@ class DenseMoEConfig(PretrainedConfig):
         self.m_emb = m_emb
         self.m_width = m_width
         self.m_residual = m_residual
-        self.init_method = None
+        self.init_method = "normal"
         self.upcast_logits_for_loss = upcast_logits_for_loss
 
         position_embedding_type = PositionEmbeddingType(position_embedding_type)

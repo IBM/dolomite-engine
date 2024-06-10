@@ -19,14 +19,14 @@ class MLP(nn.Module):
         add_bias = config.add_bias
         residual_dropout = config.resid_pdrop
 
-        self.init_method = config.init_method
-        self.initializer_range = config.initializer_range
-        self.m_width = config.m_width
-        self.n_layer = config.n_layer
+        init_method = InitMethod(config.init_method)
+        initializer_range = config.initializer_range
+        m_width = config.m_width
+        n_layer = config.n_layer
 
-        std = self.initializer_range
-        if self.init_method == InitMethod.mup:
-            std /= math.sqrt(self.m_width)
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.c_fc = ParameterizedLinear(
             hidden_size,
             2 * intermediate_size if is_glu(activation_function) else intermediate_size,
@@ -36,9 +36,9 @@ class MLP(nn.Module):
 
         self.act = get_activation_function(activation_function)
 
-        std = self.initializer_range / math.sqrt(2 * self.n_layer)
-        if self.init_method == InitMethod.mup:
-            std /= math.sqrt(self.m_width)
+        std = initializer_range / math.sqrt(2 * n_layer)
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(intermediate_size, hidden_size, bias=add_bias, std=std)
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)

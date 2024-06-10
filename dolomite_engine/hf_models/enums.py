@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class InitMethod(Enum):
+    normal = "normal"
     mup = "mup"
 
 
