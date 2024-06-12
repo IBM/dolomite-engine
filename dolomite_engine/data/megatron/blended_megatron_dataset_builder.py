@@ -196,16 +196,12 @@ class BlendedMegatronDatasetBuilder(object):
             else:
                 split_idx_bounds = _get_split_indices(split, indexed_dataset.document_indices.shape[0] - 1)
 
-            assert (
-                max(split_idx_bounds) <= numpy.iinfo(numpy.int64).max
-            ), "split_idx_bounds are assumed to be smaller than the max value of np.int64"
-
             split_indices = [
                 numpy.arange(
                     start=split_idx_bounds[i],
                     stop=split_idx_bounds[i + 1],
                     step=1,
-                    dtype=numpy.int64,
+                    dtype=_get_appropriate_dtype_for_range(split_idx_bounds),
                 )
                 for i, _ in enumerate(Split)
             ]
@@ -307,11 +303,12 @@ class BlendedMegatronDatasetBuilder(object):
             start = int(start * num_elements)
             end = int(end * num_elements)
 
-            assert (
-                max([start, end]) <= numpy.iinfo(numpy.int64).max
-            ), "split_indices's bounds are assumed to be smaller than the max value of np.int64"
-
-            split_indices = numpy.arange(start=start, stop=end, step=1, dtype=numpy.int64)
+            split_indices = numpy.arange(
+                start=start,
+                stop=end,
+                step=1,
+                dtype=_get_appropriate_dtype_for_range([start, end]),
+            )
 
         megatron_dataset = None
         if start != end:
@@ -445,3 +442,16 @@ def _parse_split(start_end: str) -> Tuple[float]:
     end = float(end)
 
     return start, end
+
+
+def _get_appropriate_dtype_for_range(split_idx_bounds: list[int]) -> numpy.dtype:
+    max_value = max(split_idx_bounds)
+
+    if max_value <= numpy.iinfo(numpy.int32).max:
+        dtype = numpy.int32
+    elif max_value <= numpy.iinfo(numpy.int64).max:
+        dtype = numpy.int64
+    else:
+        raise ValueError("value for split idx is too large")
+
+    return dtype
