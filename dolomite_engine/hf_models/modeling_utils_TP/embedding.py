@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from ...utils import SafeTensorsWeightsManager
-from .TP import ReduceFromTensorParallelRegion, get_tensor_parallel_group_manager
+from .TP import get_tensor_parallel_group_manager, reduce_from_tensor_parallel_region
 
 
 class Embedding_TP(nn.Embedding):
@@ -37,7 +37,7 @@ class Embedding_TP(nn.Embedding):
         if self.tp_world_size > 1:
             output_parallel[input_mask, :] = 0
 
-        return ReduceFromTensorParallelRegion.apply(output_parallel)
+        return reduce_from_tensor_parallel_region(output_parallel)
 
     def load_unsharded_weights(self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = "") -> None:
         weight = safetensors_weight_manager.get_slice(prefix + "weight")[

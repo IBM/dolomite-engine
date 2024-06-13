@@ -197,6 +197,10 @@ class _TorchTitanRMSNorm(torch.autograd.Function):
         return dx, dw, None
 
 
+def torchtitan_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float) -> torch.Tensor:
+    return _TorchTitanRMSNorm.apply(input, weight, eps)
+
+
 class TorchTitanRMSNorm(RMSNorm):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return _TorchTitanRMSNorm.apply(x, self.weight, self.eps)
+        return torchtitan_rmsnorm(x, self.weight, self.eps)

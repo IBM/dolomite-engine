@@ -16,6 +16,11 @@ if is_apex_rmsnorm_available():
     from apex.normalization.fused_layer_norm import FusedRMSNormAffineMixedDtypesFunction
 
 
+def apex_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float, memory_efficient: bool) -> torch.Tensor:
+    normalized_shape = (input.shape[-1],)
+    return FusedRMSNormAffineMixedDtypesFunction.apply(input, weight, normalized_shape, eps, memory_efficient)
+
+
 class ApexRMSNorm(RMSNorm):
     def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
         if not is_apex_rmsnorm_available():
@@ -24,4 +29,4 @@ class ApexRMSNorm(RMSNorm):
         super().__init__(normalized_shape, eps=eps)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return FusedRMSNormAffineMixedDtypesFunction.apply(input, self.weight, self.normalized_shape, self.eps, True)
+        return apex_rmsnorm(input, self.weight, self.eps, True)

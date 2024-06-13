@@ -43,6 +43,12 @@ _PERSISTENT_LAYERNORM_ALLOWED_HIDDEN_STATES = [
 ]
 
 
+def apex_persistent_layernorm(
+    input: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, eps: float, memory_efficient
+) -> torch.Tensor:
+    return FastLayerNormFN.apply(input, weight, bias, eps, memory_efficient)
+
+
 class ApexPersistentLayerNorm(nn.LayerNorm):
     def __init__(self, normalized_shape: int, eps: float = 0.00001) -> None:
         if not is_apex_persistent_layernorm_available():
@@ -55,4 +61,4 @@ class ApexPersistentLayerNorm(nn.LayerNorm):
         ), "persistent layernorm kernel is not avilable for the specified hidden dimension"
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return FastLayerNormFN.apply(input, self.weight, self.bias, self.eps, True)
+        return apex_persistent_layernorm(input, self.weight, self.bias, self.eps, True)

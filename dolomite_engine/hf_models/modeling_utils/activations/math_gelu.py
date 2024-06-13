@@ -26,6 +26,10 @@ class _MathGELU(torch.autograd.Function):
         return tmp
 
 
+def math_gelu(input: torch.Tensor) -> torch.Tensor:
+    return _MathGELU.apply(input)
+
+
 class MathGELU(torch.nn.Module):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return _MathGELU.apply(input)
+        return math_gelu(input)

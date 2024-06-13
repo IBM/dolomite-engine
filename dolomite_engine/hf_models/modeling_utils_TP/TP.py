@@ -43,7 +43,7 @@ def _reduce(input: torch.Tensor) -> torch.Tensor:
     return input
 
 
-class CopyToTensorParallelRegion(torch.autograd.Function):
+class _CopyToTensorParallelRegion(torch.autograd.Function):
     """Pass the input to the model parallel region."""
 
     @staticmethod
@@ -55,7 +55,7 @@ class CopyToTensorParallelRegion(torch.autograd.Function):
         return _reduce(grad_output)
 
 
-class ReduceFromTensorParallelRegion(torch.autograd.Function):
+class _ReduceFromTensorParallelRegion(torch.autograd.Function):
     """All-reduce the input from the model parallel region."""
 
     @staticmethod
@@ -65,6 +65,14 @@ class ReduceFromTensorParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         return grad_output
+
+
+def copy_to_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
+    return _CopyToTensorParallelRegion.apply(input)
+
+
+def reduce_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
+    return _ReduceFromTensorParallelRegion.apply(input)
 
 
 class ColumnParallelLinear(ParameterizedLinear):
@@ -79,7 +87,7 @@ class ColumnParallelLinear(ParameterizedLinear):
         super().__init__(in_features, self.out_features_per_device, bias)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = CopyToTensorParallelRegion.apply(input)
+        input = copy_to_tensor_parallel_region(input)
         return super().forward(input)
 
     def load_unsharded_weights(self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = "") -> None:
@@ -117,7 +125,7 @@ class RowParallelLinear(ParameterizedLinear):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = super().forward(input)
-        return ReduceFromTensorParallelRegion.apply(input)
+        return reduce_from_tensor_parallel_region(input)
 
     def load_unsharded_weights(self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = "") -> None:
         weight = safetensors_weight_manager.get_slice(prefix + "weight")

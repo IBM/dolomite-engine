@@ -7,7 +7,12 @@ from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import Attention, ParameterizedLinear
 from ..dropout import Dropout_TP
-from ..TP import ColumnParallelLinear, CopyToTensorParallelRegion, RowParallelLinear, get_tensor_parallel_group_manager
+from ..TP import (
+    ColumnParallelLinear,
+    RowParallelLinear,
+    copy_to_tensor_parallel_region,
+    get_tensor_parallel_group_manager,
+)
 
 
 class Attention_TP(Attention):
@@ -163,7 +168,7 @@ class _MQA_KeyValueProjection(nn.Module):
         query = self.q_attn(hidden_states)
 
         key_value = self.kv_attn(hidden_states)
-        key_value = CopyToTensorParallelRegion.apply(key_value)
+        key_value = copy_to_tensor_parallel_region(key_value)
         key, value = key_value.chunk(2, -1)
 
         return query, key, value
