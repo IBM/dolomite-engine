@@ -11,6 +11,7 @@ from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .communication import Communication
 from .data import get_megatron_gpt_dataloaders
 from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
@@ -18,8 +19,8 @@ from .finetune import track_train_metrics, train_step
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .utils import (
     ExperimentsTracker,
+    ProcessGroupManager,
     RunningMean,
-    get_world_size,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -104,8 +105,15 @@ def train(
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
+
     model_flops = model.get_model_tflops(micro_batch_size * gradient_accumulation_steps, sequence_length)
-    tokens_per_batch = micro_batch_size * gradient_accumulation_steps * get_world_size() * sequence_length
+
+    tokens_per_batch = (
+        micro_batch_size
+        * gradient_accumulation_steps
+        * ProcessGroupManager.get_data_parallel_world_size()
+        * sequence_length
+    )
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
@@ -170,7 +178,12 @@ def train(
                 None,
                 experiments_tracker,
                 global_step,
-                {"consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * get_world_size()},
+                {
+                    "consumed_samples": global_step
+                    * micro_batch_size
+                    * gradient_accumulation_steps
+                    * ProcessGroupManager.get_data_parallel_world_size()
+                },
             )
 
             start_time = time.perf_counter()
@@ -203,7 +216,22 @@ def evaluate(
         float: loss at the current step
     """
 
-    if val_dataloaders is None or len(val_dataloaders) == 0:
+    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+        # other tensor parallel ranks need to be told if val dataloader is None or not
+        is_val_dataloader_none = (
+            val_dataloaders is None or len(val_dataloaders) == 0
+            if ProcessGroupManager.get_tensor_parallel_rank() == 0
+            else None
+        )
+        is_val_dataloader_none = Communication.broadcast_object(
+            is_val_dataloader_none,
+            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
+            group=ProcessGroupManager.get_tensor_parallel_group(),
+        )
+    else:
+        is_val_dataloader_none = val_dataloaders is None or len(val_dataloaders) == 0
+
+    if is_val_dataloader_none:
         return
 
     model.eval()
@@ -233,7 +261,11 @@ def main() -> None:
     args: TrainingArgs = get_args(mode)
 
     # initialize distributed with nccl for multi-node communications
-    init_distributed(args.distributed_args.timeout_minutes)
+    init_distributed(
+        tensor_parallel_size=args.distributed_args.tensor_parallel_size,
+        data_parallel_size=args.distributed_args.data_parallel_size,
+        timeout_minutes=args.distributed_args.timeout_minutes,
+    )
     set_seed(args.random_args.seed)
 
     model = get_model(args, mode)

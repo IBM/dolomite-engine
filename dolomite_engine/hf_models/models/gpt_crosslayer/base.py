@@ -29,7 +29,6 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
-        self.num_key_value_heads = config.num_key_value_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 

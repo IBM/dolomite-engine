@@ -11,6 +11,7 @@ from .models import (
     GPTCrossLayerModel,
     GPTDolomiteConfig,
     GPTDolomiteForCausalLM,
+    GPTDolomiteForCausalLM_TP,
     GPTDolomiteModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
@@ -45,3 +46,17 @@ def is_custom_model(
     model_class: Union[Type[AutoModelForCausalLM], Type[AutoModelForSeq2SeqLM]], model_type: str
 ) -> bool:
     return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
+
+
+def is_tensor_parallel_compatible_model(
+    model_class: Union[Type[AutoModelForCausalLM], Type[AutoModelForSeq2SeqLM]], model_type: str
+) -> bool:
+    return model_class.__name__ == "GPTDolomiteForCausalLM" or model_type == "gpt_dolomite"
+
+
+_TENSOR_PARALLEL_CLASS_MAPPING = {"gpt_dolomite": GPTDolomiteForCausalLM_TP}
+
+
+def get_tensor_parallel_class(model_type: str) -> AutoModelForCausalLM:
+    assert is_tensor_parallel_compatible_model(AutoModelForCausalLM, model_type)
+    return _TENSOR_PARALLEL_CLASS_MAPPING[model_type]

@@ -2,8 +2,8 @@ from tqdm import tqdm
 
 from ..enums import ExperimentsTrackerName
 from .packages import is_aim_available, is_wandb_available
+from .parallel import run_rank_n
 from .pydantic import BaseArgs
-from .ranks import run_rank_n
 
 
 if is_aim_available():

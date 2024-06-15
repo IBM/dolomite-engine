@@ -8,6 +8,7 @@ from transformers import DynamicCache
 
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ...utils import divide_if_divisible
 from ..linear import ParameterizedLinear
 from ..position_embedding import apply_rotary_pos_emb
 from .utils import repeat_key_value
@@ -28,11 +29,12 @@ class Attention(nn.Module):
         n_layer = config.n_layer
         init_method = InitMethod(config.init_method)
 
-        assert (
-            self.hidden_size % self.num_heads == 0
-        ), f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})"
+        self.head_dim = divide_if_divisible(
+            self.hidden_size,
+            self.num_heads,
+            f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
+        )
 
-        self.head_dim = self.hidden_size // self.num_heads
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
@@ -57,9 +59,10 @@ class Attention(nn.Module):
                 self.num_key_value_heads is not None
             ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
 
-            assert self.num_heads % self.num_key_value_heads == 0, (
-                f"`num_heads` ({self.num_heads}) should be a multiple of `num_key_value_heads` "
-                f"({self.num_key_value_heads})"
+            divide_if_divisible(
+                self.num_heads,
+                self.num_key_value_heads,
+                f"`num_heads` ({self.num_heads}) should be a multiple of `num_key_value_heads` ({self.num_key_value_heads})",
             )
         elif self.attention_head_type == AttentionHeadType.mqa:
             if self.num_key_value_heads is None:

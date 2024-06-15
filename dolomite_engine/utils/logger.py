@@ -1,7 +1,9 @@
 import logging
 from warnings import warn
 
-from .ranks import get_world_size, run_rank_n
+import torch.distributed
+
+from .parallel import ProcessGroupManager, run_rank_n
 
 
 _LOGGER: logging.Logger = None
@@ -46,7 +48,7 @@ def print_rank_0(*args, **kwargs) -> None:
 def print_ranks_all(*args, **kwargs) -> None:
     """print on all processes sequentially, blocks other process and is slow. Please us sparingly."""
 
-    for rank in range(get_world_size()):
+    for rank in range(ProcessGroupManager.get_world_size()):
         run_rank_n(print, rank=rank, barrier=True)(f"rank {rank}:", *args, **kwargs)
 
 

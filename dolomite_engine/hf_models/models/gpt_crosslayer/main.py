@@ -18,6 +18,7 @@ class GPTCrossLayerForCausalLM(GPTCrossLayerPreTrainedModel, GPTDolomiteForCausa
             )
 
         self.m_width = config.m_width
+        self.upcast_logits_for_loss = config.upcast_logits_for_loss
 
         # Initialize weights and apply final processing
         self.post_init()

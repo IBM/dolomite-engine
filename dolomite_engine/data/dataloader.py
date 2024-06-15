@@ -5,8 +5,8 @@ import torch.distributed
 from torch.distributed import ProcessGroup
 from torch.utils.data import DataLoader, Dataset, Sampler
 
-from ..distributed import Communication
-from ..utils import get_global_rank
+from ..communication import Communication
+from ..utils import ProcessGroupManager
 
 
 class ResumableDataLoader(DataLoader):
@@ -107,7 +107,7 @@ class DispatchingDataLoader(ResumableDataLoader):
 def get_source_and_broadcast_group(
     source_broadcast_mapping: dict[int, ProcessGroup]
 ) -> tuple[bool, int, int, ProcessGroup]:
-    global_rank = get_global_rank()
+    global_rank = ProcessGroupManager.get_global_rank()
 
     for source_rank, broadcast_group in source_broadcast_mapping.items():
         ranks = torch.distributed.get_process_group_ranks(broadcast_group)

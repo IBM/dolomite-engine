@@ -1,4 +1,4 @@
-from .logging import warn_rank_0
+from .logger import warn_rank_0
 
 
 try:

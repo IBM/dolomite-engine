@@ -85,7 +85,7 @@ def collate_fn(
 
 
 def infinite_iterator(x: Iterable) -> Iterable:
-    """converts and iterable into a non-ending infinite iterable
+    """converts and iterable into a non-ending infinite iterable, will return None if input is None
 
     Args:
         x (Iterable): the iterable to convert
@@ -97,6 +97,26 @@ def infinite_iterator(x: Iterable) -> Iterable:
         Iterator[Iterable]: an element from the original iterator
     """
 
+    if x is None:
+        return None
+
     while True:
         for i in x:
             yield i
+
+
+def get_next_batch(x: Iterable) -> dict:
+    """get next batch
+
+    Args:
+        x (Iterable): dataloader
+
+    Returns:
+        dict: batch
+    """
+
+    # train_dataloader is always None on TP ranks other than 0
+    if x is None:
+        return None
+
+    return next(x)

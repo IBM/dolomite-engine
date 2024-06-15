@@ -9,12 +9,14 @@ from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
-from .data import ResumableDataLoader, get_dataloader, infinite_iterator
+from .communication import Communication
+from .data import ResumableDataLoader, get_dataloader, get_next_batch, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .utils import (
     ExperimentsTracker,
+    ProcessGroupManager,
     RunningMean,
     init_distributed,
     is_transformer_engine_available,
@@ -140,7 +142,7 @@ def train_step(
 
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
-            batch = next(train_dataloader)
+            batch = get_next_batch(train_dataloader)
             with train_step_context:
                 loss_micro_step = model(batch)
             loss += loss_micro_step
@@ -154,7 +156,7 @@ def train_step(
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    batch = next(train_dataloader)
+    batch = get_next_batch(train_dataloader)
     with train_step_context:
         loss_micro_step = model(batch)
     loss += loss_micro_step
@@ -171,6 +173,7 @@ def train_step(
         loss_micro_step.backward()
 
         if gradient_clipping is not None:
+            assert ProcessGroupManager.get_tensor_parallel_world_size() == 1
             grad_norm = model.clip_grad_norm_(gradient_clipping)
 
         optimizer.step()
@@ -293,7 +296,22 @@ def evaluate(
         float: loss at the current step
     """
 
-    if val_dataloader is None:
+    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+        # other tensor parallel ranks need to be told if val dataloader is None or not
+        is_val_dataloader_none = (
+            val_dataloader is None or len(val_dataloader) == 0
+            if ProcessGroupManager.get_tensor_parallel_rank() == 0
+            else None
+        )
+        is_val_dataloader_none = Communication.broadcast_object(
+            is_val_dataloader_none,
+            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
+            group=ProcessGroupManager.get_tensor_parallel_group(),
+        )
+    else:
+        is_val_dataloader_none = val_dataloader is None or len(val_dataloader) == 0
+
+    if is_val_dataloader_none:
         return
 
     model.eval()
@@ -324,7 +342,11 @@ def main() -> None:
     args: TrainingArgs = get_args(mode)
 
     # initialize distributed with nccl for multi-node communications
-    init_distributed(args.distributed_args.timeout_minutes)
+    init_distributed(
+        tensor_parallel_size=args.distributed_args.tensor_parallel_size,
+        data_parallel_size=args.distributed_args.data_parallel_size,
+        timeout_minutes=args.distributed_args.timeout_minutes,
+    )
     set_seed(args.random_args.seed)
 
     model = get_model(args, mode)

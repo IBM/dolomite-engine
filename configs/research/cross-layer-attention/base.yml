@@ -105,4 +105,4 @@ lr_scheduler_args:
 distributed_args:
   distributed_backend: torch
   stage: 3
-  zero_hpz_partition_size: 8
+  hsdp: true

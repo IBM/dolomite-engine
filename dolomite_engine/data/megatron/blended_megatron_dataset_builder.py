@@ -9,7 +9,7 @@ import torch
 import torch.distributed
 from transformers import AutoTokenizer
 
-from ...utils import get_global_rank
+from ...utils import ProcessGroupManager
 from .blended_dataset import BlendedDataset
 from .blended_megatron_dataset_config import BlendedMegatronDatasetConfig
 from .indexed_dataset import MMapIndexedDataset
@@ -344,10 +344,8 @@ class BlendedMegatronDatasetBuilder(object):
             Optional[DistributedDataset]: The DistributedDataset instantion or None
         """
         if torch.distributed.is_initialized():
-            rank = get_global_rank()
-            caching_allowed = rank == 0 or (
-                rank % torch.cuda.device_count() == 0 and self.config.node_uses_local_storage
-            )
+            rank = ProcessGroupManager.get_global_rank()
+            caching_allowed = rank == 0 or (torch.cuda.current_device() == 0 and self.config.node_uses_local_storage)
 
             dataset = None
 

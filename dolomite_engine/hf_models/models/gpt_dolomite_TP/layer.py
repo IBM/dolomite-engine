@@ -24,6 +24,7 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
         self.inner_dim = config.n_inner
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx
+        self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
             config.normalization_function,
@@ -32,11 +33,7 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
             normalization_implementation=normalization_implementation,
         )
         self.attn = get_attention_module(
-            config,
-            True,
-            attention_implementation,
-            use_padding_free_transformer,
-            layer_idx,
+            config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
         self.ln_2 = get_normalization_function(
             config.normalization_function,
@@ -44,26 +41,20 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = MLP_TP(
-            config.hidden_size,
-            self.inner_dim,
-            config.activation_function,
-            config.add_bias,
-            config.resid_pdrop,
-        )
+        self.mlp = MLP_TP(config)
 
-    def load_unsharded_weights(self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = "") -> None:
-        state_dict = {
-            "weight": safetensors_weight_manager.get_tensor(prefix + "ln_1.weight"),
-            "bias": safetensors_weight_manager.get_tensor(prefix + "ln_1.bias"),
-        }
+    def load_from_safetensors_weights_manager(
+        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
+    ) -> None:
+        state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "ln_1.weight")}
+        if hasattr(self.ln_1, "bias"):
+            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_1.bias")
         self.ln_1.load_state_dict(state_dict)
 
-        state_dict = {
-            "weight": safetensors_weight_manager.get_tensor(prefix + "ln_2.weight"),
-            "bias": safetensors_weight_manager.get_tensor(prefix + "ln_2.bias"),
-        }
+        state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "ln_2.weight")}
+        if hasattr(self.ln_2, "bias"):
+            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_2.bias")
         self.ln_2.load_state_dict(state_dict)
 
-        self.attn.load_unsharded_weights(safetensors_weight_manager, prefix + "attn.")
-        self.mlp.load_unsharded_weights(safetensors_weight_manager, prefix + "mlp.")
+        self.attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "attn.")
+        self.mlp.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "mlp.")

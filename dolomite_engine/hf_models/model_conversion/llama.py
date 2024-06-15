@@ -1,6 +1,6 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, LlamaConfig
 
-from ...utils import SafeTensorsWeightsManager
+from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
 from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
@@ -8,7 +8,6 @@ from ..modeling_utils import (
 )
 from ..models import GPTDolomiteConfig
 from ..models.gpt_dolomite import interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
-from ..utils import download_repo
 
 
 def import_from_huggingface_llama(pretrained_model_name_or_path: str, save_path: str) -> None:

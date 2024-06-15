@@ -19,7 +19,7 @@ from .enums import (
     ParamsGroupMethod,
     TuningMethod,
 )
-from .utils import BaseArgs, get_world_size, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
+from .utils import BaseArgs, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
 def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
@@ -148,7 +148,7 @@ class TrainingParameters(BaseArgs):
     # masking methodology of loss function input
     loss_mask: LossMask = LossMask.output_only
     # gradient clip value
-    gradient_clipping: float = 1
+    gradient_clipping: Optional[float] = 1
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.num_training_steps, "num_training_steps"), (self.micro_batch_size, "micro_batch_size")])
@@ -286,8 +286,8 @@ class DistributedArgs(BaseArgs):
     gradient_checkpointing_method: Optional[GradientCheckpointingMethod] = None
     # gradient checkpointint args
     gradient_checkpointing_args: dict = {}
-    # hierarchical partioning for ZeRO (HSDP)
-    zero_hpz_partition_size: int = 1
+    # use HSDP
+    hsdp: bool = False
     # whether to use quantized weights (ZeRO++)
     zero_quantized_weights: bool = False
     # whether to use quantized gradients (ZeRO++)
@@ -298,12 +298,16 @@ class DistributedArgs(BaseArgs):
     torch_compile: bool = False
     # whether to use a dispatching dataloader
     dispatching_dataloader: bool = False
+    # tensor parallel world size
+    tensor_parallel_size: int = 1
+    # tensor parallel embeddings
+    tensor_parallel_embeddings: bool = False
+    # data parallel world size
+    data_parallel_size: Optional[int] = None
     # distributed timeout for NCCL in minutes
     timeout_minutes: Optional[int] = None
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.zero_hpz_partition_size, "zero_hpz_partition_size")])
-
         if self.zero_quantized_weights or self.zero_quantized_gradients:
             assert (
                 self.distributed_backend == DistributedBackend.deepspeed
@@ -312,6 +316,12 @@ class DistributedArgs(BaseArgs):
         # communication dtype
         if self.communication_dtype is not None:
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
+
+        if self.stage == 0:
+            assert not self.hsdp, "hsdp is meaningless with stage 0"
+
+        if self.tensor_parallel_size > 1:
+            assert not self.hsdp, "tensor parallel is not supported with HSDP"
 
 
 class AimArgs(BaseArgs):
@@ -548,7 +558,6 @@ def log_args(args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
         result.sort(key=lambda x: x.lower())
         return result
 
-    log_rank_0(logging.INFO, f"total GPUs = {get_world_size()}")
     log_rank_0(logging.INFO, "------------------------ arguments ------------------------")
     for line in _iterate_args_recursively(args):
         line = line.split("\n")

@@ -17,8 +17,9 @@ from torch.optim.lr_scheduler import LambdaLR
 from .arguments import ExportArgs, InferenceArgs, TrainingArgs
 from .data import ResumableDataLoader
 from .enums import DistributedBackend, Mode, TuningMethod
+from .hf_models.models.gpt_dolomite_TP import unshard
 from .model_wrapper import ModelWrapper, get_model
-from .utils import ExperimentsTracker, get_global_rank, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
+from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
@@ -58,14 +59,10 @@ def save_checkpoint(
     os.makedirs(save_path, exist_ok=True)
 
     if distributed_backend == DistributedBackend.deepspeed:
-        from deepspeed import DeepSpeedEngine
-
-        assert isinstance(model, DeepSpeedEngine)
         assert save_optimizer
-
         model.save_checkpoint(args.save_args.save_path, tag=_get_checkpoint_tag(iteration))
     elif distributed_backend == DistributedBackend.torch:
-        assert isinstance(model, FSDP)
+        dp_rank = ProcessGroupManager.get_data_parallel_rank()
 
         # TODO add support for local state dict
         with FSDP.state_dict_type(
@@ -74,12 +71,14 @@ def save_checkpoint(
             state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
             optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
         ):
-            run_rank_n(torch.save)(model.state_dict(), _get_model_path(save_path))
+            model_state_dict = model.state_dict()
+            if dp_rank == 0:
+                torch.save(model_state_dict, _get_model_path(save_path))
 
             if save_optimizer:
-                run_rank_n(torch.save)(
-                    FSDP.optim_state_dict(model=model, optim=optimizer), _get_optimizer_path(save_path)
-                )
+                optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
+                if dp_rank == 0:
+                    torch.save(optimizer_state_dict, _get_optimizer_path(save_path))
 
         run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
     else:
@@ -221,13 +220,14 @@ def load_checkpoint_for_training(
 
 
 def load_checkpoint_for_inference(
-    args: Union[InferenceArgs, ExportArgs], mode: Mode
+    args: Union[InferenceArgs, ExportArgs], mode: Mode, use_meta: bool = False
 ) -> Tuple[ModelWrapper, TrainingArgs]:
     """load deepspeed checkpoint for inference
 
     Args:
         args (Union[InferenceArgs, ExportArgs]): arguments
         mode (Mode): training/inference mode
+        use_meta (bool): whether to use meta device
     """
 
     load_path = args.load_args.load_path
@@ -243,14 +243,22 @@ def load_checkpoint_for_inference(
         args_from_checkpoint.mixed_precision_args = args.mixed_precision_args
 
     distributed_backend = args_from_checkpoint.distributed_args.distributed_backend
+    checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_size
 
-    model = get_model(args_from_checkpoint, mode)
-    model = model.to(torch.cuda.current_device())
+    with (
+        torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
+        ProcessGroupManager.set_dummy_tensor_parallel_rank(1),
+        ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+    ):
+        model = get_model(args_from_checkpoint, mode)
 
     if distributed_backend == DistributedBackend.deepspeed:
         from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
 
         state = get_fp32_state_dict_from_zero_checkpoint(load_path, _get_checkpoint_tag(iteration))
+
+        if use_meta:
+            model = model.to_empty(device="cpu")
 
         if model.tuning_method == TuningMethod.prompt_tuning:
             model.load_state_dict(state, strict=False)
@@ -263,7 +271,35 @@ def load_checkpoint_for_inference(
 
             model.load_state_dict(state)
     elif distributed_backend == DistributedBackend.torch:
-        model.load_state_dict(torch.load(_get_model_path(_get_base_path(load_path, iteration))))
+        if checkpoint_tp_world_size > 1:
+            tp_state_dicts = []
+            with ProcessGroupManager.set_dummy_tensor_parallel_world_size(checkpoint_tp_world_size):
+                for rank in range(checkpoint_tp_world_size):
+                    with ProcessGroupManager.set_dummy_tensor_parallel_rank(rank):
+                        tp_state_dicts.append(
+                            torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
+                        )
+
+            state = unshard(
+                config=model.config,
+                tensor_parallel_state_dicts=tp_state_dicts,
+                tensor_parallel_embeddings=args_from_checkpoint.distributed_args.tensor_parallel_embeddings,
+                prefix="model.",
+                # with bf16 nn.Embedding backward pass is non-deteministic
+                check_correctness=args_from_checkpoint.distributed_args.tensor_parallel_embeddings,
+            )
+            del tp_state_dicts
+        else:
+            with (
+                ProcessGroupManager.set_dummy_tensor_parallel_rank(1),
+                ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+            ):
+                state = torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
+
+        if use_meta:
+            model = model.to_empty(device="cpu")
+
+        model.load_state_dict(state)
     else:
         raise ValueError(f"unexpected distributed_backend ({args['distributed_args']['distributed_backend']})")
 
@@ -293,11 +329,21 @@ def _get_base_path(path: str, iteration: int) -> str:
 
 
 def _get_model_path(path: str) -> str:
-    return os.path.join(path, "model.pt")
+    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+        suffix = f"model-tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt"
+    else:
+        suffix = "model.pt"
+
+    return os.path.join(path, suffix)
 
 
 def _get_optimizer_path(path: str) -> str:
-    return os.path.join(path, "optimizer.pt")
+    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+        suffix = f"optimizer-tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt"
+    else:
+        suffix = "optimizer.pt"
+
+    return os.path.join(path, suffix)
 
 
 def _get_lr_scheduler_path(path: str) -> str:
@@ -305,11 +351,11 @@ def _get_lr_scheduler_path(path: str) -> str:
 
 
 def _get_dataloader_path(path: str) -> str:
-    return os.path.join(path, "dataloader", f"dataloader-{get_global_rank()}.pt")
+    return os.path.join(path, "dataloader", f"dataloader-{ProcessGroupManager.get_data_parallel_rank()}.pt")
 
 
 def _get_rng_state_path(path: str) -> str:
-    return os.path.join(path, "rng_state", f"rng_state-{get_global_rank()}.pt")
+    return os.path.join(path, "rng_state", f"rng_state-{ProcessGroupManager.get_global_rank()}.pt")
 
 
 def _get_latest_checkpointed_iterations_path(path: str) -> str:

@@ -33,3 +33,15 @@ class CUDA_RNGStatesTracker:
         finally:
             self.states[name] = torch.cuda.get_rng_state()
             torch.cuda.set_rng_state(orig_rng_state)
+
+
+_RNG_TRACKER: CUDA_RNGStatesTracker = None
+
+
+def get_cuda_rng_tracker() -> CUDA_RNGStatesTracker:
+    return _RNG_TRACKER
+
+
+def set_cuda_rng_tracker(tracker: CUDA_RNGStatesTracker) -> None:
+    global _RNG_TRACKER
+    _RNG_TRACKER = tracker

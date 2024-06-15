@@ -1,9 +1,12 @@
 from typing import Union
 
 import torch
+import torch.distributed
 
 from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
+from ..communication import Communication
 from ..enums import Mode
+from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -25,8 +28,29 @@ class ModelWrapperForFinetuning(ModelWrapper):
         """
 
         if not self.use_padding_free_transformer:
-            for i in batch:
-                batch[i] = batch[i].to(torch.cuda.current_device())
+            if self.tp_world_size > 1:
+                keys = ["input_ids", "attention_mask", "labels"]
+
+                tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
+                tp_group = ProcessGroupManager.get_tensor_parallel_group()
+
+                batch_shape = batch[keys[0]].shape if self.tp_rank == 0 else None
+                batch_shape = Communication.broadcast_object(batch_shape, src=tp_source_rank, group=tp_group)
+
+                if self.tp_rank == 0:
+                    for key in keys:
+                        batch[key] = batch[key].to(torch.cuda.current_device())
+                else:
+                    batch = {
+                        key: torch.empty(batch_shape, dtype=torch.long, device=torch.cuda.current_device())
+                        for key in keys
+                    }
+
+                for key in keys:
+                    torch.distributed.broadcast(batch[key], src=tp_source_rank, group=tp_group)
+            else:
+                for key in batch:
+                    batch[key] = batch[key].to(torch.cuda.current_device())
 
         model_outputs = self.model(**batch)
 

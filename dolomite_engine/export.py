@@ -10,7 +10,7 @@ def main() -> None:
 
     args = get_args(mode)
 
-    model, _ = load_checkpoint_for_inference(args, mode)
+    model, _ = load_checkpoint_for_inference(args, mode, use_meta=True)
     model.save_pretrained(args.export_path)
 
 

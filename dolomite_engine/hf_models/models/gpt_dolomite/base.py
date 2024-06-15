@@ -8,16 +8,8 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import (
-    Alibi,
-    ParameterizedEmbedding,
-    ParameterizedLinear,
-    RMSNorm,
-    RoPE,
-    YaRNScaledRoPE,
-    get_normalization_function,
-)
-from ...utils import check_list_type, flatten_and_convert_to_tensors
+from ...modeling_utils import Alibi, ParameterizedEmbedding, RMSNorm, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...utils import check_list_type, divide_if_divisible, flatten_and_convert_to_tensors
 from .config import GPTDolomiteConfig
 from .layer import GPTDolomiteBlock
 
@@ -70,37 +62,9 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
             ]
         )
 
-        self.upcast_logits_for_loss = config.upcast_logits_for_loss
-
     def _init_weights(self, module: nn.Module) -> None:
-        if isinstance(module, (ParameterizedEmbedding, ParameterizedLinear, nn.LayerNorm, RMSNorm, Alibi, RoPE)):
+        if isinstance(module, (nn.Embedding, nn.Linear, nn.LayerNorm, RMSNorm, Alibi, RoPE)):
             module.reset_parameters()
-
-    def get_autoregressive_language_modeling_loss(
-        self, lm_logits: torch.Tensor, labels: torch.Tensor, cu_seqlens: torch.Tensor
-    ) -> torch.Tensor:
-        if labels is None:
-            return None
-
-        if self._use_padding_free_transformer:
-            shift_logits = lm_logits[:-1, :]
-            shift_labels = labels[1:].to(shift_logits.device)
-
-            # this is needed so that the last token of current example doesn't predict first token of next example
-            drop_loss_positions = cu_seqlens[1:-1] - 1
-            shift_labels[drop_loss_positions] = -100
-        else:
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
-
-        # Flatten the tokens
-        loss_fct = nn.CrossEntropyLoss()
-        if self.upcast_logits_for_loss:
-            shift_logits = shift_logits.float()
-        loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-
-        return loss
 
     def prepare_inputs_for_model(
         self,
@@ -183,15 +147,14 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
-        self.num_key_value_heads = config.num_key_value_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
-        assert (
-            self.embed_dim % self.num_heads == 0
-        ), f"`embed_dim` ({self.embed_dim}) must be divisible by `num_heads` ({self.num_heads})"
-
-        self.head_dim = self.embed_dim // self.num_heads
+        self.head_dim = divide_if_divisible(
+            self.embed_dim,
+            self.num_heads,
+            f"`embed_dim` ({self.embed_dim}) must be divisible by `num_heads` ({self.num_heads})",
+        )
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 

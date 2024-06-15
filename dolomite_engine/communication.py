@@ -3,13 +3,13 @@ from typing import Any
 import torch.distributed
 from torch.distributed import ProcessGroup
 
-from ..utils import get_global_rank
+from .utils import ProcessGroupManager
 
 
 class Communication:
     @staticmethod
     def broadcast_object(obj: Any, src: int, group: ProcessGroup) -> Any:
-        if get_global_rank() != src:
+        if ProcessGroupManager.get_global_rank() != src:
             obj = None
 
         object_list = [obj]

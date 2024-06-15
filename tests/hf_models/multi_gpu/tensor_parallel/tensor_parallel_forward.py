@@ -1,21 +1,19 @@
 import argparse
+import os
 import random
 
 import torch
 import torch.distributed
 
-from dolomite_engine import (
-    AttentionHeadType,
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
+from dolomite_engine.utils import (
     CUDA_RNGStatesTracker,
-    GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
     ProcessGroupManager,
     SafeTensorsWeightsManager,
     set_cuda_rng_tracker,
-    set_tensor_parallel_group_manager,
 )
 
-from ..test_common import TestCommons
+from ...test_common import TestCommons
 
 
 parser = argparse.ArgumentParser()
@@ -26,17 +24,7 @@ parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
 
-# initialize distributed
-torch.distributed.init_process_group("nccl")
-
-device_count_per_node = torch.cuda.device_count()
-local_rank = torch.distributed.get_rank() % device_count_per_node
-
-torch.cuda.set_device(local_rank)
-
-# this assumes all GPUs fall in tensor parallel group
-tensor_parallel_manager = ProcessGroupManager()
-set_tensor_parallel_group_manager(tensor_parallel_manager)
+ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
 
 # this is needed when combining different kinds of parallelism for training
 # leave as is if unaware of what you are doing
@@ -47,7 +35,7 @@ set_cuda_rng_tracker(cuda_rng_tracker)
 
 num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
-    num_key_value_heads = 4
+    num_key_value_heads = 8
 
 config = GPTDolomiteConfig(
     attention_head_type=args.attention_head_type,
@@ -55,7 +43,8 @@ config = GPTDolomiteConfig(
     position_embedding_type=args.position_embedding_type,
     num_key_value_heads=num_key_value_heads,
     add_bias=False,
-    n_embd=12,
+    n_embd=128,
+    n_head=16,
 )
 
 if torch.distributed.get_rank() == 0:
@@ -65,7 +54,6 @@ if torch.distributed.get_rank() == 0:
     model = model.to_empty(device=torch.cuda.current_device())
     for _, param in model.named_parameters():
         param.data.normal_(0, 0.0125)
-    model.transformer.rope.initialize("cuda")
 
     model.eval()
 
@@ -77,14 +65,8 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
     model_tp = GPTDolomiteForCausalLM_TP(
-        config,
-        tensor_parallel_vocab_matrix=False,
-        tensor_parallel_position_embedding_matrix=False,
-        attn_implementation=args.attention_implementation,
+        config, tensor_parallel_embeddings=False, attn_implementation=args.attention_implementation
     )
-
-    if torch.distributed.get_rank() == 0:
-        print(model_tp)
 
 # copy to device without copying storage
 model_tp = model_tp.to_empty(device=torch.cuda.current_device())
@@ -92,8 +74,7 @@ model_tp = model_tp.to_empty(device=torch.cuda.current_device())
 # load weights into tensor parallel model using SafeTensorsWeightsManager class
 # this avoids loading multiple copies of the parameters in CPU memory
 safetensors_weight_manager = SafeTensorsWeightsManager(args.tmp_path)
-model_tp.load_unsharded_weights(safetensors_weight_manager)
-model_tp.transformer.rope.initialize("cuda")
+model_tp.load_from_safetensors_weights_manager(safetensors_weight_manager)
 
 # set model to eval mode
 model_tp.eval()
@@ -107,4 +88,5 @@ with torch.inference_mode():
 
     if torch.distributed.get_rank() == 0:
         y = model(x)
-        print((y[0] - y_tp[0]).abs().max())
+        error = (y[0] - y_tp[0]).abs().max()
+        assert error < 5e-4, "outputs don't match for normal and tensor parallel model"

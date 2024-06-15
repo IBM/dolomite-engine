@@ -2,13 +2,8 @@ import torch
 import torch.distributed
 from transformers import AutoTokenizer
 
-from dolomite_engine import (
-    CUDA_RNGStatesTracker,
-    GPTDolomiteForCausalLM_TP,
-    ProcessGroupManager,
-    set_cuda_rng_tracker,
-    set_tensor_parallel_group_manager,
-)
+from dolomite_engine.hf_models import GPTDolomiteForCausalLM_TP
+from dolomite_engine.utils import CUDA_RNGStatesTracker, ProcessGroupManager, set_cuda_rng_tracker
 
 
 # initialize distributed
@@ -19,9 +14,7 @@ local_rank = torch.distributed.get_rank() % device_count_per_node
 
 torch.cuda.set_device(local_rank)
 
-# this assumes all GPUs fall in tensor parallel group
-tensor_parallel_manager = ProcessGroupManager()
-set_tensor_parallel_group_manager(tensor_parallel_manager)
+ProcessGroupManager(tensor_parallel_size=8)
 
 # this is needed when combining different kinds of parallelism for training
 # leave as is if unaware of what you are doing
@@ -30,9 +23,12 @@ cuda_rng_tracker.add("tensor-parallel-seed", 42)
 set_cuda_rng_tracker(cuda_rng_tracker)
 
 
-model_name = "checkpoints-13b-8k/iter_00300000"
+model_name = "save/"
 
-model = GPTDolomiteForCausalLM_TP.from_pretrained(model_name)
+model = GPTDolomiteForCausalLM_TP.from_pretrained(model_name, tensor_parallel_embeddings=True)
+
+if torch.distributed.get_rank() == 0:
+    print(model)
 
 # set model to eval mode
 model.eval()
@@ -49,4 +45,4 @@ for i in x:
 y = model.generate(**x, max_new_tokens=100)
 
 if torch.distributed.get_rank() == 0:
-    print(tokenizer.batch_decode(y))
+    print(tokenizer.batch_decode(y)[0])

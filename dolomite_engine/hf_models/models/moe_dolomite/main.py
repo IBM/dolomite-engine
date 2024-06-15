@@ -25,6 +25,7 @@ class MoEDolomiteForCausalLM(MoEDolomitePreTrainedModel, GPTDolomiteForCausalLM)
         self.num_experts = config.num_experts
         self.num_experts_per_tok = config.num_experts_per_tok
         self.m_width = config.m_width
+        self.upcast_logits_for_loss = config.upcast_logits_for_loss
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -99,11 +100,7 @@ class MoEDolomiteForCausalLM(MoEDolomitePreTrainedModel, GPTDolomiteForCausalLM)
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = (
-            F.linear(hidden_states, self.transformer.wte.weight)
-            if self._tied_word_embeddings
-            else self.lm_head(hidden_states)
-        )
+        lm_logits = self.get_lm_logits(hidden_states)
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
