@@ -242,14 +242,11 @@ class ModelWrapper(torch.nn.Module):
                         with torch.device("meta"):
                             self.model = _get_model()
                     else:
-                        if is_custom_model(self.model_class, self.config.model_type):
-                            if ProcessGroupManager.get_data_parallel_rank() == 0:
-                                self.model = _get_model()
-                            else:
-                                with torch.device("meta"):
-                                    self.model = _get_model()
-                        else:
-                            self.model = _get_model(low_cpu_mem_usage=True)
+                        assert (
+                            self.tp_world_size == 1
+                        ), "tensor parallel models don't support efficient init with model name"
+
+                        self.model = _get_model(low_cpu_mem_usage=True)
                 else:
                     self.model = _get_model()
         else:

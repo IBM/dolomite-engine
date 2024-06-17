@@ -23,18 +23,28 @@ from .wrapper import get_module_class_from_name
 from .yaml import load_yaml
 
 
-def init_distributed(tensor_parallel_size: int, data_parallel_size: int, timeout_minutes: int = None) -> None:
+def init_distributed(
+    tensor_parallel_size: int,
+    data_parallel_size: int,
+    data_parallel_replication_world_size: int,
+    data_parallel_sharding_world_size: int,
+    timeout_minutes: int = None,
+) -> None:
     """intialize distributed
 
     Args:
         tensor_parallel_size (int): tensor parallel size
         data_parallel_size (int): data parallel size
+        data_parallel_replication_world_size (int): data parallel replication world size
+        data_parallel_sharding_world_size (int): data parallel sharding world size
         timeout_minutes (int, optional): distributed timeout in minutes. Defaults to None.
     """
 
     process_group_manager = ProcessGroupManager(
         tensor_parallel_size=tensor_parallel_size,
         data_parallel_size=data_parallel_size,
+        data_parallel_replication_world_size=data_parallel_replication_world_size,
+        data_parallel_sharding_world_size=data_parallel_sharding_world_size,
         timeout_minutes=timeout_minutes,
     )
 

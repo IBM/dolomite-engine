@@ -41,8 +41,10 @@ def get_deepspeed_config(args: TrainingArgs) -> dict:
             "gradient_clipping": args.training_parameters.gradient_clipping,
         }
 
-        if args.distributed_args.hsdp:
-            config["zero_optimization"]["zero_hpz_partition_size"] = 8
+        if args.distributed_args.zero_topology is not None:
+            config["zero_optimization"][
+                "zero_hpz_partition_size"
+            ] = args.distributed_args.zero_topology.data_parallel_sharding_world_size
 
         dtype_config: dict = deepcopy(_DEEPSPEED_MIXED_PRECISION_CONFIG[args.mixed_precision_args.dtype])
         if args.distributed_args.communication_dtype is not None:

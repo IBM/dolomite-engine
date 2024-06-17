@@ -138,7 +138,7 @@ def _get_layernorm(
     }
     if normalization_function == "layernorm":
         output[prefix + "bias"] = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "bias"
+            tensor_parallel_state_dicts, key=prefix + "bias", check_correctness=check_correctness
         )
     return output
 

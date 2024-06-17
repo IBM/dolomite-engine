@@ -271,6 +271,23 @@ class MixedPrecisionArgs(BaseArgs):
             assert self.fp8_backend is None, "fp8_backend specified without fp8 dtype"
 
 
+class ZeroTopologyArgs(BaseArgs):
+    # GPUs to use for replication
+    data_parallel_replication_world_size: Optional[int] = None
+    # GPUs to use for sharding
+    data_parallel_sharding_world_size: Optional[int] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.data_parallel_replication_world_size is None:
+            assert (
+                self.data_parallel_sharding_world_size is None
+            ), "data_parallel_replication_world_size needs to be specified with data_parallel_sharding_world_size"
+        else:
+            assert (
+                self.data_parallel_sharding_world_size is not None
+            ), "data_parallel_sharding_world_size needs to be specified with data_parallel_replication_world_size"
+
+
 class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
@@ -286,8 +303,8 @@ class DistributedArgs(BaseArgs):
     gradient_checkpointing_method: Optional[GradientCheckpointingMethod] = None
     # gradient checkpointint args
     gradient_checkpointing_args: dict = {}
-    # use HSDP
-    hsdp: bool = False
+    # zero topology
+    zero_topology: Optional[ZeroTopologyArgs] = ZeroTopologyArgs()
     # whether to use quantized weights (ZeRO++)
     zero_quantized_weights: bool = False
     # whether to use quantized gradients (ZeRO++)
@@ -318,10 +335,10 @@ class DistributedArgs(BaseArgs):
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
         if self.stage == 0:
-            assert not self.hsdp, "hsdp is meaningless with stage 0"
+            assert self.zero_topology is None, "zero_topology is meaningless with stage 0"
 
         if self.tensor_parallel_size > 1:
-            assert not self.hsdp, "tensor parallel is not supported with HSDP"
+            assert self.zero_topology is None, "tensor parallel is not supported with zero_topology"
 
 
 class AimArgs(BaseArgs):

@@ -134,7 +134,14 @@ def train_step(
         Tuple[float, float]: loss at the current step, grad norm at the current step
     """
 
-    no_sync = model.no_sync if distributed_backend == DistributedBackend.torch else contextlib.nullcontext
+    no_sync = contextlib.nullcontext
+    if distributed_backend == DistributedBackend.torch:
+        # FSDP-2
+        if hasattr(model, "set_requires_gradient_sync"):
+            model.set_requires_gradient_sync(False)
+        else:
+            no_sync = model.no_sync
+
     loss = 0
     grad_norm = None
     if distributed_backend == DistributedBackend.torch:
@@ -156,6 +163,9 @@ def train_step(
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
+    if distributed_backend == DistributedBackend.torch and hasattr(model, "set_requires_gradient_sync"):
+        model.set_requires_gradient_sync(True)
+
     batch = get_next_batch(train_dataloader)
     with train_step_context:
         loss_micro_step = model(batch)
@@ -174,7 +184,7 @@ def train_step(
 
         if gradient_clipping is not None:
             assert ProcessGroupManager.get_tensor_parallel_world_size() == 1
-            grad_norm = model.clip_grad_norm_(gradient_clipping)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
 
         optimizer.step()
         lr_scheduler.step()
@@ -183,6 +193,7 @@ def train_step(
 
     loss = loss / gradient_accumulation_steps
     loss = loss.item()
+    grad_norm = grad_norm.item()
 
     return loss, grad_norm
 
@@ -345,6 +356,8 @@ def main() -> None:
     init_distributed(
         tensor_parallel_size=args.distributed_args.tensor_parallel_size,
         data_parallel_size=args.distributed_args.data_parallel_size,
+        data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
+        data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)

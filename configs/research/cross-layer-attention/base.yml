@@ -105,4 +105,6 @@ lr_scheduler_args:
 distributed_args:
   distributed_backend: torch
   stage: 3
-  hsdp: true
+  zero_topology:
+    data_parallel_replication_world_size: 16
+    data_parallel_sharding_world_size: 8
