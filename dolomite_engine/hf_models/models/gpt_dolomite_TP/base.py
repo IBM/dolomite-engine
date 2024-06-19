@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...modeling_utils import RoPE, YaRNScaledRoPE, get_normalization_function
 from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .layer import GPTDolomiteBlock_TP
@@ -31,11 +31,12 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         self.head_dim = self.embed_dim // self.num_heads
 
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-        if self.tensor_parallel_embeddings:
-            self.wte = Embedding_TP(config.vocab_size, self.embed_dim, std=self.initializer_range)
-        else:
-            self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
+        self.wte = Embedding_TP(
+            config.vocab_size,
+            self.embed_dim,
+            std=self.initializer_range,
+            tensor_parallel_embeddings=self.tensor_parallel_embeddings,
+        )
 
         self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
         self.h = nn.ModuleList(
@@ -63,29 +64,21 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    def get_input_embeddings(self) -> Union[Embedding_TP, ParameterizedEmbedding]:
+    def get_input_embeddings(self) -> Embedding_TP:
         return self.wte
 
-    def set_input_embeddings(self, new_embeddings: Union[Embedding_TP, ParameterizedEmbedding]) -> None:
+    def set_input_embeddings(self, new_embeddings: Embedding_TP) -> None:
         self.wte = new_embeddings
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
     ) -> None:
         # word embeddings
-        if self.tensor_parallel_embeddings:
-            self.wte.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "wte.")
-        else:
-            state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "wte.weight")}
-            self.wte.load_state_dict(state_dict)
+        self.wte.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "wte.")
 
         # positional embeddings
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            if self.tensor_parallel_embeddings:
-                self.wpe.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "wpe.")
-            else:
-                state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "wpe.weight")}
-                self.wpe.load_state_dict(state_dict)
+            self.wpe.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "wpe.")
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             with torch.device(torch.cuda.current_device()):
                 self.alibi.reset_parameters()
@@ -145,10 +138,9 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         max_position_embeddings = self.config.max_position_embeddings
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            if self.tensor_parallel_embeddings:
-                self.wpe = Embedding_TP(max_position_embeddings, self.embed_dim)
-            else:
-                self.wpe = ParameterizedEmbedding(max_position_embeddings, self.embed_dim)
+            self.wpe = Embedding_TP(
+                max_position_embeddings, self.embed_dim, tensor_parallel_embeddings=self.tensor_parallel_embeddings
+            )
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
