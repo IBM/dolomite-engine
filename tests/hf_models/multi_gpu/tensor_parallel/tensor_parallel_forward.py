@@ -21,6 +21,7 @@ parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--tmp-path", type=str)
+parser.add_argument("--tensor-parallel-embeddings", action="store_true")
 args = parser.parse_args()
 
 
@@ -65,7 +66,9 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
     model_tp = GPTDolomiteForCausalLM_TP(
-        config, tensor_parallel_embeddings=False, attn_implementation=args.attention_implementation
+        config,
+        tensor_parallel_embeddings=args.tensor_parallel_embeddings,
+        attn_implementation=args.attention_implementation,
     )
 
 # copy to device without copying storage
@@ -84,9 +87,13 @@ random.seed(42)
 
 with torch.inference_mode():
     x = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
-    y_tp = model_tp(x)
+    y_tp = model_tp(x)[0]
+
+    if args.tensor_parallel_embeddings:
+        y_tp = y_tp[..., : config.vocab_size]
 
     if torch.distributed.get_rank() == 0:
-        y = model(x)
-        error = (y[0] - y_tp[0]).abs().max()
+        y = model(x)[0]
+
+        error = (y - y_tp).abs().max()
         assert error < 5e-4, "outputs don't match for normal and tensor parallel model"

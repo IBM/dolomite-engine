@@ -117,9 +117,6 @@ def wrap_model_for_distributed_training(
         assert stage in [0, 2, 3]
         assert not cpu_offload
 
-        if zero_topology is not None:
-            assert tp_world_size == 1, "tensor parallel is not supported with zero_topology"
-
         if stage == 0:
             assert zero_topology is None
             assert not efficient_initialization

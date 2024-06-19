@@ -16,7 +16,7 @@ def reduce_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
 
 
 def gather_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    return _GatherFromTensorParallelRegion(input)
+    return _GatherFromTensorParallelRegion.apply(input)
 
 
 class _CopyToTensorParallelRegion(torch.autograd.Function):

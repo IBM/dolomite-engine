@@ -193,7 +193,7 @@ def train_step(
 
     loss = loss / gradient_accumulation_steps
     loss = loss.item()
-    grad_norm = grad_norm.item()
+    grad_norm = 0 if grad_norm is None else grad_norm.item()
 
     return loss, grad_norm
 

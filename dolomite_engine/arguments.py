@@ -337,9 +337,6 @@ class DistributedArgs(BaseArgs):
         if self.stage == 0:
             assert self.zero_topology is None, "zero_topology is meaningless with stage 0"
 
-        if self.tensor_parallel_size > 1:
-            assert self.zero_topology is None, "tensor parallel is not supported with zero_topology"
-
 
 class AimArgs(BaseArgs):
     # aim repo, experiment logs are saved here
