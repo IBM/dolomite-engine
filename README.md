@@ -6,7 +6,7 @@
 
 
 # Getting Started
-Run `make install` or `pip install -r requirements.txt` to install the requirements for this repository.
+Run `make install` or `pip install -r requirements.txt` to install the requirements for this repository. You might need to install `flash-attn`.
 
 # Distributed finetuning
 This repository is meant for finetuning large language models (of any scale) using multiple backends. The following backends are currently supported:
@@ -22,7 +22,7 @@ The repository currently only supports generative models but can be easily exten
 Please note that this repository doesn't support Tensor Parallel or Pipeline Parallel (yet :wink:).
 
 # HuggingFace compatible custom models
-This repository works with all HuggingFace models (text-to-text only for the moment) out-of-the-box.
+This repository works with all HuggingFace models (text-to-text only for the moment) out-of-the-box. The checkpoints have to be in safetensors format, if not you can check `tools/pt_to_safetensors.py`. If your model_type is `gpt_megatron` just change it to `gpt_dolomite`.
 
 > [!TIP]
 > You might be able to enjoy additional memory and computation savings when finetuning your models using the [padding free transformers optimization](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This optimization is currently only supported for decoder models and requires converting your model (say LLama-3 for example) to a [custom class](dolomite_engine/hf_models/models/gpt_dolomite/) implemented in this repo. This is completely optional and not required for finetuning. The conversion can be achieved as follows:
