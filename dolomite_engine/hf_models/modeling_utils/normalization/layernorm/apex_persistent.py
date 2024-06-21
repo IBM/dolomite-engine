@@ -50,7 +50,9 @@ def apex_persistent_layernorm(
 
 
 class ApexPersistentLayerNorm(nn.LayerNorm):
-    def __init__(self, normalized_shape: int, eps: float = 0.00001) -> None:
+    def __init__(self, normalized_shape: int, eps: float = 0.00001, elementwise_affine: bool = True) -> None:
+        assert self.elementwise_affine
+
         if not is_apex_persistent_layernorm_available():
             raise ImportError("build apex from source with --fast_layer_norm")
 

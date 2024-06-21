@@ -15,10 +15,14 @@ def get_normalization_function(
     normalized_shape: int,
     eps: float = 1e-5,
     normalization_implementation: str = "torch",
+    elementwise_affine: bool = True,
 ) -> nn.LayerNorm:
     if name in _NORMALIZATION_FUNCTIONS:
         return _NORMALIZATION_FUNCTIONS[name](
-            normalized_shape, eps=eps, normalization_implementation=normalization_implementation
+            normalized_shape,
+            eps=eps,
+            normalization_implementation=normalization_implementation,
+            elementwise_affine=elementwise_affine,
         )
 
     raise ValueError(f"unexpected `normalization_implementation` {normalization_implementation}")

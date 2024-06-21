@@ -23,7 +23,9 @@ def apex_layernorm(
 
 
 class ApexLayerNorm(nn.LayerNorm):
-    def __init__(self, normalized_shape: int, eps: float = 0.00001) -> None:
+    def __init__(self, normalized_shape: int, eps: float = 0.00001, elementwise_affine: bool = True) -> None:
+        assert elementwise_affine
+
         if not is_apex_layernorm_available():
             raise ImportError("build apex from source")
 

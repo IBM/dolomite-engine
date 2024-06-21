@@ -22,7 +22,9 @@ def apex_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float, memory_e
 
 
 class ApexRMSNorm(RMSNorm):
-    def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
+    def __init__(self, normalized_shape: int, eps: float = 1e-6, elementwise_affine: bool = True) -> None:
+        assert elementwise_affine
+
         if not is_apex_rmsnorm_available():
             raise ImportError("build apex from source")
 
