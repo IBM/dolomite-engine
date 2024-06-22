@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
+from ...utils import divide_if_divisible
 from ..gpt_dolomite.mlp import MLP
 from .config import GPTEnsembleConfig
 from .linear import Linear3D
@@ -14,7 +15,7 @@ class EnsembleMLP(MLP):
         super().__init__()
 
         hidden_size = config.n_embd
-        intermediate_size = config.n_inner / config.pretraining_tensor_parallel_size
+        intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
         activation_function = config.activation_function
         add_bias = config.add_bias
         residual_dropout = config.resid_pdrop

@@ -8,7 +8,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import divide_if_divisible
-from ..gpt_dolomite import GPTDolomitePreTrainedModel
+from ..gpt_dolomite import GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .config import GPTEnsembleConfig
 from .layer import GPTEnsembleBlock
 
@@ -18,7 +18,7 @@ class GPTEnsemblePreTrainedModel(GPTDolomitePreTrainedModel):
     _no_split_modules = ["GPTEnsembleBlock"]
 
 
-class GPTEnsembleModel(GPTEnsemblePreTrainedModel):
+class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
     def __init__(self, config: GPTEnsembleConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
 

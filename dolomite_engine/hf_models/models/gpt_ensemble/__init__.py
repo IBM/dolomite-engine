@@ -1,3 +1,3 @@
-from .base import GPTDolomiteModel, GPTDolomitePreTrainedModel
+from .base import GPTEnsembleModel, GPTEnsemblePreTrainedModel
 from .config import GPTEnsembleConfig
-from .main import GPTDolomiteForCausalLM
+from .main import GPTEnsembleForCausalLM

@@ -23,7 +23,6 @@ class CrossLayer(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
         self.m_residual = config.m_residual
 
         self._use_eager_attention = attention_implementation == "eager"

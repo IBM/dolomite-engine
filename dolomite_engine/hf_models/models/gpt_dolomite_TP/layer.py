@@ -1,7 +1,6 @@
 import torch.nn as nn
 
 from ....utils import SafeTensorsWeightsManager
-from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from ...modeling_utils_TP import get_attention_module
 from ..gpt_dolomite import GPTDolomiteConfig
@@ -21,8 +20,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
         nn.Module.__init__(self)
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
