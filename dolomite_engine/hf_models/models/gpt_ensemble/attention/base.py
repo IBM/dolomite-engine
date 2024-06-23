@@ -1,11 +1,13 @@
 import math
+from typing import Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ....modeling_utils import Attention
+from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
 from ....utils import divide_if_divisible
 from ..config import GPTEnsembleConfig
 from ..linear import EnsembleLinear
@@ -76,7 +78,12 @@ class EnsembleAttention(Attention):
             std /= math.sqrt(m_width)
         self.c_attn = EnsembleLinear(
             self.hidden_size,
-            self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+            divide_if_divisible(
+                self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+                config.pretraining_tensor_parallel_size,
+                "",
+            ),
+            tensor_parallel_size=config.pretraining_tensor_parallel_size,
             bias=self.add_bias,
             std=std,
         )
@@ -84,7 +91,13 @@ class EnsembleAttention(Attention):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = EnsembleLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
+        self.c_proj = EnsembleLinear(
+            divide_if_divisible(self.hidden_size, config.pretraining_tensor_parallel_size, ""),
+            self.hidden_size,
+            tensor_parallel_size=config.pretraining_tensor_parallel_size,
+            bias=self.add_bias,
+            std=std,
+        )
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop
