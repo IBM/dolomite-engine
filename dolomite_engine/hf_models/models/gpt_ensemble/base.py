@@ -28,6 +28,9 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
+        self.pretraining_tp_size = config.pretraining_tensor_parallel_size
+        self.embed_dim_per_tp_rank = divide_if_divisible(self.embed_dim, self.pretraining_tp_size, "")
+
         self.head_dim = divide_if_divisible(
             self.embed_dim,
             self.num_heads,
@@ -102,6 +105,8 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
         )
 
         output_shape = input_shape + (hidden_states.size(-1),)
+
+        hidden_states = hidden_states.unsqueeze(-2)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None

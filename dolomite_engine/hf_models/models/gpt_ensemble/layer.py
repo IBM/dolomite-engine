@@ -1,6 +1,7 @@
+import torch.nn as nn
+
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
-from ...utils import divide_if_divisible
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from .config import GPTEnsembleConfig
 from .mlp import EnsembleMLP
@@ -15,9 +16,9 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
         use_padding_free_transformer: bool,
         layer_idx: int = None,
     ) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
 
-        hidden_size = divide_if_divisible(config.hidden_size, config.pretraining_tensor_parallel_size, "")
+        hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx

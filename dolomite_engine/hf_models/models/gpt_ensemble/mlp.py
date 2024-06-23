@@ -7,12 +7,12 @@ from ...modeling_utils import get_activation_function, is_glu
 from ...utils import divide_if_divisible
 from ..gpt_dolomite.mlp import MLP
 from .config import GPTEnsembleConfig
-from .linear import Linear3D
+from .linear import EnsembleLinear
 
 
 class EnsembleMLP(MLP):
     def __init__(self, config: GPTEnsembleConfig) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
 
         hidden_size = config.n_embd
         intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
@@ -28,7 +28,7 @@ class EnsembleMLP(MLP):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_fc = Linear3D(
+        self.c_fc = EnsembleLinear(
             hidden_size,
             2 * intermediate_size if is_glu(activation_function) else intermediate_size,
             tensor_parallel_size=config.pretraining_tensor_parallel_size,
@@ -41,7 +41,7 @@ class EnsembleMLP(MLP):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = Linear3D(
+        self.c_proj = EnsembleLinear(
             intermediate_size,
             hidden_size,
             tensor_parallel_size=config.pretraining_tensor_parallel_size,

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class Linear3D(nn.Module):
+class EnsembleLinear(nn.Module):
     def __init__(
         self, in_features: int, out_features: int, tensor_parallel_size: int, std: float, bias: bool = True
     ) -> None:
