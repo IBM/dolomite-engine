@@ -1,4 +1,8 @@
+from typing import Tuple
+
 import torch.nn as nn
+from torch import Tensor
+from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
@@ -42,3 +46,19 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             elementwise_affine=False,
         )
         self.mlp = EnsembleMLP(config)
+
+    def forward(
+        self,
+        hidden_states: Tensor,
+        past_key_values: DynamicCache = None,
+        attention_mask: Tensor = None,
+        rope_cos_sin: Tensor = None,
+        cu_seqlens: Tensor = None,
+        max_seqlen: Tensor = None,
+    ) -> Tuple[Tensor] | Tuple[Tensor, Tensor] | Tuple[Tensor, Tensor, Tensor]:
+        hidden_states = hidden_states.unsqueeze(1)
+        hidden_states = super().forward(
+            hidden_states, past_key_values, attention_mask, rope_cos_sin, cu_seqlens, max_seqlen
+        )
+        hidden_states = hidden_states.sum(dim=1)
+        return hidden_states
