@@ -6,13 +6,13 @@ from transformers import set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 
-from ...test_common import TestCommons
+from ....test_common import TestCommons
 
 
 SEED = 1234
 
 
-class GPTDolomiteAttentionTest(TestCommons):
+class AttentionTestForDenseModel(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             TestCommons.get_all_devices(),
