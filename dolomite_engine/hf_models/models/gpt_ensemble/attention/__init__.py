@@ -1,14 +1,11 @@
 from ..config import GPTEnsembleConfig
 from .base import EnsembleAttention
-from .flash import EnsembleFlashAttention2
-from .padding_free import EnsemblePaddingFreeAttention
 from .sdpa import EnsembleSDPA
 
 
 _ATTENTION_MODULES = {
     "eager": EnsembleAttention,
     "sdpa": EnsembleSDPA,
-    "flash_attention_2": EnsembleFlashAttention2,
 }
 
 
@@ -20,11 +17,9 @@ def get_attention_module(
     layer_idx: int,
 ) -> EnsembleAttention:
     if use_padding_free_transformer:
-        assert (
-            attention_implementation == "flash_attention_2"
-        ), "padding free transformer only works with flash attention"
-        attention_class = EnsemblePaddingFreeAttention
-    else:
-        attention_class = _ATTENTION_MODULES[attention_implementation]
+        raise NotImplementedError("padding free transformer is not implemented with GPTEnsemble")
 
-    return attention_class(config, causal=causal, layer_idx=layer_idx)
+    if attention_implementation in _ATTENTION_MODULES:
+        return _ATTENTION_MODULES[attention_implementation](config, causal=causal, layer_idx=layer_idx)
+
+    raise ValueError(f"unexpected `attention_implementation` {attention_implementation}")
