@@ -22,16 +22,22 @@ class EnsembleLinear(nn.Module):
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        # input -> (batch_size, sequence_length, TP, in_features)
         input = input.unsqueeze(-2)
+        # input -> (batch_size, sequence_length, TP, 1, in_features)
         weight = self.weight.unsqueeze(0).unsqueeze(0)
+        # weight -> (1, 1, TP, in_features, out_features)
 
         input = input @ weight
+        # input -> (batch_size, sequence_length, TP, 1, out_features)
 
         if self.bias is not None:
             bias = self.bias.unsqueeze(1).unsqueeze(0).unsqueeze(0)
+            # bias -> (1, 1, TP, 1, out_features)
             input = input + bias
 
         input = input.squeeze(-2)
+        # input -> (batch_size, sequence_length, TP, out_features)
 
         return input
 
