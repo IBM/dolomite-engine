@@ -1,8 +1,7 @@
 from ..config import GPTEnsembleConfig
 from .base import EnsembleAttention
 from .flash import EnsembleFlashAttention2
-
-# from .padding_free import EnsemblePaddingFreeAttention
+from .padding_free import EnsemblePaddingFreeAttention
 from .sdpa import EnsembleSDPA
 
 

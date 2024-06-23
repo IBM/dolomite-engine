@@ -5,8 +5,9 @@ from torch import Tensor
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
+from .attention import get_attention_module
 from .config import GPTEnsembleConfig
 from .mlp import EnsembleMLP
 
