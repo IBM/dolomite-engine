@@ -56,6 +56,9 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
         )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
+        if self.position_embedding_type == PositionEmbeddingType.alibi:
+            raise NotImplementedError("currently GPTEnsemble doesn't support alibi")
+
         self._setup_positional_encoding()
 
         # Initialize weights and apply final processing
