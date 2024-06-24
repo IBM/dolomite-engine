@@ -213,3 +213,15 @@ Current contributors:
 <a href="https://github.com/ibm-granite/dolomite-engine/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=ibm-granite/dolomite-engine" />
 </a>
+
+# Citation
+If you find this repository useful, please consider citing it in your research:
+```bibtex
+@software{Mishra_Dolomite_Engine_A_2024,
+    author = {Mishra, Mayank},
+    month = jun,
+    title = {{Dolomite Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},
+    url = {https://github.com/ibm-granite/dolomite-engine},
+    year = {2024}
+}
+```
