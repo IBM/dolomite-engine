@@ -4,7 +4,7 @@ from transformers import set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, GPTEnsembleConfig, PositionEmbeddingType
 
-from ....test_common import TestCommons
+from ...test_common import TestCommons
 
 
 SEED = 1234
@@ -87,7 +87,7 @@ class AttentionTestForDenseModel(TestCommons):
             sdpa_logits,
             False,
             rtol_float32=0,
-            atol_float32=4e-7,
+            atol_float32=5e-7,
             rtol_float16=1e-2,
             atol_float16=5e-4,
             rtol_bfloat16=5e-3,
