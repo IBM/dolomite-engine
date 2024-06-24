@@ -1,10 +1,12 @@
+from typing import Tuple
+
 import torch
 import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....enums import PositionEmbeddingType
-from ....modeling_utils import apply_rotary_pos_emb, repeat_key_value
-from .base import EnsembleAttention
+from ....modeling_utils import repeat_key_value
+from .base import EnsembleAttention, apply_rotary_pos_emb
 
 
 class EnsembleSDPA(EnsembleAttention):
@@ -54,8 +56,9 @@ class EnsembleSDPA(EnsembleAttention):
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
-        attention_mask = attention_mask.expand(-1, self.tp_world_size, -1, -1)
-        attention_mask = attention_mask.reshape(-1, *attention_mask.shape[-2:]).unsqueeze(1)
+        if attention_mask is not None:
+            attention_mask = attention_mask.expand(-1, self.tp_world_size, -1, -1)
+            attention_mask = attention_mask.reshape(-1, *attention_mask.shape[-2:]).unsqueeze(1)
 
         attn_output = F.scaled_dot_product_attention(
             query,

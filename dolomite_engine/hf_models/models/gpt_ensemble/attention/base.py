@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
+from ....modeling_utils import Attention, repeat_key_value, rotate_half
 from ....utils import divide_if_divisible
 from ..config import GPTEnsembleConfig
 from ..linear import EnsembleLinear
@@ -238,10 +238,8 @@ class EnsembleAttention(Attention):
             )
             beta = 0
         else:
-            attention_mask = attention_mask.unsqueeze(1)
-            attn_weights = attention_mask.expand(-1, self.tp_world_size, self.num_heads, -1, -1).reshape(
-                -1, query_length, key_length
-            )
+            attention_mask = attention_mask.repeat_interleave(self.tp_world_size * self.num_heads, dim=0)
+            attn_weights = attention_mask.squeeze(1)
             beta = 1
 
         attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
@@ -281,3 +279,19 @@ class EnsembleAttention(Attention):
         # ==========================================================================================
 
         return attn_output
+
+
+def apply_rotary_pos_emb(
+    x: torch.Tensor, cos_sin: Tuple[torch.Tensor, torch.Tensor]
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    cos, sin = cos_sin
+
+    batch_size = cos.shape[0]
+    batch_size_tp = x.shape[0]
+    tp = divide_if_divisible(batch_size_tp, batch_size, "")
+
+    cos = cos.repeat_interleave(tp, dim=0)
+    sin = sin.repeat_interleave(tp, dim=0)
+
+    x = (x * cos) + (rotate_half(x) * sin)
+    return x

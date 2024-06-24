@@ -13,15 +13,7 @@ SEED = 1234
 
 
 class GPTDolomiteAttentionTest(TestCommons):
-    @parameterized.expand(
-        TestCommons.make_args_matrix(
-            TestCommons.get_all_devices(),
-            TestCommons.get_attention_head_types(),
-            TestCommons.get_position_embedding_types(),
-            TestCommons.get_dtypes(),
-        )
-    )
-    def test_math_attention_sdpa_equivalence(
+    def _test_math_attention_sdpa_equivalence(
         self,
         device: torch.device,
         attention_head_type: AttentionHeadType,
@@ -77,6 +69,28 @@ class GPTDolomiteAttentionTest(TestCommons):
             atol_float16=1e-5,
             rtol_bfloat16=0,
             atol_bfloat16=1e-5,
+        )
+
+    @parameterized.expand(
+        TestCommons.make_args_matrix(
+            TestCommons.get_all_devices(),
+            TestCommons.get_attention_head_types(),
+            TestCommons.get_position_embedding_types(),
+            TestCommons.get_dtypes(),
+        )
+    )
+    def test_math_attention_sdpa_equivalence(
+        self,
+        device: torch.device,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        torch_dtype: torch.dtype,
+    ) -> None:
+        self._test_math_attention_sdpa_equivalence(
+            device=device,
+            attention_head_type=attention_head_type,
+            position_embedding_type=position_embedding_type,
+            torch_dtype=torch_dtype,
         )
 
     @parameterized.expand(

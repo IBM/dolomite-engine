@@ -13,4 +13,4 @@ from .attention import (
 from .embedding import ParameterizedEmbedding
 from .linear import ParameterizedLinear
 from .normalization import RMSNorm, get_normalization_function
-from .position_embedding import Alibi, RoPE, YaRNScaledRoPE, apply_rotary_pos_emb
+from .position_embedding import Alibi, RoPE, YaRNScaledRoPE, apply_rotary_pos_emb, rotate_half
