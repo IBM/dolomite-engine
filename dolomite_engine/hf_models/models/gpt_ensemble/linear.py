@@ -19,7 +19,6 @@ class EnsembleLinear(nn.Module):
             [ParameterizedLinear(in_features, out_features, bias=bias) for _ in range(tensor_parallel_size)]
         )
 
-    @torch.compile
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         output = []
         for rank in range(self.tensor_parallel_size):
