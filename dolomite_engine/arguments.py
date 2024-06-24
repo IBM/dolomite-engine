@@ -334,9 +334,6 @@ class DistributedArgs(BaseArgs):
         if self.communication_dtype is not None:
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
-        if self.stage == 0:
-            assert self.zero_topology is None, "zero_topology is meaningless with stage 0"
-
 
 class AimArgs(BaseArgs):
     # aim repo, experiment logs are saved here
