@@ -23,7 +23,7 @@ class AttentionTestForDenseModel(TestCommons):
             n_embd=96,
             n_layer=num_layers,
             n_head=12,
-            num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
+            num_key_value_heads=4 if attention_head_type == AttentionHeadType.gqa else None,
             attention_head_type=attention_head_type.value,
             position_embedding_type=position_embedding_type.value,
             add_bias=add_bias,
@@ -39,7 +39,7 @@ class AttentionTestForDenseModel(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             TestCommons.get_all_devices(),
-            TestCommons.get_attention_head_types()[:1],
+            [AttentionHeadType.mha, AttentionHeadType.gqa],
             [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
             TestCommons.get_dtypes(),
         )

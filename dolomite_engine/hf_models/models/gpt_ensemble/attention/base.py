@@ -137,35 +137,19 @@ class EnsembleAttention(Attention):
     def _prepare_qkv_for_forward_gqa(
         self, hidden_states: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
+        batch_size, tp_world_size, query_length = hidden_states.shape[:3]
 
-        hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
-
+        hidden_states = hidden_states.view(batch_size * tp_world_size, query_length, self.num_key_value_heads, -1)
         query, key, value = hidden_states.split(
             ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
         )
 
         # this needs to be a reshape instead of view sadly
-        query = query.reshape(batch_size, query_length, -1, self.head_dim)
+        query = query.reshape(batch_size * tp_world_size, query_length, -1, self.head_dim)
 
         query = query.transpose(1, 2)
         key = key.transpose(1, 2)
         value = value.transpose(1, 2)
-
-        return query, key, value
-
-    def _prepare_qkv_for_forward_mqa(
-        self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
-
-        query, key, value = hidden_states.split((self.hidden_size, self.head_dim, self.head_dim), dim=-1)
-
-        query = query.view(batch_size, query_length, self.num_heads, -1)
-
-        query = query.transpose(1, 2)
-        key = key.unsqueeze(1)
-        value = value.unsqueeze(1)
 
         return query, key, value
 
