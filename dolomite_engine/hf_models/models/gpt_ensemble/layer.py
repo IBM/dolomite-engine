@@ -61,5 +61,5 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
         hidden_states = super().forward(
             hidden_states, past_key_values, attention_mask, rope_cos_sin, cu_seqlens, max_seqlen
         )
-        hidden_states = hidden_states.sum(dim=1)
+        hidden_states = hidden_states.mean(dim=1)
         return hidden_states

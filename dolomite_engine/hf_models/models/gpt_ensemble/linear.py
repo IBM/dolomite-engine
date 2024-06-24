@@ -16,7 +16,7 @@ class EnsembleLinear(nn.Module):
         self.std = std
 
         self.linears = nn.ModuleList(
-            [ParameterizedLinear(in_features, out_features, bias=bias) for _ in range(tensor_parallel_size)]
+            [ParameterizedLinear(in_features, out_features, bias=bias, std=std) for _ in range(tensor_parallel_size)]
         )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
