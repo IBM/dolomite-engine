@@ -39,7 +39,7 @@ class GPTEnsembleConfig(CommonConfig):
         m_residual: float = None,
         init_method: str = "normal",
         upcast_logits_for_loss: bool = False,
-        pretraining_tensor_parallel_size: int = None,
+        pretraining_tensor_parallel_size: int = 1,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -78,7 +78,6 @@ class GPTEnsembleConfig(CommonConfig):
             **kwargs,
         )
 
-        assert pretraining_tensor_parallel_size is not None
         self.pretraining_tensor_parallel_size = pretraining_tensor_parallel_size
 
         if position_embedding_type == PositionEmbeddingType.alibi:
