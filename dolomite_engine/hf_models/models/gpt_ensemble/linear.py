@@ -52,3 +52,9 @@ class EnsembleLinear(nn.Module):
         nn.init.normal_(self.weight, mean=0, std=self.std)
         if self.bias is not None:
             self.bias.zero_()
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_features={self.in_features}, out_features={self.out_features}, "
+            f"tensor_parallel_size={self.tensor_parallel_size}, bias={self.bias is not None}"
+        )
