@@ -21,7 +21,6 @@ class EnsembleLinear(nn.Module):
 
         self.reset_parameters()
 
-    @torch.compile
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         batch_size, _, sequence_length, _ = input.shape
 
