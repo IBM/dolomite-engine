@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.profiler import record_function
 
 
 class EnsembleLinear(nn.Module):
@@ -22,29 +23,30 @@ class EnsembleLinear(nn.Module):
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        batch_size, _, sequence_length, _ = input.shape
+        with record_function("F::ensemble_linear"):
+            batch_size, _, sequence_length, _ = input.shape
 
-        if input.shape[1] != self.tensor_parallel_size:
-            assert input.shape[1] == 1
-            input = input.expand(-1, self.tensor_parallel_size, -1, -1)
+            if input.shape[1] != self.tensor_parallel_size:
+                assert input.shape[1] == 1
+                input = input.expand(-1, self.tensor_parallel_size, -1, -1)
 
-        # input -> (batch_size, TP, sequence_length, in_features)
-        input = input.transpose(0, 1)
-        # input -> (TP, batch_size, sequence_length, in_features)
-        input = input.reshape(self.tensor_parallel_size, batch_size * sequence_length, -1)
-        # input -> (TP, batch_size * sequence_length, in_features)
+            # input -> (batch_size, TP, sequence_length, in_features)
+            input = input.transpose(0, 1)
+            # input -> (TP, batch_size, sequence_length, in_features)
+            input = input.reshape(self.tensor_parallel_size, batch_size * sequence_length, -1)
+            # input -> (TP, batch_size * sequence_length, in_features)
 
-        if self.bias is None:
-            input = torch.bmm(input, self.weight)
-        else:
-            input = torch.baddbmm(self.bias.unsqueeze(1), input, self.weight, alpha=1, beta=1)
+            if self.bias is None:
+                input = torch.bmm(input, self.weight)
+            else:
+                input = torch.baddbmm(self.bias.unsqueeze(1), input, self.weight, alpha=1, beta=1)
 
-        # input -> (TP, batch_size * sequence_length, out_features)
-        input = input.reshape(self.tensor_parallel_size, batch_size, sequence_length, -1)
-        # (TP, batch_size, sequence_length, out_features)
-        input = input.transpose(0, 1).contiguous()
+            # input -> (TP, batch_size * sequence_length, out_features)
+            input = input.reshape(self.tensor_parallel_size, batch_size, sequence_length, -1)
+            # (TP, batch_size, sequence_length, out_features)
+            input = input.transpose(0, 1).contiguous()
 
-        return input
+            return input
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
