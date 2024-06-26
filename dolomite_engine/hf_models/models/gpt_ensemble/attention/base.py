@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ....modeling_utils import Attention, repeat_key_value, rotate_half
+from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
 from ....utils import divide_if_divisible
 from ..config import GPTEnsembleConfig
 from ..linear import EnsembleLinear
@@ -122,34 +122,39 @@ class EnsembleAttention(Attention):
         self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
         self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
 
-    def _prepare_qkv_for_forward_mha(
-        self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, tp_world_size, query_length = hidden_states.shape[:3]
+    def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # ==========================================================================================
+        # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)
+        # ==========================================================================================
 
-        hidden_states = hidden_states.view(batch_size * tp_world_size, query_length, self.num_heads, -1)
-        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = self.c_attn(hidden_states)
 
-        query, key, value = hidden_states.chunk(3, dim=-1)
+        # ==========================================================================================
+        # hidden_states -> (TP, batch_size, query_length, [num_heads + num_key_value_heads * 2] * head_dim)
+        # ==========================================================================================
 
-        return query, key, value
+        tp, batch_size, query_length, _ = hidden_states.shape
+        hidden_states = hidden_states.view(tp * batch_size, query_length, -1)
 
-    def _prepare_qkv_for_forward_gqa(
-        self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, tp_world_size, query_length = hidden_states.shape[:3]
+        # ==========================================================================================
+        # hidden_states -> (TP * batch_size, query_length, [num_heads + num_key_value_heads * 2] * head_dim)
+        # ==========================================================================================
 
-        hidden_states = hidden_states.view(batch_size * tp_world_size, query_length, self.num_key_value_heads, -1)
-        query, key, value = hidden_states.split(
-            ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
-        )
+        # for MHA, we can get away with doing just 1 transpose which is not true for GQA
+        if self.attention_head_type == AttentionHeadType.mha:
+            query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
+        elif self.attention_head_type == AttentionHeadType.gqa:
+            query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
+        elif self.attention_head_type == AttentionHeadType.mqa:
+            raise NotImplementedError("mqa doesn't work with GPTEnsemble")
+        else:
+            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
-        # this needs to be a reshape instead of view sadly
-        query = query.reshape(batch_size * tp_world_size, query_length, -1, self.head_dim)
-
-        query = query.transpose(1, 2)
-        key = key.transpose(1, 2)
-        value = value.transpose(1, 2)
+        # ==========================================================================================
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
+        # value -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
+        # ==========================================================================================
 
         return query, key, value
 
@@ -163,15 +168,15 @@ class EnsembleAttention(Attention):
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
         # ==========================================================================================
-        # hidden_states -> (batch_size, 1, query_length, num_heads * head_dim)
+        # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
         # ==========================================================================================
-        # query -> (batch_size * TP, num_heads, query_length, head_dim)
-        # key -> (batch_size * TP, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size * TP, num_key_value_heads, query_length, head_dim)
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
+        # value -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -182,9 +187,9 @@ class EnsembleAttention(Attention):
             key, value = past_key_values.update(key, value, self.layer_idx)
 
         # ==========================================================================================
-        # query -> (batch_size * TP, num_heads, query_length, head_dim)
-        # key -> (batch_size * TP, num_key_value_heads, key_length, head_dim)
-        # value -> (batch_size * TP, num_key_value_heads, key_length, head_dim)
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_key_value_heads, key_length, head_dim)
+        # value -> (TP * batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
         key = key.transpose(-1, -2)
@@ -193,12 +198,12 @@ class EnsembleAttention(Attention):
         softmax_dtype = torch.float32 if self.attention_softmax_in_fp32 else dtype
 
         # ==========================================================================================
-        # query -> (batch_size * TP, num_heads, query_length, head_dim)
-        # key -> (batch_size * TP, num_key_value_heads, head_dim, key_length)
-        # value -> (batch_size * TP, num_key_value_heads, key_length, head_dim)
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_key_value_heads, head_dim, key_length)
+        # value -> (TP * batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
-        batch_size_tp = query.shape[0]
+        tp_times_batch_size = query.shape[0]
         query_length = query.shape[2]
         key_length = key.shape[-1]
 
@@ -206,76 +211,64 @@ class EnsembleAttention(Attention):
         value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
         # Always copies
-        query = query.reshape(batch_size_tp * self.num_heads, query_length, self.head_dim)
+        query = query.reshape(tp_times_batch_size * self.num_heads, query_length, self.head_dim)
         # No copy when layer_past is provided.
-        key = key.reshape(batch_size_tp * self.num_heads, self.head_dim, key_length)
+        key = key.reshape(tp_times_batch_size * self.num_heads, self.head_dim, key_length)
 
         # ==========================================================================================
-        # query -> (batch_size * TP * num_heads, query_length, head_dim)
-        # key -> (batch_size * TP * num_heads, head_dim, key_length)
-        # value -> (batch_size * TP, num_heads, key_length, head_dim)
+        # query -> (TP * batch_size * num_heads, query_length, head_dim)
+        # key -> (TP * batch_size * num_heads, head_dim, key_length)
+        # value -> (TP * batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
         if attention_mask is None:
             attn_weights = torch.empty(
-                (batch_size_tp * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
+                (tp_times_batch_size * self.num_heads, query_length, key_length),
+                device=query.device,
+                dtype=query.dtype,
             )
             beta = 0
         else:
-            attention_mask = attention_mask.repeat_interleave(self.tp_world_size * self.num_heads, dim=0)
-            attn_weights = attention_mask.squeeze(1)
+            # TODO avoid these repeats on every layer
+            attention_mask = attention_mask.repeat_interleave(self.num_heads, dim=0)
+            attention_mask = attention_mask.repeat(self.tp_world_size, 1, 1, 1)
+            attn_weights = attention_mask.view(-1, query_length, key_length)
             beta = 1
 
         attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
-            batch_size_tp, self.num_heads, query_length, key_length
+            tp_times_batch_size, self.num_heads, query_length, key_length
         )
 
         # ==========================================================================================
-        # attn_weights -> (batch_size * TP, num_heads, query_length, key_length)
+        # attn_weights -> (TP * batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
         attn_weights = F.softmax(attn_weights.to(softmax_dtype), dim=-1).to(dtype)
         attn_weights = self.attn_dropout(attn_weights)
 
         # ==========================================================================================
-        # value -> (batch_size * TP, num_heads, key_length, head_dim)
-        # attn_weights -> (batch_size * TP, num_heads, query_length, key_length)
+        # value -> (TP * batch_size, num_heads, key_length, head_dim)
+        # attn_weights -> (TP * batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
         attn_output = torch.matmul(attn_weights, value)
 
         # ==========================================================================================
-        # attn_output -> (batch_size * TP, num_heads, query_length, head_dim)
+        # attn_output -> (TP * batch_size, num_heads, query_length, head_dim)
         # ==========================================================================================
 
         attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(-1, self.tp_world_size, query_length, self.num_heads * self.head_dim)
+        attn_output = attn_output.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
 
         # ==========================================================================================
-        # attn_output -> (batch_size, TP, query_length, num_heads * head_dim)
+        # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
         # ==========================================================================================
-        # attn_output -> (batch_size, TP, query_length, num_heads * head_dim)
+        # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         return attn_output
-
-
-def apply_rotary_pos_emb(
-    x: torch.Tensor, cos_sin: Tuple[torch.Tensor, torch.Tensor]
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    cos, sin = cos_sin
-
-    batch_size = cos.shape[0]
-    batch_size_tp = x.shape[0]
-    tp = divide_if_divisible(batch_size_tp, batch_size, "")
-
-    cos = cos.repeat_interleave(tp, dim=0)
-    sin = sin.repeat_interleave(tp, dim=0)
-
-    x = (x * cos) + (rotate_half(x) * sin)
-    return x

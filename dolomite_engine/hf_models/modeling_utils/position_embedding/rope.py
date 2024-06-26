@@ -105,11 +105,11 @@ def apply_rotary_pos_emb(
     x: torch.Tensor, cos_sin: Tuple[torch.Tensor, torch.Tensor]
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     cos, sin = cos_sin
-    x = (x * cos) + (rotate_half(x) * sin)
+    x = (x * cos) + (_rotate_half(x) * sin)
     return x
 
 
-def rotate_half(x: torch.Tensor) -> torch.Tensor:
+def _rotate_half(x: torch.Tensor) -> torch.Tensor:
     x1, x2 = torch.chunk(x, 2, dim=-1)
     return torch.cat((-x2, x1), dim=-1)
 

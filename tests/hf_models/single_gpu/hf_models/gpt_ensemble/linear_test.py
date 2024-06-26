@@ -22,7 +22,7 @@ class EnsembleLinearTest(TestCommons):
         out_features = 11
 
         ensemble_linear = EnsembleLinear(in_features, out_features, tp_world_size, std=0.02, bias=bias)
-        input = torch.randn(4, tp_world_size, 37, in_features)
+        input = torch.randn(tp_world_size, 4, 37, in_features)
 
         if bias:
             with torch.no_grad():
@@ -30,13 +30,13 @@ class EnsembleLinearTest(TestCommons):
 
         output = []
         for rank in range(tp_world_size):
-            i = input[:, rank, :, :]
+            i = input[rank, ...]
             w = ensemble_linear.weight[rank, :, :].T
             b = None if ensemble_linear.bias is None else ensemble_linear.bias[rank, :]
 
             output.append(F.linear(i, w, b))
 
-        output = torch.stack(output, dim=1)
+        output = torch.stack(output, dim=0)
         ensemble_output = ensemble_linear(input)
 
         assert output.equal(ensemble_output)
@@ -50,7 +50,7 @@ class EnsembleLinearTest(TestCommons):
         out_features = 11
 
         ensemble_linear = EnsembleLinear(in_features, out_features, tp_world_size, std=0.02, bias=bias)
-        input = torch.randn(4, 1, 37, in_features)
+        input = torch.randn(1, 4, 37, in_features)
 
         if bias:
             with torch.no_grad():
@@ -58,12 +58,12 @@ class EnsembleLinearTest(TestCommons):
 
         output = []
         for rank in range(tp_world_size):
-            w = ensemble_linear.weight[rank, :, :].T
+            w = ensemble_linear.weight[rank, ...].T
             b = None if ensemble_linear.bias is None else ensemble_linear.bias[rank, :]
 
-            output.append(F.linear(input.squeeze(1), w, b))
+            output.append(F.linear(input.squeeze(0), w, b))
 
-        output = torch.stack(output, dim=1)
+        output = torch.stack(output, dim=0)
         ensemble_output = ensemble_linear(input)
 
         assert output.equal(ensemble_output)

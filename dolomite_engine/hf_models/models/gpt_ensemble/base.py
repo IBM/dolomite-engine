@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
@@ -22,6 +23,7 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
         self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
+        self.tensor_parallel_size = config.pretraining_tensor_parallel_size
 
         self.pretraining_tp_size = config.pretraining_tensor_parallel_size
         self.embed_dim_per_tp_rank = divide_if_divisible(self.embed_dim, self.pretraining_tp_size, "")
@@ -63,3 +65,12 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
 
         # Initialize weights and apply final processing
         self.post_init()
+
+    def _get_rope_cos_sin(
+        self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype, device: torch.device
+    ) -> torch.Tensor:
+        if self.position_embedding_type == PositionEmbeddingType.rope:
+            cos, sin = self.rope(key_length, dtype=dtype, device=device)
+            cos = cos[position_ids].unsqueeze(1).repeat(self.tensor_parallel_size, 1, 1, 1)
+            sin = sin[position_ids].unsqueeze(1).repeat(self.tensor_parallel_size, 1, 1, 1)
+            return cos, sin

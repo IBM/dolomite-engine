@@ -1,2 +1,2 @@
 from .alibi import Alibi
-from .rope import RoPE, YaRNScaledRoPE, apply_rotary_pos_emb, rotate_half
+from .rope import RoPE, YaRNScaledRoPE, apply_rotary_pos_emb

@@ -57,9 +57,9 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
         cu_seqlens: Tensor = None,
         max_seqlen: Tensor = None,
     ) -> Tuple[Tensor] | Tuple[Tensor, Tensor] | Tuple[Tensor, Tensor, Tensor]:
-        hidden_states = hidden_states.unsqueeze(1)
+        hidden_states = hidden_states.unsqueeze(0)
         hidden_states = super().forward(
             hidden_states, past_key_values, attention_mask, rope_cos_sin, cu_seqlens, max_seqlen
         )
-        hidden_states = hidden_states.mean(dim=1)
+        hidden_states = hidden_states.mean(dim=0)
         return hidden_states

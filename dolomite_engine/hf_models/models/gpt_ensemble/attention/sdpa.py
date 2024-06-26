@@ -1,12 +1,10 @@
-from typing import Tuple
-
 import torch
 import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....enums import PositionEmbeddingType
-from ....modeling_utils import repeat_key_value
-from .base import EnsembleAttention, apply_rotary_pos_emb
+from ....modeling_utils import apply_rotary_pos_emb, repeat_key_value
+from .base import EnsembleAttention
 
 
 class EnsembleSDPA(EnsembleAttention):
@@ -20,15 +18,15 @@ class EnsembleSDPA(EnsembleAttention):
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
         # ==========================================================================================
-        # hidden_states -> (batch_size, 1, query_length, num_heads * head_dim)
+        # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
         # ==========================================================================================
-        # query -> (batch_size * TP, num_heads, query_length, head_dim)
-        # key -> (batch_size * TP, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size * TP, num_key_value_heads, query_length, head_dim)
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
+        # value -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -39,26 +37,26 @@ class EnsembleSDPA(EnsembleAttention):
             key, value = past_key_values.update(key, value, self.layer_idx)
 
         # ==========================================================================================
-        # query -> (batch_size * TP, num_heads, query_length, head_dim)
-        # key -> (batch_size * TP, num_key_value_heads, key_length, head_dim)
-        # value -> (batch_size * TP, num_key_value_heads, key_length, head_dim)
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_key_value_heads, key_length, head_dim)
+        # value -> (TP * batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
         key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
         value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
         # ==========================================================================================
-        # query -> (batch_size * TP, num_heads, query_length, head_dim)
-        # key -> (batch_size * TP, num_heads, key_length, head_dim)
-        # value -> (batch_size * TP, num_heads, key_length, head_dim)
+        # query -> (TP * batch_size, num_heads, query_length, head_dim)
+        # key -> (TP * batch_size, num_heads, key_length, head_dim)
+        # value -> (TP * batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
         if attention_mask is not None:
-            attention_mask = attention_mask.expand(-1, self.tp_world_size, -1, -1)
-            attention_mask = attention_mask.reshape(-1, *attention_mask.shape[-2:]).unsqueeze(1)
+            # TODO avoid this repeat on every layer
+            attention_mask = attention_mask.repeat(self.tp_world_size, 1, 1, 1)
 
         attn_output = F.scaled_dot_product_attention(
             query,
@@ -71,15 +69,15 @@ class EnsembleSDPA(EnsembleAttention):
         )
 
         # ==========================================================================================
-        # attn_output -> (batch_size * TP, num_heads, query_length, head_dim)
+        # attn_output -> (TP * batch_size, num_heads, query_length, head_dim)
         # ==========================================================================================
 
         query_length = attn_output.shape[2]
         attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(-1, self.tp_world_size, query_length, self.num_heads * self.head_dim)
+        attn_output = attn_output.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
 
         # ==========================================================================================
-        # attn_output -> (batch_size, TP, query_length, num_heads * head_dim)
+        # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         attn_output = self.c_proj(attn_output)

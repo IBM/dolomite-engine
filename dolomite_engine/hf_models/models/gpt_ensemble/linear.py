@@ -24,16 +24,14 @@ class EnsembleLinear(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         with record_function("F::ensemble_linear"):
-            batch_size, _, sequence_length, _ = input.shape
+            input_tp, batch_size, sequence_length, _ = input.shape
 
-            if input.shape[1] != self.tensor_parallel_size:
-                assert input.shape[1] == 1
-                input = input.expand(-1, self.tensor_parallel_size, -1, -1)
+            if input_tp != self.tensor_parallel_size:
+                assert input_tp == 1
+                input = input.expand(self.tensor_parallel_size, -1, -1, -1)
 
-            # input -> (batch_size, TP, sequence_length, in_features)
-            input = input.transpose(0, 1)
             # input -> (TP, batch_size, sequence_length, in_features)
-            input = input.reshape(self.tensor_parallel_size, batch_size * sequence_length, -1)
+            input = input.view(self.tensor_parallel_size, batch_size * sequence_length, -1)
             # input -> (TP, batch_size * sequence_length, in_features)
 
             if self.bias is None:
@@ -42,9 +40,8 @@ class EnsembleLinear(nn.Module):
                 input = torch.baddbmm(self.bias.unsqueeze(1), input, self.weight, alpha=1, beta=1)
 
             # input -> (TP, batch_size * sequence_length, out_features)
-            input = input.reshape(self.tensor_parallel_size, batch_size, sequence_length, -1)
-            # (TP, batch_size, sequence_length, out_features)
-            input = input.transpose(0, 1).contiguous()
+            input = input.view(self.tensor_parallel_size, batch_size, sequence_length, -1)
+            # input -> (TP, batch_size, sequence_length, out_features)
 
             return input
 
