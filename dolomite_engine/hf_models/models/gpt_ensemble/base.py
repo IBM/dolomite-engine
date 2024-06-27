@@ -70,7 +70,10 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
         self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype, device: torch.device
     ) -> torch.Tensor:
         if self.position_embedding_type == PositionEmbeddingType.rope:
-            cos, sin = self.rope(key_length, dtype=dtype, device=device)
-            cos = cos[position_ids].unsqueeze(1).repeat(self.tensor_parallel_size, 1, 1, 1)
-            sin = sin[position_ids].unsqueeze(1).repeat(self.tensor_parallel_size, 1, 1, 1)
+            cos, sin = super()._get_rope_cos_sin(key_length, position_ids, dtype)
+
+            if position_ids.shape[0] != 1:
+                cos = cos.repeat(self.tensor_parallel_size, 1, 1, 1)
+                sin = sin.repeat(self.tensor_parallel_size, 1, 1, 1)
+
             return cos, sin
