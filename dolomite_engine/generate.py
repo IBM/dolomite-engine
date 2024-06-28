@@ -74,7 +74,6 @@ def main() -> None:
 
     if args.load_args is None:
         model = get_model(args, mode)
-        model = model.to(torch.cuda.current_device())
 
         datasets_list, _ = get_datasets_list(
             args,
@@ -96,6 +95,8 @@ def main() -> None:
             tokenizer=model.tokenizer,
             is_encoder_decoder=model.is_encoder_decoder,
         )
+
+    model = model.to(torch.cuda.current_device())
 
     generate(args, model, datasets_list, mode)
 

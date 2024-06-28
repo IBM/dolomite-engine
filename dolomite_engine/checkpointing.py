@@ -22,7 +22,7 @@ from torch.distributed.checkpoint.state_dict_loader import _load_state_dict
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
-from .arguments import ExportArgs, InferenceArgs, TrainingArgs
+from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from .data import ResumableDataLoader
 from .enums import DistributedBackend, Mode, TuningMethod
 from .hf_models.models.gpt_dolomite_TP import unshard
@@ -216,12 +216,12 @@ def load_checkpoint_for_training(
 
 
 def load_checkpoint_for_inference(
-    args: Union[InferenceArgs, ExportArgs], mode: Mode, use_meta: bool = False
+    args: Union[InferenceArgs, UnshardingArgs], mode: Mode, use_meta: bool = False
 ) -> Tuple[ModelWrapper, TrainingArgs]:
     """load deepspeed checkpoint for inference
 
     Args:
-        args (Union[InferenceArgs, ExportArgs]): arguments
+        args (Union[InferenceArgs, UnshardingArgs]): arguments
         mode (Mode): training/inference mode
         use_meta (bool): whether to use meta device
     """
@@ -286,12 +286,12 @@ def load_checkpoint_for_inference(
             )
             del tp_state_dicts
         else:
+            with ProcessGroupManager.set_dummy_tensor_parallel_world_size(1):
+                model_path = _get_model_path(_get_base_path(load_path, iteration))
+
             state = {}
             _load_state_dict(
-                state,
-                storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
-                planner=_EmptyStateDictLoadPlanner(),
-                no_dist=True,
+                state, storage_reader=FileSystemReader(model_path), planner=_EmptyStateDictLoadPlanner(), no_dist=True
             )
 
         if use_meta:

@@ -111,9 +111,9 @@ sh scripts/train.sh configs/sst2/training.yml
 sh scripts/generate.sh configs/sst2/inference.yml
 ```
 
-3. [Export to HuggingFace-compatible checkpoint](scripts/export.sh): This is used to export the model to a safetensors checkpoint
+3. [Unshard the checkpoint](scripts/unshard.sh): This is used to unshard the model to a safetensors checkpoint since dolomite-engine saves a sharded model during training
 ```shell
-sh scripts/export.sh configs/sst2/export.yml
+sh scripts/unshard.sh configs/sst2/unshard.yml
 ```
 
 ## Dataset

@@ -489,35 +489,35 @@ class InferenceArgs(BaseArgs):
         _check_datasets(self.datasets)
 
 
-class ExportArgs(BaseArgs):
+class UnshardingArgs(BaseArgs):
     # load related arguments
     load_args: LoadArgs = None
-    # export path
-    export_path: str = None
+    # unsharded path
+    unsharded_path: str = None
     # mixed precision related arguments
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.load_args, "load_args"), (self.export_path, "export_path")])
+        _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
 
 
 _MODE_ARGS_MAP = {
     Mode.training: TrainingArgs,
     Mode.inference: InferenceArgs,
-    Mode.export: ExportArgs,
+    Mode.unsharding: UnshardingArgs,
 }
 
 
-def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
+def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, UnshardingArgs]:
     """get args for training / inference
 
     Args:
         mode (Mode): training / inference mode for running the program
 
     Returns:
-        Union[TrainingArgs, InferenceArgs, ExportArgs]: args for training / inference
+        Union[TrainingArgs, InferenceArgs, UnshardingArgs]: args for training / inference
     """
 
     parser = ArgumentParser()
@@ -525,7 +525,7 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
     args = parser.parse_args()
 
     config: dict = load_yaml(args.config)
-    args: Union[TrainingArgs, InferenceArgs, ExportArgs] = _MODE_ARGS_MAP[mode](**config)
+    args: Union[TrainingArgs, InferenceArgs, UnshardingArgs] = _MODE_ARGS_MAP[mode](**config)
 
     set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
     log_args(args)
@@ -534,15 +534,15 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, ExportArgs]:
 
 
 @run_rank_n
-def log_args(args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+def log_args(args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
     """log args
 
     Args:
-        args (Union[TrainingArgs, InferenceArgs, ExportArgs]): args for training / inference
+        args (Union[TrainingArgs, InferenceArgs, UnshardingArgs]): args for training / inference
     """
 
     def _iterate_args_recursively(
-        args: Union[TrainingArgs, InferenceArgs, ExportArgs, dict, BaseArgs], prefix: str = ""
+        args: Union[TrainingArgs, InferenceArgs, UnshardingArgs, dict, BaseArgs], prefix: str = ""
     ) -> None:
         result = []
 

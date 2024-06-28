@@ -2,20 +2,20 @@ from typing import Union
 
 from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
 
-from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
+from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode, TuningMethod
 from ..utils import string_to_torch_dtype
 from .finetuning import ModelWrapperForFinetuning
 
 
 class ModelWrapperForPEFT(ModelWrapperForFinetuning):
-    def __init__(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], mode: Mode):
+    def __init__(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs], mode: Mode):
         super().__init__(args, mode)
 
         assert not self.reset_attention_mask, "reset_attention_mask is only supported with pretraining"
         assert not self.reset_position_ids, "reset_position_ids is only supported with pretraining"
 
-    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:

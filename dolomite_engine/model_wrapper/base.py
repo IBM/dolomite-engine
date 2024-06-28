@@ -5,7 +5,7 @@ import torch
 from transformers import AutoConfig, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from ..arguments import ExportArgs, InferenceArgs, TrainingArgs
+from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import AttentionImplementation, DistributedBackend, GradientCheckpointingMethod, LossMask, Mode
 from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
 from ..hf_models.modeling_utils import is_glu
@@ -15,11 +15,11 @@ from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 class ModelWrapper(torch.nn.Module):
     """Model class which wraps any HuggingFace model"""
 
-    def __init__(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs], mode: Mode):
+    def __init__(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs], mode: Mode):
         """initializes a Model wrapper for a HuggingFace model
 
         Args:
-            args (Union[TrainingArgs, InferenceArgs, ExportArgs]): arguments based on training / inference mode
+            args (Union[TrainingArgs, InferenceArgs, UnshardingArgs]): arguments based on training / inference mode
             mode (Mode): training / inference mode for running the program
         """
 
@@ -184,7 +184,7 @@ class ModelWrapper(torch.nn.Module):
         self.tokenizer.save_pretrained(save_path, legacy_format=False)
         self.model.save_pretrained(save_path)
 
-    def _setup_config(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+    def _setup_config(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
         if self.model_name is None:
             self.config = AutoConfig.for_model(**args.model_args.pretrained_config)
         else:
@@ -193,14 +193,14 @@ class ModelWrapper(torch.nn.Module):
             )
         log_rank_0(logging.INFO, self.config)
 
-    def _setup_tokenizer(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+    def _setup_tokenizer(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
         tokenizer_name = args.tokenizer_args.tokenizer_name if self.model_name is None else self.model_name
         assert tokenizer_name is not None, "pass a tokenizer"
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.eos_token_id = self.tokenizer.eos_token_id
 
-    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, ExportArgs]) -> None:
+    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:
@@ -256,7 +256,7 @@ class ModelWrapper(torch.nn.Module):
             else:
                 torch_dtype = string_to_torch_dtype(self.dtype)
 
-            self.model = _get_model(device_map=torch.cuda.current_device(), torch_dtype=torch_dtype)
+            self.model = _get_model(torch_dtype=torch_dtype)
 
         num_parameters = 0
         for param in self.model.parameters():
