@@ -1,15 +1,12 @@
 import torch.nn as nn
 from transformers.activations import ACT2CLS, ClassInstantier
 
-from .math_gelu import MathGELU
-
 
 _BASE_ACTIVATIONS = {
     "celu": nn.modules.CELU,
     "elu": nn.modules.ELU,
     "gelu": nn.modules.GELU,
     "gelu_pytorch_tanh": (nn.modules.GELU, {"approximate": "tanh"}),
-    "gelu_math_tanh": MathGELU,
     "selu": nn.modules.SELU,
     "hard_shrink": nn.modules.Hardshrink,
     "hard_sigmoid": nn.modules.Hardsigmoid,
