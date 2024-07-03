@@ -21,7 +21,7 @@ parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--tmp-path", type=str)
-parser.add_argument("--tensor-parallel-embeddings", action="store_true")
+parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 args = parser.parse_args()
 
 
@@ -67,7 +67,7 @@ with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
     model_tp = GPTDolomiteForCausalLM_TP(
         config,
-        tensor_parallel_embeddings=args.tensor_parallel_embeddings,
+        tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
     )
 
@@ -89,7 +89,7 @@ with torch.inference_mode():
     x = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
     y_tp = model_tp(x)[0]
 
-    if args.tensor_parallel_embeddings:
+    if args.tensor_parallel_word_embeddings:
         y_tp = y_tp[..., : config.vocab_size]
 
     if torch.distributed.get_rank() == 0:

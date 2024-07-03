@@ -304,7 +304,7 @@ class DistributedArgs(BaseArgs):
     # gradient checkpointint args
     gradient_checkpointing_args: dict = {}
     # zero topology
-    zero_topology: Optional[ZeroTopologyArgs] = ZeroTopologyArgs()
+    zero_topology: ZeroTopologyArgs = ZeroTopologyArgs()
     # whether to use quantized weights (ZeRO++)
     zero_quantized_weights: bool = False
     # whether to use quantized gradients (ZeRO++)
@@ -318,7 +318,7 @@ class DistributedArgs(BaseArgs):
     # tensor parallel world size
     tensor_parallel_size: int = 1
     # tensor parallel embeddings
-    tensor_parallel_embeddings: bool = False
+    tensor_parallel_word_embeddings: bool = False
     # data parallel world size
     data_parallel_size: Optional[int] = None
     # distributed timeout for NCCL in minutes

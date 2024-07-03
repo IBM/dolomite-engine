@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 
 from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
-from dolomite_engine.hf_models.models.gpt_dolomite_TP import unshard
+from dolomite_engine.hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
 from dolomite_engine.utils import CUDA_RNGStatesTracker, ProcessGroupManager, set_cuda_rng_tracker
 
 from ...test_common import TestCommons
@@ -14,7 +14,7 @@ from ...test_common import TestCommons
 parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
-parser.add_argument("--tensor-parallel-embeddings", action="store_true")
+parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
@@ -52,25 +52,18 @@ if tp_rank == 0:
 torch.distributed.barrier()
 
 model_tp = GPTDolomiteForCausalLM_TP.from_pretrained(
-    args.tmp_path, tensor_parallel_embeddings=args.tensor_parallel_embeddings
+    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
 )
 
 tp_state_dict = model_tp.state_dict()
-tp_state_dict = {key: value.to("cpu") for key, value in tp_state_dict.items()}
-tp_path = os.path.join(args.tmp_path, "tp", f"model-{tp_rank}.pt")
-os.makedirs(os.path.dirname(tp_path), exist_ok=True)
-torch.save(tp_state_dict, tp_path)
+tp_state_dict = {key: value.to("cpu").full_tensor() for key, value in tp_state_dict.items()}
+tp_state_dict = fix_unsharded_state_dict(config, tp_state_dict, ProcessGroupManager.get_tensor_parallel_world_size())
 
 torch.distributed.barrier()
 
 if tp_rank == 0:
-    tensor_parallel_state_dicts = [
-        torch.load(os.path.join(args.tmp_path, "tp", f"model-{i}.pt")) for i in range(tp_world_size)
-    ]
-    output_state_dict = unshard(config, tensor_parallel_state_dicts, args.tensor_parallel_embeddings)
-
     original_state_dict = model.state_dict()
 
-    assert output_state_dict.keys() == original_state_dict.keys()
+    assert tp_state_dict.keys() == original_state_dict.keys()
     for key in original_state_dict:
-        assert original_state_dict[key].equal(output_state_dict[key])
+        assert original_state_dict[key].equal(tp_state_dict[key])

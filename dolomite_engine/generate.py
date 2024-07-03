@@ -83,7 +83,7 @@ def main() -> None:
             is_encoder_decoder=model.is_encoder_decoder,
         )
     else:
-        model, args_from_checkpoint = load_checkpoint_for_inference(args, mode)
+        model, args_from_checkpoint, _ = load_checkpoint_for_inference(args, mode)
 
         # override with datasets passed in current config
         args_from_checkpoint.datasets = args.datasets

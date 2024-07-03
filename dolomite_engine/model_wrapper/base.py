@@ -9,7 +9,14 @@ from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import AttentionImplementation, DistributedBackend, GradientCheckpointingMethod, LossMask, Mode
 from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
 from ..hf_models.modeling_utils import is_glu
-from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
+from ..utils import (
+    CUDA_RNGStatesTracker,
+    ProcessGroupManager,
+    SafeTensorsWeightsManager,
+    log_rank_0,
+    set_cuda_rng_tracker,
+    string_to_torch_dtype,
+)
 
 
 class ModelWrapper(torch.nn.Module):
@@ -37,7 +44,7 @@ class ModelWrapper(torch.nn.Module):
         self.reset_position_ids = args.model_args.reset_position_ids
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
-        self.tensor_parallel_embeddings = args.distributed_args.tensor_parallel_embeddings
+        self.tensor_parallel_word_embeddings = args.distributed_args.tensor_parallel_word_embeddings
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -58,6 +65,10 @@ class ModelWrapper(torch.nn.Module):
             assert is_tensor_parallel_compatible_model(
                 self.model_class, self.config.model_type
             ), "tensor parallel is not supported with this model"
+
+            rng_tracker = CUDA_RNGStatesTracker()
+            rng_tracker.add(seed=args.random_args.seed)
+            set_cuda_rng_tracker(rng_tracker)
 
         if self.use_padding_free_transformer:
             assert is_custom_model(
@@ -180,9 +191,18 @@ class ModelWrapper(torch.nn.Module):
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
 
-    def save_pretrained(self, save_path: str) -> None:
+    def save_pretrained(self, save_path: str, state_dict: dict = None) -> None:
         self.tokenizer.save_pretrained(save_path, legacy_format=False)
-        self.model.save_pretrained(save_path)
+
+        if state_dict is None:
+            self.model.save_pretrained(save_path)
+        else:
+            for key in list(state_dict.keys()):
+                assert key.startswith("model.")
+                state_dict[key.lstrip("model.")] = state_dict.pop(key)
+
+            self.config.save_pretrained(save_path)
+            SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
 
     def _setup_config(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
         if self.model_name is None:
@@ -204,17 +224,16 @@ class ModelWrapper(torch.nn.Module):
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:
-            model_kwargs = {
-                "pretrained_model_name_or_path": self.model_name,
-                "trust_remote_code": args.model_args.trust_remote_code,
-            }
+            model_kwargs = {"pretrained_model_name_or_path": self.model_name}
 
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
-        if self.tensor_parallel_embeddings:
-            model_kwargs["tensor_parallel_embeddings"] = True
+        if self.tensor_parallel_word_embeddings:
+            model_kwargs["tensor_parallel_word_embeddings"] = True
+        if args.model_args.trust_remote_code:
+            model_kwargs["trust_remote_code"] = True
 
         def _get_model(**extras):
             if self.model_name is None:

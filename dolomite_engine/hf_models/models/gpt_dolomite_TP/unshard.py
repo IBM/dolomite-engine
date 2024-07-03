@@ -6,10 +6,10 @@ from ...modeling_utils import is_glu
 from ..gpt_dolomite import GPTDolomiteConfig
 
 
-def unshard(
+def unshard_tensor_parallel_state_dicts(
     config: GPTDolomiteConfig,
     tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_embeddings: bool,
+    tensor_parallel_word_embeddings: bool,
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
@@ -19,7 +19,7 @@ def unshard(
     # word embeddings
     output_state_dict = _get_embeddings_or_lm_head(
         tensor_parallel_state_dicts,
-        tensor_parallel_embeddings=tensor_parallel_embeddings,
+        tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
         prefix=prefix + "transformer.wte.weight",
         vocab_size=config.vocab_size,
         check_correctness=check_correctness,
@@ -30,7 +30,8 @@ def unshard(
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
-                tensor_parallel_embeddings=tensor_parallel_embeddings,
+                # TODO change this if we support tensor parallel position embeddings
+                tensor_parallel_word_embeddings=False,
                 prefix=prefix + "transformer.wpe.weight",
                 vocab_size=config.n_positions,
                 check_correctness=check_correctness,
@@ -95,7 +96,7 @@ def unshard(
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
-                tensor_parallel_embeddings=tensor_parallel_embeddings,
+                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
                 prefix=prefix + "lm_head.weight",
                 vocab_size=config.vocab_size,
                 check_correctness=check_correctness,
@@ -105,22 +106,33 @@ def unshard(
     return output_state_dict
 
 
+def fix_unsharded_state_dict(
+    config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
+) -> dict:
+    state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
+        : config.vocab_size, :
+    ]
+    state_dict = _fix_attention_weights(config, state_dict, prefix)
+    state_dict = _fix_mlp_weights(config, state_dict, tensor_parallel_size, prefix)
+    return state_dict
+
+
 def _get_embeddings_or_lm_head(
     tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_embeddings: bool,
+    tensor_parallel_word_embeddings: bool,
     prefix: str,
     vocab_size: int,
     check_correctness: bool,
 ) -> dict:
-    if tensor_parallel_embeddings:
+    if tensor_parallel_word_embeddings:
         output = _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts, key=prefix, dim=0)
     else:
         output = _get_once_from_state_dicts_with_check(
             tensor_parallel_state_dicts, key=prefix, check_correctness=check_correctness
         )
 
-    # tensor parallel embeddings uses EmbeddingTP class so we need to trim the matrix
-    if tensor_parallel_embeddings:
+    # tensor parallel embeddings uses Embedding_TP class so we need to trim the matrix
+    if tensor_parallel_word_embeddings:
         assert output.shape[0] >= vocab_size
         output = output[:vocab_size, :]
 
@@ -239,3 +251,39 @@ def _get_once_from_state_dicts_with_check(
         for state_dict in tensor_parallel_state_dicts[1:]:
             assert output.equal(state_dict[key])
     return output
+
+
+def _fix_attention_weights(config: GPTDolomiteConfig, state_dict: dict, prefix: str) -> dict:
+    if AttentionHeadType(config.attention_head_type) == AttentionHeadType.mqa:
+        for layer_idx in range(config.n_layer):
+            q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.q_attn.weight")
+            kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.kv_attn.weight")
+            state_dict[f"{prefix}transformer.h.{layer_idx}.attn.c_attn.weight"] = torch.cat([q_attn_w, kv_attn_w])
+
+            if config.add_bias:
+                q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.q_attn.bias")
+                kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.kv_attn.bias")
+                state_dict[f"{prefix}transformer.h.{layer_idx}.attn.c_attn.bias"] = torch.cat([q_attn_w, kv_attn_w])
+
+    return state_dict
+
+
+def _fix_mlp_weights(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+    if is_glu(config.activation_function):
+        for layer_idx in range(config.n_layer):
+            key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
+            weight = state_dict[key].chunk(tensor_parallel_size)
+            weight = [w.chunk(2) for w in weight]
+            w0 = torch.cat([w[0] for w in weight])
+            w1 = torch.cat([w[1] for w in weight])
+            state_dict[key] = torch.cat([w0, w1])
+
+            if config.add_bias:
+                key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.bias"
+                weight = state_dict[key].chunk(tensor_parallel_size)
+                weight = [w.chunk(2) for w in weight]
+                w0 = torch.cat([w[0] for w in weight])
+                w1 = torch.cat([w[1] for w in weight])
+                state_dict[key] = torch.cat([w0, w1])
+
+    return state_dict

@@ -6,8 +6,8 @@ from tqdm import tqdm
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import RoPE, YaRNScaledRoPE, get_normalization_function
-from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP
+from ...modeling_utils import RoPE, YaRNScaledRoPE
+from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .layer import GPTDolomiteBlock_TP
 
@@ -17,10 +17,10 @@ class GPTDolomitePreTrainedModel_TP(GPTDolomitePreTrainedModel):
 
 
 class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
-    def __init__(self, config: GPTDolomiteConfig, tensor_parallel_embeddings: bool = False, **kwargs) -> None:
+    def __init__(self, config: GPTDolomiteConfig, tensor_parallel_word_embeddings: bool = False, **kwargs) -> None:
         GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
-        self.tensor_parallel_embeddings = tensor_parallel_embeddings
+        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
 
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
@@ -35,7 +35,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             config.vocab_size,
             self.embed_dim,
             std=self.initializer_range,
-            tensor_parallel_embeddings=self.tensor_parallel_embeddings,
+            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
         )
 
         self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
@@ -51,7 +51,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                 for i in range(config.num_hidden_layers)
             ]
         )
-        self.ln_f = get_normalization_function(
+        self.ln_f = get_normalization_function_TP(
             config.normalization_function,
             self.embed_dim,
             eps=config.layer_norm_epsilon,
@@ -138,9 +138,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         max_position_embeddings = self.config.max_position_embeddings
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            self.wpe = Embedding_TP(
-                max_position_embeddings, self.embed_dim, tensor_parallel_embeddings=self.tensor_parallel_embeddings
-            )
+            self.wpe = Embedding_TP(max_position_embeddings, self.embed_dim, tensor_parallel_word_embeddings=False)
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:

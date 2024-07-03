@@ -1,12 +1,18 @@
+from typing import Any, Mapping
+
 import torch
 import torch.distributed
+import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributed._tensor.api import DTensor
+from torch.distributed._tensor.placement_types import Replicate, Shard
 
-from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ...utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .TP import (
     copy_to_tensor_parallel_region,
+    modify_state_dict_to_dtensor_dict,
     reduce_from_tensor_parallel_region,
     tensor_parallel_split_safetensor_slice,
 )
@@ -39,9 +45,22 @@ class ColumnParallelLinear(ParameterizedLinear):
             std=std,
         )
 
+        self.weight = nn.Parameter(
+            DTensor.from_local(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
+            )
+        )
+        if bias:
+            self.bias = nn.Parameter(
+                DTensor.from_local(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
+                )
+            )
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = copy_to_tensor_parallel_region(input)
-        input = super().forward(input)
+        bias = None if self.bias is None else self.bias.to_local()
+        input = F.linear(input, self.weight.to_local(), bias)
         return input
 
     def load_from_safetensors_weights_manager(
@@ -62,6 +81,10 @@ class ColumnParallelLinear(ParameterizedLinear):
         return "in_features={}, out_features_per_device={}, bias={}".format(
             self.in_features, self.out_features_per_device, self.bias is not None
         )
+
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
+        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
+        return super().load_state_dict(state_dict, strict, assign)
 
 
 class RowParallelLinear(ParameterizedLinear):
@@ -91,13 +114,25 @@ class RowParallelLinear(ParameterizedLinear):
             std=std,
         )
 
+        self.weight = nn.Parameter(
+            DTensor.from_local(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(1)]
+            )
+        )
+        if bias:
+            self.bias = nn.Parameter(
+                DTensor.from_local(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                )
+            )
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # we can't call super().forward here since that will add bias to each TP rank
         # but for tensor parallel, we need to add it on only 1 TP rank
-        input = F.linear(input, self.weight, None)
+        input = F.linear(input, self.weight.to_local(), None)
         input = reduce_from_tensor_parallel_region(input)
         if self.bias is not None:
-            input = input + self.bias
+            input = input + self.bias.to_local()
         return input
 
     def load_from_safetensors_weights_manager(
@@ -116,3 +151,47 @@ class RowParallelLinear(ParameterizedLinear):
         return "in_features_per_device={}, out_features={}, bias={}".format(
             self.in_features_per_device, self.out_features, self.bias is not None
         )
+
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
+        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
+        return super().load_state_dict(state_dict, strict, assign)
+
+
+class TensorParallelSharedLinear(ParameterizedLinear):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        device: torch.device = None,
+        dtype: torch.dtype = None,
+        std: float = None,
+    ) -> None:
+        super().__init__(in_features, out_features, bias, device, dtype, std)
+
+        self.weight = nn.Parameter(
+            DTensor.from_local(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            )
+        )
+        if bias:
+            self.bias = nn.Parameter(
+                DTensor.from_local(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                )
+            )
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        bias = None if self.bias is None else self.bias.to_local()
+        input = F.linear(input, self.weight.to_local(), bias)
+        input = copy_to_tensor_parallel_region(input)
+        return input
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        with get_cuda_rng_tracker().fork():
+            return super().reset_parameters()
+
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
+        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
+        return super().load_state_dict(state_dict, strict, assign)

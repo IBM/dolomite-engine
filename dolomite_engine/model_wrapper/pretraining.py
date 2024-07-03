@@ -57,7 +57,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             input_ids = tokens[:, :-1]
             labels = tokens[:, 1:]
 
-            if self.tensor_parallel_embeddings:
+            if self.tensor_parallel_word_embeddings:
                 model_outputs = self.model(input_ids=input_ids, output_parallel_lm_logits=True)
 
                 logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits

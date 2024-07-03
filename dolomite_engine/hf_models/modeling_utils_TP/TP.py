@@ -2,21 +2,27 @@ from typing import Tuple
 
 import torch
 import torch.distributed
+import torch.nn as nn
+from torch.distributed._tensor.api import DTensor
+from torch.profiler import record_function
 
 from ...utils import ProcessGroupManager
 from ..utils import divide_if_divisible
 
 
 def copy_to_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    return _CopyToTensorParallelRegion.apply(input)
+    with record_function("TP::copy_to_tensor_parallel_region"):
+        return _CopyToTensorParallelRegion.apply(input)
 
 
 def reduce_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    return _ReduceFromTensorParallelRegion.apply(input)
+    with record_function("TP::reduce_from_tensor_parallel_region"):
+        return _ReduceFromTensorParallelRegion.apply(input)
 
 
 def gather_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    return _GatherFromTensorParallelRegion.apply(input)
+    with record_function("TP::gather_from_tensor_parallel_region"):
+        return _GatherFromTensorParallelRegion.apply(input)
 
 
 class _CopyToTensorParallelRegion(torch.autograd.Function):
@@ -127,3 +133,12 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: Tuple[int
             return slice[:, start_index:end_index]
     else:
         raise RuntimeError("this code should not be reachable")
+
+
+def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict) -> dict:
+    result = {}
+    for key, tensor in state_dict.items():
+        device_mesh = getattr(module, key).device_mesh
+        placements = getattr(module, key).placements
+        result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements, run_check=False)
+    return result

@@ -8,7 +8,6 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ....utils import SafeTensorsWeightsManager
-from ...modeling_utils import ParameterizedLinear
 from ...modeling_utils_TP import (
     LMHead_TP,
     TensorParallelCrossEntropy,
@@ -20,21 +19,23 @@ from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
 
 
 class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCausalLM):
-    def __init__(self, config: GPTDolomiteConfig, tensor_parallel_embeddings: bool = False, **kwargs) -> None:
+    def __init__(self, config: GPTDolomiteConfig, tensor_parallel_word_embeddings: bool = False, **kwargs) -> None:
         GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
-        self.tensor_parallel_embeddings = tensor_parallel_embeddings
+        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.vocab_size = config.vocab_size
 
-        self.transformer = GPTDolomiteModel_TP(config, tensor_parallel_embeddings=tensor_parallel_embeddings, **kwargs)
+        self.transformer = GPTDolomiteModel_TP(
+            config, tensor_parallel_word_embeddings=tensor_parallel_word_embeddings, **kwargs
+        )
 
         if not self._tied_word_embeddings:
-            if self.tensor_parallel_embeddings:
-                self.lm_head = LMHead_TP(config.vocab_size, config.n_embd, std=config.initializer_range)
-            else:
-                self.lm_head = ParameterizedLinear(
-                    config.n_embd, config.vocab_size, bias=False, std=config.initializer_range
-                )
+            self.lm_head = LMHead_TP(
+                config.vocab_size,
+                config.n_embd,
+                std=config.initializer_range,
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            )
 
         self.m_width = config.m_width
         self.upcast_logits_for_loss = config.upcast_logits_for_loss
@@ -81,9 +82,9 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels)
 
         if output_parallel_lm_logits:
-            assert self.tensor_parallel_embeddings
+            assert self.tensor_parallel_word_embeddings
         else:
-            if self.tensor_parallel_embeddings:
+            if self.tensor_parallel_word_embeddings:
                 lm_logits = gather_from_tensor_parallel_region(lm_logits)
 
         if not return_dict:
@@ -99,12 +100,14 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         )
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        if self.tensor_parallel_embeddings:
+        if self.tensor_parallel_word_embeddings:
             hidden_states = copy_to_tensor_parallel_region(hidden_states)
 
-        lm_logits = super().get_lm_logits(hidden_states)
-
-        return lm_logits
+        return (
+            F.linear(hidden_states, self.transformer.wte.weight.to_local())
+            if self._tied_word_embeddings
+            else self.lm_head(hidden_states)
+        )
 
     def get_autoregressive_language_modeling_loss(self, lm_logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         if labels is None:
@@ -114,7 +117,7 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         shift_logits = lm_logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
 
-        if self.tensor_parallel_embeddings:
+        if self.tensor_parallel_word_embeddings:
             loss = TensorParallelCrossEntropy.apply(
                 shift_logits, shift_labels, self.vocab_size, self.upcast_logits_for_loss
             )
@@ -132,7 +135,7 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         self.transformer.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "transformer.")
 
         if not self._tied_word_embeddings:
-            if self.tensor_parallel_embeddings:
+            if self.tensor_parallel_word_embeddings:
                 self.lm_head.load_from_safetensors_weights_manager(safetensors_weight_manager, "lm_head.")
             else:
                 state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "transformer.wte.weight")}
@@ -141,17 +144,19 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
     @classmethod
     def from_pretrained(
         self,
-        model_name: str,
+        pretrained_model_name_or_path: str,
         torch_dtype: torch.dtype = torch.float32,
-        tensor_parallel_embeddings: bool = False,
+        tensor_parallel_word_embeddings: bool = False,
+        **kwargs,
     ) -> GPTDolomiteForCausalLM_TP:
+        config = GPTDolomiteConfig.from_pretrained(pretrained_model_name_or_path)
+
         # use dummy tensors to avoid initializing model here
         with torch.device("meta"):
-            config = GPTDolomiteConfig.from_pretrained(model_name)
             # try sharding vocab matrices if really struggling for memory
-            model = GPTDolomiteForCausalLM_TP(config, tensor_parallel_embeddings=tensor_parallel_embeddings)
-
-            # set dtype
+            model = GPTDolomiteForCausalLM_TP._from_config(
+                config, tensor_parallel_word_embeddings=tensor_parallel_word_embeddings, **kwargs
+            )
             model = model.to(dtype=torch_dtype)
 
         # copy to device without copying storage
@@ -159,7 +164,7 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
 
         # load weights into tensor parallel model using SafeTensorsWeightsManager class
         # this avoids loading multiple copies of the parameters in CPU memory
-        safetensors_weight_manager = SafeTensorsWeightsManager(model_name)
+        safetensors_weight_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
         model.load_from_safetensors_weights_manager(safetensors_weight_manager)
 
         return model

@@ -1,7 +1,5 @@
 datasets:
   - class_name: DollyDataset
-    class_args:
-      data_path: ../dolly/data/
     data_name: dolly
     output_format: " __output__"
     data_sampling_ratio: 1
