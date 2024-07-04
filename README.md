@@ -103,7 +103,12 @@ Note that padding free transformers doesn't support generation and thus for runn
 The typical training workflow looks like:
 1. [Pretraining](scripts/pretrain.sh) or [Finetuning](scripts/finetune.sh): This is the actual training process
 ```shell
-sh scripts/train.sh configs/sst2/training.yml
+# for finetuning
+sh scripts/finetune.sh configs/sst2/training.yml
+```
+```shell
+# for pretraining
+sh scripts/pretrain.sh configs/pretraining-examples/pretrain-1.yml
 ```
 
 2. [Inference](scripts/generate.sh): Run inference on the trained models or the un-trained model
@@ -116,7 +121,7 @@ sh scripts/generate.sh configs/sst2/inference.yml
 sh scripts/unshard.sh configs/sst2/unshard.yml
 ```
 
-## Dataset
+## Using custom datasets
 The data directory should obey the following structure:
 ```text
 📦data
@@ -170,6 +175,9 @@ HuggingFaceDataset
 SlimOrcaDataset
 SST2Dataset
 ```
+
+## Using Megatron Dataset outside of this repository
+This repository implements the dataloader from Megatron-LM for efficient pretraining. If for some reason you need to use that dataloader outside this repository, take a look at [this example](tools/megatron_dataset/megatron_dataloader.py).
 
 ## Supported optimizers
 We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [DeepSpeed](https://github.com/microsoft/DeepSpeed) or [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.

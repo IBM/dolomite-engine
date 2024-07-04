@@ -137,6 +137,18 @@ class ProcessGroupManager:
             _TENSOR_PARALLEL_RANK = ProcessGroupManager.get_tensor_parallel_mesh().get_local_rank()
         return _TENSOR_PARALLEL_RANK
 
+    @contextmanager
+    @staticmethod
+    def set_dummy_tensor_parallel_rank(rank: int):
+        global _TENSOR_PARALLEL_RANK
+
+        original_rank = _TENSOR_PARALLEL_RANK
+        _TENSOR_PARALLEL_RANK = rank
+
+        yield
+
+        _TENSOR_PARALLEL_RANK = original_rank
+
     @staticmethod
     def get_tensor_parallel_world_size() -> int:
         global _TENSOR_PARALLEL_WORLD_SIZE
@@ -144,6 +156,18 @@ class ProcessGroupManager:
         if _TENSOR_PARALLEL_WORLD_SIZE is None:
             _TENSOR_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_tensor_parallel_mesh().size()
         return _TENSOR_PARALLEL_WORLD_SIZE
+
+    @contextmanager
+    @staticmethod
+    def set_dummy_tensor_parallel_world_size(world_size: int):
+        global _TENSOR_PARALLEL_WORLD_SIZE
+
+        original_world_size = _TENSOR_PARALLEL_WORLD_SIZE
+        _TENSOR_PARALLEL_WORLD_SIZE = world_size
+
+        yield
+
+        _TENSOR_PARALLEL_WORLD_SIZE = original_world_size
 
     @staticmethod
     def get_tensor_parallel_first_rank() -> int:
@@ -154,6 +178,18 @@ class ProcessGroupManager:
             ranks = torch.distributed.get_process_group_ranks(group)
             _TENSOR_PARALLEL_FIRST_RANK = ranks[0]
         return _TENSOR_PARALLEL_FIRST_RANK
+
+    @contextmanager
+    @staticmethod
+    def set_dummy_tensor_parallel_first_rank(rank: int):
+        global _TENSOR_PARALLEL_FIRST_RANK
+
+        original_rank = _TENSOR_PARALLEL_FIRST_RANK
+        _TENSOR_PARALLEL_FIRST_RANK = rank
+
+        yield
+
+        _TENSOR_PARALLEL_FIRST_RANK = original_rank
 
     # data parallel
     @staticmethod
@@ -181,6 +217,18 @@ class ProcessGroupManager:
             _DATA_PARALLEL_RANK = ProcessGroupManager.get_data_parallel_mesh().get_local_rank()
         return _DATA_PARALLEL_RANK
 
+    @contextmanager
+    @staticmethod
+    def set_dummy_data_parallel_rank(rank: int):
+        global _DATA_PARALLEL_RANK
+
+        original_rank = _DATA_PARALLEL_RANK
+        _DATA_PARALLEL_RANK = rank
+
+        yield
+
+        _DATA_PARALLEL_RANK = original_rank
+
     @staticmethod
     def get_data_parallel_world_size() -> int:
         global _DATA_PARALLEL_WORLD_SIZE
@@ -189,32 +237,20 @@ class ProcessGroupManager:
             _DATA_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_data_parallel_mesh().size()
         return _DATA_PARALLEL_WORLD_SIZE
 
+    @contextmanager
+    @staticmethod
+    def set_dummy_data_parallel_world_size(world_size: int):
+        global _DATA_PARALLEL_WORLD_SIZE
+
+        original_world_size = _DATA_PARALLEL_WORLD_SIZE
+        _DATA_PARALLEL_WORLD_SIZE = world_size
+
+        yield
+
+        _DATA_PARALLEL_WORLD_SIZE = original_world_size
+
     def __str__(self) -> str:
         return str(self.get_mesh())
-
-    @contextmanager
-    @staticmethod
-    def set_dummy_tensor_parallel_rank(rank: int):
-        global _TENSOR_PARALLEL_RANK
-
-        original_rank = _TENSOR_PARALLEL_RANK
-        _TENSOR_PARALLEL_RANK = rank
-
-        yield
-
-        _TENSOR_PARALLEL_RANK = original_rank
-
-    @contextmanager
-    @staticmethod
-    def set_dummy_tensor_parallel_world_size(world_size: int):
-        global _TENSOR_PARALLEL_WORLD_SIZE
-
-        original_world_size = _TENSOR_PARALLEL_WORLD_SIZE
-        _TENSOR_PARALLEL_WORLD_SIZE = world_size
-
-        yield
-
-        _TENSOR_PARALLEL_WORLD_SIZE = original_world_size
 
     @staticmethod
     def get_data_parallel_mesh_with_topology() -> DeviceMesh:
