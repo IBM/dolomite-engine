@@ -1,5 +1,5 @@
-import contextlib
 import logging
+from contextlib import AbstractContextManager, nullcontext
 from typing import Tuple
 
 import torch
@@ -117,7 +117,7 @@ def train_step(
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
-    train_step_context: contextlib.AbstractContextManager,
+    train_step_context: AbstractContextManager,
 ) -> Tuple[float, float]:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -134,7 +134,7 @@ def train_step(
         Tuple[float, float]: loss at the current step, grad norm at the current step
     """
 
-    no_sync = contextlib.nullcontext
+    no_sync = nullcontext
     if distributed_backend == DistributedBackend.torch:
         # FSDP-2
         if hasattr(model, "set_requires_gradient_sync"):
@@ -240,7 +240,7 @@ def train(
     if eval_during_training:
         evaluate(val_dataloader, model, starting_iteration, experiments_tracker)
 
-    train_step_context = contextlib.nullcontext()
+    train_step_context = nullcontext()
     use_nvte_fp8 = (
         args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
     )

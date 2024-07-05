@@ -1,5 +1,5 @@
-import contextlib
 import math
+from contextlib import nullcontext
 from typing import Any, Mapping
 
 import torch
@@ -80,7 +80,7 @@ class Embedding_TP(ParameterizedEmbedding):
         self.load_state_dict({"weight": weight})
 
     def reset_parameters(self) -> None:
-        context = contextlib.nullcontext if self.tensor_parallel_word_embeddings else get_cuda_rng_tracker().fork
+        context = nullcontext if self.tensor_parallel_word_embeddings else get_cuda_rng_tracker().fork
 
         with context():
             return super().reset_parameters()

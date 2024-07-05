@@ -1,6 +1,6 @@
-import contextlib
 import logging
 import time
+from contextlib import nullcontext
 from typing import List
 
 import torch
@@ -115,7 +115,7 @@ def train(
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
-    train_step_context = contextlib.nullcontext()
+    train_step_context = nullcontext()
     use_nvte_fp8 = (
         args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
     )
