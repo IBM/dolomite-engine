@@ -86,14 +86,23 @@ random.seed(42)
 
 
 with torch.inference_mode():
-    x = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
-    y_tp = model_tp(x)[0]
+    input_ids = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
+    labels = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
+
+    output_tp = model_tp(input_ids=input_ids, labels=labels)
+    loss_tp = output_tp[0]
+    logits_tp = output_tp[1]
 
     if args.tensor_parallel_word_embeddings:
-        y_tp = y_tp[..., : config.vocab_size]
+        logits_tp = logits_tp[..., : config.vocab_size]
 
     if torch.distributed.get_rank() == 0:
-        y = model(x)[0]
+        output = model(input_ids=input_ids, labels=labels)
+        loss = output[0]
+        logits = output[1]
 
-        error = (y - y_tp).abs().max()
-        assert error < 5e-4, "outputs don't match for normal and tensor parallel model"
+        error = (logits - logits_tp).abs().max()
+        assert error < 5e-4, "logits don't match for normal and tensor parallel model"
+
+        error = (loss - loss_tp).abs().max()
+        assert error < 3e-6, "losses don't match for normal and tensor parallel model"

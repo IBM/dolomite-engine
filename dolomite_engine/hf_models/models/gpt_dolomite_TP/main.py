@@ -1,19 +1,16 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Tuple, Union
 
 import torch
 import torch.nn.functional as F
+from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ....utils import SafeTensorsWeightsManager
-from ...modeling_utils_TP import (
-    LMHead_TP,
-    TensorParallelCrossEntropy,
-    copy_to_tensor_parallel_region,
-    gather_from_tensor_parallel_region,
-)
+from ...modeling_utils_TP import LMHead_TP, copy_to_tensor_parallel_region, gather_from_tensor_parallel_region
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM, GPTDolomitePreTrainedModel
 from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
 
@@ -118,13 +115,15 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
 
         if self.tensor_parallel_word_embeddings:
-            loss = TensorParallelCrossEntropy.apply(
-                shift_logits, shift_labels, self.vocab_size, self.upcast_logits_for_loss
-            )
+            assert not self.upcast_logits_for_loss
+            loss_context = loss_parallel
         else:
             if self.upcast_logits_for_loss:
                 shift_logits = shift_logits.float()
 
+            loss_context = nullcontext
+
+        with loss_context():
             loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
         return loss
