@@ -105,15 +105,13 @@ def train(
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-
-    model_flops = model.get_model_tflops(micro_batch_size * gradient_accumulation_steps, sequence_length)
-
-    tokens_per_batch = (
-        micro_batch_size
-        * gradient_accumulation_steps
-        * ProcessGroupManager.get_data_parallel_world_size()
-        * sequence_length
+    global_batch_size = (
+        micro_batch_size * gradient_accumulation_steps * ProcessGroupManager.get_data_parallel_world_size()
     )
+    tokens_per_batch = global_batch_size * sequence_length
+
+    # model flops per GPU
+    model_flops = model.get_model_tflops(global_batch_size, sequence_length) / ProcessGroupManager.get_world_size()
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
