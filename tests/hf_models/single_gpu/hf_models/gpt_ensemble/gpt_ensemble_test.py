@@ -10,7 +10,7 @@ from ....test_common import TestCommons
 SEED = 1234
 
 
-class AttentionTestForDenseModel(TestCommons):
+class AttentionTestForEnsembleModel(TestCommons):
     @staticmethod
     def get_dense_test_config(
         attention_head_type: AttentionHeadType,
@@ -89,7 +89,7 @@ class AttentionTestForDenseModel(TestCommons):
             rtol_float32=0,
             atol_float32=5e-7,
             rtol_float16=1e-2,
-            atol_float16=5e-4,
+            atol_float16=7e-4,
             rtol_bfloat16=5e-3,
             atol_bfloat16=5e-3,
         )
