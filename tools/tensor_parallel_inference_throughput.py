@@ -69,7 +69,8 @@ with torch.device("meta"):
     for param_name, param in model.named_parameters():
         num_parameters += param.numel()
 
-    print("\ntotal", f"{num_parameters:,}")
+    if ProcessGroupManager.get_global_rank() == 0:
+        print("\ntotal", f"{num_parameters:,}")
 
     del model
 

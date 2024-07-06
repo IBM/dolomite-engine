@@ -8,4 +8,5 @@ from .gpt_crosslayer import (
 from .gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM, GPTDolomiteModel
 from .gpt_dolomite_TP import GPTDolomiteForCausalLM_TP, GPTDolomiteModel_TP
 from .gpt_ensemble import GPTEnsembleConfig, GPTEnsembleForCausalLM, GPTEnsembleModel
+from .gpt_ensemble_TP import GPTEnsembleForCausalLM_TP, GPTEnsembleModel_TP
 from .moe_dolomite import MoEDolomiteConfig, MoEDolomiteForCausalLM, MoEDolomiteModel
