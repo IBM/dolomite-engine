@@ -1,5 +1,3 @@
-from typing import Union
-
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -18,7 +16,7 @@ class GPTDolomitePreTrainedModel_TP(GPTDolomitePreTrainedModel):
 
 class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
     def __init__(self, config: GPTDolomiteConfig, tensor_parallel_embeddings: bool = False, **kwargs) -> None:
-        GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
+        GPTDolomitePreTrainedModel_TP.__init__(self, config, **kwargs)
 
         self.tensor_parallel_embeddings = tensor_parallel_embeddings
 
