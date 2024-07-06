@@ -15,8 +15,8 @@ from .communication import Communication
 from .data import get_megatron_gpt_dataloaders
 from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
-from .finetune import track_train_metrics, train_step
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
+from .train_utils import track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,

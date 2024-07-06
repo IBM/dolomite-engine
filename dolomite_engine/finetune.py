@@ -1,6 +1,5 @@
 import logging
-from contextlib import AbstractContextManager, nullcontext
-from typing import Tuple
+from contextlib import nullcontext
 
 import torch
 from torch.optim import Optimizer
@@ -10,10 +9,11 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
-from .data import ResumableDataLoader, get_dataloader, get_next_batch, infinite_iterator
+from .data import ResumableDataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
+from .train_utils import track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
@@ -30,72 +30,6 @@ if is_transformer_engine_available():
     from transformer_engine.common.recipe import DelayedScaling, Format
 
 
-def track_train_metrics(
-    global_step: int,
-    train_loss_step: float,
-    grad_norm_step: float,
-    current_lr: float,
-    experiments_tracker: ExperimentsTracker,
-    loss_running_mean_tracker: RunningMean,
-    flops: float = None,
-    billion_tokens_per_day: float = None,
-    step_time: float = None,
-) -> None:
-    """tracks metrics like training loss, learning rate etc
-
-    Args:
-        global_step (int): global step during training
-        train_loss_step (float): training loss at the current step
-        current_lr (float): learning rate at the current step
-        experiments_tracker (ExperimentsTracker): metrics tracker
-        loss_running_mean_tracker (RunningMean): running mean accumulator for loss
-        flops (float, optional): total model flops. Defaults to None
-        billion_tokens_per_day (float, optional): billions of tokens per day. Defaults to None
-        step_time (float, optional): time per step in seconds
-    """
-
-    # update loss running mean
-    loss_running_mean = loss_running_mean_tracker.add_loss(train_loss_step)
-
-    # experiments tracker
-    message = {"loss_step": train_loss_step, "loss_running_mean": loss_running_mean, "learning_rate": current_lr}
-
-    if grad_norm_step is not None:
-        message["grad_norm"] = grad_norm_step
-
-    if flops is not None:
-        message["FLOPS"] = flops
-
-    if billion_tokens_per_day is not None:
-        message["throughput (B tokens/day)"] = billion_tokens_per_day
-
-    if step_time is not None:
-        message["step time (sec)"] = step_time
-
-    experiments_tracker.track(message, step=global_step, context="train")
-
-    # terminal
-    message = (
-        f"step = {global_step}, train_loss (batch) = {train_loss_step:.4f}, "
-        f"train_loss (running_mean) = {loss_running_mean:.4f}, "
-        f"learning_rate = {current_lr:.3E}"
-    )
-
-    if grad_norm_step is not None:
-        message += f", grad_norm = {grad_norm_step:.2f}"
-
-    if flops is not None:
-        message += f", FLOPS = {flops:.2f}"
-
-    if billion_tokens_per_day is not None:
-        message += f", throughput = {billion_tokens_per_day:.2f} B tokens/day"
-
-    if step_time is not None:
-        message += f", step_time = {step_time:.3f} sec"
-
-    log_rank_0(logging.INFO, message)
-
-
 def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker) -> None:
     """tracks metrics like validation loss
 
@@ -107,94 +41,6 @@ def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: Ex
 
     log_rank_0(logging.INFO, f"step = {global_step}, val_loss = {val_loss:.4f}")
     experiments_tracker.track({"loss": val_loss}, step=global_step, context="val")
-
-
-def train_step(
-    model: ModelWrapperForFinetuning,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
-    distributed_backend: DistributedBackend,
-    train_dataloader: ResumableDataLoader,
-    gradient_accumulation_steps: int,
-    gradient_clipping: float,
-    train_step_context: AbstractContextManager,
-) -> Tuple[float, float]:
-    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
-
-    Args:
-        model (ModelWrapperForFinetuning): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
-        distributed_backend (DistributedBackend): distributed backend
-        train_dataloader (ResumableDataLoader): training dataloader
-        gradient_accumulation_steps (int): gradient accumulation steps
-        gradient_clipping (float): gradient clipping value
-
-    Returns:
-        Tuple[float, float]: loss at the current step, grad norm at the current step
-    """
-
-    no_sync = nullcontext
-    if distributed_backend == DistributedBackend.torch:
-        # FSDP-2
-        if hasattr(model, "set_requires_gradient_sync"):
-            model.set_requires_gradient_sync(False)
-        else:
-            no_sync = model.no_sync
-
-    loss = 0
-    grad_norm = None
-    if distributed_backend == DistributedBackend.torch:
-        optimizer.zero_grad()
-
-    with no_sync():
-        for _ in range(gradient_accumulation_steps - 1):
-            batch = get_next_batch(train_dataloader)
-            with train_step_context:
-                loss_micro_step = model(batch)
-            loss += loss_micro_step
-
-            # compute gradients
-            if distributed_backend == DistributedBackend.deepspeed:
-                model.backward(loss_micro_step)
-                model.step()
-            elif distributed_backend == DistributedBackend.torch:
-                loss_micro_step.backward()
-            else:
-                raise ValueError(f"unexpected distributed backend ({distributed_backend})")
-
-    if distributed_backend == DistributedBackend.torch and hasattr(model, "set_requires_gradient_sync"):
-        model.set_requires_gradient_sync(True)
-
-    batch = get_next_batch(train_dataloader)
-    with train_step_context:
-        loss_micro_step = model(batch)
-    loss += loss_micro_step
-
-    # compute gradients
-    if distributed_backend == DistributedBackend.deepspeed:
-        model.backward(loss_micro_step)
-
-        if gradient_clipping is not None:
-            grad_norm = model.get_global_grad_norm()
-
-        model.step()
-    elif distributed_backend == DistributedBackend.torch:
-        loss_micro_step.backward()
-
-        if gradient_clipping is not None:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
-
-        optimizer.step()
-        lr_scheduler.step()
-    else:
-        raise ValueError(f"unexpected distributed backend ({distributed_backend})")
-
-    loss = loss / gradient_accumulation_steps
-    loss = loss.item()
-    grad_norm = 0 if grad_norm is None else grad_norm.item()
-
-    return loss, grad_norm
 
 
 def train(
