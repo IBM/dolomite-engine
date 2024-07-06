@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+from time import perf_counter
 
 import torch
 import torch.distributed
@@ -55,9 +56,9 @@ kwargs = dict(
     vocab_size=49152,
 )
 
-if args.model_scale == "34b":
+if args.model_scale == "40b":
     config = GPTDolomiteConfig(**kwargs)
-elif args.model_scale == "34b-ensemble":
+elif args.model_scale == "40b-ensemble":
     config = GPTEnsembleConfig(**kwargs)
 
 # use dummy tensors to avoid initializing model here
@@ -77,7 +78,7 @@ with torch.device("meta"):
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
-    )
+    ).to(torch.bfloat16)
 
 # copy to device without copying storage
 model_tp = model_tp.to_empty(device=torch.cuda.current_device())
@@ -89,7 +90,22 @@ model_tp.eval()
 random.seed(42)
 
 input_ids = torch.randint(
-    0, 50255, (args.batch_size, args.input_sequence_length), device=torch.cuda.current_device(), requires_grad=False
+    0, 49152, (args.batch_size, args.input_sequence_tokens), device=torch.cuda.current_device(), requires_grad=False
 )
 
-output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
+n = 10
+
+for _ in range(10):
+    output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
+
+torch.cuda.synchronize()
+start_time = perf_counter()
+
+for _ in range(n):
+    output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
+
+torch.cuda.synchronize()
+end_time = perf_counter()
+
+if ProcessGroupManager.get_global_rank() == 0:
+    print("time taken = {:.2f} sec".format((end_time - start_time) / n))
