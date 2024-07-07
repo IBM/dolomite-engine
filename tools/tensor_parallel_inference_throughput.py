@@ -20,6 +20,7 @@ from dolomite_engine.utils import CUDA_RNGStatesTracker, ProcessGroupManager, se
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--attention-head-type", type=str)
+parser.add_argument("--activation-function", type=str)
 parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--model-scale", type=str)
 parser.add_argument("--attention-implementation", type=str)
@@ -58,12 +59,29 @@ kwargs = dict(
     resid_pdrop=0,
     embd_pdrop=0,
     attn_pdrop=0,
+    activation_function=args.activation_function,
 )
 
-if args.model_scale == "40b":
+if args.model_scale == "34b":
     config = GPTDolomiteConfig(**kwargs)
     model_class = GPTDolomiteForCausalLM_TP
-elif args.model_scale == "40b-ensemble":
+elif args.model_scale == "34b-ensemble":
+    config = GPTEnsembleConfig(**kwargs)
+    model_class = GPTEnsembleForCausalLM_TP
+elif args.model_scale == "70b":
+    kwargs["n_embd"] = 8192
+    kwargs["n_inner"] = 28672
+    kwargs["n_head"] = 64
+    kwargs["n_layer"] = 80
+
+    config = GPTDolomiteConfig(**kwargs)
+    model_class = GPTDolomiteForCausalLM_TP
+elif args.model_scale == "70b-ensemble":
+    kwargs["n_embd"] = 8192
+    kwargs["n_inner"] = 28672
+    kwargs["n_head"] = 64
+    kwargs["n_layer"] = 80
+
     config = GPTEnsembleConfig(**kwargs)
     model_class = GPTEnsembleForCausalLM_TP
 
@@ -105,17 +123,18 @@ input_ids = torch.randint(
 
 n = 10
 
-for _ in range(10):
-    output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
+with torch.inference_mode():
+    for _ in range(10):
+        output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
 
-torch.cuda.synchronize()
-start_time = perf_counter()
+    torch.cuda.synchronize()
+    start_time = perf_counter()
 
-for _ in range(n):
-    output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
+    for _ in range(n):
+        output_tp = model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens)
 
-torch.cuda.synchronize()
-end_time = perf_counter()
+    torch.cuda.synchronize()
+    end_time = perf_counter()
 
-if ProcessGroupManager.get_global_rank() == 0:
-    print(f"time taken = {(end_time - start_time) / n} sec")
+    if ProcessGroupManager.get_global_rank() == 0:
+        print(f"time taken = {(end_time - start_time) / n} sec")
