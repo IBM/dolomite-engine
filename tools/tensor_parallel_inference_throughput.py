@@ -118,4 +118,4 @@ torch.cuda.synchronize()
 end_time = perf_counter()
 
 if ProcessGroupManager.get_global_rank() == 0:
-    print("time taken = {:.2f} sec".format((end_time - start_time) / n))
+    print(f"time taken = {(end_time - start_time) / n} sec")
