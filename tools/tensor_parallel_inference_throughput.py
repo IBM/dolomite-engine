@@ -12,6 +12,7 @@ from dolomite_engine.hf_models import (
     GPTDolomiteConfig,
     GPTDolomiteForCausalLM_TP,
     GPTEnsembleConfig,
+    GPTEnsembleForCausalLM_TP,
 )
 from dolomite_engine.utils import CUDA_RNGStatesTracker, ProcessGroupManager, set_cuda_rng_tracker
 
@@ -54,12 +55,17 @@ kwargs = dict(
     n_inner=24576,
     n_positions=8192,
     vocab_size=49152,
+    resid_pdrop=0,
+    embd_pdrop=0,
+    attn_pdrop=0,
 )
 
 if args.model_scale == "40b":
     config = GPTDolomiteConfig(**kwargs)
+    model_class = GPTDolomiteForCausalLM_TP
 elif args.model_scale == "40b-ensemble":
     config = GPTEnsembleConfig(**kwargs)
+    model_class = GPTEnsembleForCausalLM_TP
 
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
@@ -75,11 +81,14 @@ with torch.device("meta"):
     del model
 
     # try sharding vocab matrices if really struggling for memory
-    model_tp = GPTDolomiteForCausalLM_TP._from_config(
+    model_tp = model_class._from_config(
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
     ).to(torch.bfloat16)
+
+    if ProcessGroupManager.get_global_rank() == 0:
+        print(model_tp)
 
 # copy to device without copying storage
 model_tp = model_tp.to_empty(device=torch.cuda.current_device())
