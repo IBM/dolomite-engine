@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
-from transformers.models.mixtral.modeling_mixtral import load_balancing_loss_func
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
@@ -16,27 +15,6 @@ from .layer import SparseMoEBlock
 class MoEDolomitePreTrainedModel(GPTDolomitePreTrainedModel):
     config_class = MoEDolomiteConfig
     _no_split_modules = ["SparseMoEBlock"]
-
-    def get_moe_loss(
-        self,
-        lm_logits: torch.Tensor,
-        labels: torch.Tensor,
-        cu_seqlens: torch.Tensor,
-        router_logits: torch.Tensor,
-        num_experts: int,
-        num_experts_per_token: int,
-        router_aux_loss_coef: float,
-        output_router_logits: bool,
-    ) -> torch.Tensor:
-        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
-
-        load_balancing_loss = None
-        if output_router_logits:
-            load_balancing_loss = load_balancing_loss_func(router_logits, num_experts, num_experts_per_token)
-            if loss is not None:
-                loss += router_aux_loss_coef * load_balancing_loss
-
-        return loss, load_balancing_loss
 
 
 class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):

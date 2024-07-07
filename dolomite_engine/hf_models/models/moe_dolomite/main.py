@@ -3,6 +3,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn.functional as F
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
+from transformers.models.mixtral.modeling_mixtral import load_balancing_loss_func
 
 from ...modeling_utils import ParameterizedLinear
 from ..gpt_dolomite import GPTDolomiteForCausalLM
@@ -131,3 +132,24 @@ class MoEDolomiteForCausalLM(MoEDolomitePreTrainedModel, GPTDolomiteForCausalLM)
             attentions=transformer_outputs.attentions,
             router_logits=transformer_outputs.router_logits,
         )
+
+    def get_moe_loss(
+        self,
+        lm_logits: torch.Tensor,
+        labels: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        router_logits: torch.Tensor,
+        num_experts: int,
+        num_experts_per_token: int,
+        router_aux_loss_coef: float,
+        output_router_logits: bool,
+    ) -> torch.Tensor:
+        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+
+        load_balancing_loss = None
+        if output_router_logits:
+            load_balancing_loss = load_balancing_loss_func(router_logits, num_experts, num_experts_per_token)
+            if loss is not None:
+                loss += router_aux_loss_coef * load_balancing_loss
+
+        return loss, load_balancing_loss
