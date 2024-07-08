@@ -85,24 +85,23 @@ model_tp.eval()
 random.seed(42)
 
 
-with torch.inference_mode():
-    input_ids = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
-    labels = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
+input_ids = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
+labels = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
 
-    output_tp = model_tp(input_ids=input_ids, labels=labels)
-    loss_tp = output_tp[0]
-    logits_tp = output_tp[1]
+output_tp = model_tp(input_ids=input_ids, labels=labels)
+loss_tp = output_tp[0]
+logits_tp = output_tp[1]
 
-    if args.tensor_parallel_word_embeddings:
-        logits_tp = logits_tp[..., : config.vocab_size]
+if args.tensor_parallel_word_embeddings:
+    logits_tp = logits_tp[..., : config.vocab_size]
 
-    if torch.distributed.get_rank() == 0:
-        output = model(input_ids=input_ids, labels=labels)
-        loss = output[0]
-        logits = output[1]
+if torch.distributed.get_rank() == 0:
+    output = model(input_ids=input_ids, labels=labels)
+    loss = output[0]
+    logits = output[1]
 
-        error = (logits - logits_tp).abs().max()
-        assert error < 5e-4, "logits don't match for normal and tensor parallel model"
+    error = (logits - logits_tp).abs().max()
+    assert error < 5e-4, "logits don't match for normal and tensor parallel model"
 
-        error = (loss - loss_tp).abs().max()
-        assert error < 3e-6, "losses don't match for normal and tensor parallel model"
+    error = (loss - loss_tp).abs().max()
+    assert error < 3e-6, "losses don't match for normal and tensor parallel model"

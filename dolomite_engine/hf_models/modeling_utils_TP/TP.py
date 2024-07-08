@@ -4,6 +4,7 @@ import torch
 import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
+from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
 from torch.profiler import record_function
 
 from ...utils import ProcessGroupManager
@@ -135,6 +136,40 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: Tuple[int
         raise RuntimeError("this code should not be reachable")
 
 
+def tensor_to_dtensor_hook(
+    module: nn.Module, inputs: tuple[torch.Tensor], current_placement: Placement, desired_placement: Placement = None
+) -> DTensor:
+    assert len(inputs) == 1
+    input = inputs[0]
+
+    tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+
+    input = DTensor.from_local(input, device_mesh=tp_mesh, run_check=False, placements=[current_placement])
+
+    if desired_placement is not None:
+        input = input.redistribute(device_mesh=tp_mesh, placements=[desired_placement])
+
+    return (input,)
+
+
+def dtensor_to_tensor_hook(
+    module: nn.Module,
+    inputs: tuple[DTensor],
+    output: DTensor,
+    desired_placement: Placement = None,
+    grad_placement: Placement = None,
+) -> torch.Tensor:
+    if desired_placement is not None:
+        output = output.redistribute(
+            device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[desired_placement]
+        )
+
+    output = output.to_local(grad_placements=None if grad_placement is None else [grad_placement])
+
+    return output
+
+
+@torch.no_grad()
 def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict) -> dict:
     result = {}
     for key, tensor in state_dict.items():
