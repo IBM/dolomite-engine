@@ -46,19 +46,17 @@ class Embedding_TP(ParameterizedEmbedding):
             # Build the mask.
             input_mask = (input < self.vocab_start_index) | (input >= self.vocab_end_index)
             # Mask the input.
-            masked_input = input - self.vocab_start_index
-            masked_input[input_mask] = 0
-        else:
-            masked_input = input
+            input = input - self.vocab_start_index
+            input[input_mask] = 0
 
-        output_parallel = F.embedding(input, self.weight.to_local())
+        input = F.embedding(input, self.weight.to_local())
 
         if self.tensor_parallel_word_embeddings:
             # Mask the output embedding.
-            output_parallel[input_mask, :] = 0
-            output_parallel = reduce_from_tensor_parallel_region(output_parallel)
+            input[input_mask, :] = 0
+            input = reduce_from_tensor_parallel_region(input)
 
-        return output_parallel
+        return input
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""

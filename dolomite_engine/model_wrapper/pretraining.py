@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
-from torch.distributed._tensor.placement_types import Shard
+from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 
 from dolomite_engine.enums import Mode
@@ -73,6 +73,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 loss_context = loss_parallel
 
                 logits = DTensor.from_local(logits, device_mesh=tp_mesh, placements=[Shard(-1)])
+                labels = DTensor.from_local(labels, device_mesh=tp_mesh, placements=[Replicate()], run_check=False)
         else:
             tokens: torch.Tensor = batch["text"]
             if not tokens.is_cuda:
