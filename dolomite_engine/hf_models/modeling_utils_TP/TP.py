@@ -175,5 +175,5 @@ def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict) -> di
     for key, tensor in state_dict.items():
         device_mesh = getattr(module, key).device_mesh
         placements = getattr(module, key).placements
-        result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements, run_check=False)
+        result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
     return result

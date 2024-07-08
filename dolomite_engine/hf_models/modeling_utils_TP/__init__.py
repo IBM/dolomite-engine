@@ -1,4 +1,5 @@
 from .attention import get_attention_module
+from .cross_entropy import tensor_parallel_cross_entropy
 from .dropout import Dropout_TP
 from .embedding import Embedding_TP
 from .linear import ColumnParallelLinear, RowParallelLinear

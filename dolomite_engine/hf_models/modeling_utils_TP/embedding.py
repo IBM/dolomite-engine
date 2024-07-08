@@ -1,17 +1,17 @@
 import math
 from contextlib import nullcontext
+from functools import partial
 from typing import Any, Mapping
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 
 from ...utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
 from ..modeling_utils import ParameterizedEmbedding
 from ..utils import divide_if_divisible
-from .TP import modify_state_dict_to_dtensor_dict, reduce_from_tensor_parallel_region
+from .TP import dtensor_to_tensor_hook, modify_state_dict_to_dtensor_dict, tensor_to_dtensor_hook
 
 
 class Embedding_TP(ParameterizedEmbedding):
@@ -41,22 +41,8 @@ class Embedding_TP(ParameterizedEmbedding):
             )
         )
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        if self.tensor_parallel_word_embeddings:
-            # Build the mask.
-            input_mask = (input < self.vocab_start_index) | (input >= self.vocab_end_index)
-            # Mask the input.
-            input = input - self.vocab_start_index
-            input[input_mask] = 0
-
-        input = F.embedding(input, self.weight.to_local())
-
-        if self.tensor_parallel_word_embeddings:
-            # Mask the output embedding.
-            input[input_mask, :] = 0
-            input = reduce_from_tensor_parallel_region(input)
-
-        return input
+        self.register_forward_pre_hook(partial(tensor_to_dtensor_hook, current_placement=Replicate()))
+        self.register_forward_hook(partial(dtensor_to_tensor_hook, desired_placement=Replicate()))
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
