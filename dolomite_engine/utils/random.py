@@ -1,4 +1,4 @@
-import contextlib
+from contextlib import contextmanager
 
 import torch
 
@@ -20,7 +20,7 @@ class CUDA_RNGStatesTracker:
 
         torch.cuda.set_rng_state(orig_rng_state)
 
-    @contextlib.contextmanager
+    @contextmanager
     def fork(self, name: str = "tensor-parallel-seed"):
         if name not in self.states:
             raise Exception("cuda rng state {} is not added".format(name))

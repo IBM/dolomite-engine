@@ -10,6 +10,7 @@ from dolomite_engine.utils import (
     CUDA_RNGStatesTracker,
     ProcessGroupManager,
     SafeTensorsWeightsManager,
+    enable_dtensors_for_computation,
     set_cuda_rng_tracker,
 )
 
@@ -92,6 +93,11 @@ output_tp = model_tp(input_ids=input_ids, labels=labels)
 loss_tp = output_tp[0]
 logits_tp = output_tp[1]
 
+with enable_dtensors_for_computation():
+    output_tp_dtensors = model_tp(input_ids=input_ids, labels=labels)
+loss_tp_dtensors = output_tp_dtensors[0]
+logits_tp_dtensors = output_tp_dtensors[1]
+
 if args.tensor_parallel_word_embeddings:
     logits_tp = logits_tp[..., : config.vocab_size]
 
@@ -103,5 +109,11 @@ if torch.distributed.get_rank() == 0:
     error = (logits - logits_tp).abs().max()
     assert error < 5e-4, "logits don't match for normal and tensor parallel model"
 
+    error = (logits - logits_tp_dtensors).abs().max()
+    assert error < 5e-4, "logits don't match for normal and tensor parallel model"
+
     error = (loss - loss_tp).abs().max()
+    assert error < 3e-6, "losses don't match for normal and tensor parallel model"
+
+    error = (loss - loss_tp_dtensors).abs().max()
     assert error < 3e-6, "losses don't match for normal and tensor parallel model"

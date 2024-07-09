@@ -1,6 +1,7 @@
 import logging
 import time
 from contextlib import nullcontext
+from functools import partial
 from typing import List
 
 import torch
@@ -21,6 +22,7 @@ from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
     RunningMean,
+    enable_dtensors_for_computation,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -115,21 +117,25 @@ def train(
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
-    train_step_context = nullcontext()
     use_nvte_fp8 = (
         args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
     )
+
+    train_step_context = nullcontext
+    if args.distributed_args.use_dtensors_for_computation:
+        assert not use_nvte_fp8
+        train_step_context = enable_dtensors_for_computation
+    elif use_nvte_fp8:
+        train_step_context = partial(
+            te.fp8_autocast,
+            enabled=True,
+            fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
+        )
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
-
-        if use_nvte_fp8:
-            train_step_context = te.fp8_autocast(
-                enabled=True,
-                fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
-            )
 
         loss_step, grad_norm_step = train_step(
             model=model,

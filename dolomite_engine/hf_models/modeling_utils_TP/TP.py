@@ -12,27 +12,26 @@ from ..utils import divide_if_divisible
 
 
 def copy_to_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    with record_function("TP::copy_to_tensor_parallel_region"):
-        return _CopyToTensorParallelRegion.apply(input)
+    return _CopyToTensorParallelRegion.apply(input)
 
 
 def reduce_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    with record_function("TP::reduce_from_tensor_parallel_region"):
-        return _ReduceFromTensorParallelRegion.apply(input)
+    return _ReduceFromTensorParallelRegion.apply(input)
 
 
 def gather_from_tensor_parallel_region(input: torch.Tensor) -> torch.Tensor:
-    with record_function("TP::gather_from_tensor_parallel_region"):
-        return _GatherFromTensorParallelRegion.apply(input)
+    return _GatherFromTensorParallelRegion.apply(input)
 
 
 class _CopyToTensorParallelRegion(torch.autograd.Function):
     """Pass the input to the model parallel region."""
 
+    @record_function("TP:copy_to_tensor_parallel_region_forward")
     @staticmethod
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         return input
 
+    @record_function("TP:copy_to_tensor_parallel_region_backward")
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         return _tensor_parallel_all_reduce(grad_output)
@@ -41,10 +40,12 @@ class _CopyToTensorParallelRegion(torch.autograd.Function):
 class _ReduceFromTensorParallelRegion(torch.autograd.Function):
     """All-reduce the input from the model parallel region."""
 
+    @record_function("TP:reduce_from_tensor_parallel_region_forward")
     @staticmethod
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         return _tensor_parallel_all_reduce(input)
 
+    @record_function("TP:reduce_from_tensor_parallel_region_backward")
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         return grad_output
@@ -53,10 +54,12 @@ class _ReduceFromTensorParallelRegion(torch.autograd.Function):
 class _GatherFromTensorParallelRegion(torch.autograd.Function):
     """Gather the input from model parallel region and concatinate."""
 
+    @record_function("TP:gather_from_tensor_parallel_region_forward")
     @staticmethod
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         return _gather_along_last_dim(input)
 
+    @record_function("TP:gather_from_tensor_parallel_region_backward")
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         return _split_along_last_dim(grad_output)
