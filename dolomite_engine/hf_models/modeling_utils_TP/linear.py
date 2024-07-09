@@ -11,12 +11,8 @@ from torch.distributed._tensor.placement_types import _Partial as Partial
 from ...utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
-from .TP import (
-    dtensor_to_tensor_hook,
-    modify_state_dict_to_dtensor_dict,
-    tensor_parallel_split_safetensor_slice,
-    tensor_to_dtensor_hook,
-)
+from .hooks import dtensor_to_tensor_hook, tensor_to_dtensor_hook
+from .TP import modify_state_dict_to_dtensor_dict, tensor_parallel_split_safetensor_slice
 
 
 class ColumnParallelLinear(ParameterizedLinear):
