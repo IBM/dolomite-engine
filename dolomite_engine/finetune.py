@@ -14,7 +14,7 @@ from .data import ResumableDataLoader, get_dataloader, infinite_iterator
 from .distributed import wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
-from .train_utils import track_train_metrics, train_step
+from .train_utils import get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
@@ -78,6 +78,8 @@ def train(
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
+    torch_profiler_trace_path = args.logging_args.torch_profiler_trace_path
+
     loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
 
     model.train()
@@ -103,6 +105,11 @@ def train(
             fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
         )
 
+    torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
+
+    if torch_profiler_trace_path is not None:
+        torch_profiler.__enter__()
+
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
@@ -117,6 +124,9 @@ def train(
             gradient_clipping=gradient_clipping,
             train_step_context=train_step_context,
         )
+
+        if torch_profiler is not None:
+            torch_profiler.step()
 
         if global_step % log_interval == 0:
             track_train_metrics(
@@ -137,6 +147,9 @@ def train(
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
             save_checkpoint(args, model, optimizer, lr_scheduler, train_dataloader, experiments_tracker, global_step)
+
+    if torch_profiler is not None:
+        torch_profiler.__exit__()
 
 
 @torch.no_grad()

@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from .data import ResumableDataLoader, get_next_batch
 from .enums import DistributedBackend
 from .model_wrapper import ModelWrapperForFinetuning
-from .utils import ExperimentsTracker, RunningMean, log_rank_0
+from .utils import ExperimentsTracker, ProcessGroupManager, RunningMean, log_rank_0
 
 
 def train_step(
@@ -32,6 +32,7 @@ def train_step(
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
+        train_step_context (AbstractContextManager): a context that is used for every model forward call
 
     Returns:
         Tuple[float, float]: loss at the current step, grad norm at the current step
@@ -164,3 +165,18 @@ def track_train_metrics(
         message += f", step_time = {step_time:.3f} sec"
 
     log_rank_0(logging.INFO, message)
+
+
+def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile:
+    torch_profiler = None
+    if torch_profiler_trace_path is not None:
+        torch_profiler = torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            schedule=torch.profiler.schedule(
+                wait=5 if ProcessGroupManager.get_global_rank() == 0 else 150000, warmup=5, active=1, repeat=1
+            ),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(torch_profiler_trace_path),
+            record_shapes=True,
+        )
+
+    return torch_profiler

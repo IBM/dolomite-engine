@@ -17,7 +17,7 @@ from .data import get_megatron_gpt_dataloaders
 from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .train_utils import track_train_metrics, train_step
+from .train_utils import get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
@@ -132,6 +132,11 @@ def train(
             fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
         )
 
+    torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
+
+    if torch_profiler is not None:
+        torch_profiler.__enter__()
+
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
@@ -147,6 +152,9 @@ def train(
             gradient_clipping=gradient_clipping,
             train_step_context=train_step_context,
         )
+
+        if torch_profiler is not None:
+            torch_profiler.step()
 
         if global_step % log_interval == 0:
             time_elapsed = time.perf_counter() - start_time
@@ -195,6 +203,9 @@ def train(
 
     if eval_during_training:
         evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
+
+    if torch_profiler is not None:
+        torch_profiler.__exit__()
 
 
 @torch.no_grad()
