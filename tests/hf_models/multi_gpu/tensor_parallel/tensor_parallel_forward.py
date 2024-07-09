@@ -117,3 +117,5 @@ if torch.distributed.get_rank() == 0:
 
     error = (loss - loss_tp_dtensors).abs().max()
     assert error < 3e-6, "losses don't match for normal and tensor parallel model"
+
+ProcessGroupManager.destroy_process_groups()

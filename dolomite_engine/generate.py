@@ -9,7 +9,7 @@ from .checkpointing import load_checkpoint_for_inference, save_args
 from .data import BaseDataset, get_datasets_list
 from .enums import DatasetKeys, DatasetSplit, Mode
 from .model_wrapper import ModelWrapper, get_model
-from .utils import ProgressBar, setup_tf32
+from .utils import ProcessGroupManager, ProgressBar, setup_tf32
 
 
 def generate(args: InferenceArgs, model: ModelWrapper, datasets_list: List[BaseDataset], mode: Mode) -> None:
@@ -99,6 +99,8 @@ def main() -> None:
     model = model.to(torch.cuda.current_device())
 
     generate(args, model, datasets_list, mode)
+
+    ProcessGroupManager.destroy_process_groups()
 
 
 if __name__ == "__main__":
