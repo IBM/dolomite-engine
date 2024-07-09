@@ -1,5 +1,5 @@
 torch
-transformers>=4.40.0
+transformers
 datasets
 pydantic
 safetensors
