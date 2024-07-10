@@ -4,15 +4,18 @@ from typing import Tuple, Union
 
 import torch
 import torch.nn.functional as F
+from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from ....utils import SafeTensorsWeightsManager
+from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, is_dtensors_computation_enabled
 from ...modeling_utils_TP import (
     LMHead_TP,
     copy_to_tensor_parallel_region,
+    dtensor_to_tensor,
     gather_from_tensor_parallel_region,
     tensor_parallel_cross_entropy,
+    tensor_to_dtensor,
 )
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM, GPTDolomitePreTrainedModel
 from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
@@ -39,6 +42,8 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
 
         self.m_width = config.m_width
         self.upcast_logits_for_loss = config.upcast_logits_for_loss
+
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -100,14 +105,23 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         )
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        if self.tensor_parallel_word_embeddings:
-            hidden_states = copy_to_tensor_parallel_region(hidden_states)
+        if is_dtensors_computation_enabled():
+            hidden_states = tensor_to_dtensor(hidden_states, current_placement=Replicate())
+            hidden_states = super().get_lm_logits(hidden_states)
+            hidden_states = dtensor_to_tensor(
+                hidden_states, desired_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+            )
+        else:
+            if self.tensor_parallel_word_embeddings:
+                hidden_states = copy_to_tensor_parallel_region(hidden_states)
 
-        return (
-            F.linear(hidden_states, self.transformer.wte.weight.to_local())
-            if self._tied_word_embeddings
-            else self.lm_head(hidden_states)
-        )
+            hidden_states = (
+                F.linear(hidden_states, self.transformer.wte.weight.to_local())
+                if self._tied_word_embeddings
+                else self.lm_head(hidden_states)
+            )
+
+        return hidden_states
 
     def get_autoregressive_language_modeling_loss(self, lm_logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         if labels is None:
