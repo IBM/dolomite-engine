@@ -9,6 +9,7 @@ from ...modeling_utils import get_attention_module, get_normalization_function
 from .config import RNNDolomiteConfig
 from .mlp import MLP
 from .gla2 import GLA2Attention
+from .deltanet import DeltaNet
 
 
 class RNNDolomiteBlock(nn.Module):

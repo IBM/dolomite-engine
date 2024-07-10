@@ -6,20 +6,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ...utils import divide_if_divisible
+from ...enums import InitMethod
 from ...modeling_utils.linear import ParameterizedLinear
-from ...modeling_utils.position_embedding import apply_rotary_pos_emb
-from ...modeling_utils.attention.utils import repeat_key_value
 
-# from __future__ import annotations
-
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import Optional, Tuple
 
 from einops import rearrange
 
-from fla.modules import RMSNorm, ShortConvolution
-from fla.modules.activations import swish
+from fla.modules import ShortConvolution
 from fla.ops.gla import chunk_gla, fused_chunk_gla, fused_recurrent_gla
 
 from fla.models.utils import Cache

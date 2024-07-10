@@ -2,7 +2,6 @@
 
 # Sect4.2 of Linear Transformers Are Secretly Fast Weight Programmers https://arxiv.org/abs/2102.11174
 
-import math
 from typing import Tuple
 
 import torch
@@ -10,20 +9,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ...utils import divide_if_divisible
-from ...modeling_utils.linear import ParameterizedLinear
-from ...modeling_utils.position_embedding import apply_rotary_pos_emb
-from ...modeling_utils.attention.utils import repeat_key_value
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import Optional, Tuple
 
-import torch
-import torch.nn as nn
 from einops import rearrange
-from torch.nn import functional as F
 
-from fla.modules import FusedRMSNormSwishGate, RMSNorm, ShortConvolution
+from fla.modules import RMSNorm
 from fla.ops.delta_rule import (chunk_delta_rule, fused_chunk_delta_rule,
                                 fused_recurrent_linear_attn_delta_rule)
 from fla.models.utils import Cache
