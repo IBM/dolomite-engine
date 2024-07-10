@@ -31,10 +31,11 @@ class GLA2Attention(nn.Module):
         self,
         config: CommonConfig,
         layer_idx: int = None,
+        mode: str = 'fused_chunk',
     ):
         super().__init__()
 
-        self.mode = 'chunk'
+        self.mode = mode
         self.hidden_size = config.n_embd
         self.num_heads = config.n_head
 
@@ -96,7 +97,7 @@ class GLA2Attention(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
         past_key_values: Optional[Cache] = None,
         use_cache: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Cache]]:
+    ):
         # launching the triton kernel for just one token will actually be slower
         mode = 'fused_recurrent' if hidden_states.shape[1] == 1 else self.mode
 
