@@ -59,15 +59,15 @@ class GLA2Attention(nn.Module):
             std /= math.sqrt(config.m_width)
         self.q_proj = ParameterizedLinear(
             self.hidden_size, self.forget_dim, 
-            bias=False, std=initializer_range
+            bias=False, std=std
             )
         self.f_proj = ParameterizedLinear(
             self.hidden_size, self.forget_dim, 
-            bias=False, std=initializer_range
+            bias=False, std=std
             )
         self.i_proj = ParameterizedLinear(
             self.hidden_size, self.input_dim, 
-            bias=False, std=initializer_range
+            bias=False, std=std
             )
         # self.g_norm = RMSNorm(self.hidden_size, elementwise_affine=True, eps=1e-5)
 
@@ -76,7 +76,7 @@ class GLA2Attention(nn.Module):
             std /= math.sqrt(config.m_width)
         self.o_proj = ParameterizedLinear(
             self.input_dim, self.hidden_size, 
-            bias=False, std=initializer_range
+            bias=False, std=std
             )
 
         self.apply(self._initialize_weights)
