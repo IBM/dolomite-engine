@@ -2,6 +2,7 @@
 
 # Sect4.2 of Linear Transformers Are Secretly Fast Weight Programmers https://arxiv.org/abs/2102.11174
 
+import math
 from typing import Tuple
 
 import torch
@@ -9,12 +10,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ...config import CommonConfig
+from ...enums import InitMethod
+from ...modeling_utils.linear import ParameterizedLinear
 
 from typing import Optional, Tuple
 
 from einops import rearrange
 
-from fla.modules import RMSNorm
+from fla.modules import RMSNorm, ShortConvolution
 from fla.ops.delta_rule import (chunk_delta_rule, fused_chunk_delta_rule,
                                 fused_recurrent_linear_attn_delta_rule)
 from fla.models.utils import Cache
@@ -47,20 +50,26 @@ class DeltaNet(nn.Module):
         self,
         config: CommonConfig,
         layer_idx: int = None,
-        mode: str = 'fused_chunk',
-        chunk_size: int = 16,
+        mode: str = 'chunk',
+        chunk_size: int = 64,
         use_beta: bool = True,
         use_output_norm: bool = True,
         use_elu: bool = False,
         qk_activation: str = 'silu',
         qk_norm: str = 'l2',
         norm_eps: float = 1e-5,
+        use_short_conv: bool = True,
+        conv_size: int = 4,
+        conv_bias: bool = False,
+        share_conv_kernel: bool = False,
     ):
         super().__init__()
 
         self.mode = mode
         self.qk_activation = qk_activation
         self.qk_norm = qk_norm
+        self.use_short_conv = use_short_conv
+        self.share_conv_kernel = share_conv_kernel
 
         assert self.qk_activation in ['silu', 'relu', 'elu', 'identity']
         assert self.qk_norm in ['l2', 'sum']
@@ -82,28 +91,38 @@ class DeltaNet(nn.Module):
         assert self.key_dim % self.num_heads == 0, f"key dim must be divisible by num_heads of {self.num_heads}"
         assert self.value_dim % self.num_heads == 0, f"value dim must be divisible by num_heads of {self.num_heads}"
 
-        self.q_proj = nn.Linear(self.hidden_size, self.key_dim, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size, self.key_dim, bias=False)
-        self.v_proj = nn.Linear(self.hidden_size, self.value_dim, bias=False)
+        initializer_range = config.initializer_range
+        std = initializer_range
+        init_method = InitMethod(config.init_method)
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(config.m_width)
+        self.q_proj = ParameterizedLinear(self.hidden_size, self.key_dim, bias=False, std=std)
+        self.k_proj = ParameterizedLinear(self.hidden_size, self.key_dim, bias=False, std=std)
+        self.v_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std)
+
+        if use_short_conv:
+            self.conv_size = conv_size
+            if share_conv_kernel:
+                self.h_conv1d = ShortConvolution(self.hidden_size, conv_size, activation=None)
+            else:
+                self.q_conv1d = ShortConvolution(self.key_dim,
+                                                 conv_size,
+                                                 activation='silu' if qk_activation == 'silu' else None)
+                self.k_conv1d = ShortConvolution(self.key_dim,
+                                                 conv_size,
+                                                 activation='silu' if qk_activation == 'silu' else None)
+                self.v_conv1d = ShortConvolution(self.value_dim, conv_size, activation='silu')
 
         self.use_beta = use_beta
         self.use_elu = use_elu
         if self.use_beta:
-            self.b_proj = nn.Linear(self.hidden_size, self.num_heads, bias=False)
+            self.b_proj = ParameterizedLinear(self.hidden_size, self.num_heads, bias=False, std=std)
         self.o_norm = RMSNorm(self.head_v_dim, eps=norm_eps)
 
-        self.o_proj = nn.Linear(self.value_dim, self.hidden_size, bias=False)
-
-        self.apply(self._initialize_weights)
-
-    def _initialize_weights(self, module: nn.Module):
-        if getattr(module, "_is_hf_initialized", False):
-            return
-        if isinstance(module, nn.Linear):
-            nn.init.xavier_uniform_(module.weight, gain=2 ** -2.5)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        module._is_hf_initialized = True
+        std = initializer_range / math.sqrt(2 * config.n_layer)
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(config.m_width)
+        self.o_proj = ParameterizedLinear(self.value_dim, self.hidden_size, bias=False, std=std)
 
     def forward(
         self,
@@ -115,13 +134,34 @@ class DeltaNet(nn.Module):
         # change to inference mode.
         mode = 'fused_recurrent' if hidden_states.shape[1] < 64 else self.mode
 
+        last_state = past_key_values[self.layer_idx] if use_cache else None
+
         if attention_mask is not None:
             if attention_mask.shape[-1] != hidden_states.shape[-2]:
                 attention_mask = attention_mask[:, -1:]
 
-        q = (self.q_proj(hidden_states))
-        k = (self.k_proj(hidden_states))
-        v = self.silu(self.v_proj(hidden_states))
+        if self.use_short_conv:
+            conv_state = last_state[0] if use_cache else None
+            if self.share_conv_kernel:
+                # conv state is updated inplace
+                hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
+                q = self.q_proj(hidden_states)
+                k = self.k_proj(hidden_states)
+                v = self.v_proj(hidden_states)
+            else:
+                conv_state_q = last_state[0] if use_cache else None
+                conv_state_k = last_state[1] if use_cache else None
+                conv_state_v = last_state[2] if use_cache else None
+                k = self.k_proj(hidden_states)
+                v = self.v_proj(hidden_states)
+                q = self.q_proj(hidden_states)
+                q = self.q_conv1d(q, attention_mask, conv_state_q)
+                k = self.k_conv1d(k, attention_mask, conv_state_k)
+                v = self.v_conv1d(v, attention_mask, conv_state_v)
+        else:
+            q = (self.q_proj(hidden_states))
+            k = (self.k_proj(hidden_states))
+            v = self.silu(self.v_proj(hidden_states))
 
         # dealing with left-padding
         if attention_mask is not None:
