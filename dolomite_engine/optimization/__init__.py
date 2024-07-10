@@ -4,7 +4,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from ..enums import LRDecaySchedule, ParamsGroupMethod
-from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM
+from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteConfig, RNNDolomiteForCausalLM
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
 from ..model_wrapper import ModelWrapper
@@ -53,8 +53,8 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
     if params_group_method is None:
         trainable_parameters_or_param_groups = model.parameters()
     elif params_group_method == ParamsGroupMethod.mup:
-        assert isinstance(model.config, GPTDolomiteConfig), "mup is only supported with GPTDolomiteForCausalLM"
-        assert isinstance(model.model, GPTDolomiteForCausalLM), "mup is only supported with GPTDolomiteForCausalLM"
+        assert isinstance(model.config, (GPTDolomiteConfig, RNNDolomiteConfig)), "mup is only supported with GPTDolomiteForCausalLM"
+        assert isinstance(model.model, (GPTDolomiteForCausalLM, RNNDolomiteForCausalLM)), "mup is only supported with GPTDolomiteForCausalLM"
         assert (
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
