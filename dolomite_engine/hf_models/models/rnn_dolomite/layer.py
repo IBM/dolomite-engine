@@ -39,10 +39,10 @@ class RNNDolomiteBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        # self.attn = get_attention_module(
-        #     config, True, attention_implementation, use_padding_free_transformer, layer_idx
-        # )
-        self.attn = GLA2Attention(config, layer_idx)
+        self.attn = DeltaNet(
+            config=config, 
+            layer_idx=layer_idx
+        )
         self.ln_2 = get_normalization_function(
             config.normalization_function,
             hidden_size,
@@ -66,7 +66,7 @@ class RNNDolomiteBlock(nn.Module):
         hidden_states = self.ln_1(hidden_states)
 
         attn_output = self.attn(
-            hidden_states,
+            hidden_states=hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
         )

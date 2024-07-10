@@ -53,7 +53,7 @@ class DeltaNet(nn.Module):
         use_output_norm: bool = True,
         use_elu: bool = False,
         qk_activation: str = 'silu',
-        qk_norm: str = None,
+        qk_norm: str = 'l2',
         norm_eps: float = 1e-5,
     ):
         super().__init__()
@@ -79,8 +79,8 @@ class DeltaNet(nn.Module):
         self.silu = nn.SiLU()
 
         assert mode in ['chunk', 'fused_chunk', 'fused_recurrent'], f"Not suppoerted mode `{mode}`."
-        assert self.key_dim % self.num_heads == 0, f"key dim must be divisible by num_heads of {num_heads}"
-        assert self.value_dim % self.num_heads == 0, f"value dim must be divisible by num_heads of {num_heads}"
+        assert self.key_dim % self.num_heads == 0, f"key dim must be divisible by num_heads of {self.num_heads}"
+        assert self.value_dim % self.num_heads == 0, f"value dim must be divisible by num_heads of {self.num_heads}"
 
         self.q_proj = nn.Linear(self.hidden_size, self.key_dim, bias=False)
         self.k_proj = nn.Linear(self.hidden_size, self.key_dim, bias=False)
@@ -111,15 +111,9 @@ class DeltaNet(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
         past_key_values: Optional[Cache] = None,
         use_cache: Optional[bool] = False,
-        **kwargs
     ):
         # change to inference mode.
         mode = 'fused_recurrent' if hidden_states.shape[1] < 64 else self.mode
-
-        if self.norm_first:
-            hidden_states = self.norm(hidden_states)
-
-        last_state = past_key_values[self.layer_idx] if use_cache else None
 
         if attention_mask is not None:
             if attention_mask.shape[-1] != hidden_states.shape[-2]:
@@ -174,11 +168,7 @@ class DeltaNet(nn.Module):
             past_key_values.update(state, self.layer_idx)
 
         o = rearrange(o, 'b h l d -> b l h d')
-        if self.use_gate:
-            g = rearrange(self.g_proj(hidden_states), 'b l (h d) -> b l h d', h=self.num_heads)
-            o = self.o_norm(o, g)
-        else:
-            o = self.o_norm(o)
+        o = self.o_norm(o)
         o = rearrange(o, 'b l h d -> b l (h d)')
         o = self.o_proj(o)
 
