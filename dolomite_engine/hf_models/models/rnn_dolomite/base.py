@@ -25,11 +25,8 @@ class RNNDolomitePreTrainedModel(GPTDolomitePreTrainedModel):
     """
 
     config_class = RNNDolomiteConfig
-    base_model_prefix = "transformer"
-    causal = True
     _no_split_modules = ["RNNDolomiteBlock"]
-    _skip_keys_device_placement = "past_key_values"
-    _supports_sdpa = True
+    _supports_sdpa = False
     _supports_flash_attn_2 = True
 
     def __init__(self, config: RNNDolomiteConfig, *inputs, **kwargs):
