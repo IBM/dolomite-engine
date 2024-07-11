@@ -20,7 +20,8 @@ def train_step(
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
-    train_step_context: AbstractContextManager,
+    forward_context: AbstractContextManager,
+    backward_context: AbstractContextManager,
 ) -> Tuple[float, float]:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -32,7 +33,8 @@ def train_step(
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
-        train_step_context (AbstractContextManager): a context that is used for every model forward call
+        forward_context (AbstractContextManager): a context that is used for every model forward call
+        backward_context (AbstractContextManager): a context that is used for every model backward call
 
     Returns:
         Tuple[float, float]: loss at the current step, grad norm at the current step
@@ -54,16 +56,18 @@ def train_step(
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
             batch = get_next_batch(train_dataloader)
-            with train_step_context():
+            with forward_context():
                 loss_micro_step = model(batch)
             loss += loss_micro_step
 
             # compute gradients
             if distributed_backend == DistributedBackend.deepspeed:
-                model.backward(loss_micro_step)
+                with backward_context():
+                    model.backward(loss_micro_step)
                 model.step()
             elif distributed_backend == DistributedBackend.torch:
-                loss_micro_step.backward()
+                with backward_context():
+                    loss_micro_step.backward()
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
@@ -71,20 +75,22 @@ def train_step(
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
-    with train_step_context():
+    with forward_context():
         loss_micro_step = model(batch)
     loss += loss_micro_step
 
     # compute gradients
     if distributed_backend == DistributedBackend.deepspeed:
-        model.backward(loss_micro_step)
+        with backward_context():
+            model.backward(loss_micro_step)
 
         if gradient_clipping is not None:
             grad_norm = model.get_global_grad_norm()
 
         model.step()
     elif distributed_backend == DistributedBackend.torch:
-        loss_micro_step.backward()
+        with backward_context():
+            loss_micro_step.backward()
 
         if gradient_clipping is not None:
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)

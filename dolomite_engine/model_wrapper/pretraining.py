@@ -3,11 +3,13 @@ from typing import Union
 import torch
 import torch.distributed
 import torch.nn.functional as F
+from torch.distributed._tensor.placement_types import Replicate, Shard
+from torch.distributed.tensor.parallel import loss_parallel
 
 from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode
-from ..hf_models.modeling_utils_TP import tensor_parallel_cross_entropy
-from ..utils import ProcessGroupManager
+from ..hf_models.modeling_utils_TP import tensor_parallel_cross_entropy, tensor_to_dtensor
+from ..utils import ProcessGroupManager, is_dtensors_computation_enabled
 from .base import ModelWrapper
 
 
@@ -39,7 +41,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         if self.tp_world_size > 1:
             tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
             tp_group = ProcessGroupManager.get_tensor_parallel_group()
-            tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
             if self.tp_rank == 0:
                 tokens: torch.Tensor = batch["text"]
@@ -62,9 +63,22 @@ class ModelWrapperForPretraining(ModelWrapper):
             )
             logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
 
+            if is_dtensors_computation_enabled():
+                logits = tensor_to_dtensor(
+                    logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+                )
+                labels = tensor_to_dtensor(labels, current_placement=Replicate())
+
             if self.tensor_parallel_word_embeddings:
-                loss = tensor_parallel_cross_entropy(logits, labels, self.vocab_size, self.upcast_logits_for_loss)
-                loss = loss.mean()
+                if is_dtensors_computation_enabled():
+                    if self.upcast_logits_for_loss:
+                        logits = logits.float()
+
+                    with loss_parallel():
+                        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+                else:
+                    loss = tensor_parallel_cross_entropy(logits, labels, self.vocab_size, self.upcast_logits_for_loss)
+                    loss = loss.mean()
             else:
                 if self.upcast_logits_for_loss:
                     logits = logits.float()
