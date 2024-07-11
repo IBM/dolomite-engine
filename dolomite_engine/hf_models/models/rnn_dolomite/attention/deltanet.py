@@ -20,7 +20,7 @@ if is_einops_available():
     from einops import rearrange
 
 if is_fla_available():
-    from fla.models.utils import FLACache
+    from fla.models.utils import Cache as FLACache
     from fla.modules import ShortConvolution
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
