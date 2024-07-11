@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers import Cache
 
 from .....utils import is_einops_available, is_fla_available
 from ....config import CommonConfig
@@ -19,7 +20,7 @@ if is_einops_available():
     from einops import rearrange
 
 if is_fla_available():
-    from fla.models.utils import Cache as FLACache
+    from fla.models.utils import FLACache
     from fla.modules import ShortConvolution
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
@@ -84,7 +85,7 @@ class DeltaNet(nn.Module):
         use_short_conv: bool = True,
         conv_size: int = 4,
         share_conv_kernel: bool = False,
-    ):
+    ) -> None:
         super().__init__()
 
         self.mode = mode
@@ -161,11 +162,14 @@ class DeltaNet(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        past_key_values: Optional[FLACache] = None,
+        past_key_values: Optional[Cache] = None,
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ):
+    ) -> torch.Tensor:
+        if past_key_values is not None:
+            assert isinstance(past_key_values, FLACache)
+
         # change to inference mode.
         mode = "fused_recurrent" if hidden_states.shape[1] < 64 else self.mode
         use_cache = (past_key_values is not None) and (len(past_key_values) > self.layer_idx)

@@ -1,4 +1,5 @@
 import torch
+from transformers import Cache
 
 from .....utils import is_fla_available, is_flash_attention_available
 from ....enums import AttentionHeadType, PositionEmbeddingType
@@ -9,8 +10,9 @@ if is_flash_attention_available():
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
     from flash_attn.flash_attn_interface import flash_attn_func, flash_attn_varlen_func
 
+
 if is_fla_available():
-    from fla.models.utils import Cache
+    from fla.models.utils import Cache as FLACache
 
 
 class RNNFlashAttention2(FlashAttention2):
@@ -40,6 +42,8 @@ class RNNFlashAttention2(FlashAttention2):
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
         if past_key_values is not None:
+            assert isinstance(past_key_values, FLACache)
+
             if len(past_key_values) > self.layer_idx:
                 past_key, past_value = past_key_values[self.layer_idx]
                 key = torch.cat([past_key, key], dim=-2)
