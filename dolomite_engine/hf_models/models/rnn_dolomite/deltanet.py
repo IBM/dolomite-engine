@@ -175,6 +175,7 @@ class DeltaNet(nn.Module):
             if self.share_conv_kernel:
                 # conv state is updated inplace
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
+
                 q = self.q_proj(hidden_states)
                 k = self.k_proj(hidden_states)
                 v = self.v_proj(hidden_states)
@@ -182,9 +183,11 @@ class DeltaNet(nn.Module):
                 conv_state_q = last_state[0] if use_cache else None
                 conv_state_k = last_state[1] if use_cache else None
                 conv_state_v = last_state[2] if use_cache else None
+
+                q = self.q_proj(hidden_states)
                 k = self.k_proj(hidden_states)
                 v = self.v_proj(hidden_states)
-                q = self.q_proj(hidden_states)
+
                 q = self.q_conv1d(q, attention_mask, conv_state_q)
                 k = self.k_conv1d(k, attention_mask, conv_state_k)
                 v = self.v_conv1d(v, attention_mask, conv_state_v)
