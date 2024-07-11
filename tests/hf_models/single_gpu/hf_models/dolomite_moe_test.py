@@ -175,13 +175,6 @@ class AttentionTestForMoEModel(TestCommons):
         sdpa_logits[attention_mask == 0] = 0
         flash_logits[attention_mask == 0] = 0
 
-        if torch_dtype == torch.float16:
-            rtol = 1e-3
-            atol = 3e-4
-        elif torch_dtype == torch.bfloat16:
-            rtol = 5e-3
-            atol = 5e-3
-
         self.assert_equal_tensors(
             sdpa_logits[attention_mask],
             flash_logits[attention_mask],

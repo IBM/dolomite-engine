@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 from itertools import product
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, List, Tuple, Union
 from unittest import TestCase
 
 import torch
