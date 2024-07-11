@@ -166,7 +166,7 @@ class DeltaNet(nn.Module):
     ):
         # change to inference mode.
         mode = 'fused_recurrent' if hidden_states.shape[1] < 64 else self.mode
-        use_cache = len(past_key_values) > self.layer_idx
+        use_cache = (past_key_values is not None) and (len(past_key_values) > self.layer_idx)
 
         last_state = past_key_values[self.layer_idx] if use_cache else None
 
