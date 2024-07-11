@@ -7,9 +7,9 @@ from fla.models.utils import Cache
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from .config import RNNDolomiteConfig
-from .mlp import MLP
 from .deltanet import DeltaNet
 from .flash import FlashAttention2
+from .mlp import MLP
 
 
 class RNNDolomiteBlock(nn.Module):
@@ -40,14 +40,9 @@ class RNNDolomiteBlock(nn.Module):
             normalization_implementation=normalization_implementation,
         )
         if attention_implementation == "DeltaNet":
-            self.attn = DeltaNet(
-                config=config, 
-                layer_idx=layer_idx
-            )
+            self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         elif attention_implementation == "flash_attention_2":
-            self.attn = FlashAttention2(
-                config, True, layer_idx
-            )
+            self.attn = FlashAttention2(config, True, layer_idx)
         else:
             raise ValueError(f"Attention implementation {attention_implementation} not supported.")
         self.ln_2 = get_normalization_function(

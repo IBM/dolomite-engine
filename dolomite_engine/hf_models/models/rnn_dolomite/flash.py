@@ -3,9 +3,9 @@ from fla.models.utils import Cache
 
 from ....utils import is_flash_attention_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils.position_embedding import apply_rotary_pos_emb
 from ...modeling_utils.attention.base import Attention
 from ...modeling_utils.attention.utils import get_unpad_data
+from ...modeling_utils.position_embedding import apply_rotary_pos_emb
 
 
 if is_flash_attention_available():
