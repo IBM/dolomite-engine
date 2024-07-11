@@ -3,7 +3,7 @@
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 from ...utils import ProcessGroupManager, log_rank_0
 from .utils import Split, normalize

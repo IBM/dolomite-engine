@@ -265,6 +265,12 @@ class ProcessGroupManager:
 
         return dp_mesh
 
+    @staticmethod
+    def destroy_process_groups() -> None:
+        if ProcessGroupManager.is_initialized():
+            torch.distributed.barrier()
+            torch.distributed.destroy_process_group()
+
 
 def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable:
     """wraps a function to run on a single rank, returns a no-op for other ranks

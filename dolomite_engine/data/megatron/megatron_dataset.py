@@ -68,7 +68,6 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
     @abstractmethod
     def _finalize(self) -> None:
         """Build the dataset and assert any subclass-specific conditions"""
-        pass
 
     @abstractmethod
     def __len__(self) -> int:
@@ -77,7 +76,6 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
         Returns:
             int: See abstract implementation
         """
-        pass
 
     @abstractmethod
     def __getitem__(self, idx: int) -> Dict[str, numpy.ndarray]:
@@ -89,7 +87,6 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
         Returns:
             Dict[str, numpy.ndarray]: See abstract implementation
         """
-        pass
 
     @abstractstaticmethod
     def is_multimodal() -> bool:
@@ -98,7 +95,6 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
         Returns:
             bool: See abstract implementation
         """
-        pass
 
     @abstractstaticmethod
     def is_split_by_sequence() -> bool:
@@ -109,7 +105,6 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
         Returns:
             bool: See abstract implementation
         """
-        pass
 
     @classmethod
     def is_split_by_document(cls) -> bool:

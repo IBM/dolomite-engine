@@ -323,6 +323,8 @@ class DistributedArgs(BaseArgs):
     data_parallel_size: Optional[int] = None
     # distributed timeout for NCCL in minutes
     timeout_minutes: Optional[int] = None
+    # whether to use DTensors for computation
+    use_dtensors_for_computation: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         if self.zero_quantized_weights or self.zero_quantized_gradients:
@@ -375,6 +377,9 @@ class LoggingArgs(BaseArgs):
     experiments_tracker_name: Optional[ExperimentsTrackerName] = None
     # whether to use colored logs
     use_colored_logs: bool = False
+    # torch profiler trace path, specifying a path will enable the torch profiler
+    # this can cause some performance impact so use sparingly
+    torch_profiler_trace_path: Optional[str] = None
 
     def model_post_init(self, __context: Any) -> None:
         if self.experiments_tracker_name == ExperimentsTrackerName.aim:

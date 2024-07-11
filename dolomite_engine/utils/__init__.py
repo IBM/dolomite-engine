@@ -3,6 +3,7 @@ import logging
 import torch
 import torch.distributed
 
+from .dtensors import enable_dtensors_for_computation, is_dtensors_computation_enabled
 from .hf_hub import download_repo
 from .logger import log_rank_0, print_rank_0, print_ranks_all, set_logger
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
