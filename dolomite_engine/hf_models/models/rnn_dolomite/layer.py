@@ -7,7 +7,6 @@ from ..gpt_dolomite.mlp import MLP
 from .config import RNNDolomiteConfig
 from .deltanet import DeltaNet
 from .flash import FlashAttention2
-from .mlp import MLP
 
 
 class RNNDolomiteBlock(GPTDolomiteBlock):

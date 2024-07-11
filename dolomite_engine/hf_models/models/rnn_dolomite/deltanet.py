@@ -8,14 +8,20 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
-from fla.models.utils import Cache
-from fla.modules import RMSNorm, ShortConvolution
-from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
+from ....utils import is_einops_available, is_fla_available
 from ...config import CommonConfig
 from ...enums import InitMethod
 from ...modeling_utils.linear import ParameterizedLinear
+
+
+if is_einops_available():
+    from einops import rearrange
+
+if is_fla_available():
+    from fla.models.utils import Cache
+    from fla.modules import RMSNorm, ShortConvolution
+    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
 
 def simple_norm(x):
