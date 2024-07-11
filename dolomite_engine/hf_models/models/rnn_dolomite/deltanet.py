@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from ....utils import is_einops_available, is_fla_available
 from ...config import CommonConfig
 from ...enums import InitMethod
-from ...modeling_utils.linear import ParameterizedLinear
+from ...modeling_utils import ParameterizedLinear, get_normalization_function
 
 
 if is_einops_available():
@@ -20,7 +20,7 @@ if is_einops_available():
 
 if is_fla_available():
     from fla.models.utils import Cache
-    from fla.modules import RMSNorm, ShortConvolution
+    from fla.modules import ShortConvolution
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
 
@@ -145,7 +145,7 @@ class DeltaNet(nn.Module):
         self.use_elu = use_elu
         if self.use_beta:
             self.b_proj = ParameterizedLinear(self.hidden_size, self.num_heads, bias=False, std=std_in)
-        self.o_norm = RMSNorm(self.head_v_dim, eps=norm_eps)
+        self.o_norm = get_normalization_function("rmsnorm", self.head_v_dim, eps=norm_eps)
 
         std_out = initializer_range / math.sqrt(2 * config.n_layer)
         if init_method == InitMethod.mup:
