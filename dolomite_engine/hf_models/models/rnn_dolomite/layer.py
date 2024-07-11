@@ -8,7 +8,6 @@ from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from .config import RNNDolomiteConfig
 from .mlp import MLP
-from .gla2 import GLA2Attention
 from .deltanet import DeltaNet
 from .flash import FlashAttention2
 
