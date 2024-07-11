@@ -45,11 +45,6 @@ class RNNDolomiteBlock(nn.Module):
                 config=config, 
                 layer_idx=layer_idx
             )
-        elif attention_implementation == "GLA2":
-            self.attn = GLA2Attention(
-                config=config, 
-                layer_idx=layer_idx
-            )
         elif attention_implementation == "flash_attention_2":
             self.attn = FlashAttention2(
                 config, True, layer_idx
