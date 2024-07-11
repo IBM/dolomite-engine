@@ -3,24 +3,19 @@
 # Sect4.2 of Linear Transformers Are Secretly Fast Weight Programmers https://arxiv.org/abs/2102.11174
 
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange
+from fla.models.utils import Cache
+from fla.modules import RMSNorm, ShortConvolution
+from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
 from ...config import CommonConfig
 from ...enums import InitMethod
 from ...modeling_utils.linear import ParameterizedLinear
-
-from typing import Optional, Tuple
-
-from einops import rearrange
-
-from fla.modules import RMSNorm, ShortConvolution
-from fla.ops.delta_rule import (chunk_delta_rule, fused_chunk_delta_rule,
-                                fused_recurrent_linear_attn_delta_rule)
-from fla.models.utils import Cache
 
 
 def simple_norm(x):
@@ -29,7 +24,7 @@ def simple_norm(x):
 
 # @torch.jit.script
 def elu_p1(x):
-    return (F.elu(x, 1., False) + 1.).to(x)
+    return (F.elu(x, 1.0, False) + 1.0).to(x)
 
 
 # @torch.jit.script
@@ -40,7 +35,7 @@ def sum_norm(x):
 # @torch.jit.script
 def elu_norm(x):
     dtype = x.dtype
-    x = F.elu(x, 1., False) + 1.
+    x = F.elu(x, 1.0, False) + 1.0
     return (x / x.sum(-1, keepdim=True)).to(dtype)
 
 
@@ -50,7 +45,7 @@ class ParameterizedShortConvolution(ShortConvolution):
         hidden_size: int,
         kernel_size: int,
         bias: bool = False,
-        activation: Optional[str] = 'silu',
+        activation: Optional[str] = "silu",
         use_causal_conv: Optional[bool] = True,
         std: Optional[float] = None,
     ):
@@ -72,13 +67,13 @@ class DeltaNet(nn.Module):
         self,
         config: CommonConfig,
         layer_idx: int = None,
-        mode: str = 'chunk',
+        mode: str = "chunk",
         chunk_size: int = 64,
         use_beta: bool = True,
         use_output_norm: bool = True,
         use_elu: bool = False,
-        qk_activation: str = 'silu',
-        qk_norm: str = 'l2',
+        qk_activation: str = "silu",
+        qk_norm: str = "l2",
         norm_eps: float = 1e-5,
         use_short_conv: bool = True,
         conv_size: int = 4,
@@ -93,8 +88,8 @@ class DeltaNet(nn.Module):
         self.share_conv_kernel = share_conv_kernel
         self.initializer_range = config.initializer_range
 
-        assert self.qk_activation in ['silu', 'relu', 'elu', 'identity']
-        assert self.qk_norm in ['l2', 'sum']
+        assert self.qk_activation in ["silu", "relu", "elu", "identity"]
+        assert self.qk_norm in ["l2", "sum"]
 
         self.hidden_size = config.n_embd
         self.num_heads = config.n_head
@@ -102,14 +97,14 @@ class DeltaNet(nn.Module):
         self.use_output_norm = use_output_norm
 
         self.key_dim = self.hidden_size
-        self.value_dim = self.hidden_size 
+        self.value_dim = self.hidden_size
         self.head_qk_dim = self.key_dim // self.num_heads
         self.head_v_dim = self.value_dim // self.num_heads
         self.layer_idx = layer_idx
 
         self.silu = nn.SiLU()
 
-        assert mode in ['chunk', 'fused_chunk', 'fused_recurrent'], f"Not suppoerted mode `{mode}`."
+        assert mode in ["chunk", "fused_chunk", "fused_recurrent"], f"Not suppoerted mode `{mode}`."
         assert self.key_dim % self.num_heads == 0, f"key dim must be divisible by num_heads of {self.num_heads}"
         assert self.value_dim % self.num_heads == 0, f"value dim must be divisible by num_heads of {self.num_heads}"
 
@@ -126,18 +121,19 @@ class DeltaNet(nn.Module):
             std_conv = initializer_range
             self.conv_size = conv_size
             if share_conv_kernel:
-                self.h_conv1d = ParameterizedShortConvolution(self.hidden_size, conv_size, activation=None, std=std_conv)
+                self.h_conv1d = ParameterizedShortConvolution(
+                    self.hidden_size, conv_size, activation=None, std=std_conv
+                )
             else:
-                self.q_conv1d = ParameterizedShortConvolution(self.key_dim,
-                                                 conv_size,
-                                                 activation='silu' if qk_activation == 'silu' else None, 
-                                                 std=std_conv)
-                self.k_conv1d = ParameterizedShortConvolution(self.key_dim,
-                                                 conv_size,
-                                                 activation='silu' if qk_activation == 'silu' else None,
-                                                 std=std_conv)
-                self.v_conv1d = ParameterizedShortConvolution(self.value_dim, conv_size, activation='silu',
-                                                              std=std_conv)
+                self.q_conv1d = ParameterizedShortConvolution(
+                    self.key_dim, conv_size, activation="silu" if qk_activation == "silu" else None, std=std_conv
+                )
+                self.k_conv1d = ParameterizedShortConvolution(
+                    self.key_dim, conv_size, activation="silu" if qk_activation == "silu" else None, std=std_conv
+                )
+                self.v_conv1d = ParameterizedShortConvolution(
+                    self.value_dim, conv_size, activation="silu", std=std_conv
+                )
 
         self.use_beta = use_beta
         self.use_elu = use_elu
@@ -152,7 +148,7 @@ class DeltaNet(nn.Module):
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
-        std = self.initializer_range
+        self.initializer_range
         self.q_conv1d.reset_parameters()
 
     def forward(
@@ -165,7 +161,7 @@ class DeltaNet(nn.Module):
         max_seqlen: torch.Tensor = None,
     ):
         # change to inference mode.
-        mode = 'fused_recurrent' if hidden_states.shape[1] < 64 else self.mode
+        mode = "fused_recurrent" if hidden_states.shape[1] < 64 else self.mode
         use_cache = (past_key_values is not None) and (len(past_key_values) > self.layer_idx)
 
         last_state = past_key_values[self.layer_idx] if use_cache else None
@@ -193,45 +189,49 @@ class DeltaNet(nn.Module):
                 k = self.k_conv1d(k, attention_mask, conv_state_k)
                 v = self.v_conv1d(v, attention_mask, conv_state_v)
         else:
-            q = (self.q_proj(hidden_states))
-            k = (self.k_proj(hidden_states))
+            q = self.q_proj(hidden_states)
+            k = self.k_proj(hidden_states)
             v = self.silu(self.v_proj(hidden_states))
 
         # dealing with left-padding
         if attention_mask is not None:
             v = v.mul_(attention_mask.unsqueeze(-1))
 
-        q, k, v = map(lambda x: rearrange(x, 'b l (h d) -> b h l d', h=self.num_heads), (q, k, v))
+        q, k, v = map(lambda x: rearrange(x, "b l (h d) -> b h l d", h=self.num_heads), (q, k, v))
 
-        if self.qk_activation != 'silu':
-            if self.qk_activation == 'relu':
+        if self.qk_activation != "silu":
+            if self.qk_activation == "relu":
                 q, k = q.relu(), k.relu()
-            elif self.qk_activation == 'elu':
+            elif self.qk_activation == "elu":
                 q, k = elu_p1(q), elu_p1(k)
-            elif self.qk_activation == 'identity':
+            elif self.qk_activation == "identity":
                 pass
             else:
                 raise NotImplementedError
 
         if self.qk_norm is not None:
-            if self.qk_norm == 'l2':
+            if self.qk_norm == "l2":
                 k = nn.functional.normalize(k, dim=-1, p=2).to(v)  # auto mixed precision type transfer is annoying.
                 q = nn.functional.normalize(q, dim=-1, p=2).to(v)
-            elif self.qk_norm == 'sum':
+            elif self.qk_norm == "sum":
                 q = sum_norm(q).to(v)
                 k = sum_norm(k).to(v)
 
         if self.use_beta:
-            beta = rearrange(self.b_proj(hidden_states), 'b l h -> b h l').sigmoid()
+            beta = rearrange(self.b_proj(hidden_states), "b l h -> b h l").sigmoid()
         else:
             beta = q.new_ones(q.shape[0], q.shape[1], q.shape[2])
         state = past_key_values[self.layer_idx][-1] if use_cache else None
-        if mode == 'fused_recurrent':
-            o, recurrent_state = fused_recurrent_linear_attn_delta_rule(q, k, v, beta, state, output_final_state=use_cache)
-        elif mode == 'fused_chunk':
+        if mode == "fused_recurrent":
+            o, recurrent_state = fused_recurrent_linear_attn_delta_rule(
+                q, k, v, beta, state, output_final_state=use_cache
+            )
+        elif mode == "fused_chunk":
             assert self.chunk_size in [16, 32, 64]
-            o, recurrent_state = fused_chunk_delta_rule(q, k, v, beta, self.chunk_size, state, output_final_state=use_cache)
-        elif mode == 'chunk':
+            o, recurrent_state = fused_chunk_delta_rule(
+                q, k, v, beta, self.chunk_size, state, output_final_state=use_cache
+            )
+        elif mode == "chunk":
             assert self.chunk_size in [16, 32, 64]
             o, recurrent_state = chunk_delta_rule(q, k, v, beta, self.chunk_size, state, output_final_state=use_cache)
         else:
@@ -248,9 +248,9 @@ class DeltaNet(nn.Module):
             state = (recurrent_state,)
             past_key_values.update(state, self.layer_idx)
 
-        o = rearrange(o, 'b h l d -> b l h d')
+        o = rearrange(o, "b h l d -> b l h d")
         o = self.o_norm(o)
-        o = rearrange(o, 'b l h d -> b l (h d)')
+        o = rearrange(o, "b l h d -> b l (h d)")
         o = self.o_proj(o)
 
         return o
@@ -263,8 +263,10 @@ class DeltaNet(nn.Module):
                 state += (param.new_zeros(batch_size, self.hidden_size, self.conv_size),)
             else:
                 # for q/k/v each
-                state += (param.new_zeros(batch_size, self.key_dim, self.conv_size),
-                          param.new_zeros(batch_size, self.key_dim, self.conv_size),
-                          param.new_zeros(batch_size, self.value_dim, self.conv_size))
+                state += (
+                    param.new_zeros(batch_size, self.key_dim, self.conv_size),
+                    param.new_zeros(batch_size, self.key_dim, self.conv_size),
+                    param.new_zeros(batch_size, self.value_dim, self.conv_size),
+                )
         state += (param.new_zeros(batch_size, self.num_heads, self.head_qk_dim, self.head_v_dim),)
         return state

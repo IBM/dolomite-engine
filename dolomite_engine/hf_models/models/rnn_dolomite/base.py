@@ -3,9 +3,9 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
+from fla.models.utils import Cache
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
-from fla.models.utils import Cache
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
