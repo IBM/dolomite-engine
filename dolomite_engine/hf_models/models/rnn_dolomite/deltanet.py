@@ -19,7 +19,7 @@ if is_einops_available():
     from einops import rearrange
 
 if is_fla_available():
-    from fla.models.utils import Cache
+    from fla.models.utils import Cache as FLACache
     from fla.modules import ShortConvolution
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
@@ -161,7 +161,7 @@ class DeltaNet(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Cache] = None,
+        past_key_values: Optional[FLACache] = None,
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,

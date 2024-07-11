@@ -3,7 +3,7 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
-from fla.models.utils import Cache
+from fla.models.utils import Cache as FLACache
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
@@ -253,7 +253,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel):
 
         output_shape = input_shape + (hidden_states.size(-1),)
 
-        past_key_values = Cache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:
@@ -410,7 +410,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel):
     def _prepare_a_bunch_of_stuff(
         self,
         input_ids: torch.Tensor = None,
-        past_key_values: Cache = None,
+        past_key_values: FLACache = None,
         attention_mask: torch.Tensor = None,
         token_type_ids: torch.Tensor = None,
         position_ids: torch.Tensor = None,
