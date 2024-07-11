@@ -1,5 +1,4 @@
 import math
-from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -49,11 +48,3 @@ class MLP(nn.Module):
         hidden_states = self.c_proj(hidden_states)
         hidden_states = self.dropout(hidden_states)
         return hidden_states
-
-
-def interleave_up_gate_tensor_for_mlp(up_weight: torch.Tensor, gate_weight: torch.Tensor) -> torch.Tensor:
-    return torch.cat([up_weight, gate_weight])
-
-
-def split_up_gate_tensor_for_mlp(c_fc_weight: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    return c_fc_weight.chunk(2)
