@@ -6,10 +6,10 @@ from fla.models.utils import Cache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
+from ..gpt_dolomite.mlp import MLP
 from .config import RNNDolomiteConfig
 from .deltanet import DeltaNet
 from .flash import FlashAttention2
-from .mlp import MLP
 
 
 class RNNDolomiteBlock(nn.Module):
