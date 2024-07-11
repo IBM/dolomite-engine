@@ -1,11 +1,10 @@
 from ...modeling_utils import ParameterizedLinear
 from .base import RNNDolomiteModel, RNNDolomitePreTrainedModel
 from .config import RNNDolomiteConfig
+from ..gpt_dolomite import GPTDolomiteForCausalLM
 
 
-class RNNDolomiteForCausalLM(RNNDolomitePreTrainedModel):
-    _tied_weights_keys = ["lm_head.weight"]
-
+class RNNDolomiteForCausalLM(RNNDolomitePreTrainedModel, GPTDolomiteForCausalLM):
     def __init__(self, config: RNNDolomiteConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
         self.transformer = RNNDolomiteModel(config, **kwargs)
