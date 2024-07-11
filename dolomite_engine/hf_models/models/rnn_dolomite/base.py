@@ -2,15 +2,20 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
-from fla.models.utils import Cache as FLACache
+from transformers import Cache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
+from ....utils import is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
 from ..gpt_dolomite import GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .config import RNNDolomiteConfig
 from .layer import RNNDolomiteBlock
+
+
+if is_fla_available():
+    from fla.models.utils import Cache as FLACache
 
 
 class RNNDolomitePreTrainedModel(GPTDolomitePreTrainedModel):
@@ -129,15 +134,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
-
-        # ==========================================================================================
-        # padding_free:
-        #     attention_mask -> None
-        # flash:
-        #     attention_mask -> (batch_size, key_length)
-        # else:
-        #     attention_mask -> (batch_size, 1, query_length, key_length)
-        # ==========================================================================================
 
         output_shape = input_shape + (hidden_states.size(-1),)
 
