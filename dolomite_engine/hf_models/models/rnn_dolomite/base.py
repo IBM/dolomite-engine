@@ -151,6 +151,8 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel):
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
+        self.attention_patterns = self.mapping_attention_patterns(config.attention_patterns)
+
         self.head_dim = divide_if_divisible(
             self.embed_dim,
             self.num_heads,
@@ -165,7 +167,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel):
                 RNNDolomiteBlock(
                     config,
                     self.normalization_implementation,
-                    self.attention_implementation,
+                    self.attention_patterns[i],
                     self._use_padding_free_transformer,
                     layer_idx=i,
                 )
@@ -190,6 +192,17 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel):
 
     def set_input_embeddings(self, new_embeddings: ParameterizedEmbedding) -> None:
         self.wte = new_embeddings
+
+    def mapping_attention_patterns(self, attention_patterns: str) -> List[str]:
+        attention_implementation_list = []
+        for pattern in attention_patterns:
+            if pattern == "a":
+                attention_implementation_list.append(self.attention_implementation)
+            elif pattern == "d":
+                attention_implementation_list.append("DeltaNet")
+            else:
+                raise ValueError(f"Attention pattern {pattern} not supported")
+        return attention_implementation_list
 
     def forward(
         self,

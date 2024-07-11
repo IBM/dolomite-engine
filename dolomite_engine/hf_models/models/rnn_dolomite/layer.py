@@ -5,11 +5,12 @@ import torch.nn as nn
 from fla.models.utils import Cache
 
 from ...enums import AttentionHeadType
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import get_normalization_function
 from .config import RNNDolomiteConfig
 from .mlp import MLP
 from .gla2 import GLA2Attention
 from .deltanet import DeltaNet
+from .flash import FlashAttention2
 
 
 class RNNDolomiteBlock(nn.Module):
@@ -39,10 +40,22 @@ class RNNDolomiteBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.attn = DeltaNet(
-            config=config, 
-            layer_idx=layer_idx
-        )
+        if attention_implementation == "DeltaNet":
+            self.attn = DeltaNet(
+                config=config, 
+                layer_idx=layer_idx
+            )
+        elif attention_implementation == "GLA2":
+            self.attn = GLA2Attention(
+                config=config, 
+                layer_idx=layer_idx
+            )
+        elif attention_implementation == "flash_attention_2":
+            self.attn = FlashAttention2(
+                config, True, layer_idx
+            )
+        else:
+            raise ValueError(f"Attention implementation {attention_implementation} not supported.")
         self.ln_2 = get_normalization_function(
             config.normalization_function,
             hidden_size,
@@ -69,6 +82,9 @@ class RNNDolomiteBlock(nn.Module):
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
+            rope_cos_sin=rope_cos_sin,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
         )
 
         if self.m_residual is not None:

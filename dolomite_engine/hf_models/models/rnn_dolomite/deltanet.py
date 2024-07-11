@@ -160,10 +160,13 @@ class DeltaNet(nn.Module):
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         past_key_values: Optional[Cache] = None,
-        use_cache: Optional[bool] = False,
+        rope_cos_sin: torch.Tensor = None,
+        cu_seqlens: torch.Tensor = None,
+        max_seqlen: torch.Tensor = None,
     ):
         # change to inference mode.
         mode = 'fused_recurrent' if hidden_states.shape[1] < 64 else self.mode
+        use_cache = len(past_key_values) > self.layer_idx
 
         last_state = past_key_values[self.layer_idx] if use_cache else None
 
@@ -235,6 +238,13 @@ class DeltaNet(nn.Module):
             raise NotImplementedError(f"Not supported mode `{mode}`.")
 
         if past_key_values is not None:
+            if self.use_short_conv:
+                if self.share_conv_kernel:
+                    state = (conv_state, recurrent_state)
+                else:
+                    state = (conv_state_q, conv_state_k, conv_state_v, recurrent_state)
+            else:
+                state = (recurrent_state,)
             state = (recurrent_state,)
             past_key_values.update(state, self.layer_idx)
 
