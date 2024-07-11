@@ -1,18 +1,15 @@
-from typing import Tuple, Union
-
-import torch
 import torch.nn as nn
-from fla.models.utils import Cache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
+from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_dolomite.mlp import MLP
 from .config import RNNDolomiteConfig
 from .deltanet import DeltaNet
 from .flash import FlashAttention2
 
 
-class RNNDolomiteBlock(nn.Module):
+class RNNDolomiteBlock(GPTDolomiteBlock):
     """
     Layer implementation for the transformer block
     """
@@ -25,7 +22,7 @@ class RNNDolomiteBlock(nn.Module):
         use_padding_free_transformer: bool,
         layer_idx: int = None,
     ) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
 
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
@@ -52,45 +49,3 @@ class RNNDolomiteBlock(nn.Module):
             normalization_implementation=normalization_implementation,
         )
         self.mlp = MLP(config)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values: Cache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[
-        Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ]:
-        residual = hidden_states
-        hidden_states = self.ln_1(hidden_states)
-
-        attn_output = self.attn(
-            hidden_states=hidden_states,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
-
-        if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
-
-        # residual connection
-        hidden_states = attn_output + residual
-
-        residual = hidden_states
-        hidden_states = self.ln_2(hidden_states)
-
-        feed_forward_hidden_states = self.mlp(hidden_states)
-
-        if self.m_residual is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
-
-        # residual connection
-        hidden_states = residual + feed_forward_hidden_states
-
-        return hidden_states
