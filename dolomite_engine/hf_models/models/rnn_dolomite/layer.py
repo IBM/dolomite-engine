@@ -4,9 +4,8 @@ from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_dolomite.mlp import MLP
+from .attention import DeltaNet, RNNFlashAttention2
 from .config import RNNDolomiteConfig
-from .deltanet import DeltaNet
-from .flash import FlashAttention2
 
 
 class RNNDolomiteBlock(GPTDolomiteBlock):
@@ -39,7 +38,7 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
         if attention_implementation == "DeltaNet":
             self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         elif attention_implementation == "flash_attention_2":
-            self.attn = FlashAttention2(config, True, layer_idx)
+            self.attn = RNNFlashAttention2(config, True, layer_idx)
         else:
             raise ValueError(f"Attention implementation {attention_implementation} not supported.")
         self.ln_2 = get_normalization_function(

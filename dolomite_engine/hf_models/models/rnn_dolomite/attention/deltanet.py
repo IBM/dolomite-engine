@@ -9,10 +9,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ....utils import is_einops_available, is_fla_available
-from ...config import CommonConfig
-from ...enums import InitMethod
-from ...modeling_utils import ParameterizedLinear, get_normalization_function
+from .....utils import is_einops_available, is_fla_available
+from ....config import CommonConfig
+from ....enums import InitMethod
+from ....modeling_utils import ParameterizedLinear, get_normalization_function
 
 
 if is_einops_available():

@@ -1,19 +1,19 @@
 import torch
-from fla.models.utils import Cache
 
-from ....utils import is_flash_attention_available
-from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils.attention.base import Attention
-from ...modeling_utils.attention.utils import get_unpad_data
-from ...modeling_utils.position_embedding import apply_rotary_pos_emb
+from .....utils import is_fla_available, is_flash_attention_available
+from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....modeling_utils import FlashAttention2, apply_rotary_pos_emb, get_unpad_data
 
 
 if is_flash_attention_available():
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
     from flash_attn.flash_attn_interface import flash_attn_func, flash_attn_varlen_func
 
+if is_fla_available():
+    from fla.models.utils import Cache
 
-class FlashAttention2(Attention):
+
+class RNNFlashAttention2(FlashAttention2):
     def forward(
         self,
         hidden_states: torch.Tensor,
