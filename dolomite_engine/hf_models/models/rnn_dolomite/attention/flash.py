@@ -1,11 +1,9 @@
 import torch
-from fla.models.utils import Cache
+from transformers import Cache
 
-from ....utils import is_flash_attention_available
-from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils.attention.base import Attention
-from ...modeling_utils.attention.utils import get_unpad_data
-from ...modeling_utils.position_embedding import apply_rotary_pos_emb
+from .....utils import is_fla_available, is_flash_attention_available
+from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....modeling_utils import FlashAttention2, apply_rotary_pos_emb, get_unpad_data
 
 
 if is_flash_attention_available():
@@ -13,7 +11,11 @@ if is_flash_attention_available():
     from flash_attn.flash_attn_interface import flash_attn_func, flash_attn_varlen_func
 
 
-class FlashAttention2(Attention):
+if is_fla_available():
+    from fla.models.utils import Cache as FLACache
+
+
+class RNNFlashAttention2(FlashAttention2):
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -40,6 +42,8 @@ class FlashAttention2(Attention):
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
         if past_key_values is not None:
+            assert isinstance(past_key_values, FLACache)
+
             if len(past_key_values) > self.layer_idx:
                 past_key, past_value = past_key_values[self.layer_idx]
                 key = torch.cat([past_key, key], dim=-2)

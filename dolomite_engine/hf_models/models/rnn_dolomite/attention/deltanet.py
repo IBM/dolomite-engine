@@ -8,14 +8,21 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
-from fla.models.utils import Cache
-from fla.modules import RMSNorm, ShortConvolution
-from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
+from transformers import Cache
 
-from ...config import CommonConfig
-from ...enums import InitMethod
-from ...modeling_utils.linear import ParameterizedLinear
+from .....utils import is_einops_available, is_fla_available
+from ....config import CommonConfig
+from ....enums import InitMethod
+from ....modeling_utils import ParameterizedLinear, get_normalization_function
+
+
+if is_einops_available():
+    from einops import rearrange
+
+if is_fla_available():
+    from fla.models.utils import Cache as FLACache
+    from fla.modules import ShortConvolution
+    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
 
 def simple_norm(x):
@@ -78,7 +85,7 @@ class DeltaNet(nn.Module):
         use_short_conv: bool = True,
         conv_size: int = 4,
         share_conv_kernel: bool = False,
-    ):
+    ) -> None:
         super().__init__()
 
         self.mode = mode
@@ -139,7 +146,7 @@ class DeltaNet(nn.Module):
         self.use_elu = use_elu
         if self.use_beta:
             self.b_proj = ParameterizedLinear(self.hidden_size, self.num_heads, bias=False, std=std_in)
-        self.o_norm = RMSNorm(self.head_v_dim, eps=norm_eps)
+        self.o_norm = get_normalization_function("rmsnorm", self.head_v_dim, eps=norm_eps)
 
         std_out = initializer_range / math.sqrt(2 * config.n_layer)
         if init_method == InitMethod.mup:
@@ -159,7 +166,10 @@ class DeltaNet(nn.Module):
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
-    ):
+    ) -> torch.Tensor:
+        if past_key_values is not None:
+            assert isinstance(past_key_values, FLACache)
+
         # change to inference mode.
         mode = "fused_recurrent" if hidden_states.shape[1] < 64 else self.mode
         use_cache = (past_key_values is not None) and (len(past_key_values) > self.layer_idx)
@@ -175,6 +185,7 @@ class DeltaNet(nn.Module):
             if self.share_conv_kernel:
                 # conv state is updated inplace
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
+
                 q = self.q_proj(hidden_states)
                 k = self.k_proj(hidden_states)
                 v = self.v_proj(hidden_states)
@@ -182,9 +193,11 @@ class DeltaNet(nn.Module):
                 conv_state_q = last_state[0] if use_cache else None
                 conv_state_k = last_state[1] if use_cache else None
                 conv_state_v = last_state[2] if use_cache else None
+
+                q = self.q_proj(hidden_states)
                 k = self.k_proj(hidden_states)
                 v = self.v_proj(hidden_states)
-                q = self.q_proj(hidden_states)
+
                 q = self.q_conv1d(q, attention_mask, conv_state_q)
                 k = self.k_conv1d(k, attention_mask, conv_state_k)
                 v = self.v_conv1d(v, attention_mask, conv_state_v)

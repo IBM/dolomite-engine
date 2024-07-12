@@ -55,10 +55,10 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
     elif params_group_method == ParamsGroupMethod.mup:
         assert isinstance(
             model.config, (GPTDolomiteConfig, RNNDolomiteConfig)
-        ), "mup is only supported with GPTDolomiteForCausalLM"
+        ), "mup is not supported with this model architecture"
         assert isinstance(
             model.model, (GPTDolomiteForCausalLM, RNNDolomiteForCausalLM)
-        ), "mup is only supported with GPTDolomiteForCausalLM"
+        ), "mup is not supported with this model architecture"
         assert (
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
