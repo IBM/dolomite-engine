@@ -54,7 +54,6 @@ def wrap_model_for_distributed_training(
     dtype = args.mixed_precision_args.dtype
     communication_dtype = args.distributed_args.communication_dtype
     fp8_backend = args.mixed_precision_args.fp8_backend
-    zero_topology = args.distributed_args.zero_topology
     efficient_initialization = args.model_args.efficient_initialization
 
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -119,7 +118,6 @@ def wrap_model_for_distributed_training(
         assert not cpu_offload
 
         if stage == 0:
-            assert zero_topology is None
             assert not efficient_initialization
 
             mixed_precision_policy = deepcopy(_FSDP1_MIXED_PRECISION_POLICIES[dtype])
