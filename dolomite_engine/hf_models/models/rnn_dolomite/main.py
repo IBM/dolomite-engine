@@ -1,7 +1,7 @@
 from ...modeling_utils import ParameterizedLinear
+from ..gpt_dolomite import GPTDolomiteForCausalLM
 from .base import RNNDolomiteModel, RNNDolomitePreTrainedModel
 from .config import RNNDolomiteConfig
-from ..gpt_dolomite import GPTDolomiteForCausalLM
 
 
 class RNNDolomiteForCausalLM(RNNDolomitePreTrainedModel, GPTDolomiteForCausalLM):
