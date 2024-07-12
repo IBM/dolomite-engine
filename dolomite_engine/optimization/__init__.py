@@ -7,6 +7,7 @@ from ..enums import LRDecaySchedule, ParamsGroupMethod
 from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteConfig, RNNDolomiteForCausalLM
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
+from ..hf_models.models.rnn_dolomite.layer import DeltaNet
 from ..model_wrapper import ModelWrapper
 from .optimizer import get_optimizer
 from .scheduler import get_scheduler
@@ -66,10 +67,10 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
         # collect parameters with mup learning rate
         mup_group = {}
         for module_name, module in model.named_modules():
-            if isinstance(module, (Attention, MLP)):
+            if isinstance(module, (Attention, MLP, DeltaNet)):
                 for param_name, param in module.named_parameters():
                     # we don't add bias to mup group
-                    if not param_name.endswith("bias"):
+                    if not (param_name.endswith("bias") or param_name.find("norm") != -1):
                         # add name of module to name of subparam
                         mup_group[f"{module_name}.{param_name}"] = param
 
