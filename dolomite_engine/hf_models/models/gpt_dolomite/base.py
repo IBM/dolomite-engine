@@ -588,6 +588,8 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
                     scale=self.config.rope_scaling["factor"],
                     original_max_position_embeddings=self.config.rope_scaling["original_max_position_embeddings"],
                 )
+        elif self.position_embedding_type == PositionEmbeddingType.nope:
+            pass
         else:
             raise NotImplementedError()
 
