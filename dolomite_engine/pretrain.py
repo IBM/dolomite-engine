@@ -23,7 +23,6 @@ from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
     RunningMean,
-    enable_dtensors_for_computation,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -93,8 +92,6 @@ def train(
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
-    use_dtensors_for_computation = args.distributed_args.use_dtensors_for_computation
-
     val_weighted_split_paths = args.datasets[0].class_args.get("val_weighted_split_paths")
     group_names = [None]
     if val_weighted_split_paths is not None:
@@ -128,19 +125,12 @@ def train(
         else nullcontext
     )
 
-    backward_context = (
-        loss_parallel
-        if use_dtensors_for_computation and args.distributed_args.tensor_parallel_word_embeddings
-        else nullcontext
-    )
+    backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
 
     torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
 
     if torch_profiler is not None:
         torch_profiler.__enter__()
-
-    if use_dtensors_for_computation:
-        enable_dtensors_for_computation().__enter__()
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
@@ -212,9 +202,6 @@ def train(
 
     if eval_during_training:
         evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
-
-    if use_dtensors_for_computation:
-        enable_dtensors_for_computation().__exit__()
 
     if torch_profiler is not None:
         torch_profiler.__exit__()

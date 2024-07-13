@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Tuple, Union
 
 import torch
@@ -9,13 +10,8 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, is_dtensors_computation_enabled
-from ...modeling_utils_TP import (
-    LMHead_TP,
-    gather_from_tensor_parallel_region,
-    tensor_parallel_cross_entropy,
-    tensor_to_dtensor,
-)
+from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM, GPTDolomitePreTrainedModel
 from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
 
@@ -89,7 +85,9 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
             assert self.tensor_parallel_word_embeddings
         else:
             if self.tensor_parallel_word_embeddings:
-                lm_logits = gather_from_tensor_parallel_region(lm_logits)
+                # all gather
+                lm_logits = tensor_to_dtensor(lm_logits, current_placement=Shard(-1))
+                lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
 
         if not return_dict:
             output = (lm_logits,) + transformer_outputs[1:]
@@ -122,28 +120,16 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         shift_logits = lm_logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
 
-        if is_dtensors_computation_enabled():
-            shift_logits = tensor_to_dtensor(
-                shift_logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
-            )
-            shift_labels = tensor_to_dtensor(shift_labels, current_placement=Replicate())
+        shift_logits = tensor_to_dtensor(
+            shift_logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+        )
+        shift_labels = tensor_to_dtensor(shift_labels, current_placement=Replicate())
 
-        if self.tensor_parallel_word_embeddings:
-            if is_dtensors_computation_enabled():
-                if self.upcast_logits_for_loss:
-                    shift_logits = shift_logits.float()
+        if self.upcast_logits_for_loss:
+            shift_logits = shift_logits.float()
 
-                with loss_parallel():
-                    loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            else:
-                loss = tensor_parallel_cross_entropy(
-                    shift_logits, shift_labels, self.vocab_size, self.upcast_logits_for_loss
-                )
-                loss = loss.mean()
-        else:
-            if self.upcast_logits_for_loss:
-                shift_logits = shift_logits.float()
-
+        loss_context = loss_parallel if self.tensor_parallel_word_embeddings else nullcontext
+        with loss_context():
             loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
         return loss

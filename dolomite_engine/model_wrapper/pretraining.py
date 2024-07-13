@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from typing import Union
 
 import torch
@@ -8,8 +9,8 @@ from torch.distributed.tensor.parallel import loss_parallel
 
 from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode
-from ..hf_models.modeling_utils_TP import tensor_parallel_cross_entropy, tensor_to_dtensor
-from ..utils import ProcessGroupManager, is_dtensors_computation_enabled
+from ..hf_models.modeling_utils_TP import tensor_to_dtensor
+from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -63,26 +64,16 @@ class ModelWrapperForPretraining(ModelWrapper):
             )
             logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
 
-            if is_dtensors_computation_enabled():
-                logits = tensor_to_dtensor(
-                    logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
-                )
-                labels = tensor_to_dtensor(labels, current_placement=Replicate())
+            logits = tensor_to_dtensor(
+                logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+            )
+            labels = tensor_to_dtensor(labels, current_placement=Replicate())
 
-            if self.tensor_parallel_word_embeddings:
-                if is_dtensors_computation_enabled():
-                    if self.upcast_logits_for_loss:
-                        logits = logits.float()
+            if self.upcast_logits_for_loss:
+                logits = logits.float()
 
-                    with loss_parallel():
-                        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
-                else:
-                    loss = tensor_parallel_cross_entropy(logits, labels, self.vocab_size, self.upcast_logits_for_loss)
-                    loss = loss.mean()
-            else:
-                if self.upcast_logits_for_loss:
-                    logits = logits.float()
-
+            loss_context = loss_parallel if self.tensor_parallel_word_embeddings else nullcontext
+            with loss_context():
                 loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
         else:
             tokens: torch.Tensor = batch["text"]
