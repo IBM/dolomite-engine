@@ -5,10 +5,8 @@ import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed._tensor.placement_types import _Partial as Partial
-from torch.profiler import record_function
 
-from ...utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
+from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .TP import (
@@ -28,8 +26,11 @@ class ColumnParallelLinear(ParameterizedLinear):
         device: torch.device = None,
         dtype: torch.dtype = None,
         std: float = None,
+        sequence_parallel: bool = False,
     ) -> None:
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+
+        self.sequence_parallel = sequence_parallel
 
         self.out_features_per_device = divide_if_divisible(
             out_features,
@@ -58,9 +59,8 @@ class ColumnParallelLinear(ParameterizedLinear):
                 )
             )
 
-    @record_function("TP:column_parallel_linear")
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Replicate())
+        input = tensor_to_dtensor(input, current_placement=Shard(1) if self.sequence_parallel else Replicate())
         input = super().forward(input)
         input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         return input
@@ -98,8 +98,11 @@ class RowParallelLinear(ParameterizedLinear):
         device: torch.device = None,
         dtype: torch.dtype = None,
         std: float = None,
+        sequence_parallel: bool = False,
     ) -> None:
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+
+        self.sequence_parallel = sequence_parallel
 
         self.in_features_per_device = divide_if_divisible(
             in_features,
@@ -128,11 +131,10 @@ class RowParallelLinear(ParameterizedLinear):
                 )
             )
 
-    @record_function("TP:row_parallel_linear")
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=Shard(-1))
         input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=Replicate())
+        input = dtensor_to_tensor(input, desired_placement=Shard(1) if self.sequence_parallel else Replicate())
         return input
 
     def load_from_safetensors_weights_manager(
@@ -151,47 +153,6 @@ class RowParallelLinear(ParameterizedLinear):
         return "in_features_per_device={}, out_features={}, bias={}".format(
             self.in_features_per_device, self.out_features, self.bias is not None
         )
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)
-
-
-class TensorParallelSharedLinear(ParameterizedLinear):
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        device: torch.device = None,
-        dtype: torch.dtype = None,
-        std: float = None,
-    ) -> None:
-        super().__init__(in_features, out_features, bias, device, dtype, std)
-
-        self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
-            )
-        )
-        if bias:
-            self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
-                )
-            )
-
-    @record_function("TP:shared_linear")
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Replicate())
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=Replicate(), grad_placement=Partial())
-        return input
-
-    @torch.no_grad()
-    def reset_parameters(self) -> None:
-        with get_cuda_rng_tracker().fork():
-            return super().reset_parameters()
 
     def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
         state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)

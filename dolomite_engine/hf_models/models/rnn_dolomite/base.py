@@ -112,7 +112,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
             output_hidden_states,
             use_cache,
             return_dict,
-            input_shape,
             hidden_states,
             attention_mask,
             position_ids,
@@ -132,8 +131,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
             max_seqlen=max_seqlen,
         )
 
-        output_shape = input_shape + (hidden_states.size(-1),)
-
         past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
@@ -151,7 +148,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
 
         hidden_states = self.ln_f(hidden_states)
 
-        hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states += (hidden_states,)

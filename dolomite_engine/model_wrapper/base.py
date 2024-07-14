@@ -45,6 +45,7 @@ class ModelWrapper(torch.nn.Module):
         self.attention_implementation = args.model_args.attention_implementation
         self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
         self.tensor_parallel_word_embeddings = args.distributed_args.tensor_parallel_word_embeddings
+        self.sequence_parallel = args.distributed_args.sequence_parallel
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -232,6 +233,8 @@ class ModelWrapper(torch.nn.Module):
             model_kwargs["use_padding_free_transformer"] = True
         if self.tensor_parallel_word_embeddings:
             model_kwargs["tensor_parallel_word_embeddings"] = True
+        if self.sequence_parallel:
+            model_kwargs["sequence_parallel"] = True
         if args.model_args.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
 

@@ -18,7 +18,7 @@ from ..gpt_dolomite.mlp import MLP
 
 
 class MLP_TP(MLP):
-    def __init__(self, config: GPTDolomiteConfig) -> None:
+    def __init__(self, config: GPTDolomiteConfig, sequence_parallel: bool = False) -> None:
         nn.Module.__init__(self)
 
         hidden_size = config.n_embd
@@ -41,6 +41,7 @@ class MLP_TP(MLP):
             2 * intermediate_size if self.is_glu_activation else intermediate_size,
             bias=self.add_bias,
             std=std,
+            sequence_parallel=sequence_parallel,
         )
 
         self.act = get_activation_function(activation_function)
@@ -48,7 +49,13 @@ class MLP_TP(MLP):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = RowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
+        self.c_proj = RowParallelLinear(
+            intermediate_size,
+            hidden_size,
+            bias=self.add_bias,
+            std=std,
+            sequence_parallel=sequence_parallel,
+        )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
 

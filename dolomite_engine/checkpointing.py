@@ -327,7 +327,6 @@ def load_checkpoint_for_inference(
             if use_meta:
                 model = model.to_empty(device="cpu")
 
-            strict = True
             model.load_state_dict(state)
     else:
         raise ValueError(f"unexpected distributed_backend ({args['distributed_args']['distributed_backend']})")

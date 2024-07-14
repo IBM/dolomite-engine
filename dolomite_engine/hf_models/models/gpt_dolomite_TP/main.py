@@ -12,27 +12,25 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
-from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM, GPTDolomitePreTrainedModel
+from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM
 from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
 
 
 class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCausalLM):
-    def __init__(self, config: GPTDolomiteConfig, tensor_parallel_word_embeddings: bool = False, **kwargs) -> None:
-        GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
+    def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
+        GPTDolomitePreTrainedModel_TP.__init__(self, config, **kwargs)
 
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.vocab_size = config.vocab_size
 
-        self.transformer = GPTDolomiteModel_TP(
-            config, tensor_parallel_word_embeddings=tensor_parallel_word_embeddings, **kwargs
-        )
+        self.transformer = GPTDolomiteModel_TP(config, **kwargs)
 
         if not self._tied_word_embeddings:
             self.lm_head = LMHead_TP(
-                config.vocab_size,
+                self.vocab_size,
                 config.n_embd,
                 std=config.initializer_range,
                 tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                sequence_parallel=self.sequence_parallel,
             )
 
         self.m_width = config.m_width
@@ -107,6 +105,7 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
                 hidden_states,
                 weight=self.transformer.wte.weight,
                 tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                sequence_parallel=self.sequence_parallel,
             )
             if self._tied_word_embeddings
             else self.lm_head(hidden_states)

@@ -103,7 +103,6 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
             output_hidden_states,
             use_cache,
             return_dict,
-            input_shape,
             hidden_states,
             attention_mask,
             position_ids,
@@ -134,8 +133,6 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        output_shape = input_shape + (hidden_states.size(-1),)
-
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
@@ -159,7 +156,6 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
 
         hidden_states = self.ln_f(hidden_states)
 
-        hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)

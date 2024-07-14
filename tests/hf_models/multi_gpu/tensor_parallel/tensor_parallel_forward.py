@@ -1,9 +1,9 @@
 import argparse
 import os
-import random
 
 import torch
 import torch.distributed
+from transformers import set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
 from dolomite_engine.utils import (
@@ -22,8 +22,10 @@ parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--tmp-path", type=str)
 parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
+parser.add_argument("--sequence-parallel", action="store_true")
 args = parser.parse_args()
 
+set_seed(42)
 
 ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
 
@@ -69,6 +71,7 @@ with torch.device("meta"):
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
+        sequence_parallel=args.sequence_parallel,
     )
 
 # copy to device without copying storage
@@ -82,8 +85,7 @@ model_tp.load_from_safetensors_weights_manager(safetensors_weight_manager)
 # set model to eval mode
 model_tp.eval()
 
-random.seed(42)
-
+set_seed(42)
 
 input_ids = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)
 labels = torch.randint(0, 50255, (4, 512), device=torch.cuda.current_device(), requires_grad=False)

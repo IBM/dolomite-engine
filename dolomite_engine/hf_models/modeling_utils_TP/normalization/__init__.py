@@ -19,10 +19,14 @@ def get_normalization_function_TP(
     normalized_shape: int,
     eps: float = 1e-5,
     normalization_implementation: str = "torch",
+    sequence_parallel: bool = False,
 ) -> nn.LayerNorm:
     if name in _NORMALIZATION_FUNCTIONS:
         normalization_function = _NORMALIZATION_FUNCTIONS[name](
-            normalized_shape, eps=eps, normalization_implementation=normalization_implementation
+            normalized_shape,
+            eps=eps,
+            normalization_implementation=normalization_implementation,
+            sequence_parallel=sequence_parallel,
         )
 
     original_load_state_dict = normalization_function.load_state_dict

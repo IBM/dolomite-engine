@@ -319,6 +319,8 @@ class DistributedArgs(BaseArgs):
     tensor_parallel_size: int = 1
     # tensor parallel embeddings
     tensor_parallel_word_embeddings: bool = False
+    # whether to use sequence parallel
+    sequence_parallel: bool = False
     # data parallel world size
     data_parallel_size: Optional[int] = None
     # distributed timeout for NCCL in minutes
@@ -333,6 +335,9 @@ class DistributedArgs(BaseArgs):
         # communication dtype
         if self.communication_dtype is not None:
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
+
+        if self.sequence_parallel:
+            assert self.tensor_parallel_size > 1, "tensor parallel needs to be enabled for sequence parallel"
 
 
 class AimArgs(BaseArgs):

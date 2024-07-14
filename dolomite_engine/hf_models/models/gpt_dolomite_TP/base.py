@@ -13,12 +13,16 @@ from .layer import GPTDolomiteBlock_TP
 class GPTDolomitePreTrainedModel_TP(GPTDolomitePreTrainedModel):
     _no_split_modules = ["GPTDolomiteBlock_TP"]
 
+    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
+        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
+
+        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
+        self.sequence_parallel = kwargs.get("sequence_parallel", False)
+
 
 class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
-    def __init__(self, config: GPTDolomiteConfig, tensor_parallel_word_embeddings: bool = False, **kwargs) -> None:
-        GPTDolomitePreTrainedModel.__init__(self, config, **kwargs)
-
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
+    def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
+        GPTDolomitePreTrainedModel_TP.__init__(self, config, **kwargs)
 
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
@@ -34,6 +38,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             self.embed_dim,
             std=self.initializer_range,
             tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            sequence_parallel=self.sequence_parallel,
         )
 
         self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
@@ -45,6 +50,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                     self.attention_implementation,
                     self._use_padding_free_transformer,
                     layer_idx=i,
+                    sequence_parallel=self.sequence_parallel,
                 )
                 for i in range(config.num_hidden_layers)
             ]
@@ -136,7 +142,12 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         max_position_embeddings = self.config.max_position_embeddings
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            self.wpe = Embedding_TP(max_position_embeddings, self.embed_dim, tensor_parallel_word_embeddings=False)
+            self.wpe = Embedding_TP(
+                max_position_embeddings,
+                self.embed_dim,
+                tensor_parallel_word_embeddings=False,
+                sequence_parallel=self.sequence_parallel,
+            )
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
