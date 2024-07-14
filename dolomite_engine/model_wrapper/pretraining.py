@@ -1,5 +1,4 @@
 from contextlib import nullcontext
-from typing import Union
 
 import torch
 import torch.distributed
@@ -101,7 +100,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return loss
 
-    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
+    def _setup_model(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
         super()._setup_model(args)
 
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"

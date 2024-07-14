@@ -1,5 +1,3 @@
-from typing import Tuple, Union
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
@@ -21,7 +19,7 @@ class GPTDolomiteBlock(nn.Module):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_idx: int = None,
+        layer_idx: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -51,14 +49,12 @@ class GPTDolomiteBlock(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[
-        Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ]:
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 

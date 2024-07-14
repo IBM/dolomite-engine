@@ -15,7 +15,7 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_idx: int = None,
+        layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
         nn.Module.__init__(self)

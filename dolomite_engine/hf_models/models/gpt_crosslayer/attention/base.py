@@ -10,7 +10,7 @@ from ..config import GPTCrossLayerConfig
 
 
 class CrossLayerAttention(nn.Module):
-    def __init__(self, config: GPTCrossLayerConfig, causal: bool, layer_idx: int = None) -> None:
+    def __init__(self, config: GPTCrossLayerConfig, causal: bool, layer_idx: int | None = None) -> None:
         super().__init__()
 
         self.causal = causal
@@ -67,10 +67,10 @@ class CrossLayerAttention(nn.Module):
         hidden_states: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         batch_size, query_length = hidden_states.shape[:2]
 
@@ -148,7 +148,7 @@ class KeyValueProjection(nn.Module):
             std=config.initializer_range,
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size, query_length = hidden_states.shape[:2]
 
         hidden_states = self.ln(hidden_states)

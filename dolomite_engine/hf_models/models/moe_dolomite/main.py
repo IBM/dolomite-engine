@@ -1,7 +1,4 @@
-from typing import List, Tuple, Union
-
 import torch
-import torch.nn.functional as F
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ...modeling_utils import ParameterizedLinear
@@ -32,21 +29,21 @@ class MoEDolomiteForCausalLM(MoEDolomitePreTrainedModel, GPTDolomiteForCausalLM)
 
     def forward(
         self,
-        input_ids: Union[torch.Tensor, List[List[int]]] = None,
-        past_key_values: Tuple[Tuple[torch.Tensor]] = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: Union[torch.Tensor, List[List[int]]] = None,
-        position_ids: Union[torch.Tensor, List[List[int]]] = None,
-        inputs_embeds: Union[torch.Tensor, List[List[float]]] = None,
-        labels: Union[torch.Tensor, List[List[int]]] = None,
-        use_cache: bool = None,
-        output_attentions: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-        output_router_logits: bool = None,
-    ) -> Union[Tuple, MoeCausalLMOutputWithPast]:
+        input_ids: torch.Tensor | list[list[int]] | None = None,
+        past_key_values: tuple[tuple[torch.Tensor]] | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | list[list[int]] | None = None,
+        position_ids: torch.Tensor | list[list[int]] | None = None,
+        inputs_embeds: torch.Tensor | list[list[float]] | None = None,
+        labels: torch.Tensor | list[list[int]] | None = None,
+        use_cache: bool | None = None,
+        output_attentions: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+        output_router_logits: bool | None = None,
+    ) -> tuple | MoeCausalLMOutputWithPast:
         if self._use_padding_free_transformer and output_router_logits:
             raise NotImplementedError("padding_free is not supported with load_balancing_loss_func currently")
 

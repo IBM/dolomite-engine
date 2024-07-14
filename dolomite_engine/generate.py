@@ -1,6 +1,5 @@
 import json
 import os
-from typing import List
 
 import torch
 
@@ -12,13 +11,13 @@ from .model_wrapper import ModelWrapper, get_model
 from .utils import ProcessGroupManager, ProgressBar, setup_tf32
 
 
-def generate(args: InferenceArgs, model: ModelWrapper, datasets_list: List[BaseDataset], mode: Mode) -> None:
+def generate(args: InferenceArgs, model: ModelWrapper, datasets_list: list[BaseDataset], mode: Mode) -> None:
     """main generation loop
 
     Args:
         args (InferenceArgs): inference args
         model (ModelWrapper): non-sharded model
-        datasets_list (List[BaseDataset]): list of datasets
+        datasets_list (list[BaseDataset]): list of datasets
         mode (Mode): training / inference mode
     """
 

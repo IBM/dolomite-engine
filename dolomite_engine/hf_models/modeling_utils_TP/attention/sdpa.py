@@ -5,7 +5,7 @@ from .base import Attention_TP
 
 class SDPA_TP(Attention_TP, SDPA):
     def __init__(
-        self, config: CommonConfig, causal: bool, layer_idx: int = None, sequence_parallel: bool = False
+        self, config: CommonConfig, causal: bool, layer_idx: int | None = None, sequence_parallel: bool = False
     ) -> None:
         Attention_TP.__init__(
             self, config=config, causal=causal, layer_idx=layer_idx, sequence_parallel=sequence_parallel

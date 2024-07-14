@@ -3,7 +3,6 @@
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 from ...utils import ProcessGroupManager, log_rank_0
 from .utils import Split, normalize
@@ -22,20 +21,20 @@ class BlendedMegatronDatasetConfig:
 
         sequence_length (int): The sequence length.
 
-        blend (Optional[List[str]]): The blend string, consisting of either a single dataset or a
+        blend (list[str] | None): The blend string, consisting of either a single dataset or a
         flattened sequential sequence of weight-dataset pairs. For example, ["dataset-path1"] and
         ["50", "dataset-path1", "50", "dataset-path2"] are both valid. Not to be used with
         'blend_per_split'. Defaults to None.
 
-        blend_per_split (blend_per_split: Optional[List[Optional[List[str]]]]): A set of blend
+        blend_per_split (blend_per_split: list[list[str] | None]): A set of blend
         strings, as defined above, one for each split distribution. Not to be used with 'blend'.
         Defauls to None.
 
-        split (Optional[str]): The split string, a comma separated weighting for the dataset splits
+        split (str | None): The split string, a comma separated weighting for the dataset splits
         when drawing samples from a single distribution. Not to be used with 'blend_per_split'.
         Defaults to None.
 
-        split_vector: (Optional[List[float]]): The split string, parsed and normalized post-
+        split_vector: (list[float] | None): The split string, parsed and normalized post-
         initialization. Not to be passed to the constructor.
 
         path_to_cache (str): Where all re-useable dataset indices are to be cached.
@@ -47,15 +46,15 @@ class BlendedMegatronDatasetConfig:
 
     sequence_length: int
 
-    name: str = None
+    name: str | None = None
 
-    blend: Optional[List[str]] = None
+    blend: list[str] | None = None
 
-    blend_per_split: Optional[List[Optional[List[str]]]] = None
+    blend_per_split: list[list[str] | None] | None = None
 
-    split: Optional[str] = None
+    split: str | None = None
 
-    split_vector: Optional[List[float]] = field(init=False, default=None)
+    split_vector: list[float] | None = field(init=False, default=None)
 
     path_to_cache: str = None
 
@@ -96,14 +95,14 @@ class GPTDatasetConfig(BlendedMegatronDatasetConfig):
     fim_spm_rate: float = 0
 
 
-def _parse_and_normalize_split(split: str) -> List[float]:
+def _parse_and_normalize_split(split: str) -> list[float]:
     """Parse the dataset split ratios from a string
 
     Args:
         split (str): The train valid test split string e.g. "99,1,0"
 
     Returns:
-        List[float]: The trian valid test split ratios e.g. [99.0, 1.0, 0.0]
+        list[float]: The trian valid test split ratios e.g. [99.0, 1.0, 0.0]
     """
     split = list(map(float, re.findall(r"[.0-9]+", split)))
     split = split + [0.0 for _ in range(len(Split) - len(split))]

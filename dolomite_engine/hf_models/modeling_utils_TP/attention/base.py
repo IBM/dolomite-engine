@@ -1,5 +1,5 @@
 import math
-from typing import Any, Mapping, Tuple
+from typing import Any, Mapping
 
 import torch
 import torch.distributed
@@ -20,7 +20,7 @@ from ..TP import dtensor_to_tensor, modify_state_dict_to_dtensor_dict, tensor_to
 
 class Attention_TP(Attention):
     def __init__(
-        self, config: CommonConfig, causal: bool, layer_idx: int = None, sequence_parallel: bool = False
+        self, config: CommonConfig, causal: bool, layer_idx: int | None = None, sequence_parallel: bool = False
     ) -> None:
         nn.Module.__init__(self)
 
@@ -152,8 +152,8 @@ class Attention_TP(Attention):
         self.c_proj.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix=prefix + "c_proj.")
 
     def _prepare_qkv_for_forward_mqa(
-        self, query_key_value: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        self, query_key_value: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query, key, value = query_key_value
         batch_size, query_length = query.shape[:-1]
 
@@ -212,7 +212,7 @@ class _MQA_QueryKeyValueProjection(nn.Module):
             sequence_parallel=sequence_parallel,
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query = self.q_attn(hidden_states)
 
         key_value = self.kv_attn(hidden_states)
@@ -250,9 +250,9 @@ class _MQASharedLinear(ParameterizedLinear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        device: torch.device = None,
-        dtype: torch.dtype = None,
-        std: float = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
         sequence_parallel: bool = False,
     ) -> None:
         super().__init__(in_features, out_features, bias, device, dtype, std)

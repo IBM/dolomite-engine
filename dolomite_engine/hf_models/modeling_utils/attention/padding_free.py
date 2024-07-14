@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import torch
 from transformers import DynamicCache
 
@@ -17,11 +15,11 @@ class PaddingFreeAttention(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         assert past_key_values is None
 
@@ -80,7 +78,7 @@ class PaddingFreeAttention(Attention):
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         total_q = hidden_states.shape[0]
 
         hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
@@ -90,7 +88,7 @@ class PaddingFreeAttention(Attention):
 
     def _prepare_qkv_for_forward_gqa(
         self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         total_q = hidden_states.shape[0]
 
         hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
@@ -106,7 +104,7 @@ class PaddingFreeAttention(Attention):
 
     def _prepare_qkv_for_forward_mqa(
         self, hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         total_q = hidden_states.shape[0]
 
         query, key, value = hidden_states.split((self.hidden_size, self.head_dim, self.head_dim), dim=-1)

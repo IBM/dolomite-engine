@@ -1,4 +1,4 @@
-from typing import Iterable, List
+from typing import Iterable
 
 import torch
 
@@ -6,7 +6,7 @@ from ..enums import LossMask, Mode
 
 
 def collate_fn(
-    batch: List[dict],
+    batch: list[dict],
     mode: Mode,
     loss_mask: LossMask,
     eos_token_id: int,
@@ -17,7 +17,7 @@ def collate_fn(
     """prepares the batch with padding to pass into the forward function of the HuggingFace model
 
     Args:
-        batch (Tuple[List[int]]): input tokens and output tokens. Output tokens are optional when running generation but required for training.
+        batch (list[dict]): input tokens and output tokens. Output tokens are optional when running generation but required for training.
 
     Returns:
         dict: dict containing input_ids, attention_mask and labels if outputs is specified
@@ -84,7 +84,7 @@ def collate_fn(
     return result
 
 
-def infinite_iterator(x: Iterable) -> Iterable:
+def infinite_iterator(x: Iterable | None) -> Iterable:
     """converts and iterable into a non-ending infinite iterable, will return None if input is None
 
     Args:
@@ -105,7 +105,7 @@ def infinite_iterator(x: Iterable) -> Iterable:
             yield i
 
 
-def get_next_batch(x: Iterable) -> dict:
+def get_next_batch(x: Iterable | None) -> dict:
     """get next batch
 
     Args:

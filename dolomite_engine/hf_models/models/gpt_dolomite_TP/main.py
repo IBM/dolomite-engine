@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
-from typing import Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -43,19 +42,19 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
 
     def forward(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        labels: torch.Tensor = None,
-        use_cache: bool = None,
-        output_attentions: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
+        input_ids: torch.Tensor | None = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        labels: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_attentions: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
         output_parallel_lm_logits: bool = False,
-    ) -> Union[Tuple, CausalLMOutputWithPast]:
+    ) -> tuple | CausalLMOutputWithPast:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         assert not output_attentions
 
@@ -111,7 +110,9 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
             else self.lm_head(hidden_states)
         )
 
-    def get_autoregressive_language_modeling_loss(self, lm_logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def get_autoregressive_language_modeling_loss(
+        self, lm_logits: torch.Tensor, labels: torch.Tensor | None
+    ) -> torch.Tensor:
         if labels is None:
             return None
 

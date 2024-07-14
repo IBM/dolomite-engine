@@ -1,5 +1,5 @@
 import math
-from typing import Iterator, List
+from typing import Iterator
 
 import numpy as np
 import torch
@@ -15,7 +15,7 @@ class BlendedDistributedSampler(DistributedSampler):
     def __init__(
         self,
         dataset: BlendedDatasets,
-        data_sampling_ratios: List[int],
+        data_sampling_ratios: list[int],
         num_replicas: int,
         rank: int,
         ignore_sampling_proportion_for_validation: bool = True,
@@ -135,7 +135,7 @@ class BlendedDistributedSampler(DistributedSampler):
         return x.rstrip()
 
 
-def _get_num_samples_by_dataset(data_sampling_ratio: List[int], total_examples: int) -> List[int]:
+def _get_num_samples_by_dataset(data_sampling_ratio: list[int], total_examples: int) -> list[int]:
     data_sampling_ratio = torch.tensor(data_sampling_ratio)
     num_samples_by_dataset = data_sampling_ratio / data_sampling_ratio.sum() * total_examples
     num_samples_by_dataset = num_samples_by_dataset.to(torch.long)

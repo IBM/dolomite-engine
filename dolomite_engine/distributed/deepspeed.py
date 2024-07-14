@@ -10,7 +10,7 @@ _DEEPSPEED_MIXED_PRECISION_CONFIG = {
 }
 
 
-_DEEPSPEED_CONFIG: dict = None
+_DEEPSPEED_CONFIG: dict | None = None
 
 
 def get_deepspeed_config(args: TrainingArgs) -> dict:

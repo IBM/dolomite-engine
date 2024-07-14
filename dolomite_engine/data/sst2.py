@@ -1,5 +1,3 @@
-from typing import List
-
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
@@ -42,7 +40,7 @@ class SST2Dataset(BaseDataset):
 
         self.examples = self.prepare_examples()
 
-    def prepare_examples(self) -> List[dict]:
+    def prepare_examples(self) -> list[dict]:
         split = self.split.value
         if split == "val":
             split = "validation"

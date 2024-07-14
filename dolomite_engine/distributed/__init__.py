@@ -1,6 +1,5 @@
 import logging
 from copy import deepcopy
-from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -37,7 +36,7 @@ _FSDP2_MIXED_PRECISION_POLICIES = {
 
 def wrap_model_for_distributed_training(
     args: TrainingArgs, model: nn.Module
-) -> Tuple[ModelWrapper, Optimizer, LambdaLR]:
+) -> tuple[ModelWrapper, Optimizer, LambdaLR]:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -45,7 +44,7 @@ def wrap_model_for_distributed_training(
         model (ModelWrapper): any nn.Module object
 
     Returns:
-        Tuple[ModelWrapper, Optimizer, LambdaLR]: parallelized model, optimizer and lr_scheduler
+        tuple[ModelWrapper, Optimizer, LambdaLR]: parallelized model, optimizer and lr_scheduler
     """
 
     stage = args.distributed_args.stage

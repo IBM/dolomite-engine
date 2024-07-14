@@ -1,5 +1,4 @@
 import logging
-from typing import List, Union
 
 import torch
 from transformers import AutoConfig, AutoTokenizer
@@ -22,7 +21,7 @@ from ..utils import (
 class ModelWrapper(torch.nn.Module):
     """Model class which wraps any HuggingFace model"""
 
-    def __init__(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs], mode: Mode):
+    def __init__(self, args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode):
         """initializes a Model wrapper for a HuggingFace model
 
         Args:
@@ -108,7 +107,7 @@ class ModelWrapper(torch.nn.Module):
             if len(self.tokenizer) != original_vocab_size:
                 self.model.resize_token_embeddings(len(self.tokenizer))
 
-    def generate(self, batch: dict, generate_kwargs: dict) -> List[str]:
+    def generate(self, batch: dict, generate_kwargs: dict) -> list[str]:
         """generate function for a batch
 
         Args:
@@ -205,7 +204,7 @@ class ModelWrapper(torch.nn.Module):
             self.config.save_pretrained(save_path)
             SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
 
-    def _setup_config(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
+    def _setup_config(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
         if self.model_name is None:
             self.config = AutoConfig.for_model(**args.model_args.pretrained_config)
         else:
@@ -214,14 +213,14 @@ class ModelWrapper(torch.nn.Module):
             )
         log_rank_0(logging.INFO, self.config)
 
-    def _setup_tokenizer(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
+    def _setup_tokenizer(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
         tokenizer_name = args.tokenizer_args.tokenizer_name if self.model_name is None else self.model_name
         assert tokenizer_name is not None, "pass a tokenizer"
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.eos_token_id = self.tokenizer.eos_token_id
 
-    def _setup_model(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
+    def _setup_model(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:

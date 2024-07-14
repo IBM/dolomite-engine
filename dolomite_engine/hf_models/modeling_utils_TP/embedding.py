@@ -18,7 +18,7 @@ class Embedding_TP(ParameterizedEmbedding):
         self,
         num_embeddings: int,
         embedding_dim: int,
-        std: float = None,
+        std: float | None = None,
         tensor_parallel_word_embeddings: bool = False,
         sequence_parallel: bool = False,
     ) -> None:

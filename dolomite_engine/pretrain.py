@@ -2,7 +2,6 @@ import logging
 import time
 from contextlib import nullcontext
 from functools import partial
-from typing import List
 
 import torch
 from torch.distributed.tensor.parallel import loss_parallel
@@ -36,7 +35,7 @@ if is_transformer_engine_available():
 
 
 def track_val_metrics(
-    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str = None
+    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str | None = None
 ) -> None:
     """tracks metrics like validation loss
 
@@ -44,7 +43,7 @@ def track_val_metrics(
         global_step (int): global step during training
         val_loss (float): validation loss for the validation data
         experiments_tracker (ExperimentsTracker): metrics tracker
-        group_name (str): group name for the validation / test set
+        group_name (str | None): group name for the validation / test set
     """
 
     message = f"step = {global_step}, val_loss = {val_loss:.4f}"
@@ -63,8 +62,8 @@ def train(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
-    val_dataloaders: List[DataLoader],
-    test_dataloaders: List[DataLoader],
+    val_dataloaders: list[DataLoader],
+    test_dataloaders: list[DataLoader],
     experiments_tracker: ExperimentsTracker,
     starting_iteration: int = 0,
 ) -> None:
@@ -76,8 +75,8 @@ def train(
         optimizer (Optimizer): optimizer
         lr_scheduler (LRScheduler): learning rate scheduler
         train_dataloader (DataLoader): training dataloader
-        val_dataloaders (List[DataLoader]): validation dataloaders
-        test_dataloaders (List[DataLoader]): test dataloaders
+        val_dataloaders (list[DataLoader]): validation dataloaders
+        test_dataloaders (list[DataLoader]): test dataloaders
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
@@ -209,22 +208,22 @@ def train(
 
 @torch.no_grad()
 def evaluate(
-    val_dataloaders: List[DataLoader],
+    val_dataloaders: list[DataLoader],
     model: ModelWrapperForPretraining,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
-    group_names: List[str],
+    group_names: list[str],
 ) -> float:
     """main validation loop for the program
 
     Args:
-        val_dataloaders (List[DataLoader]): list of validation dataloaders
+        val_dataloaders (list[DataLoader]): list of validation dataloaders
         model (ModelWrapperForPretraining): model
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
-        group_names (List[str]): names of the datasets in validation/test group
+        group_names (list[str]): names of the datasets in validation/test group
 
     Returns:
         float: loss at the current step

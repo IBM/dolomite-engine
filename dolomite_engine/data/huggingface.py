@@ -1,5 +1,3 @@
-from typing import List
-
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
@@ -23,7 +21,7 @@ class HuggingFaceDataset(BaseDataset):
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = None,
+        num_virtual_tokens: int | None = None,
     ) -> None:
         super().__init__(
             class_args=class_args,
@@ -42,7 +40,7 @@ class HuggingFaceDataset(BaseDataset):
 
         self.examples = self.prepare_examples()
 
-    def prepare_examples(self) -> List[dict]:
+    def prepare_examples(self) -> list[dict]:
         assert "data_path" in self.class_args, "`data_path` is not specified"
 
         data_path: str = self.class_args.get("data_path")

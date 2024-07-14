@@ -20,7 +20,7 @@ class DebugDataset(BaseDataset):
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = None,
+        num_virtual_tokens: int | None = None,
     ) -> None:
         super().__init__(
             class_args=class_args,

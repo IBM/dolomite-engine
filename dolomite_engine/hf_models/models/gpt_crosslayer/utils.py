@@ -1,5 +1,3 @@
-from typing import List
-
 import torch
 from transformers import AutoModelForCausalLM
 
@@ -13,7 +11,7 @@ from .main import GPTCrossLayerForCausalLM
 def convert_gpt_dolomite_to_gpt_crosslayer(
     original_config: GPTDolomiteConfig,
     original_model: GPTDolomiteForCausalLM,
-    sharing_pattern: List[int] = None,
+    sharing_pattern: list[int] | None = None,
     **kwargs,
 ) -> GPTCrossLayerForCausalLM:
     config = GPTCrossLayerConfig(

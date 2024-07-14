@@ -1,5 +1,3 @@
-from typing import List, Optional, Tuple, Union
-
 import torch
 import torch.nn.functional as F
 from transformers import DynamicCache
@@ -42,12 +40,11 @@ class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel):
         if not self._tied_word_embeddings:
             self.lm_head = new_embeddings
 
-    # FIXME typing
     def prepare_inputs_for_generation(
         self,
         input_ids: torch.Tensor,
-        past_key_values: Optional[DynamicCache] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
+        past_key_values: DynamicCache | None = None,
+        inputs_embeds: torch.Tensor | None = None,
         **kwargs,
     ) -> dict:
         token_type_ids = kwargs.get("token_type_ids", None)
@@ -97,20 +94,20 @@ class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel):
 
     def forward(
         self,
-        input_ids: Union[torch.Tensor, List[List[int]]] = None,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: Union[torch.Tensor, List[List[int]]] = None,
-        position_ids: Union[torch.Tensor, List[List[int]]] = None,
-        inputs_embeds: Union[torch.Tensor, List[List[float]]] = None,
-        labels: Union[torch.Tensor, List[List[int]]] = None,
-        use_cache: bool = None,
-        output_attentions: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, CausalLMOutputWithPast]:
+        input_ids: torch.Tensor | list[list[int]] = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | list[list[int]] | None = None,
+        position_ids: torch.Tensor | list[list[int]] | None = None,
+        inputs_embeds: torch.Tensor | list[list[float]] | None = None,
+        labels: torch.Tensor | list[list[int]] | None = None,
+        use_cache: bool | None = None,
+        output_attentions: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple | CausalLMOutputWithPast:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -180,7 +177,7 @@ class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel):
         )
 
     def get_autoregressive_language_modeling_loss(
-        self, lm_logits: torch.Tensor, labels: torch.Tensor, cu_seqlens: torch.Tensor
+        self, lm_logits: torch.Tensor, labels: torch.Tensor | None, cu_seqlens: torch.Tensor
     ) -> torch.Tensor:
         if labels is None:
             return None

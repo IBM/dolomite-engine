@@ -1,6 +1,3 @@
-from typing import Tuple
-
-
 class MegatronBatchSampler:
     def __init__(
         self,
@@ -29,7 +26,7 @@ class MegatronBatchSampler:
     def __len__(self) -> int:
         return self.total_samples
 
-    def _get_start_end_idx(self) -> Tuple[int, int]:
+    def _get_start_end_idx(self) -> tuple[int, int]:
         start_idx = self.rank * self.micro_batch_size
         end_idx = start_idx + self.micro_batch_size
         return start_idx, end_idx

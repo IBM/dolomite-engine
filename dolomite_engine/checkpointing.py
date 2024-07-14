@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import random
-from typing import Tuple, Union
 
 import numpy as np
 import torch
@@ -51,7 +50,7 @@ def save_checkpoint(
     train_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
     iteration: int,
-    metadata: dict = None,
+    metadata: dict | None = None,
 ) -> None:
     """save checkpoint during training
 
@@ -63,7 +62,7 @@ def save_checkpoint(
         train_dataloader (DataLoader): train dataloader to save
         experiments_tracker (ExperimentsTracker): experiment tracker to save
         iteration (int): current iteration
-        metadata (dict): extra stuff to store
+        metadata (dict | None): extra stuff to store
 
     Raises:
         ValueError: if unexpected distributed backend is found
@@ -129,7 +128,7 @@ def load_checkpoint_for_training(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: ResumableDataLoader,
-) -> Tuple[int, dict]:
+) -> tuple[int, dict, dict]:
     """load checkpoint for training
 
     Args:
@@ -143,7 +142,7 @@ def load_checkpoint_for_training(
         ValueError: if unexpected distributed backend is found
 
     Returns:
-        Tuple[int, dict, dict]: checkpointed iteration, metadata, experiments_tracker state dict
+        tuple[int, dict, dict]: checkpointed iteration, metadata, experiments_tracker state dict
     """
 
     if args.load_args is None or args.load_args.load_path is None:
@@ -219,8 +218,8 @@ def load_checkpoint_for_training(
 
 
 def load_checkpoint_for_inference(
-    args: Union[InferenceArgs, UnshardingArgs], mode: Mode, use_meta: bool = False
-) -> Tuple[ModelWrapper, TrainingArgs, dict]:
+    args: InferenceArgs | UnshardingArgs, mode: Mode, use_meta: bool = False
+) -> tuple[ModelWrapper, TrainingArgs, dict]:
     """load deepspeed checkpoint for inference
 
     Args:
@@ -335,11 +334,11 @@ def load_checkpoint_for_inference(
 
 
 @run_rank_n
-def save_args(args: Union[TrainingArgs, InferenceArgs], save_path: str, mode: Mode) -> None:
+def save_args(args: TrainingArgs | InferenceArgs, save_path: str, mode: Mode) -> None:
     """saves training args as a json
 
     Args:
-        args (Union[TrainingArgs, InferenceArgs]): arguments for training or inference
+        args (TrainingArgs | InferenceArgs): arguments for training or inference
         save_path (str): save location on disk
     """
 

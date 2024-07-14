@@ -1,6 +1,5 @@
 import logging
 from functools import partial
-from typing import List, Tuple, Union
 
 import torch
 import torch.distributed
@@ -31,16 +30,16 @@ _DATASETS_LIST = {
 
 
 def get_datasets_list(
-    args: Union[TrainingArgs, InferenceArgs],
+    args: TrainingArgs | InferenceArgs,
     split: DatasetSplit,
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
-) -> Tuple[List[BaseDataset], List[int]]:
+) -> tuple[list[BaseDataset], list[int]]:
     """get the list of datasets from their configs
 
     Args:
-        args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
+        args (TrainingArgs | InferenceArgs): arguments based on training / inference mode
         split (DatasetSplit): train / val / test split
         mode (Mode): training / inference mode for running the program
         tokenizer (AutoTokenizer): tokenizer
@@ -50,7 +49,7 @@ def get_datasets_list(
         ValueError: if invalid class_name for dataset is found
 
     Returns:
-        Tuple[List[BaseDataset], List[int]]: tuple of list of datasets and the respective dataset sampling ratios
+        tuple[List[BaseDataset], list[int]]: tuple of list of datasets and the respective dataset sampling ratios
     """
 
     dataset_args_list = args.datasets
@@ -100,23 +99,23 @@ def get_datasets_list(
 
 
 def get_dataloader(
-    args: Union[TrainingArgs, InferenceArgs],
+    args: TrainingArgs | InferenceArgs,
     split: DatasetSplit,
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
-) -> Tuple[ResumableDataLoader]:
+) -> tuple[ResumableDataLoader]:
     """prepares datasets and sampler
 
     Args:
-        args (Union[TrainingArgs, InferenceArgs]): arguments based on training / inference mode
+        args (TrainingArgs | InferenceArgs): arguments based on training / inference mode
         split (DatasetSplit): train / val / test split
         mode (Mode): training / inference mode
         tokenizer (AutoTokenizer): tokenizer
         is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
 
     Returns:
-        Tuple[ResumableDataLoader]: dataloader for a blended dataset
+        tuple[ResumableDataLoader]: dataloader for a blended dataset
     """
 
     assert mode == Mode.training, "blended dataset is only supported in training mode"
@@ -141,12 +140,12 @@ def get_dataloader(
 
 
 def _get_dispatching_dataloader(
-    args: Union[TrainingArgs, InferenceArgs],
+    args: TrainingArgs | InferenceArgs,
     split: DatasetSplit,
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
-) -> Tuple[ResumableDataLoader]:
+) -> tuple[ResumableDataLoader]:
     micro_batch_size = args.training_parameters.micro_batch_size
 
     num_ranks_per_node = torch.cuda.device_count()
@@ -228,12 +227,12 @@ def _get_dispatching_dataloader(
 
 
 def _get_non_dispatching_dataloader(
-    args: Union[TrainingArgs, InferenceArgs],
+    args: TrainingArgs | InferenceArgs,
     split: DatasetSplit,
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
-) -> Tuple[ResumableDataLoader]:
+) -> tuple[ResumableDataLoader]:
     micro_batch_size = args.training_parameters.micro_batch_size
 
     datasets_list, data_sampling_ratios = get_datasets_list(

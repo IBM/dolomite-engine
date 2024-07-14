@@ -1,5 +1,3 @@
-from typing import Union
-
 import torch
 import torch.distributed
 
@@ -11,7 +9,7 @@ from .base import ModelWrapper
 
 
 class ModelWrapperForFinetuning(ModelWrapper):
-    def __init__(self, args: Union[TrainingArgs, InferenceArgs, UnshardingArgs], mode: Mode):
+    def __init__(self, args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode):
         super().__init__(args, mode)
 
         assert not self.reset_attention_mask, "reset_attention_mask is only supported with pretraining"

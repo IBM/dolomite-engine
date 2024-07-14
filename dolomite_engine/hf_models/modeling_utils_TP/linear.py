@@ -23,9 +23,9 @@ class ColumnParallelLinear(ParameterizedLinear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        device: torch.device = None,
-        dtype: torch.dtype = None,
-        std: float = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
         sequence_parallel: bool = False,
     ) -> None:
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -95,9 +95,9 @@ class RowParallelLinear(ParameterizedLinear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        device: torch.device = None,
-        dtype: torch.dtype = None,
-        std: float = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
         sequence_parallel: bool = False,
     ) -> None:
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()

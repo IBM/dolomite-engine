@@ -1,6 +1,5 @@
 import logging
 from contextlib import AbstractContextManager, nullcontext
-from typing import Tuple
 
 import torch
 from torch.optim import Optimizer
@@ -22,7 +21,7 @@ def train_step(
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
@@ -37,7 +36,7 @@ def train_step(
         backward_context (AbstractContextManager): a context that is used for every model backward call
 
     Returns:
-        Tuple[float, float]: loss at the current step, grad norm at the current step
+        tuple[float, float]: loss at the current step, grad norm at the current step
     """
 
     no_sync = nullcontext
@@ -114,9 +113,9 @@ def track_train_metrics(
     current_lr: float,
     experiments_tracker: ExperimentsTracker,
     loss_running_mean_tracker: RunningMean,
-    flops: float = None,
-    billion_tokens_per_day: float = None,
-    step_time: float = None,
+    flops: float | None = None,
+    billion_tokens_per_day: float | None = None,
+    step_time: float | None = None,
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -126,9 +125,9 @@ def track_train_metrics(
         current_lr (float): learning rate at the current step
         experiments_tracker (ExperimentsTracker): metrics tracker
         loss_running_mean_tracker (RunningMean): running mean accumulator for loss
-        flops (float, optional): total model flops. Defaults to None
-        billion_tokens_per_day (float, optional): billions of tokens per day. Defaults to None
-        step_time (float, optional): time per step in seconds
+        flops (float | None, optional): total model flops. Defaults to None
+        billion_tokens_per_day (float | None, optional): billions of tokens per day. Defaults to None
+        step_time (float | None, optional): time per step in seconds
     """
 
     # update loss running mean

@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import torch
 import torch.distributed
 import torch.nn as nn
@@ -10,7 +8,7 @@ from ...utils import ProcessGroupManager
 from ..utils import divide_if_divisible
 
 
-def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: Tuple[int, int] = None) -> torch.Tensor:
+def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int, int] | None = None) -> torch.Tensor:
     shape = slice.get_shape()
     dimensionality = len(shape)
     assert dimensionality in [1, 2], f"tensor should be either 1 or 2 dimensional but {dimensionality} was found"
@@ -46,7 +44,7 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: Tuple[int
 
 
 def tensor_to_dtensor(
-    tensor: torch.Tensor, current_placement: Placement, desired_placement: Placement = None
+    tensor: torch.Tensor, current_placement: Placement, desired_placement: Placement | None = None
 ) -> DTensor:
     tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
@@ -58,7 +56,7 @@ def tensor_to_dtensor(
 
 
 def dtensor_to_tensor(
-    dtensor: DTensor, desired_placement: Placement = None, grad_placement: Placement = None
+    dtensor: DTensor, desired_placement: Placement | None = None, grad_placement: Placement | None = None
 ) -> torch.Tensor:
     if desired_placement is not None:
         dtensor = dtensor.redistribute(

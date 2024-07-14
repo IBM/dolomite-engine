@@ -1,5 +1,3 @@
-from typing import List, Tuple, Union
-
 import torch
 import torch.nn as nn
 from transformers import Cache
@@ -36,8 +34,6 @@ class RNNDolomitePreTrainedModel(GPTDolomitePreTrainedModel):
 
 
 class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
-    mask_value = None
-
     def __init__(self, config: RNNDolomiteConfig, **kwargs) -> None:
         RNNDolomitePreTrainedModel.__init__(self, config, **kwargs)
 
@@ -83,7 +79,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    def mapping_attention_patterns(self, attention_patterns: str) -> List[str]:
+    def mapping_attention_patterns(self, attention_patterns: str) -> list[str]:
         attention_implementation_list = []
         for pattern in attention_patterns:
             if pattern == "a":
@@ -96,18 +92,18 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
 
     def forward(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: Cache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, BaseModelOutputWithPast]:
+        input_ids: torch.Tensor | None = None,
+        past_key_values: Cache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple | BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,

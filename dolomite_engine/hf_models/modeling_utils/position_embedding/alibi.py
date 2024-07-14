@@ -12,7 +12,12 @@ class Alibi(nn.Module):
         self.reset_parameters()
 
     def forward(
-        self, attention_mask: torch.Tensor, batch_size: int, key_length: int, device: torch.device, dtype: torch.dtype
+        self,
+        attention_mask: torch.Tensor | None,
+        batch_size: int,
+        key_length: int,
+        device: torch.device,
+        dtype: torch.dtype,
     ) -> torch.Tensor:
         if attention_mask is None:
             arange_tensor = (

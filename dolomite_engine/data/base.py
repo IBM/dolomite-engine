@@ -1,5 +1,3 @@
-from typing import List, Tuple
-
 import torch
 from transformers import AutoTokenizer
 
@@ -23,7 +21,7 @@ class BaseDataset(torch.utils.data.Dataset):
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = None,
+        num_virtual_tokens: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -104,7 +102,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
         eos_token_id: int = self.tokenizer.eos_token_id
 
-        input: List[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
+        input: list[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
 
         if self.is_encoder_decoder:
             if self.max_input_tokens is not None:
@@ -115,7 +113,7 @@ class BaseDataset(torch.utils.data.Dataset):
                 input = input[: self.max_input_tokens]
 
         if self.mode == Mode.training:
-            output: List[int] = self.tokenizer(output, add_special_tokens=False)["input_ids"]
+            output: list[int] = self.tokenizer(output, add_special_tokens=False)["input_ids"]
 
             if self.max_output_tokens is not None:
                 output = output[: self.max_output_tokens - 1]
@@ -146,7 +144,7 @@ class BaseDataset(torch.utils.data.Dataset):
 class BlendedDatasets(torch.utils.data.Dataset):
     """Concatenated list of datasets for training or inference"""
 
-    def __init__(self, datasets: List[BaseDataset], split: DatasetSplit) -> None:
+    def __init__(self, datasets: list[BaseDataset], split: DatasetSplit) -> None:
         super().__init__()
 
         self.split = split
@@ -164,11 +162,11 @@ class BlendedDatasets(torch.utils.data.Dataset):
 
         return len(self.datasets)
 
-    def get_num_examples_in_each_dataset(self) -> List[int]:
+    def get_num_examples_in_each_dataset(self) -> list[int]:
         """returns the number of examples in each dataset component
 
         Returns:
-            List[int]: the number of examples in each dataset component
+            list[int]: the number of examples in each dataset component
         """
 
         return [len(dataset) for dataset in self.datasets]
@@ -179,7 +177,7 @@ class BlendedDatasets(torch.utils.data.Dataset):
     def load_state_dict(self, state_dict: dict) -> None:
         return
 
-    def _get_indexing_array(self) -> List[Tuple[int]]:
+    def _get_indexing_array(self) -> list[tuple[int]]:
         num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
 
         indexing_array = []
