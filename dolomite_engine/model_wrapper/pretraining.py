@@ -38,6 +38,75 @@ class ModelWrapperForPretraining(ModelWrapper):
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
 
+        input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
+        batch = self._prepare_model_inputs(input_ids)
+
+        model_outputs = self.model(**batch)
+        logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
+
+        if self.upcast_logits_for_loss:
+            logits = logits.float()
+
+        loss_context = nullcontext
+
+        if self.tp_world_size > 1:
+            logits = tensor_to_dtensor(
+                logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+            )
+            labels = tensor_to_dtensor(labels, current_placement=Replicate())
+
+            if self.tensor_parallel_word_embeddings:
+                loss_context = loss_parallel
+
+        with loss_context():
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+
+        return loss
+
+    def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
+        if self.tp_world_size > 1:
+            batch = {"input_ids": input_ids, "output_parallel_lm_logits": self.tensor_parallel_word_embeddings}
+        else:
+            if self.use_padding_free_transformer:
+                batch_size, sequence_length = input_ids.shape
+                input_ids = input_ids.reshape(-1)
+
+                if self.reset_attention_mask:
+                    num_tokens_in_batch = batch_size * sequence_length
+
+                    document_end_positions = input_ids == self.eos_token_id
+                    for i in range(sequence_length - 1, num_tokens_in_batch, sequence_length):
+                        document_end_positions[i] = 1
+                    cu_seqlens = document_end_positions.nonzero(as_tuple=True)[0] + 1
+                    cu_seqlens = torch.cat([torch.tensor([0], device=input_ids.device), cu_seqlens])
+                    cu_seqlens = cu_seqlens.to(torch.int32)
+
+                    seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
+                    max_seqlen = seqlen.max()
+
+                    if self.reset_position_ids:
+                        position_ids = torch.cat(
+                            [torch.arange(0, i, 1, dtype=torch.int32, device=input_ids.device) for i in seqlen]
+                        )
+                    else:
+                        position_ids = self.position_ids
+                else:
+                    cu_seqlens = self.cu_seqlens
+                    max_seqlen = self.max_seqlen
+                    position_ids = self.position_ids
+
+                batch = {
+                    "input_ids": input_ids,
+                    "cu_seqlens": cu_seqlens,
+                    "max_seqlen": max_seqlen,
+                    "position_ids": position_ids,
+                }
+            else:
+                batch = {"input_ids": input_ids}
+
+        return batch
+
+    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> torch.Tensor:
         if self.tp_world_size > 1:
             tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
             tp_group = ProcessGroupManager.get_tensor_parallel_group()
@@ -54,51 +123,15 @@ class ModelWrapperForPretraining(ModelWrapper):
                 )
 
             torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
-
-            input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
-
-            model_outputs = self.model(
-                input_ids=input_ids, output_parallel_lm_logits=self.tensor_parallel_word_embeddings
-            )
-            logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
-
-            logits = tensor_to_dtensor(
-                logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
-            )
-            labels = tensor_to_dtensor(labels, current_placement=Replicate())
-
-            if self.upcast_logits_for_loss:
-                logits = logits.float()
-
-            loss_context = loss_parallel if self.tensor_parallel_word_embeddings else nullcontext
-            with loss_context():
-                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
         else:
             tokens: torch.Tensor = batch["text"]
             if not tokens.is_cuda:
                 tokens = tokens.to(torch.cuda.current_device())
 
-            input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
+        input_ids = tokens[:, :-1]
+        labels = tokens[:, 1:]
 
-            if self.use_padding_free_transformer:
-                input_ids, cu_seqlens, max_seqlen, position_ids = self._get_padding_free_inputs(input_ids)
-
-                model_outputs = self.model(
-                    input_ids=input_ids, position_ids=position_ids, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
-                )
-            else:
-                model_outputs = self.model(input_ids=input_ids)
-
-            logits = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
-
-            if self.upcast_logits_for_loss:
-                logits = logits.float()
-
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
-
-        return loss
+        return input_ids, labels
 
     def _setup_model(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
         super()._setup_model(args)
@@ -141,33 +174,3 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
-
-    def _get_padding_free_inputs(self, input_ids: torch.Tensor) -> torch.Tensor:
-        batch_size, sequence_length = input_ids.shape
-        input_ids = input_ids.reshape(-1)
-
-        if self.reset_attention_mask:
-            num_tokens_in_batch = batch_size * sequence_length
-
-            document_end_positions = input_ids == self.eos_token_id
-            for i in range(sequence_length - 1, num_tokens_in_batch, sequence_length):
-                document_end_positions[i] = 1
-            cu_seqlens = document_end_positions.nonzero(as_tuple=True)[0] + 1
-            cu_seqlens = torch.cat([torch.tensor([0], device=input_ids.device), cu_seqlens])
-            cu_seqlens = cu_seqlens.to(torch.int32)
-
-            seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
-            max_seqlen = seqlen.max()
-
-            if self.reset_position_ids:
-                position_ids = torch.cat(
-                    [torch.arange(0, i, 1, dtype=torch.int32, device=input_ids.device) for i in seqlen]
-                )
-            else:
-                position_ids = self.position_ids
-        else:
-            cu_seqlens = self.cu_seqlens
-            max_seqlen = self.max_seqlen
-            position_ids = self.position_ids
-
-        return input_ids, cu_seqlens, max_seqlen, position_ids
