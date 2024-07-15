@@ -26,11 +26,10 @@ class ColumnParallelLinear(ParameterizedLinear):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
+        use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-        self.sequence_parallel = sequence_parallel
 
         self.out_features_per_device = divide_if_divisible(
             out_features,
@@ -59,8 +58,16 @@ class ColumnParallelLinear(ParameterizedLinear):
                 )
             )
 
+        if sequence_parallel:
+            if use_padding_free_transformer:
+                self.input_placement = Shard(0)
+            else:
+                self.input_placement = Shard(1)
+        else:
+            self.input_placement = Replicate()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Shard(1) if self.sequence_parallel else Replicate())
+        input = tensor_to_dtensor(input, current_placement=self.input_placement)
         input = super().forward(input)
         input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         return input
@@ -98,6 +105,7 @@ class RowParallelLinear(ParameterizedLinear):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
+        use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -131,10 +139,18 @@ class RowParallelLinear(ParameterizedLinear):
                 )
             )
 
+        if sequence_parallel:
+            if use_padding_free_transformer:
+                self.output_placement = Shard(0)
+            else:
+                self.output_placement = Shard(1)
+        else:
+            self.output_placement = Replicate()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=Shard(-1))
         input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=Shard(1) if self.sequence_parallel else Replicate())
+        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         return input
 
     def load_from_safetensors_weights_manager(

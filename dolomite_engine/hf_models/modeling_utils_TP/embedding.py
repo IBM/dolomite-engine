@@ -20,10 +20,12 @@ class Embedding_TP(ParameterizedEmbedding):
         embedding_dim: int,
         std: float | None = None,
         tensor_parallel_word_embeddings: bool = False,
+        use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings and self.tp_world_size > 1
+        self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
 
         if self.tensor_parallel_word_embeddings:
@@ -46,10 +48,18 @@ class Embedding_TP(ParameterizedEmbedding):
             )
         )
 
+        if sequence_parallel:
+            if use_padding_free_transformer:
+                self.output_placement = Shard(0)
+            else:
+                self.output_placement = Shard(1)
+        else:
+            self.output_placement = Replicate()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=Replicate())
         input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=Shard(1) if self.sequence_parallel else Replicate())
+        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         return input
 
     def load_from_safetensors_weights_manager(

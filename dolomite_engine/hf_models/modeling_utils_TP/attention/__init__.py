@@ -1,6 +1,7 @@
 from ...config import CommonConfig
 from .base import Attention_TP
 from .flash import FlashAttention2_TP
+from .padding_free import PaddingFreeAttention_TP
 from .sdpa import SDPA_TP
 
 
@@ -20,11 +21,11 @@ def get_attention_module_TP(
     sequence_parallel: bool,
 ) -> Attention_TP:
     if use_padding_free_transformer:
-        raise NotImplementedError("padding free transformer is not implemented with tensor parallel")
+        assert (
+            attention_implementation == "flash_attention_2"
+        ), "padding free transformer only works with flash attention"
+        attention_class = PaddingFreeAttention_TP
+    else:
+        attention_class = _ATTENTION_MODULES[attention_implementation]
 
-    if attention_implementation in _ATTENTION_MODULES:
-        return _ATTENTION_MODULES[attention_implementation](
-            config, causal=causal, layer_idx=layer_idx, sequence_parallel=sequence_parallel
-        )
-
-    raise ValueError(f"unexpected `attention_implementation` {attention_implementation}")
+    return attention_class(config, causal=causal, layer_idx=layer_idx, sequence_parallel=sequence_parallel)

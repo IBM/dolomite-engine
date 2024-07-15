@@ -38,6 +38,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             self.embed_dim,
             std=self.initializer_range,
             tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            use_padding_free_transformer=self._use_padding_free_transformer,
             sequence_parallel=self.sequence_parallel,
         )
 
@@ -60,6 +61,8 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             self.embed_dim,
             eps=config.layer_norm_epsilon,
             normalization_implementation=self.normalization_implementation,
+            use_padding_free_transformer=self._use_padding_free_transformer,
+            sequence_parallel=self.sequence_parallel,
         )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
@@ -102,42 +105,6 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_f.bias")
         self.ln_f.load_state_dict(state_dict)
 
-    def _get_alibi_bias(
-        self,
-        attention_mask: torch.Tensor,
-        batch_size: int,
-        query_length: int,
-        key_length: int,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> torch.Tensor:
-        if self.position_embedding_type != PositionEmbeddingType.alibi:
-            return None
-
-        alibi_bias = self.alibi(attention_mask, batch_size, key_length, device, dtype)
-
-        if self._use_eager_attention:
-            if self.attention_head_type == AttentionHeadType.mqa:
-                if query_length != 1:
-                    alibi_bias = alibi_bias.repeat(1, query_length, 1)
-            elif self.attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
-                alibi_bias = alibi_bias.unsqueeze(2)
-                if query_length != 1:
-                    alibi_bias = alibi_bias.expand(-1, -1, query_length, -1)
-                alibi_bias = alibi_bias.view(
-                    batch_size * (self.num_heads // self.tp_world_size), query_length, key_length
-                )
-            else:
-                raise NotImplementedError()
-        elif self._use_sdpa:
-            alibi_bias = alibi_bias.unsqueeze(2)
-            if query_length != 1:
-                alibi_bias = alibi_bias.expand(-1, -1, query_length, -1)
-        elif self._use_flash_attention_2:
-            raise ValueError()
-
-        return alibi_bias
-
     def _setup_positional_encoding(self) -> None:
         max_position_embeddings = self.config.max_position_embeddings
 
@@ -146,6 +113,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                 max_position_embeddings,
                 self.embed_dim,
                 tensor_parallel_word_embeddings=False,
+                use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
         elif self.position_embedding_type == PositionEmbeddingType.alibi:

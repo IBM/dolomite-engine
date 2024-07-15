@@ -94,7 +94,7 @@ class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel):
 
     def forward(
         self,
-        input_ids: torch.Tensor | list[list[int]] = None,
+        input_ids: torch.Tensor | list[list[int]] | None = None,
         past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | list[list[int]] | None = None,

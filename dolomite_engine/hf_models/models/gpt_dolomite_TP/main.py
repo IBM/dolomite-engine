@@ -42,21 +42,37 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
 
     def forward(
         self,
-        input_ids: torch.Tensor | None = None,
+        input_ids: torch.Tensor | list[list[int]] | None = None,
         past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
-        token_type_ids: torch.Tensor | None = None,
-        position_ids: torch.Tensor | None = None,
-        inputs_embeds: torch.Tensor | None = None,
-        labels: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | list[list[int]] | None = None,
+        position_ids: torch.Tensor | list[list[int]] | None = None,
+        inputs_embeds: torch.Tensor | list[list[float]] | None = None,
+        labels: torch.Tensor | list[list[int]] | None = None,
         use_cache: bool | None = None,
         output_attentions: bool | None = None,
         output_hidden_states: bool | None = None,
         return_dict: bool | None = None,
         output_parallel_lm_logits: bool = False,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> tuple | CausalLMOutputWithPast:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         assert not output_attentions
+
+        input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
+            labels=labels,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+        )
 
         transformer_outputs = self.transformer(
             input_ids,
@@ -68,6 +84,8 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
         )
         hidden_states = transformer_outputs[0]
 
@@ -76,7 +94,7 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
 
-        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels)
+        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
         if output_parallel_lm_logits:
             assert self.tensor_parallel_word_embeddings
@@ -104,6 +122,7 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
                 hidden_states,
                 weight=self.transformer.wte.weight,
                 tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
             if self._tied_word_embeddings
@@ -111,14 +130,22 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         )
 
     def get_autoregressive_language_modeling_loss(
-        self, lm_logits: torch.Tensor, labels: torch.Tensor | None
+        self, lm_logits: torch.Tensor, labels: torch.Tensor | None, cu_seqlens: torch.Tensor
     ) -> torch.Tensor:
         if labels is None:
             return None
 
-        # Shift so that tokens < n predict n
-        shift_logits = lm_logits[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
+        if self._use_padding_free_transformer:
+            shift_logits = lm_logits[:-1, :]
+            shift_labels = labels[1:].to(shift_logits.device)
+
+            # this is needed so that the last token of current example doesn't predict first token of next example
+            drop_loss_positions = cu_seqlens[1:-1] - 1
+            shift_labels[drop_loss_positions] = -100
+        else:
+            # Shift so that tokens < n predict n
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
 
         shift_logits = tensor_to_dtensor(
             shift_logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()

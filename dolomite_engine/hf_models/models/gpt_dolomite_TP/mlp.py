@@ -18,7 +18,9 @@ from ..gpt_dolomite.mlp import MLP
 
 
 class MLP_TP(MLP):
-    def __init__(self, config: GPTDolomiteConfig, sequence_parallel: bool = False) -> None:
+    def __init__(
+        self, config: GPTDolomiteConfig, use_padding_free_transformer: bool = False, sequence_parallel: bool = False
+    ) -> None:
         nn.Module.__init__(self)
 
         hidden_size = config.n_embd
@@ -41,6 +43,7 @@ class MLP_TP(MLP):
             2 * intermediate_size if self.is_glu_activation else intermediate_size,
             bias=self.add_bias,
             std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
 
@@ -54,6 +57,7 @@ class MLP_TP(MLP):
             hidden_size,
             bias=self.add_bias,
             std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
 
