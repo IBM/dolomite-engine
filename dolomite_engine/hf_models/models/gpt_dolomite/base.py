@@ -8,7 +8,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import Alibi, ParameterizedEmbedding, RMSNorm, RoPE, YaRNScaledRoPE, get_normalization_function
-from ...utils import check_list_type, divide_if_divisible, flatten_and_convert_to_tensors
+from ...utils import convert_padding_free_lists_to_tensors, divide_if_divisible
 from .config import GPTDolomiteConfig
 from .layer import GPTDolomiteBlock
 
@@ -81,16 +81,6 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
     ) -> tuple[torch.Tensor]:
         if self._use_padding_free_transformer:
             if isinstance(input_ids, list) or isinstance(inputs_embeds, list):
-                device = torch.cuda.current_device()
-
-                # check input types are correct
-                error_message = "{variable} should be of type List[List[{dtype}]]"
-                check_list_type(input_ids, error_message.format(variable="input_ids", dtype="int"))
-                check_list_type(inputs_embeds, error_message.format(variable="inputs_embeds", dtype="float"))
-                check_list_type(position_ids, error_message.format(variable="position_ids", dtype="int"))
-                check_list_type(token_type_ids, error_message.format(variable="token_type_ids", dtype="int"))
-                check_list_type(labels, error_message.format(variable="labels", dtype="int"))
-
                 # this is managed internally
                 error_message = (
                     "{variable} should not be passed for flash attention when using List[List[int]] "
@@ -100,25 +90,15 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
                 assert max_seqlen is None, error_message.format(variable="max_seqlen")
                 assert attention_mask is None, error_message.format(variable="attention_mask")
 
-                # prepare inputs for the model
-                seqlens = torch.tensor([0] + [len(x) for x in input_ids])
-                cu_seqlens = seqlens.cumsum(dim=-1).to(device, torch.int32)
-                max_seqlen = seqlens.max().to(device)
-
-                if position_ids is None:
-                    position_ids = [list(range(len(x))) for x in input_ids]
-                position_ids = flatten_and_convert_to_tensors(position_ids, device)
-
-                input_ids = flatten_and_convert_to_tensors(input_ids, device)
-
-                if inputs_embeds is not None:
-                    inputs_embeds = flatten_and_convert_to_tensors(inputs_embeds, device)
-
-                if token_type_ids is not None:
-                    token_type_ids = flatten_and_convert_to_tensors(token_type_ids, device)
-
-                if labels is not None:
-                    labels = flatten_and_convert_to_tensors(labels, device)
+                input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = (
+                    convert_padding_free_lists_to_tensors(
+                        input_ids=input_ids,
+                        inputs_embeds=inputs_embeds,
+                        position_ids=position_ids,
+                        token_type_ids=token_type_ids,
+                        labels=labels,
+                    )
+                )
             else:
                 assert (
                     cu_seqlens is not None
@@ -129,8 +109,6 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
 
             if use_cache or past_key_values is not None:
                 raise NotImplementedError("KV caching is not supported with padding_free transformer")
-
-        error_message = "{variable} is only supported with math attention"
 
         assert not output_attentions
 

@@ -79,8 +79,6 @@ class ModelWrapper(torch.nn.Module):
                 self.attention_implementation == AttentionImplementation.flash_attention_2
             ), "padding free transformer only works with flash attention"
 
-            assert self.tp_world_size == 1, "padding free transformer is not supported with tensor parallel"
-
         self._setup_tokenizer(args)
         self._setup_model(args)
 
@@ -118,8 +116,8 @@ class ModelWrapper(torch.nn.Module):
             List[str]: list of generated text. input is trimmed from the generated text
         """
 
-        if self.use_padding_free_transformer:
-            raise NotImplementedError("padding free transformer doesn't support generation")
+        if self.use_padding_free_transformer or self.tp_world_size > 1:
+            raise NotImplementedError("padding free transformer and tensor parallel doesn't support generation")
 
         for i in batch:
             batch[i] = batch[i].to(torch.cuda.current_device())

@@ -4,8 +4,10 @@ from typing import Any, Mapping
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
+from torch.distributed._tensor.placement_types import _Partial as Partial
 
 from ...utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
 from ..modeling_utils import ParameterizedEmbedding
@@ -57,10 +59,30 @@ class Embedding_TP(ParameterizedEmbedding):
             self.output_placement = Replicate()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Replicate())
-        input = super().forward(input)
+        if self.tensor_parallel_word_embeddings:
+            input_mask = (input < self.vocab_start_index) | (input >= self.vocab_end_index)
+            input = input - self.vocab_start_index
+            input[input_mask] = 0
+
+            input = F.embedding(input, self.weight.to_local())
+
+            input[input_mask, :] = 0
+            input = tensor_to_dtensor(input, current_placement=Partial())
+        else:
+            input = F.embedding(input, self.weight.to_local())
+            input = tensor_to_dtensor(input, current_placement=Replicate())
+
         input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+
         return input
+
+    # FIXME sadly this code is not working when we have 2 embedding matrices (absolute embeddings)
+    # my guess is that PyTorch is saving the mask globaly and wpe sees the mask of wte
+    # def forward(self, input: torch.Tensor) -> torch.Tensor:
+    #     input = tensor_to_dtensor(input, current_placement=Replicate())
+    #     input = super().forward(input)
+    #     input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+    #     return input
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""

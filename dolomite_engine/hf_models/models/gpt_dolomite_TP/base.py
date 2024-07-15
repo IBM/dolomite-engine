@@ -112,6 +112,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             self.wpe = Embedding_TP(
                 max_position_embeddings,
                 self.embed_dim,
+                std=self.initializer_range,
                 tensor_parallel_word_embeddings=False,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,

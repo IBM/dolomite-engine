@@ -30,6 +30,9 @@ def collate_fn(
     labels = None
 
     if is_encoder_decoder:
+        if use_padding_free_transformer:
+            raise NotImplementedError("padding free transformer only supports decoder only models")
+
         input_max_length = max(list(map(len, inputs)))
 
         input_ids = [[eos_token_id] * (input_max_length - len(array)) + array for array in inputs]
