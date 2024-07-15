@@ -64,45 +64,44 @@ class ModelWrapperForPretraining(ModelWrapper):
         return loss
 
     def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
-        if self.tp_world_size > 1:
-            batch = {"input_ids": input_ids, "output_parallel_lm_logits": self.tensor_parallel_word_embeddings}
-        else:
-            if self.use_padding_free_transformer:
-                batch_size, sequence_length = input_ids.shape
-                input_ids = input_ids.reshape(-1)
+        batch = {}
 
-                if self.reset_attention_mask:
-                    num_tokens_in_batch = batch_size * sequence_length
+        if self.use_padding_free_transformer:
+            batch_size, sequence_length = input_ids.shape
+            input_ids = input_ids.reshape(-1)
 
-                    document_end_positions = input_ids == self.eos_token_id
-                    for i in range(sequence_length - 1, num_tokens_in_batch, sequence_length):
-                        document_end_positions[i] = 1
-                    cu_seqlens = document_end_positions.nonzero(as_tuple=True)[0] + 1
-                    cu_seqlens = torch.cat([torch.tensor([0], device=input_ids.device), cu_seqlens])
-                    cu_seqlens = cu_seqlens.to(torch.int32)
+            if self.reset_attention_mask:
+                num_tokens_in_batch = batch_size * sequence_length
 
-                    seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
-                    max_seqlen = seqlen.max()
+                document_end_positions = input_ids == self.eos_token_id
+                for i in range(sequence_length - 1, num_tokens_in_batch, sequence_length):
+                    document_end_positions[i] = 1
+                cu_seqlens = document_end_positions.nonzero(as_tuple=True)[0] + 1
+                cu_seqlens = torch.cat([torch.tensor([0], device=input_ids.device), cu_seqlens])
+                cu_seqlens = cu_seqlens.to(torch.int32)
 
-                    if self.reset_position_ids:
-                        position_ids = torch.cat(
-                            [torch.arange(0, i, 1, dtype=torch.int32, device=input_ids.device) for i in seqlen]
-                        )
-                    else:
-                        position_ids = self.position_ids
+                seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
+                max_seqlen = seqlen.max()
+
+                if self.reset_position_ids:
+                    position_ids = torch.cat(
+                        [torch.arange(0, i, 1, dtype=torch.int32, device=input_ids.device) for i in seqlen]
+                    )
                 else:
-                    cu_seqlens = self.cu_seqlens
-                    max_seqlen = self.max_seqlen
                     position_ids = self.position_ids
-
-                batch = {
-                    "input_ids": input_ids,
-                    "cu_seqlens": cu_seqlens,
-                    "max_seqlen": max_seqlen,
-                    "position_ids": position_ids,
-                }
             else:
-                batch = {"input_ids": input_ids}
+                cu_seqlens = self.cu_seqlens
+                max_seqlen = self.max_seqlen
+                position_ids = self.position_ids
+
+            batch["cu_seqlens"] = cu_seqlens
+            batch["max_seqlen"] = max_seqlen
+            batch["position_ids"] = position_ids
+
+        batch["input_ids"] = input_ids
+
+        if self.tp_world_size > 1:
+            batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
 
         return batch
 
