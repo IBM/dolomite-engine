@@ -125,17 +125,13 @@ n = 10
 
 with torch.inference_mode():
     for _ in range(10):
-        output_tp = model_tp.generate(
-            input_ids=input_ids, max_new_tokens=args.max_new_tokens, min_new_tokens=args.max_new_tokens
-        )
+        model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens, min_new_tokens=args.max_new_tokens)
 
     torch.cuda.synchronize()
     start_time = perf_counter()
 
     for _ in range(n):
-        output_tp = model_tp.generate(
-            input_ids=input_ids, max_new_tokens=args.max_new_tokens, min_new_tokens=args.max_new_tokens
-        )
+        model_tp.generate(input_ids=input_ids, max_new_tokens=args.max_new_tokens, min_new_tokens=args.max_new_tokens)
 
     torch.cuda.synchronize()
     end_time = perf_counter()
