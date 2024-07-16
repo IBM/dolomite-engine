@@ -36,7 +36,6 @@ class CommonConfig(PretrainedConfig):
         eos_token_id: int = 50256,
         pad_token_id: int = 50256,
         attention_softmax_in_fp32: bool = True,
-        scale_attention_softmax_in_fp32: bool = True,
         add_bias: bool = True,
         position_embedding_type: str = "learned_absolute",
         rope_theta: int = 10000,
@@ -67,7 +66,6 @@ class CommonConfig(PretrainedConfig):
         self.attention_multiplier = attention_multiplier
         self.use_cache = use_cache
         self.attention_softmax_in_fp32 = attention_softmax_in_fp32
-        self.scale_attention_softmax_in_fp32 = scale_attention_softmax_in_fp32
         self.position_embedding_type = position_embedding_type
         self.add_bias = add_bias
         self.rope_theta = rope_theta

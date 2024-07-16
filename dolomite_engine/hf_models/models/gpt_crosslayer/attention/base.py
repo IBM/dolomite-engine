@@ -33,9 +33,6 @@ class CrossLayerAttention(nn.Module):
 
         self.layer_idx = layer_idx
         self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
-        self.scale_attention_softmax_in_fp32 = (
-            config.scale_attention_softmax_in_fp32 and config.attention_softmax_in_fp32
-        )
 
         self.q_attn = ParameterizedLinear(
             self.hidden_size, self.hidden_size, bias=self.add_bias, std=config.initializer_range

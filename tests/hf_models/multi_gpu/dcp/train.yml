@@ -32,7 +32,6 @@ model_args:
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000
-    scale_attention_softmax_in_fp32: true
     attention_head_type: mha
     scale_attn_weights: true
     vocab_size: 50304
