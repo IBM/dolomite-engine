@@ -8,7 +8,7 @@ from .....modeling_utils import RMSNorm
 
 class EnsembleRMSNorm(RMSNorm):
     def __init__(self, normalized_shape: int, tp_world_size: int, eps: float = 1e-6) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
 
         self.weight = nn.Parameter(torch.ones(tp_world_size, 1, 1, normalized_shape))
         self.eps = eps
