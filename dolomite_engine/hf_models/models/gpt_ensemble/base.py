@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import ParameterizedEmbedding
+from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
 from ..gpt_dolomite import GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .config import GPTEnsembleConfig
 from .layer import GPTEnsembleBlock
-from .normalization import get_ensemble_normalization_function
 
 
 class GPTEnsemblePreTrainedModel(GPTDolomitePreTrainedModel):
@@ -50,10 +49,9 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
                 for i in range(config.num_hidden_layers)
             ]
         )
-        self.ln_f = get_ensemble_normalization_function(
+        self.ln_f = get_normalization_function(
             config.normalization_function,
             self.embed_dim,
-            tp_world_size=self.tensor_parallel_size,
             eps=config.layer_norm_epsilon,
             normalization_implementation=self.normalization_implementation,
         )
