@@ -115,6 +115,14 @@ def train(
         * sequence_length
     )
 
+    global_batch_size = (
+        micro_batch_size * gradient_accumulation_steps * ProcessGroupManager.get_data_parallel_world_size()
+    )
+    tokens_per_batch = global_batch_size * sequence_length
+
+    log_rank_0(f"global batch size = {global_batch_size}")
+    log_rank_0(f"tokens per batch = {tokens_per_batch}")
+
     start_time = time.perf_counter()
     steps_since_start_time = 0
     train_step_context = contextlib.nullcontext()
@@ -259,6 +267,8 @@ def main() -> None:
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
+
+    log_rank_0("global batch size =")
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(
