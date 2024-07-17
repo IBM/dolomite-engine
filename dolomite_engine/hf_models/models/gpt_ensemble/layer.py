@@ -34,7 +34,6 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             hidden_size,
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
-            elementwise_affine=False,
         )
         self.attn = get_attention_module(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
@@ -44,7 +43,6 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             hidden_size,
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
-            elementwise_affine=False,
         )
         self.mlp = EnsembleMLP(config)
 

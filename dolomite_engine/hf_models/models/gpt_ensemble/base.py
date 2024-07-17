@@ -54,7 +54,6 @@ class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
             self.embed_dim,
             eps=config.layer_norm_epsilon,
             normalization_implementation=self.normalization_implementation,
-            elementwise_affine=False,
         )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)

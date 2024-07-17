@@ -202,10 +202,5 @@ def torchtitan_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float) ->
 
 
 class TorchTitanRMSNorm(RMSNorm):
-    def __init__(self, normalized_shape: int, eps: float = 0.000001, elementwise_affine: bool = True) -> None:
-        assert elementwise_affine
-
-        super().__init__(normalized_shape, eps, elementwise_affine)
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torchtitan_rmsnorm(x, self.weight, self.eps)
