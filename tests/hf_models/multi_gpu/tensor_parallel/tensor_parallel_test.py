@@ -36,7 +36,7 @@ class TensorParallelTest(TestCommons):
                 "--nproc_per_node",
                 str(gpus_per_node),
                 "-m",
-                "tests.hf_models.multi_gpu.tensor_parallel.tensor_parallel_forward",
+                "tests.hf_models.multi_gpu.tensor_parallel.gpt_dolomite_forward",
                 "--attention-head-type",
                 str(attention_head_type.value),
                 "--position-embedding-type",
