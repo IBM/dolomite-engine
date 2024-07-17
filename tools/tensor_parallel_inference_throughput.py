@@ -84,6 +84,22 @@ elif args.model_scale == "70b-ensemble":
 
     config = GPTEnsembleConfig(**kwargs)
     model_class = GPTEnsembleForCausalLM_TP
+elif args.model_scale == "176b":
+    kwargs["n_embd"] = 14336
+    kwargs["n_inner"] = 57344
+    kwargs["n_head"] = 112
+    kwargs["n_layer"] = 70
+
+    config = GPTDolomiteConfig(**kwargs)
+    model_class = GPTDolomiteForCausalLM_TP
+elif args.model_scale == "176b-ensemble":
+    kwargs["n_embd"] = 14336
+    kwargs["n_inner"] = 57344
+    kwargs["n_head"] = 112
+    kwargs["n_layer"] = 70
+
+    config = GPTEnsembleConfig(**kwargs)
+    model_class = GPTEnsembleForCausalLM_TP
 
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
