@@ -120,8 +120,8 @@ def train(
     )
     tokens_per_batch = global_batch_size * sequence_length
 
-    log_rank_0(f"global batch size = {global_batch_size}")
-    log_rank_0(f"tokens per batch = {tokens_per_batch}")
+    log_rank_0(logging.INFO, f"global batch size = {global_batch_size}")
+    log_rank_0(logging.INFO, f"tokens per batch = {tokens_per_batch}")
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
@@ -267,8 +267,6 @@ def main() -> None:
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
-
-    log_rank_0("global batch size =")
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(
