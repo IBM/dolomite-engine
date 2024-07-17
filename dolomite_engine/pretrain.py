@@ -108,13 +108,6 @@ def train(
 
     model_flops = model.get_model_tflops(micro_batch_size * gradient_accumulation_steps, sequence_length)
 
-    tokens_per_batch = (
-        micro_batch_size
-        * gradient_accumulation_steps
-        * ProcessGroupManager.get_data_parallel_world_size()
-        * sequence_length
-    )
-
     global_batch_size = (
         micro_batch_size * gradient_accumulation_steps * ProcessGroupManager.get_data_parallel_world_size()
     )
