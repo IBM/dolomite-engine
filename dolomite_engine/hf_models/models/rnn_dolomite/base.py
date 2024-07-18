@@ -90,6 +90,8 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
                 attention_implementation_list.append(self.attention_implementation)
             elif pattern == "d":
                 attention_implementation_list.append("DeltaNet")
+            elif pattern == "g":
+                attention_implementation_list.append("gla2")
             else:
                 raise ValueError(f"Attention pattern {pattern} not supported")
         return attention_implementation_list
