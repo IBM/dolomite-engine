@@ -18,7 +18,7 @@ class AttentionTestForEnsembleModel(TestCommons):
         num_layers: int = 8,
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
-        normalization_function: str = "layernorm",
+        normalization_function: str = "rmsnorm",
     ) -> GPTEnsembleConfig:
         return GPTEnsembleConfig(
             vocab_size=2048,
