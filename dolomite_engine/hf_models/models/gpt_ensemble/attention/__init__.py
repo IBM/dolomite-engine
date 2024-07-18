@@ -1,13 +1,11 @@
 from ..config import GPTEnsembleConfig
 from .base import EnsembleAttention
-from .flash import EnsembleFlashAttention2
 from .sdpa import EnsembleSDPA
 
 
 _ATTENTION_MODULES = {
     "eager": EnsembleAttention,
     "sdpa": EnsembleSDPA,
-    "flash_attention_2": EnsembleFlashAttention2,
 }
 
 
