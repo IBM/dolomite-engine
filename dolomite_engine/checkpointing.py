@@ -294,6 +294,16 @@ def load_checkpoint_for_inference(
                 no_dist=True,
             )
 
+            new_state = {}
+            for key in state:
+                if "linears.0" in key:
+                    new_state[key.replace("linears.0.", "")] = torch.stack(
+                        [state[key.replace("linears.0.", f"linears.{i}.")] for i in range(4)]
+                    ).transpose(1, 2)
+                elif "linears." not in key:
+                    new_state[key] = state[key]
+            state = new_state
+
         if use_meta:
             model = model.to_empty(device="cpu")
 
@@ -327,19 +337,11 @@ def _get_base_path(path: str, iteration: int) -> str:
 
 
 def _get_model_path(path: str) -> str:
-    suffix = "model"
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
-        suffix += f"-{ProcessGroupManager.get_tensor_parallel_rank()}.pt"
-
-    return os.path.join(path, suffix)
+    return os.path.join(path, "model")
 
 
 def _get_optimizer_path(path: str) -> str:
-    suffix = "optimizer"
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
-        suffix += f"-{ProcessGroupManager.get_tensor_parallel_rank()}.pt"
-
-    return os.path.join(path, suffix)
+    return os.path.join(path, "optimizer")
 
 
 def _get_lr_scheduler_path(path: str) -> str:
