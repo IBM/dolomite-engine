@@ -21,7 +21,7 @@ if is_einops_available():
 
 if is_fla_available():
     from fla.models.utils import Cache as FLACache
-    from fla.modules import ShortConvolution
+    from fla.modules import ShortConvolution, RMSNorm, FusedRMSNormSwishGate
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
 
 
@@ -87,6 +87,7 @@ class DeltaNet(nn.Module):
         use_short_conv: bool = True,
         conv_size: int = 4,
         share_conv_kernel: bool = False,
+        use_gate: bool = True,
     ) -> None:
         super().__init__()
 
@@ -94,6 +95,7 @@ class DeltaNet(nn.Module):
         self.qk_activation = qk_activation
         self.qk_norm = qk_norm
         self.use_short_conv = use_short_conv
+        self.use_gate = use_gate
         self.share_conv_kernel = share_conv_kernel
         self.initializer_range = config.initializer_range
 
@@ -148,7 +150,12 @@ class DeltaNet(nn.Module):
         self.use_elu = use_elu
         if self.use_beta:
             self.b_proj = ParameterizedLinear(self.hidden_size, self.num_heads, bias=False, std=std_in)
-        self.o_norm = get_normalization_function("rmsnorm", self.head_v_dim, eps=norm_eps)
+        # self.o_norm = get_normalization_function("rmsnorm", self.head_v_dim, eps=norm_eps)
+        if use_gate:
+            self.g_proj = nn.Linear(self.hidden_size, self.value_dim, bias=False)
+            self.o_norm = FusedRMSNormSwishGate(self.head_v_dim, eps=norm_eps)
+        else:
+            self.o_norm = RMSNorm(self.head_v_dim, eps=norm_eps)
 
         std_out = initializer_range / math.sqrt(2 * config.n_layer)
         if init_method == InitMethod.mup:
@@ -206,6 +213,9 @@ class DeltaNet(nn.Module):
         else:
             q = self.q_proj(hidden_states)
             k = self.k_proj(hidden_states)
+            if self.qk_activation == "silu":
+                q = self.silu(q)
+                k = self.silu(k)
             v = self.silu(self.v_proj(hidden_states))
 
         # dealing with left-padding
@@ -264,7 +274,11 @@ class DeltaNet(nn.Module):
             past_key_values.update(state, self.layer_idx)
 
         o = rearrange(o, "b h l d -> b l h d")
-        o = self.o_norm(o)
+        if self.use_gate:
+            g = rearrange(self.g_proj(hidden_states), 'b l (h d) -> b l h d', h=self.num_heads)
+            o = self.o_norm(o, g)
+        else:
+            o = self.o_norm(o)
         o = rearrange(o, "b l h d -> b l (h d)")
         o = self.o_proj(o)
 
