@@ -84,7 +84,7 @@ class DeltaNet(nn.Module):
         qk_activation: str = "silu",
         qk_norm: str = "l2",
         norm_eps: float = 1e-5,
-        use_short_conv: bool = True,
+        # use_short_conv: bool = True,
         conv_size: int = 4,
         share_conv_kernel: bool = False,
         use_gate: bool = True,
@@ -94,7 +94,7 @@ class DeltaNet(nn.Module):
         self.mode = mode
         self.qk_activation = qk_activation
         self.qk_norm = qk_norm
-        self.use_short_conv = use_short_conv
+        self.use_short_conv = config.use_short_conv
         self.use_gate = use_gate
         self.share_conv_kernel = share_conv_kernel
         self.initializer_range = config.initializer_range
@@ -128,7 +128,7 @@ class DeltaNet(nn.Module):
         self.k_proj = ParameterizedLinear(self.hidden_size, self.key_dim, bias=False, std=std_in)
         self.v_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
 
-        if use_short_conv:
+        if self.use_short_conv:
             std_conv = initializer_range
             self.conv_size = conv_size
             if share_conv_kernel:
