@@ -1,6 +1,7 @@
 import torch
 from transformers import DynamicCache
 
+from .....utils import is_flash_attention_available
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import apply_rotary_pos_emb, get_unpad_data
 from .base import EnsembleAttention
