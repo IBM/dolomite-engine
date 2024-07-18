@@ -123,84 +123,75 @@ def train(
         args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
     )
 
-    with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(
-            wait=5 if ProcessGroupManager.get_global_rank() == 0 else 150000, warmup=5, active=1, repeat=1
-        ),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler("tmp"),
-        record_shapes=True,
-    ) as torch_profiler:
-        global_step = starting_iteration
-        while global_step < num_training_steps:
-            global_step += 1
-            steps_since_start_time += 1
+    global_step = starting_iteration
+    while global_step < num_training_steps:
+        global_step += 1
+        steps_since_start_time += 1
 
-            if use_nvte_fp8:
-                train_step_context = te.fp8_autocast(
-                    enabled=True,
-                    fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
-                )
-
-            loss_step, grad_norm_step = train_step(
-                model=model,
-                optimizer=optimizer,
-                lr_scheduler=lr_scheduler,
-                distributed_backend=distributed_backend,
-                train_dataloader=train_dataloader,
-                gradient_accumulation_steps=gradient_accumulation_steps,
-                gradient_clipping=gradient_clipping,
-                train_step_context=train_step_context,
-                torch_profiler=torch_profiler,
+        if use_nvte_fp8:
+            train_step_context = te.fp8_autocast(
+                enabled=True,
+                fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
             )
 
-            if global_step % log_interval == 0:
-                time_elapsed = time.perf_counter() - start_time
-                step_time = time_elapsed / steps_since_start_time
+        loss_step, grad_norm_step = train_step(
+            model=model,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            distributed_backend=distributed_backend,
+            train_dataloader=train_dataloader,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_clipping=gradient_clipping,
+            train_step_context=train_step_context,
+        )
 
-                track_train_metrics(
-                    global_step=global_step,
-                    train_loss_step=loss_step,
-                    grad_norm_step=grad_norm_step,
-                    current_lr=(
-                        model.lr_scheduler.get_lr()[0]
-                        if distributed_backend == DistributedBackend.deepspeed
-                        else lr_scheduler.get_lr()[0]
-                    ),
-                    experiments_tracker=experiments_tracker,
-                    loss_running_mean_tracker=loss_running_mean_tracker,
-                    flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
-                    billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
-                    step_time=step_time,
-                )
-                start_time = time.perf_counter()
-                steps_since_start_time = 0
+        if global_step % log_interval == 0:
+            time_elapsed = time.perf_counter() - start_time
+            step_time = time_elapsed / steps_since_start_time
 
-            if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
-                evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
+            track_train_metrics(
+                global_step=global_step,
+                train_loss_step=loss_step,
+                grad_norm_step=grad_norm_step,
+                current_lr=(
+                    model.lr_scheduler.get_lr()[0]
+                    if distributed_backend == DistributedBackend.deepspeed
+                    else lr_scheduler.get_lr()[0]
+                ),
+                experiments_tracker=experiments_tracker,
+                loss_running_mean_tracker=loss_running_mean_tracker,
+                flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
+                billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
+                step_time=step_time,
+            )
+            start_time = time.perf_counter()
+            steps_since_start_time = 0
 
-            if global_step % save_interval == 0 or global_step == num_training_steps:
-                save_checkpoint(
-                    args,
-                    model,
-                    optimizer,
-                    lr_scheduler,
-                    None,
-                    experiments_tracker,
-                    global_step,
-                    {
-                        "consumed_samples": global_step
-                        * micro_batch_size
-                        * gradient_accumulation_steps
-                        * ProcessGroupManager.get_data_parallel_world_size()
-                    },
-                )
+        if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
+            evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
-                start_time = time.perf_counter()
-                steps_since_start_time = 0
+        if global_step % save_interval == 0 or global_step == num_training_steps:
+            save_checkpoint(
+                args,
+                model,
+                optimizer,
+                lr_scheduler,
+                None,
+                experiments_tracker,
+                global_step,
+                {
+                    "consumed_samples": global_step
+                    * micro_batch_size
+                    * gradient_accumulation_steps
+                    * ProcessGroupManager.get_data_parallel_world_size()
+                },
+            )
 
-        if eval_during_training:
-            evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
+            start_time = time.perf_counter()
+            steps_since_start_time = 0
+
+    if eval_during_training:
+        evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
 
 @torch.no_grad()

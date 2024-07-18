@@ -118,7 +118,6 @@ def train_step(
     gradient_accumulation_steps: int,
     gradient_clipping: float,
     train_step_context: contextlib.AbstractContextManager,
-    torch_profiler,
 ) -> Tuple[float, float]:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -189,7 +188,6 @@ def train_step(
 
         optimizer.step()
         lr_scheduler.step()
-        torch_profiler.step()
     else:
         raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
