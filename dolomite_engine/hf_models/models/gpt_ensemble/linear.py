@@ -22,30 +22,30 @@ class EnsembleLinear(nn.Module):
 
         self.reset_parameters()
 
+    @record_function("F::ensemble_linear")
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        with record_function("F::ensemble_linear"):
-            input_tp, batch_size, sequence_length, _ = input.shape
+        input_tp, batch_size, sequence_length, _ = input.shape
 
-            if input_tp != self.tensor_parallel_size:
-                assert input_tp == 1
-                input = input.expand(self.tensor_parallel_size, -1, -1, -1)
+        if input_tp != self.tensor_parallel_size:
+            assert input_tp == 1
+            input = input.expand(self.tensor_parallel_size, -1, -1, -1)
 
-            # input -> (TP, batch_size, sequence_length, in_features)
-            input = input.view(self.tensor_parallel_size, batch_size * sequence_length, -1)
-            # input -> (TP, batch_size * sequence_length, in_features)
+        # input -> (TP, batch_size, sequence_length, in_features)
+        input = input.view(self.tensor_parallel_size, batch_size * sequence_length, -1)
+        # input -> (TP, batch_size * sequence_length, in_features)
 
-            weight = self.weight.view(self.tensor_parallel_size, self.in_features, -1)
+        weight = self.weight.view(self.tensor_parallel_size, self.in_features, -1)
 
-            if self.bias is None:
-                input = torch.bmm(input, weight)
-            else:
-                input = torch.baddbmm(self.bias.unsqueeze(1), input, weight, alpha=1, beta=1)
+        if self.bias is None:
+            input = torch.bmm(input, weight)
+        else:
+            input = torch.baddbmm(self.bias.unsqueeze(1), input, weight, alpha=1, beta=1)
 
-            # input -> (TP, batch_size * sequence_length, out_features)
-            input = input.view(self.tensor_parallel_size, batch_size, sequence_length, -1)
-            # input -> (TP, batch_size, sequence_length, out_features)
+        # input -> (TP, batch_size * sequence_length, out_features)
+        input = input.view(self.tensor_parallel_size, batch_size, sequence_length, -1)
+        # input -> (TP, batch_size, sequence_length, out_features)
 
-            return input
+        return input
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
