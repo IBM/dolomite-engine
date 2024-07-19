@@ -4,9 +4,12 @@ from contextlib import AbstractContextManager, nullcontext
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
+from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .data import ResumableDataLoader, get_next_batch
-from .enums import DistributedBackend
+from .enums import DistributedBackend, GradientCheckpointingMethod
+from .hf_models import is_custom_model
+from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapperForFinetuning
 from .utils import ExperimentsTracker, ProcessGroupManager, RunningMean, log_rank_0
 
@@ -185,3 +188,45 @@ def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile
         )
 
     return torch_profiler
+
+
+def get_model_tflops(
+    model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
+    config: AutoConfig,
+    batch_size: int,
+    sequence_length: int,
+    gradient_checkpointing_method: GradientCheckpointingMethod | None,
+    gradient_checkpointing_args: dict,
+) -> None:
+    if not is_custom_model(model_class, config.model_type):
+        return 0
+
+    b = batch_size
+    s = sequence_length
+    h = config.n_embd
+    f = config.n_inner
+    n = config.n_head
+    k = config.num_key_value_heads
+    l = config.n_layer
+    v = config.vocab_size
+
+    mlp_flops = 4 * b * s * h * f
+    if is_glu(config.activation_function):
+        mlp_flops += 2 * b * s * h * f
+
+    attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
+
+    forward_flops = attention_flops + mlp_flops
+
+    if gradient_checkpointing_method == GradientCheckpointingMethod.block:
+        num_layers_checkpointed = l // gradient_checkpointing_args.get("checkpoint_every", 1)
+        fraction_of_layers_checkpointed = num_layers_checkpointed / l
+        backward_flops = (2 + fraction_of_layers_checkpointed) * forward_flops
+    else:
+        backward_flops = 2 * forward_flops
+
+    model_flops = l * (forward_flops + backward_flops)
+    model_flops += 6 * b * s * h * v
+    model_flops /= 10**12
+
+    return model_flops

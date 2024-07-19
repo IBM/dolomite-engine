@@ -1,13 +1,12 @@
 import logging
 
 import torch
-from transformers import AutoConfig, AutoTokenizer
+import torch.nn as nn
+from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
-from ..enums import AttentionImplementation, DistributedBackend, GradientCheckpointingMethod, LossMask, Mode
+from ..enums import AttentionImplementation, DistributedBackend, Mode
 from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
-from ..hf_models.modeling_utils import is_glu
 from ..utils import (
     CUDA_RNGStatesTracker,
     ProcessGroupManager,
@@ -18,46 +17,70 @@ from ..utils import (
 )
 
 
-class ModelWrapper(torch.nn.Module):
+class ModelWrapper(nn.Module):
     """Model class which wraps any HuggingFace model"""
 
-    def __init__(self, args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode):
-        """initializes a Model wrapper for a HuggingFace model
+    def __init__(
+        self,
+        mode: Mode,
+        model_name: str | None,
+        pretrained_config: dict | None,
+        model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
+        dtype: torch.dtype,
+        efficient_initialization: bool,
+        attention_implementation: AttentionImplementation,
+        use_padding_free_transformer: bool,
+        tensor_parallel_word_embeddings: bool,
+        sequence_parallel: bool,
+        distributed_backend: DistributedBackend,
+        random_seed: int,
+        neft_alpha: float | None = None,
+        trust_remote_code: bool = False,
+        tokenizer_name: str | None = None,
+        additional_special_tokens: list[str] | None = None,
+    ) -> None:
+        """initializes a model wrapper for a HuggingFace model
 
         Args:
-            args (Union[TrainingArgs, InferenceArgs, UnshardingArgs]): arguments based on training / inference mode
-            mode (Mode): training / inference mode for running the program
+            mode (Mode): training / inference mode
+            model_name (str | None): path of the model on disk or HF hub
+            pretrained_config (dict | None): config of the model to load model from, only used if `model_name` is None
+            model_class (AutoModelForCausalLM | AutoModelForSeq2SeqLM): HF model class to use for model loading
+            dtype (torch.dtype): dtype for the model
+            efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
+            attention_implementation (AttentionImplementation): attention implementation for the model
+            use_padding_free_transformer (bool): whether to use padding free transformer
+            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
+            sequence_parallel (bool): whether to use sequence parallel
+            distributed_backend (DistributedBackend): distributed backend to use for model
+            random_seed (int): random seed to use for tensor parallel seed management
+            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
+            trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
+            tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
+            additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
         """
 
         super().__init__()
 
         self.mode = mode
-        self.model_name = args.model_args.model_name
-        self.model_class = args.model_args.model_class
-        self.gradient_checkpointing_method = args.distributed_args.gradient_checkpointing_method
-        self.gradient_checkpointing_args = args.distributed_args.gradient_checkpointing_args
-        self.efficient_initialization = args.model_args.efficient_initialization
-        self.tuning_method = args.tuning_args.tuning_method
-        self.dtype = args.mixed_precision_args.dtype
-        self.reset_attention_mask = args.model_args.reset_attention_mask
-        self.reset_position_ids = args.model_args.reset_position_ids
-        self.attention_implementation = args.model_args.attention_implementation
-        self.use_padding_free_transformer = args.model_args.use_padding_free_transformer
-        self.tensor_parallel_word_embeddings = args.distributed_args.tensor_parallel_word_embeddings
-        self.sequence_parallel = args.distributed_args.sequence_parallel
+        self.model_name = model_name
+        self.pretrained_config = pretrained_config
+        self.model_class = model_class
+        self.efficient_initialization = efficient_initialization
+        self.dtype = dtype
+        self.attention_implementation = attention_implementation
+        self.use_padding_free_transformer = use_padding_free_transformer
+        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
+        self.sequence_parallel = sequence_parallel
+        self.tokenizer_name = tokenizer_name if self.model_name is None else self.model_name
+        self.trust_remote_code = trust_remote_code
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
-        self.distributed_backend = None
-        self.stage = None
-        if self.mode == Mode.training:
-            self.distributed_backend = args.distributed_args.distributed_backend
-            self.stage = args.distributed_args.stage
+        self.distributed_backend = distributed_backend if self.mode == Mode.training else None
 
-        self._setup_config(args)
-        self.tie_word_embeddings = self.config.tie_word_embeddings
-        self.is_encoder_decoder = self.config.is_encoder_decoder
+        self._setup_config()
 
         if self.tp_world_size > 1:
             self.model_class = get_tensor_parallel_class(self.config.model_type)
@@ -67,7 +90,7 @@ class ModelWrapper(torch.nn.Module):
             ), "tensor parallel is not supported with this model"
 
             rng_tracker = CUDA_RNGStatesTracker()
-            rng_tracker.add(seed=args.random_args.seed)
+            rng_tracker.add(seed=random_seed)
             set_cuda_rng_tracker(rng_tracker)
 
         if self.use_padding_free_transformer:
@@ -79,23 +102,13 @@ class ModelWrapper(torch.nn.Module):
                 self.attention_implementation == AttentionImplementation.flash_attention_2
             ), "padding free transformer only works with flash attention"
 
-        self._setup_tokenizer(args)
-        self._setup_model(args)
-
-        self.loss_mask = None
-        if self.mode == Mode.training:
-            self.loss_mask = args.training_parameters.loss_mask
-            if self.is_encoder_decoder:
-                assert (
-                    self.loss_mask == LossMask.output_only
-                ), "only output_only loss mask is supported with encoder decoder models"
+        self._setup_tokenizer()
+        self._setup_model()
 
         if self.mode == Mode.training:
-            neft_alpha = args.research_args.neft_alpha
             if neft_alpha is not None and neft_alpha > 0:
                 self._override_embedding_forward_with_neft_forward(neft_alpha)
 
-        additional_special_tokens = args.tokenizer_args.additional_special_tokens
         if additional_special_tokens is not None and len(additional_special_tokens) > 0:
             original_vocab_size = len(self.tokenizer)
 
@@ -133,63 +146,7 @@ class ModelWrapper(torch.nn.Module):
 
         return generated_text, num_generated_tokens
 
-    def get_model_tflops(self, batch_size: int, sequence_length: int) -> None:
-        if not is_custom_model(self.model_class, self.config.model_type):
-            return 0
-
-        b = batch_size
-        s = sequence_length
-        h = self.config.n_embd
-        f = self.config.n_inner
-        n = self.config.n_head
-        k = self.config.num_key_value_heads
-        l = self.config.n_layer
-        v = self.config.vocab_size
-
-        mlp_flops = 4 * b * s * h * f
-        if is_glu(self.config.activation_function):
-            mlp_flops += 2 * b * s * h * f
-
-        attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
-
-        forward_flops = attention_flops + mlp_flops
-
-        if self.gradient_checkpointing_method == GradientCheckpointingMethod.block:
-            num_layers_checkpointed = l // self.gradient_checkpointing_args.get("checkpoint_every", 1)
-            fraction_of_layers_checkpointed = num_layers_checkpointed / l
-            backward_flops = (2 + fraction_of_layers_checkpointed) * forward_flops
-        else:
-            backward_flops = 2 * forward_flops
-
-        model_flops = l * (forward_flops + backward_flops)
-        model_flops += 6 * b * s * h * v
-        model_flops /= 10**12
-
-        return model_flops
-
-    def _override_embedding_forward_with_neft_forward(self, neft_alpha: float):
-        if not hasattr(self.model, "get_input_embeddings"):
-            raise Exception(
-                "`get_input_embeddings` is not implemented for this model so its not possible to inject noise to input"
-                " embeddings. Please implement `get_input_embeddings` ot set `neft_alpha` to None"
-            )
-
-        original_forward = self.model.get_input_embeddings().forward
-
-        def _noisy_forward(x: torch.Tensor):
-            x = original_forward(x)
-
-            # to check if we are in eval mode we use self.training instead of self.model.training
-            if self.training:
-                mag_norm = neft_alpha / torch.sqrt(torch.tensor(torch.numel(x)))
-                return x + torch.zeros_like(x).uniform_(-mag_norm, mag_norm)
-
-            return x
-
-        # overrides the forward function of torch.nn.Embedding
-        self.model.get_input_embeddings().forward = _noisy_forward
-
-    def save_pretrained(self, save_path: str, state_dict: dict = None) -> None:
+    def save_pretrained(self, save_path: str, state_dict: dict | None = None) -> None:
         self.tokenizer.save_pretrained(save_path, legacy_format=False)
 
         if state_dict is None:
@@ -202,23 +159,25 @@ class ModelWrapper(torch.nn.Module):
             self.config.save_pretrained(save_path)
             SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
 
-    def _setup_config(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
-        if self.model_name is None:
-            self.config = AutoConfig.for_model(**args.model_args.pretrained_config)
-        else:
-            self.config = AutoConfig.from_pretrained(
-                self.model_name, trust_remote_code=args.model_args.trust_remote_code
-            )
+    def _setup_config(self) -> None:
+        self.config = (
+            AutoConfig.for_model(**self.pretrained_config)
+            if self.model_name is None
+            else AutoConfig.from_pretrained(self.model_name, trust_remote_code=self.trust_remote_code)
+        )
+
+        self.tie_word_embeddings = self.config.tie_word_embeddings
+        self.is_encoder_decoder = self.config.is_encoder_decoder
+
         log_rank_0(logging.INFO, self.config)
 
-    def _setup_tokenizer(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
-        tokenizer_name = args.tokenizer_args.tokenizer_name if self.model_name is None else self.model_name
-        assert tokenizer_name is not None, "pass a tokenizer"
+    def _setup_tokenizer(self) -> None:
+        assert self.tokenizer_name is not None, "pass a tokenizer"
 
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
         self.eos_token_id = self.tokenizer.eos_token_id
 
-    def _setup_model(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
+    def _setup_model(self) -> None:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:
@@ -232,7 +191,7 @@ class ModelWrapper(torch.nn.Module):
             model_kwargs["tensor_parallel_word_embeddings"] = True
         if self.sequence_parallel:
             model_kwargs["sequence_parallel"] = True
-        if args.model_args.trust_remote_code:
+        if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
 
         def _get_model(**extras):
@@ -252,7 +211,7 @@ class ModelWrapper(torch.nn.Module):
                 if self.efficient_initialization:
                     from ..distributed import get_deepspeed_config
 
-                    self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config(args))
+                    self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config())
 
                 self.model = _get_model()
             elif self.distributed_backend == DistributedBackend.torch:
@@ -282,3 +241,25 @@ class ModelWrapper(torch.nn.Module):
             num_parameters += param.numel()
 
         log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")
+
+    def _override_embedding_forward_with_neft_forward(self, neft_alpha: float) -> None:
+        if not hasattr(self.model, "get_input_embeddings"):
+            raise Exception(
+                "`get_input_embeddings` is not implemented for this model so its not possible to inject noise to input"
+                " embeddings. Please implement `get_input_embeddings` ot set `neft_alpha` to None"
+            )
+
+        original_forward = self.model.get_input_embeddings().forward
+
+        def _noisy_forward(x: torch.Tensor) -> torch.Tensor:
+            x = original_forward(x)
+
+            # to check if we are in eval mode we use self.training instead of self.model.training
+            if self.training:
+                mag_norm = neft_alpha / torch.sqrt(torch.tensor(torch.numel(x)))
+                return x + torch.zeros_like(x).uniform_(-mag_norm, mag_norm)
+
+            return x
+
+        # overrides the forward function of torch.nn.Embedding
+        self.model.get_input_embeddings().forward = _noisy_forward

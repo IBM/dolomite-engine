@@ -7,12 +7,6 @@ from .finetuning import ModelWrapperForFinetuning
 
 
 class ModelWrapperForPEFT(ModelWrapperForFinetuning):
-    def __init__(self, args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode):
-        super().__init__(args, mode)
-
-        assert not self.reset_attention_mask, "reset_attention_mask is only supported with pretraining"
-        assert not self.reset_position_ids, "reset_position_ids is only supported with pretraining"
-
     def _setup_model(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
         if self.model_name is None:
             model_kwargs = {"config": self.config}

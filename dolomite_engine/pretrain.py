@@ -14,10 +14,10 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders
-from .distributed import wrap_model_for_distributed_training
+from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .train_utils import get_torch_profiler, track_train_metrics, train_step
+from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
@@ -112,7 +112,17 @@ def train(
     tokens_per_batch = global_batch_size * sequence_length
 
     # model flops per GPU
-    model_flops = model.get_model_tflops(global_batch_size, sequence_length) / ProcessGroupManager.get_world_size()
+    model_flops = (
+        get_model_tflops(
+            model_class=args.model_args.model_class,
+            config=model.config,
+            batch_size=global_batch_size,
+            sequence_length=sequence_length,
+            gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
+            gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
+        )
+        / ProcessGroupManager.get_world_size()
+    )
 
     forward_context = (
         partial(
@@ -282,6 +292,9 @@ def main() -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
+
+    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
+        set_deepspeed_config(args)
 
     model = get_model(args, mode)
     model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)

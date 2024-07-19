@@ -12,7 +12,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import ResumableDataLoader, get_dataloader, infinite_iterator
-from .distributed import wrap_model_for_distributed_training
+from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .train_utils import get_torch_profiler, track_train_metrics, train_step
@@ -221,6 +221,9 @@ def main() -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
+
+    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
+        set_deepspeed_config(args)
 
     model = get_model(args, mode)
 

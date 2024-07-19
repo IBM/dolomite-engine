@@ -164,6 +164,8 @@ def load_checkpoint_for_training(
 
     load_path = _get_base_path(args.load_args.load_path, iteration)
 
+    log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
+
     if distributed_backend == DistributedBackend.deepspeed:
         from deepspeed import DeepSpeedEngine
 
@@ -229,7 +231,14 @@ def load_checkpoint_for_inference(
     """
 
     load_path = args.load_args.load_path
+
     iteration = args.load_args.iteration
+    if iteration is None:
+        iteration = json.load(open(_get_latest_checkpointed_iterations_path(args.load_args.load_path), "r"))[
+            "latest_checkpointed_iteration"
+        ]
+
+    log_rank_0(logging.INFO, f"loading checkpoint saved at {_get_base_path(load_path, iteration)}")
 
     args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yml")
     args_from_checkpoint = load_yaml(args_file)

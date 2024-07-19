@@ -1,21 +1,13 @@
 import torch
 import torch.distributed
 
-from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..communication import Communication
-from ..enums import Mode
 from ..hf_models import convert_padding_free_lists_to_tensors
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
 
 class ModelWrapperForFinetuning(ModelWrapper):
-    def __init__(self, args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode):
-        super().__init__(args, mode)
-
-        assert not self.reset_attention_mask, "reset_attention_mask is only supported with pretraining"
-        assert not self.reset_position_ids, "reset_position_ids is only supported with pretraining"
-
     def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 

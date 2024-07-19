@@ -5,23 +5,87 @@ import torch.distributed
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
+from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
-from ..enums import Mode
+from ..enums import AttentionImplementation, DistributedBackend, Mode
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
 
 class ModelWrapperForPretraining(ModelWrapper):
-    def __init__(self, args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode):
-        self.micro_batch_size = args.training_parameters.micro_batch_size
-        self.sequence_length = args.datasets[0].class_args.get("sequence_length")
+    def __init__(
+        self,
+        mode: Mode,
+        model_name: str | None,
+        pretrained_config: dict | None,
+        model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
+        dtype: torch.dtype,
+        efficient_initialization: bool,
+        attention_implementation: AttentionImplementation,
+        use_padding_free_transformer: bool,
+        tensor_parallel_word_embeddings: bool,
+        sequence_parallel: bool,
+        distributed_backend: DistributedBackend,
+        random_seed: int,
+        micro_batch_size: int,
+        sequence_length: int,
+        neft_alpha: float | None = None,
+        trust_remote_code: bool = False,
+        tokenizer_name: str | None = None,
+        additional_special_tokens: list[str] | None = None,
+        reset_attention_mask: bool = False,
+        reset_position_ids: bool = False,
+    ) -> None:
+        """initializes a model wrapper for a HuggingFace model
 
-        super().__init__(args, mode)
+        Args:
+            mode (Mode): training / inference mode
+            model_name (str | None): path of the model on disk or HF hub
+            pretrained_config (dict | None): config of the model to load model from, only used if `model_name` is None
+            model_class (AutoModelForCausalLM | AutoModelForSeq2SeqLM): HF model class to use for model loading
+            dtype (torch.dtype): dtype for the model
+            efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
+            attention_implementation (AttentionImplementation): attention implementation for the model
+            use_padding_free_transformer (bool): whether to use padding free transformer
+            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
+            sequence_parallel (bool): whether to use sequence parallel
+            distributed_backend (DistributedBackend): distributed backend to use for model
+            random_seed (int): random seed to use for tensor parallel seed management
+            micro_batch_size (int): micro batch size for pretraining
+            sequence_length (int): sequence length for pretraining
+            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
+            trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
+            tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
+            additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
+            reset_attention_mask (bool, optional): whether to reset attention mask during pretraining. Defaults to False.
+            reset_position_ids (bool, optional): whether to reset position ids during pretraining. Defaults to False.
+        """
 
+        super().__init__(
+            mode=mode,
+            model_name=model_name,
+            pretrained_config=pretrained_config,
+            model_class=model_class,
+            dtype=dtype,
+            efficient_initialization=efficient_initialization,
+            attention_implementation=attention_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+            sequence_parallel=sequence_parallel,
+            distributed_backend=distributed_backend,
+            random_seed=random_seed,
+            neft_alpha=neft_alpha,
+            trust_remote_code=trust_remote_code,
+            tokenizer_name=tokenizer_name,
+            additional_special_tokens=additional_special_tokens,
+        )
+
+        self.micro_batch_size = micro_batch_size
+        self.sequence_length = sequence_length
+        self.reset_attention_mask = reset_attention_mask
+        self.reset_position_ids = reset_position_ids
         self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
-        self.vocab_size = self.config.vocab_size
 
     def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
@@ -132,8 +196,8 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return input_ids, labels
 
-    def _setup_model(self, args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
-        super()._setup_model(args)
+    def _setup_model(self) -> None:
+        super()._setup_model()
 
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
 
