@@ -18,6 +18,9 @@ from torch.distributed.checkpoint.state_dict import (
     set_optimizer_state_dict,
 )
 from torch.distributed.checkpoint.state_dict_loader import _load_state_dict
+from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import StateDictType
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -78,11 +81,30 @@ def save_checkpoint(
         assert save_optimizer
         model.save_checkpoint(args.save_args.save_path, tag=_get_checkpoint_tag(iteration))
     elif distributed_backend == DistributedBackend.torch:
-        dcp.save(get_model_state_dict(model), checkpoint_id=_get_model_path(save_path))
+        if args.distributed_args.fsdp_algorithm == 1:
+            dp_rank = ProcessGroupManager.get_data_parallel_rank()
 
-        if save_optimizer:
-            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
+            # TODO add support for local state dict
+            with FSDP.state_dict_type(
+                model,
+                state_dict_type=StateDictType.FULL_STATE_DICT,
+                state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+                optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            ):
+                model_state_dict = model.state_dict()
+                if dp_rank == 0:
+                    torch.save(model_state_dict, _get_model_path(save_path))
+
+                if save_optimizer:
+                    optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
+                    if dp_rank == 0:
+                        torch.save(optimizer_state_dict, _get_optimizer_path(save_path))
+        else:
+            dcp.save(get_model_state_dict(model), checkpoint_id=_get_model_path(save_path))
+
+            if save_optimizer:
+                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+                dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
 
         run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
     else:
@@ -178,17 +200,36 @@ def load_checkpoint_for_training(
             load_lr_scheduler_states=load_lr_scheduler,
         )
     elif distributed_backend == DistributedBackend.torch:
-        model_state_dict = get_model_state_dict(model)
-        dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
-        set_model_state_dict(model, model_state_dict)
-        del model_state_dict
+        if args.distributed_args.fsdp_algorithm == 1:
+            assert isinstance(model, FSDP)
 
-        if load_optimizer:
-            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-            dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path))
-            set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
-            del optimizer_state_dict
+            # TODO add support for local state dict
+            with FSDP.state_dict_type(
+                model,
+                state_dict_type=StateDictType.FULL_STATE_DICT,
+                state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
+                optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
+            ):
+                model.load_state_dict(torch.load(_get_model_path(load_path)))
+
+                if load_optimizer:
+                    optimizer.load_state_dict(
+                        FSDP.optim_state_dict_to_load(
+                            model=model, optim=optimizer, optim_state_dict=torch.load(_get_optimizer_path(load_path))
+                        )
+                    )
+        else:
+            model_state_dict = get_model_state_dict(model)
+            dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
+            set_model_state_dict(model, model_state_dict)
+            del model_state_dict
+
+            if load_optimizer:
+                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+                optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
+                dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path))
+                set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
+                del optimizer_state_dict
 
         if load_lr_scheduler:
             lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
@@ -317,13 +358,16 @@ def load_checkpoint_for_inference(
                 model.config, state, tensor_parallel_size=checkpoint_tp_world_size, prefix="model."
             )
         else:
-            state = {}
-            _load_state_dict(
-                state,
-                storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
-                planner=_EmptyStateDictLoadPlanner(),
-                no_dist=True,
-            )
+            if args_from_checkpoint.distributed_args.fsdp_algorithm == 1:
+                state = torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
+            else:
+                state = {}
+                _load_state_dict(
+                    state,
+                    storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
+                    planner=_EmptyStateDictLoadPlanner(),
+                    no_dist=True,
+                )
 
             with (
                 torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
