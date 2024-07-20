@@ -131,6 +131,9 @@ class TuningArgs(BaseArgs):
         elif self.tuning_method == TuningMethod.lora:
             assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with lora"
 
+    def get_num_virtual_tokens(self) -> int:
+        return self.prompt_tuning_args.num_virtual_tokens if self.tuning_method == TuningMethod.prompt_tuning else 0
+
 
 class TrainingParameters(BaseArgs):
     # whether to use sequential sampler for validation

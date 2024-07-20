@@ -6,7 +6,7 @@ import torch
 from .arguments import InferenceArgs, get_args
 from .checkpointing import load_checkpoint_for_inference, save_args
 from .data import BaseDataset, collate_fn, get_datasets_list
-from .enums import DatasetKeys, DatasetSplit, Mode
+from .enums import DatasetKeys, DatasetSplit, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, ModelWrapperForFinetuning
 from .utils import ProcessGroupManager, ProgressBar, setup_tf32
 
@@ -106,20 +106,28 @@ def main() -> None:
                 additional_special_tokens=args.tokenizer_args.additional_special_tokens,
             )
 
-        args_from_checkpoint = args
+        datasets_list, _ = get_datasets_list(
+            dataset_args_list=args.datasets,
+            tuning_method=TuningMethod.full_finetuning,
+            split=DatasetSplit.test,
+            mode=mode,
+            tokenizer=model.tokenizer,
+            is_encoder_decoder=model.is_encoder_decoder,
+        )
     else:
         model, args_from_checkpoint, _ = load_checkpoint_for_inference(args, mode)
 
-        # override with datasets passed in current config
-        args_from_checkpoint.datasets = args.datasets
+        tuning_method = args_from_checkpoint.tuning_args.tuning_method
 
-    datasets_list, _ = get_datasets_list(
-        args_from_checkpoint,
-        split=DatasetSplit.test,
-        mode=mode,
-        tokenizer=model.tokenizer,
-        is_encoder_decoder=model.is_encoder_decoder,
-    )
+        datasets_list, _ = get_datasets_list(
+            dataset_args_list=args.datasets,
+            tuning_method=tuning_method,
+            split=DatasetSplit.test,
+            mode=mode,
+            tokenizer=model.tokenizer,
+            is_encoder_decoder=model.is_encoder_decoder,
+            num_virtual_tokens=args_from_checkpoint.tuning_args.get_num_virtual_tokens(),
+        )
 
     model = model.to(torch.cuda.current_device())
 

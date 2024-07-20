@@ -25,7 +25,7 @@ class ModelWrapperForPEFT(ModelWrapperForFinetuning):
             self.peft_config = PromptTuningConfig(
                 task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
                 prompt_tuning_init=args.tuning_args.prompt_tuning_args.prompt_tuning_init,
-                num_virtual_tokens=args.tuning_args.prompt_tuning_args.num_virtual_tokens,
+                num_virtual_tokens=args.tuning_args.get_num_virtual_tokens(),
                 prompt_tuning_init_text=args.tuning_args.prompt_tuning_args.prompt_tuning_init_text,
                 tokenizer_name_or_path=args.model_args.model_name,
             )

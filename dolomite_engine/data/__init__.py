@@ -5,8 +5,8 @@ import torch
 import torch.distributed
 from transformers import AutoTokenizer
 
-from ..arguments import InferenceArgs, TrainingArgs
-from ..enums import DatasetSplit, Mode, TuningMethod
+from ..arguments import DatasetArgs, InferenceArgs, TrainingArgs
+from ..enums import DatasetSplit, Mode
 from ..utils import ProcessGroupManager, log_rank_0, run_rank_n
 from .base import BaseDataset, BlendedDatasets
 from .dataloader import DispatchingDataLoader, ResumableDataLoader
@@ -30,20 +30,22 @@ _DATASETS_LIST = {
 
 
 def get_datasets_list(
-    args: TrainingArgs | InferenceArgs,
+    dataset_args_list: list[DatasetArgs],
     split: DatasetSplit,
     mode: Mode,
     tokenizer: AutoTokenizer,
     is_encoder_decoder: bool,
+    num_virtual_tokens: int = 0,
 ) -> tuple[list[BaseDataset], list[int]]:
     """get the list of datasets from their configs
 
     Args:
-        args (TrainingArgs | InferenceArgs): arguments based on training / inference mode
+        dataset_args_list (list[DatasetArgs]): list of DatasetArgs objects
         split (DatasetSplit): train / val / test split
         mode (Mode): training / inference mode for running the program
         tokenizer (AutoTokenizer): tokenizer
         is_encoder_decoder (bool): whether the model is an encoder-decoder or a decoder-only model
+        num_virtual_tokens (int): number of tokens to use for prompt tuning
 
     Raises:
         ValueError: if invalid class_name for dataset is found
@@ -51,14 +53,6 @@ def get_datasets_list(
     Returns:
         tuple[List[BaseDataset], list[int]]: tuple of list of datasets and the respective dataset sampling ratios
     """
-
-    dataset_args_list = args.datasets
-    tuning_method = args.tuning_args.tuning_method
-    num_virtual_tokens = (
-        args.tuning_args.prompt_tuning_args.num_virtual_tokens
-        if args.tuning_args.tuning_method == TuningMethod.prompt_tuning
-        else None
-    )
 
     datasets_list = []
     data_sampling_ratios = []
@@ -72,13 +66,12 @@ def get_datasets_list(
             mode=mode,
             tokenizer=tokenizer,
             is_encoder_decoder=is_encoder_decoder,
-            tuning_method=tuning_method,
             data_name=data_args.data_name,
             input_format=data_args.input_format,
             output_format=data_args.output_format,
             max_input_tokens=data_args.max_input_tokens,
             max_output_tokens=data_args.max_output_tokens,
-            num_virtual_tokens=num_virtual_tokens if tuning_method == TuningMethod.prompt_tuning else None,
+            num_virtual_tokens=num_virtual_tokens,
         )
 
         if len(dataset) > 0:
@@ -165,11 +158,12 @@ def _get_dispatching_dataloader(
     # check if node's first rank
     if ProcessGroupManager.get_global_rank() == node_rank * num_ranks_per_node:
         datasets_list, data_sampling_ratios = get_datasets_list(
-            args=args,
+            dataset_args_list=args.datasets,
             split=split,
             mode=Mode.training,
             tokenizer=tokenizer,
             is_encoder_decoder=is_encoder_decoder,
+            num_virtual_tokens=args.tuning_args.get_num_virtual_tokens(),
         )
 
         if len(datasets_list) == 0:
@@ -236,11 +230,12 @@ def _get_non_dispatching_dataloader(
     micro_batch_size = args.training_parameters.micro_batch_size
 
     datasets_list, data_sampling_ratios = get_datasets_list(
-        args=args,
+        dataset_args_list=args.datasets,
         split=split,
         mode=Mode.training,
         tokenizer=tokenizer,
         is_encoder_decoder=is_encoder_decoder,
+        num_virtual_tokens=args.tuning_args.get_num_virtual_tokens(),
     )
 
     if len(datasets_list) == 0:

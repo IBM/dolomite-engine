@@ -1,6 +1,6 @@
 from transformers import AutoTokenizer
 
-from ...enums import DatasetSplit, Mode, TuningMethod
+from ...enums import DatasetSplit, Mode
 from ..base import BaseDataset
 
 
@@ -12,13 +12,12 @@ class BaseInstructionDataset(BaseDataset):
         mode: Mode,
         tokenizer: AutoTokenizer,
         is_encoder_decoder: bool,
-        tuning_method: TuningMethod,
         data_name: str,
         input_format: str,
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int | None = None,
+        num_virtual_tokens: int = 0,
     ) -> None:
         super().__init__(
             class_args=class_args,
@@ -26,7 +25,6 @@ class BaseInstructionDataset(BaseDataset):
             mode=mode,
             tokenizer=tokenizer,
             is_encoder_decoder=is_encoder_decoder,
-            tuning_method=tuning_method,
             data_name=data_name,
             input_format=input_format,
             output_format=output_format,

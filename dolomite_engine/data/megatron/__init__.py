@@ -149,7 +149,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
 
     log_rank_0(logging.INFO, "> finished creating GPT datasets ...")
 
-    def _get_dataloader(dataset: GPTDataset, consumed_samples: int):
+    def _get_dataloader(dataset: GPTDataset | None, consumed_samples: int):
         # we use batch sampler here to match the data order of NVIDIA's megatron repo
         if dispatching_dataloader:
             is_dataset_none_on_source_rank = [dataset is None if is_built_on_rank else False]
