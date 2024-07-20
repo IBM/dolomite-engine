@@ -127,7 +127,7 @@ class DeltaNet(nn.Module):
         self.v_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
 
         if self.use_short_conv:
-            std_conv = initializer_range
+            std_conv = std_in
             self.conv_size = conv_size
             if share_conv_kernel:
                 self.h_conv1d = ParameterizedShortConvolution(
@@ -148,12 +148,13 @@ class DeltaNet(nn.Module):
         self.use_elu = use_elu
         if self.use_beta:
             self.b_proj = ParameterizedLinear(self.hidden_size, self.num_heads, bias=False, std=std_in)
-        # self.o_norm = get_normalization_function("rmsnorm", self.head_v_dim, eps=norm_eps)
+            
         if self.use_gate:
             self.g_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
             self.o_norm = FusedRMSNormSwishGate(self.head_v_dim, eps=norm_eps)
         else:
             self.o_norm = RMSNorm(self.head_v_dim, eps=norm_eps)
+            # self.o_norm = get_normalization_function("rmsnorm", self.head_v_dim, eps=norm_eps)
 
         std_out = initializer_range / math.sqrt(2 * config.n_layer)
         if init_method == InitMethod.mup:
