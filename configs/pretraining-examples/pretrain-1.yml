@@ -40,7 +40,6 @@ model_args:
     eos_token_id: 50256
     pad_token_id: 50256
     attention_softmax_in_fp32: true
-    scale_attention_softmax_in_fp32: true
     add_bias: true
     position_embedding_type: learned_absolute
     rope_theta: 10000

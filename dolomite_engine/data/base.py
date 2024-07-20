@@ -1,10 +1,8 @@
-from typing import List, Tuple
-
 import torch
 from transformers import AutoTokenizer
 
 from ..defaults import INPUT_FORMAT, OUTPUT_FORMAT
-from ..enums import DatasetSplit, Mode, TuningMethod
+from ..enums import DatasetSplit, Mode
 
 
 class BaseDataset(torch.utils.data.Dataset):
@@ -17,13 +15,12 @@ class BaseDataset(torch.utils.data.Dataset):
         mode: Mode,
         tokenizer: AutoTokenizer,
         is_encoder_decoder: bool,
-        tuning_method: TuningMethod,
         data_name: str,
         input_format: str,
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = None,
+        num_virtual_tokens: int = 0,
     ) -> None:
         super().__init__()
 
@@ -35,9 +32,8 @@ class BaseDataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.is_encoder_decoder = is_encoder_decoder
 
-        self.tuning_method = tuning_method
         # used for prompt tuning
-        self.num_virtual_tokens = num_virtual_tokens if self.tuning_method == TuningMethod.prompt_tuning else None
+        self.num_virtual_tokens = num_virtual_tokens
 
         self.data_name = data_name
         self.input_format = input_format
@@ -49,16 +45,10 @@ class BaseDataset(torch.utils.data.Dataset):
 
         # length to use for trimming (excludes eos)
         self.max_input_tokens = get_max_input_length(
-            max_input_tokens,
-            self.tuning_method,
-            self.num_virtual_tokens,
-            self.is_encoder_decoder,
+            max_input_tokens, self.num_virtual_tokens, self.is_encoder_decoder
         )
         self.max_output_tokens = get_max_output_length(
-            max_output_tokens,
-            self.tuning_method,
-            self.num_virtual_tokens,
-            self.is_encoder_decoder,
+            max_output_tokens, self.num_virtual_tokens, self.is_encoder_decoder
         )
 
         self.examples = []
@@ -104,7 +94,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
         eos_token_id: int = self.tokenizer.eos_token_id
 
-        input: List[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
+        input: list[int] = self.tokenizer(input, add_special_tokens=False)["input_ids"]
 
         if self.is_encoder_decoder:
             if self.max_input_tokens is not None:
@@ -115,7 +105,7 @@ class BaseDataset(torch.utils.data.Dataset):
                 input = input[: self.max_input_tokens]
 
         if self.mode == Mode.training:
-            output: List[int] = self.tokenizer(output, add_special_tokens=False)["input_ids"]
+            output: list[int] = self.tokenizer(output, add_special_tokens=False)["input_ids"]
 
             if self.max_output_tokens is not None:
                 output = output[: self.max_output_tokens - 1]
@@ -146,7 +136,7 @@ class BaseDataset(torch.utils.data.Dataset):
 class BlendedDatasets(torch.utils.data.Dataset):
     """Concatenated list of datasets for training or inference"""
 
-    def __init__(self, datasets: List[BaseDataset], split: DatasetSplit) -> None:
+    def __init__(self, datasets: list[BaseDataset], split: DatasetSplit) -> None:
         super().__init__()
 
         self.split = split
@@ -164,11 +154,11 @@ class BlendedDatasets(torch.utils.data.Dataset):
 
         return len(self.datasets)
 
-    def get_num_examples_in_each_dataset(self) -> List[int]:
+    def get_num_examples_in_each_dataset(self) -> list[int]:
         """returns the number of examples in each dataset component
 
         Returns:
-            List[int]: the number of examples in each dataset component
+            list[int]: the number of examples in each dataset component
         """
 
         return [len(dataset) for dataset in self.datasets]
@@ -179,7 +169,7 @@ class BlendedDatasets(torch.utils.data.Dataset):
     def load_state_dict(self, state_dict: dict) -> None:
         return
 
-    def _get_indexing_array(self) -> List[Tuple[int]]:
+    def _get_indexing_array(self) -> list[tuple[int]]:
         num_examples_in_each_dataset = self.get_num_examples_in_each_dataset()
 
         indexing_array = []
@@ -208,16 +198,12 @@ class BlendedDatasets(torch.utils.data.Dataset):
 
 
 def get_max_input_length(
-    max_input_tokens_specified: int,
-    tuning_method: TuningMethod,
-    num_virtual_tokens: int,
-    is_encoder_decoder: bool,
+    max_input_tokens_specified: int | None, num_virtual_tokens: int, is_encoder_decoder: bool
 ) -> int:
     """max input length for the model, depends on the training / inference type and whether the model is decoder-only or encoder-decoder
 
     Args:
-        max_input_tokens_specified (int): maximum number of specified input tokens
-        tuning_method (TuningMethod): full finetuning / prompt tuning
+        max_input_tokens_specified (int | None): maximum number of specified input tokens
         num_virtual_tokens (int): virtual tokens for prompt tuning
         is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
 
@@ -228,10 +214,7 @@ def get_max_input_length(
     if max_input_tokens_specified is None:
         return None
 
-    max_input_tokens = max_input_tokens_specified
-
-    if tuning_method == TuningMethod.prompt_tuning:
-        max_input_tokens -= num_virtual_tokens
+    max_input_tokens = max_input_tokens_specified - num_virtual_tokens
 
     if is_encoder_decoder:
         max_input_tokens -= 1
@@ -240,16 +223,12 @@ def get_max_input_length(
 
 
 def get_max_output_length(
-    max_output_tokens_specified: int,
-    tuning_method: TuningMethod,
-    num_virtual_tokens: int,
-    is_encoder_decoder: bool,
+    max_output_tokens_specified: int | None, num_virtual_tokens: int, is_encoder_decoder: bool
 ) -> int:
     """max output length for the model, depends on the training / inference type and whether the model is decoder-only or encoder-decoder
 
     Args:
-        max_output_tokens_specified (int): maximum number of specified output tokens
-        tuning_method (TuningMethod): full finetuning / prompt tuning
+        max_output_tokens_specified (int | None): maximum number of specified output tokens
         num_virtual_tokens (int): virtual tokens for prompt tuning
         is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
 
@@ -263,7 +242,6 @@ def get_max_output_length(
     max_output_tokens = max_output_tokens_specified - 1
 
     if is_encoder_decoder:
-        if tuning_method == TuningMethod.prompt_tuning:
-            max_output_tokens -= num_virtual_tokens
+        max_output_tokens -= num_virtual_tokens
 
     return max_output_tokens

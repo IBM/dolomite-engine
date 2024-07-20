@@ -1,5 +1,4 @@
 from os import PathLike
-from typing import List
 
 from ...config import CommonConfig
 
@@ -15,7 +14,7 @@ class GPTCrossLayerConfig(CommonConfig):
         n_layer: int = 12,
         n_head: int = 12,
         num_key_value_heads: int = 12,
-        n_inner: int = None,
+        n_inner: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         resid_pdrop: float = 0.1,
         embd_pdrop: float = 0.1,
@@ -31,8 +30,8 @@ class GPTCrossLayerConfig(CommonConfig):
         add_bias: bool = True,
         position_embedding_type: str = "learned_absolute",
         rope_theta: int = 10000,
-        rope_scaling: dict = None,
-        sharing_pattern: List[int] = None,
+        rope_scaling: dict | None = None,
+        sharing_pattern: list[int] | None = None,
         joint_residual_stream: bool = False,
         **kwargs,
     ) -> None:

@@ -14,9 +14,9 @@ class ParameterizedEmbedding(nn.Embedding):
         sparse: bool = False,
         _weight: torch.Tensor | None = None,
         _freeze: bool = False,
-        device=None,
-        dtype=None,
-        std=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
     ) -> None:
         self.std = std
         super().__init__(

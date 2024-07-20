@@ -12,8 +12,8 @@ class DenseMoEBlock(SparseMoEBlock):
         self,
         config: DenseMoEConfig,
         normalization_implementation: str,
-        layer_idx: int = None,
-        inference_method: dict = None,
+        layer_idx: int | None = None,
+        inference_method: dict | None = None,
     ) -> None:
         nn.Module.__init__(self)
 

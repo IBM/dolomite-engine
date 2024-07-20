@@ -46,7 +46,7 @@ class RunningMean:
 class ProgressBar:
     """progress bar for training or validation"""
 
-    def __init__(self, start: int, end: int, desc: str = None) -> None:
+    def __init__(self, start: int, end: int, desc: str | None = None) -> None:
         self.progress_bar: tqdm = run_rank_n(tqdm)(total=end, desc=desc)
         self.update(start)
 
@@ -74,7 +74,7 @@ class ExperimentsTracker:
 
     def __init__(
         self,
-        experiments_tracker_name: ExperimentsTrackerName,
+        experiments_tracker_name: ExperimentsTrackerName | None,
         aim_args: BaseArgs,
         wandb_args: BaseArgs,
         checkpoint_metadata: dict,
@@ -122,7 +122,7 @@ class ExperimentsTracker:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
     @run_rank_n
-    def track(self, values: dict, step: int = None, context: str = None) -> None:
+    def track(self, values: dict, step: int | None = None, context: str | None = None) -> None:
         """main tracking method
 
         Args:

@@ -92,6 +92,6 @@ class SparseMoE(nn.Module):
 
         return final_hidden_states, router_logits
 
-    def extra_repr(self):
+    def extra_repr(self) -> str | None:
         if self.bias is not None:
             return f"(bias): Parameter(size={tuple(self.bias.size())})"

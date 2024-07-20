@@ -1,5 +1,4 @@
 import inspect
-from typing import Tuple
 
 import torch
 
@@ -91,7 +90,7 @@ def split_query_key_value_tensor_for_attention(
     num_key_value_heads: int,
     head_dim: int,
     attention_head_type: AttentionHeadType,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if attention_head_type.value in _SPLIT_FUNCTIONS:
         split_function = _SPLIT_FUNCTIONS[attention_head_type.value]
         split_function_parameters = inspect.signature(split_function).parameters.keys()

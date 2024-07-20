@@ -19,7 +19,7 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_idx: int = None,
+        layer_idx: int | None = None,
     ) -> None:
         nn.Module.__init__(self)
 
@@ -35,6 +35,7 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
+
         if attention_implementation == "DeltaNet":
             self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         elif attention_implementation == "flash_attention_2":
@@ -43,10 +44,12 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
             self.attn = GatedLinearAttention2(config=config, layer_idx=layer_idx)
         else:
             raise ValueError(f"Attention implementation {attention_implementation} not supported.")
+
         self.ln_2 = get_normalization_function(
             config.normalization_function,
             hidden_size,
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
+
         self.mlp = MLP(config)

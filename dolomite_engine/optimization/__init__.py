@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -26,7 +24,7 @@ def get_optimizer_and_lr_scheduler(
     lr_decay_factor: float,
     params_group_method: ParamsGroupMethod,
     extra_lr_scheduler_args: dict,
-) -> Tuple[Optimizer, LambdaLR]:
+) -> tuple[Optimizer, LambdaLR]:
     trainable_parameters_or_param_groups = _get_param_groups(model, optimizer_class_args, params_group_method)
 
     optimizer = get_optimizer(
@@ -50,7 +48,7 @@ def get_optimizer_and_lr_scheduler(
     return optimizer, lr_scheduler
 
 
-def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod):
+def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None):
     if params_group_method is None:
         trainable_parameters_or_param_groups = model.parameters()
     elif params_group_method == ParamsGroupMethod.mup:

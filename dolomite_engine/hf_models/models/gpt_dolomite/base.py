@@ -1,5 +1,4 @@
 import warnings
-from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -9,7 +8,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import Alibi, ParameterizedEmbedding, RMSNorm, RoPE, YaRNScaledRoPE, get_normalization_function
-from ...utils import check_list_type, divide_if_divisible, flatten_and_convert_to_tensors
+from ...utils import convert_padding_free_lists_to_tensors, divide_if_divisible
 from .config import GPTDolomiteConfig
 from .layer import GPTDolomiteBlock
 
@@ -28,7 +27,7 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
     _supports_sdpa = True
     _supports_flash_attn_2 = True
 
-    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
+    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs) -> None:
         super().__init__(config, *inputs, **kwargs)
 
         self.normalization_implementation = kwargs.get(
@@ -68,30 +67,20 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
 
     def prepare_inputs_for_model(
         self,
-        input_ids: Union[torch.Tensor, List[List[int]]],
-        inputs_embeds: Union[torch.Tensor, List[List[float]]],
-        position_ids: Union[torch.Tensor, List[List[int]]],
-        token_type_ids: Union[torch.Tensor, List[List[int]]],
-        labels: Union[torch.Tensor, List[List[int]]],
-        cu_seqlens: torch.Tensor,
-        max_seqlen: torch.Tensor,
-        past_key_values: Tuple[Tuple[torch.Tensor]],
-        attention_mask: torch.Tensor,
+        input_ids: torch.Tensor | list[list[int]] | None,
+        inputs_embeds: torch.Tensor | list[list[float]] | None,
+        position_ids: torch.Tensor | list[list[int]] | None,
+        token_type_ids: torch.Tensor | list[list[int]] | None,
+        labels: torch.Tensor | list[list[int]] | None,
+        cu_seqlens: torch.Tensor | None,
+        max_seqlen: torch.Tensor | None,
+        past_key_values: tuple[tuple[torch.Tensor]],
+        attention_mask: torch.Tensor | None,
         use_cache: bool,
         output_attentions: bool,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor]:
         if self._use_padding_free_transformer:
             if isinstance(input_ids, list) or isinstance(inputs_embeds, list):
-                device = torch.cuda.current_device()
-
-                # check input types are correct
-                error_message = "{variable} should be of type List[List[{dtype}]]"
-                check_list_type(input_ids, error_message.format(variable="input_ids", dtype="int"))
-                check_list_type(inputs_embeds, error_message.format(variable="inputs_embeds", dtype="float"))
-                check_list_type(position_ids, error_message.format(variable="position_ids", dtype="int"))
-                check_list_type(token_type_ids, error_message.format(variable="token_type_ids", dtype="int"))
-                check_list_type(labels, error_message.format(variable="labels", dtype="int"))
-
                 # this is managed internally
                 error_message = (
                     "{variable} should not be passed for flash attention when using List[List[int]] "
@@ -101,25 +90,15 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
                 assert max_seqlen is None, error_message.format(variable="max_seqlen")
                 assert attention_mask is None, error_message.format(variable="attention_mask")
 
-                # prepare inputs for the model
-                seqlens = torch.tensor([0] + [len(x) for x in input_ids])
-                cu_seqlens = seqlens.cumsum(dim=-1).to(device, torch.int32)
-                max_seqlen = seqlens.max().to(device)
-
-                if position_ids is None:
-                    position_ids = [list(range(len(x))) for x in input_ids]
-                position_ids = flatten_and_convert_to_tensors(position_ids, device)
-
-                input_ids = flatten_and_convert_to_tensors(input_ids, device)
-
-                if inputs_embeds is not None:
-                    inputs_embeds = flatten_and_convert_to_tensors(inputs_embeds, device)
-
-                if token_type_ids is not None:
-                    token_type_ids = flatten_and_convert_to_tensors(token_type_ids, device)
-
-                if labels is not None:
-                    labels = flatten_and_convert_to_tensors(labels, device)
+                input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = (
+                    convert_padding_free_lists_to_tensors(
+                        input_ids=input_ids,
+                        inputs_embeds=inputs_embeds,
+                        position_ids=position_ids,
+                        token_type_ids=token_type_ids,
+                        labels=labels,
+                    )
+                )
             else:
                 assert (
                     cu_seqlens is not None
@@ -130,8 +109,6 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
 
             if use_cache or past_key_values is not None:
                 raise NotImplementedError("KV caching is not supported with padding_free transformer")
-
-        error_message = "{variable} is only supported with math attention"
 
         assert not output_attentions
 
@@ -192,23 +169,22 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
 
     def forward(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, BaseModelOutputWithPast]:
+        input_ids: torch.Tensor | None = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple | BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,
             return_dict,
-            input_shape,
             hidden_states,
             attention_mask,
             position_ids,
@@ -237,8 +213,6 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        output_shape = input_shape + (hidden_states.size(-1),)
-
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
@@ -256,7 +230,6 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
 
         hidden_states = self.ln_f(hidden_states)
 
-        hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
@@ -323,7 +296,12 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
             return cos, sin
 
     def _prepare_causal_attention_mask(
-        self, attention_mask: torch.Tensor, batch_size: int, query_length: int, key_length: int, device: torch.device
+        self,
+        attention_mask: torch.Tensor | None,
+        batch_size: int,
+        query_length: int,
+        key_length: int,
+        device: torch.device,
     ) -> torch.Tensor:
         past_length = key_length - query_length
 
@@ -373,9 +351,9 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
     def _get_initial_hidden_state(
         self,
         input_ids: torch.Tensor,
-        inputs_embeds: torch.Tensor,
-        position_ids: torch.Tensor,
-        token_type_ids: torch.Tensor,
+        inputs_embeds: torch.Tensor | None,
+        position_ids: torch.Tensor | None,
+        token_type_ids: torch.Tensor | None,
     ) -> torch.Tensor:
         if inputs_embeds is None:
             inputs_embeds = self.wte(input_ids)
@@ -395,18 +373,18 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
 
     def _prepare_a_bunch_of_stuff(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Tuple[
+        input_ids: torch.Tensor | None = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple[
         bool,
         bool,
         bool,
@@ -417,7 +395,7 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
-        Union[Tuple[torch.Tensor], Tuple[Tuple[torch.Tensor, torch.Tensor]]],
+        tuple[torch.Tensor],
     ]:
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -556,7 +534,6 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
             output_hidden_states,
             use_cache,
             return_dict,
-            input_shape,
             hidden_states,
             attention_mask,
             position_ids,

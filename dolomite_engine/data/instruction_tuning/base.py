@@ -1,8 +1,6 @@
-from typing import List
-
 from transformers import AutoTokenizer
 
-from ...enums import DatasetSplit, Mode, TuningMethod
+from ...enums import DatasetSplit, Mode
 from ..base import BaseDataset
 
 
@@ -14,13 +12,12 @@ class BaseInstructionDataset(BaseDataset):
         mode: Mode,
         tokenizer: AutoTokenizer,
         is_encoder_decoder: bool,
-        tuning_method: TuningMethod,
         data_name: str,
         input_format: str,
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = None,
+        num_virtual_tokens: int = 0,
     ) -> None:
         super().__init__(
             class_args=class_args,
@@ -28,7 +25,6 @@ class BaseInstructionDataset(BaseDataset):
             mode=mode,
             tokenizer=tokenizer,
             is_encoder_decoder=is_encoder_decoder,
-            tuning_method=tuning_method,
             data_name=data_name,
             input_format=input_format,
             output_format=output_format,
@@ -42,12 +38,12 @@ class BaseInstructionDataset(BaseDataset):
 
         self.examples = self.prepare_examples()
 
-    def construct_input_from_format(self, instruction: str, input: str) -> List[int]:
+    def construct_input_from_format(self, instruction: str, input: str) -> list[int]:
         input_text = instruction + "\n\n"
         if not (input is None or input == ""):
             input_text += f"input: {input}\n"
         input_text += "output:"
         return input_text
 
-    def prepare_examples(self) -> List[dict]:
+    def prepare_examples(self) -> list[dict]:
         raise NotImplementedError()

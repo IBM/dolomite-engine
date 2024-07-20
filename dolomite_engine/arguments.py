@@ -1,6 +1,6 @@
 import logging
 from argparse import ArgumentParser
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any
 
 import transformers
 from peft import PromptTuningInit
@@ -22,7 +22,7 @@ from .enums import (
 from .utils import BaseArgs, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
-def _check_not_None(object_name_list: List[Tuple[Any, str]]) -> None:
+def _check_not_None(object_name_list: list[tuple[Any, str]]) -> None:
     for obj, name in object_name_list:
         assert obj is not None, f"{name} cannot be None"
 
@@ -34,22 +34,22 @@ class RandomArgs(BaseArgs):
 
 class TokenizerArgs(BaseArgs):
     # override model's tokenizer with this
-    tokenizer_name: Optional[str] = None
+    tokenizer_name: str | None = None
     # add special tokens to the tokenizer
-    additional_special_tokens: Optional[List[str]] = None
+    additional_special_tokens: list[str] | None = None
 
 
 class ModelArgs(BaseArgs):
     # model name on huggingface hub
-    model_name: Optional[str] = None
+    model_name: str | None = None
     # config class to load the model from
-    pretrained_config: Optional[dict] = None
+    pretrained_config: dict | None = None
     # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
     model_class: str = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
     # attention implementation (only works with GPTDolomiteForCausalLM)
-    attention_implementation: Optional[AttentionImplementation] = None
+    attention_implementation: AttentionImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
@@ -73,16 +73,16 @@ class ModelArgs(BaseArgs):
             AutoModelForSeq2SeqLM.__name__,
         ], f"unexpected model_class ({self.model_class})"
 
-        self.model_class: Union[AutoModelForCausalLM, AutoModelForSeq2SeqLM] = getattr(transformers, self.model_class)
+        self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
 
 class PromptTuningArgs(BaseArgs):
     # prompt tuning init method
     prompt_tuning_init: PromptTuningInit = None
     # prompt tuning init text
-    prompt_tuning_init_text: Optional[str] = None
+    prompt_tuning_init_text: str | None = None
     # number of virtual tokens for PEFT
-    num_virtual_tokens: Optional[int] = None
+    num_virtual_tokens: int | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.prompt_tuning_init, "prompt_tuning_init")])
@@ -113,9 +113,9 @@ class TuningArgs(BaseArgs):
     # type of tuning, full finetuning or PEFT
     tuning_method: TuningMethod = None
     # prompt tuning related arguments
-    prompt_tuning_args: Optional[PromptTuningArgs] = None
+    prompt_tuning_args: PromptTuningArgs | None = None
     # lora related arguments
-    lora_args: Optional[LoRAArgs] = None
+    lora_args: LoRAArgs | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.tuning_method, "tuning_method")])
@@ -131,16 +131,19 @@ class TuningArgs(BaseArgs):
         elif self.tuning_method == TuningMethod.lora:
             assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with lora"
 
+    def get_num_virtual_tokens(self) -> int:
+        return self.prompt_tuning_args.num_virtual_tokens if self.tuning_method == TuningMethod.prompt_tuning else 0
+
 
 class TrainingParameters(BaseArgs):
     # whether to use sequential sampler for validation
     ignore_sampling_proportion_for_validation: bool = False
     # number of training steps
-    num_training_steps: Optional[int] = None
+    num_training_steps: int | None = None
     # gradient accumulation steps
     gradient_accumulation_steps: int = 1
     # interval for evaluation
-    eval_interval: Optional[int] = None
+    eval_interval: int | None = None
     # batch size per GPU for ZeRO-DP
     micro_batch_size: int = None
     # whether to use val dataset for validation during training
@@ -148,7 +151,7 @@ class TrainingParameters(BaseArgs):
     # masking methodology of loss function input
     loss_mask: LossMask = LossMask.output_only
     # gradient clip value
-    gradient_clipping: Optional[float] = 1
+    gradient_clipping: float | None = 1
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.num_training_steps, "num_training_steps"), (self.micro_batch_size, "micro_batch_size")])
@@ -174,7 +177,7 @@ class LoadArgs(BaseArgs):
     # path to load checkpoints
     load_path: str = None
     # iteration to load
-    iteration: Optional[int] = None
+    iteration: int | None = None
     # whether to load optimizer
     load_optimizer: bool = True
     # whether to load lr_scheduler
@@ -211,9 +214,9 @@ class DatasetArgs(BaseArgs):
     # data sampling proportions
     data_sampling_ratio: int = None
     # max tokens for input text
-    max_input_tokens: Optional[int] = None
+    max_input_tokens: int | None = None
     # max tokens for output text
-    max_output_tokens: Optional[int] = None
+    max_output_tokens: int | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.class_name, "dataset class_name"), (self.data_name, "data_name")])
@@ -227,7 +230,7 @@ class OptimizerArgs(BaseArgs):
     # optimizer class
     class_name: str = "TorchAdamW"
     # how to create param groups
-    params_group_method: Optional[ParamsGroupMethod] = None
+    params_group_method: ParamsGroupMethod | None = None
     # class args for optimizer
     class_args: dict = {
         "lr": 1e-5,
@@ -246,7 +249,7 @@ class LRSchedulerArgs(BaseArgs):
     # constant steps after warmup and before decay
     num_constant_steps: int = 0
     # decays steps after constant steps, if None then all remaining steps are for decay
-    num_decay_steps: Optional[int] = None
+    num_decay_steps: int | None = None
     # lr scheduler for decay
     lr_decay_style: LRDecaySchedule = LRDecaySchedule.cosine
     # decay factor * max_lr = min_lr (ratio of min_lr and max_lr)
@@ -260,7 +263,7 @@ class MixedPrecisionArgs(BaseArgs):
     # dtype to use for training / inference
     dtype: str = "fp32"
     # fp8 backend
-    fp8_backend: Optional[FP8Backend] = None
+    fp8_backend: FP8Backend | None = None
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
@@ -273,9 +276,9 @@ class MixedPrecisionArgs(BaseArgs):
 
 class ZeroTopologyArgs(BaseArgs):
     # GPUs to use for replication
-    data_parallel_replication_world_size: Optional[int] = None
+    data_parallel_replication_world_size: int | None = None
     # GPUs to use for sharding
-    data_parallel_sharding_world_size: Optional[int] = None
+    data_parallel_sharding_world_size: int | None = None
 
     def model_post_init(self, __context: Any) -> None:
         if self.data_parallel_replication_world_size is None:
@@ -300,7 +303,7 @@ class DistributedArgs(BaseArgs):
     # train with CPU offloading to save GPU memory
     cpu_offload: bool = False
     # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
-    gradient_checkpointing_method: Optional[GradientCheckpointingMethod] = None
+    gradient_checkpointing_method: GradientCheckpointingMethod | None = None
     # gradient checkpointint args
     gradient_checkpointing_args: dict = {}
     # zero topology
@@ -310,7 +313,7 @@ class DistributedArgs(BaseArgs):
     # whether to use quantized gradients (ZeRO++)
     zero_quantized_gradients: bool = False
     # communication dtype
-    communication_dtype: Optional[str] = None
+    communication_dtype: str | None = None
     # whether to use torch.compile
     torch_compile: bool = False
     # whether to use a dispatching dataloader
@@ -319,12 +322,14 @@ class DistributedArgs(BaseArgs):
     tensor_parallel_size: int = 1
     # tensor parallel embeddings
     tensor_parallel_word_embeddings: bool = False
+    # whether to use sequence parallel
+    sequence_parallel: bool = False
     # data parallel world size
-    data_parallel_size: Optional[int] = None
+    data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes
-    timeout_minutes: Optional[int] = None
-    # whether to use DTensors for computation
-    use_dtensors_for_computation: bool = False
+    timeout_minutes: int | None = None
+    # fsdp algorithm
+    fsdp_algorithm: int = 1
 
     def model_post_init(self, __context: Any) -> None:
         if self.zero_quantized_weights or self.zero_quantized_gradients:
@@ -336,8 +341,8 @@ class DistributedArgs(BaseArgs):
         if self.communication_dtype is not None:
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
-        if self.stage == 0:
-            assert self.zero_topology is None, "zero_topology is meaningless with stage 0"
+        if self.sequence_parallel:
+            assert self.tensor_parallel_size > 1, "tensor parallel needs to be enabled for sequence parallel"
 
 
 class AimArgs(BaseArgs):
@@ -356,7 +361,7 @@ class WandBArgs(BaseArgs):
     # name of the experiment
     name: str = None
     # run hash for the experiment
-    entity: Optional[str] = None
+    entity: str | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.project, "project"), (self.name, "name")])
@@ -370,16 +375,16 @@ class LoggingArgs(BaseArgs):
     # running mean window
     running_mean_window: int = 10
     # arguments if using aim
-    aim_args: Optional[AimArgs] = None
+    aim_args: AimArgs | None = None
     # arguments if using wandb
-    wandb_args: Optional[WandBArgs] = None
+    wandb_args: WandBArgs | None = None
     # experiment tracker to use (aim or wandb)
-    experiments_tracker_name: Optional[ExperimentsTrackerName] = None
+    experiments_tracker_name: ExperimentsTrackerName | None = None
     # whether to use colored logs
     use_colored_logs: bool = False
     # torch profiler trace path, specifying a path will enable the torch profiler
     # this can cause some performance impact so use sparingly
-    torch_profiler_trace_path: Optional[str] = None
+    torch_profiler_trace_path: str | None = None
 
     def model_post_init(self, __context: Any) -> None:
         if self.experiments_tracker_name == ExperimentsTrackerName.aim:
@@ -391,7 +396,7 @@ class LoggingArgs(BaseArgs):
 class ResearchArgs(BaseArgs):
     # Scalar of noise to inject into input embeddings
     # https://arxiv.org/abs/2310.05914
-    neft_alpha: Optional[float] = None
+    neft_alpha: float | None = None
 
 
 class TrainingArgs(BaseArgs):
@@ -408,13 +413,13 @@ class TrainingArgs(BaseArgs):
     # lr_scheduler related arguments
     lr_scheduler_args: LRSchedulerArgs = LRSchedulerArgs()
     # list of datasets to use
-    datasets: List[DatasetArgs] = []
+    datasets: list[DatasetArgs] = []
     # save related arguments
     save_args: SaveArgs = None
     # load related arguments
-    load_args: Optional[LoadArgs] = None
+    load_args: LoadArgs | None = None
     # training parameters
-    training_parameters: Optional[TrainingParameters] = None
+    training_parameters: TrainingParameters | None = None
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
     # mixed precision related arguments
@@ -442,15 +447,15 @@ class GenerationParameters(BaseArgs):
     # batch size
     batch_size: int = None
     # sample or greedy
-    do_sample: Optional[bool] = None
+    do_sample: bool | None = None
     # max new tokens to generate
     max_new_tokens: int = None
     # temperature
-    temperature: Optional[float] = None
+    temperature: float | None = None
     # top k
-    top_k: Optional[int] = None
+    top_k: int | None = None
     # top p
-    top_p: Optional[float] = None
+    top_p: float | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.batch_size, "batch_size"), (self.max_new_tokens, "max_new_tokens")])
@@ -462,11 +467,11 @@ class InferenceArgs(BaseArgs):
     # tokenizer related arguments
     tokenizer_args: TokenizerArgs = TokenizerArgs()
     # model related arguments
-    model_args: Optional[ModelArgs] = None
+    model_args: ModelArgs | None = None
     # list of datasets to use
-    datasets: List[DatasetArgs] = []
+    datasets: list[DatasetArgs] = []
     # load related arguments
-    load_args: Optional[LoadArgs] = None
+    load_args: LoadArgs | None = None
     # generation parameters
     generation_parameters: GenerationParameters = None
     # mixed precision related arguments
@@ -515,14 +520,14 @@ _MODE_ARGS_MAP = {
 }
 
 
-def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, UnshardingArgs]:
+def get_args(mode: Mode) -> TrainingArgs | InferenceArgs | UnshardingArgs:
     """get args for training / inference
 
     Args:
         mode (Mode): training / inference mode for running the program
 
     Returns:
-        Union[TrainingArgs, InferenceArgs, UnshardingArgs]: args for training / inference
+        TrainingArgs | InferenceArgs | UnshardingArgs: args for training / inference
     """
 
     parser = ArgumentParser()
@@ -530,7 +535,7 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, UnshardingArgs]:
     args = parser.parse_args()
 
     config: dict = load_yaml(args.config)
-    args: Union[TrainingArgs, InferenceArgs, UnshardingArgs] = _MODE_ARGS_MAP[mode](**config)
+    args: TrainingArgs | InferenceArgs | UnshardingArgs = _MODE_ARGS_MAP[mode](**config)
 
     set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
     log_args(args)
@@ -539,7 +544,7 @@ def get_args(mode: Mode) -> Union[TrainingArgs, InferenceArgs, UnshardingArgs]:
 
 
 @run_rank_n
-def log_args(args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
+def log_args(args: TrainingArgs | InferenceArgs | UnshardingArgs) -> None:
     """log args
 
     Args:
@@ -547,7 +552,7 @@ def log_args(args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
     """
 
     def _iterate_args_recursively(
-        args: Union[TrainingArgs, InferenceArgs, UnshardingArgs, dict, BaseArgs], prefix: str = ""
+        args: TrainingArgs | InferenceArgs | UnshardingArgs | dict | BaseArgs, prefix: str = ""
     ) -> None:
         result = []
 
@@ -585,7 +590,7 @@ def log_args(args: Union[TrainingArgs, InferenceArgs, UnshardingArgs]) -> None:
     log_rank_0(logging.INFO, "-------------------- end of arguments ---------------------")
 
 
-def _check_datasets(datasets: List[DatasetArgs]) -> None:
+def _check_datasets(datasets: list[DatasetArgs]) -> None:
     assert len(datasets) != 0, "datasets cannot be an empty list"
     # check data_names are unique
     assert len(datasets) == len(

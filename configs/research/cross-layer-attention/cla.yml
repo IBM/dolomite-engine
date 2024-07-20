@@ -59,7 +59,6 @@ model_args:
     position_embedding_type: rope
     resid_pdrop: 0
     rope_theta: 10000
-    scale_attention_softmax_in_fp32: true
     scale_attn_weights: true
     sharing_pattern:
       - 0

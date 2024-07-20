@@ -1,13 +1,15 @@
 import logging
 from contextlib import AbstractContextManager, nullcontext
-from typing import Tuple
 
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
+from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .data import ResumableDataLoader, get_next_batch
-from .enums import DistributedBackend
+from .enums import DistributedBackend, GradientCheckpointingMethod
+from .hf_models import is_custom_model
+from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapperForFinetuning
 from .utils import ExperimentsTracker, ProcessGroupManager, RunningMean, log_rank_0
 
@@ -22,7 +24,7 @@ def train_step(
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
@@ -37,16 +39,17 @@ def train_step(
         backward_context (AbstractContextManager): a context that is used for every model backward call
 
     Returns:
-        Tuple[float, float]: loss at the current step, grad norm at the current step
+        tuple[float, float]: loss at the current step, grad norm at the current step
     """
 
     no_sync = nullcontext
     if distributed_backend == DistributedBackend.torch:
-        # FSDP-2
-        if hasattr(model, "set_requires_gradient_sync"):
-            model.set_requires_gradient_sync(False)
-        else:
+        fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+        if fsdp_algorithm == 1:
             no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
 
     loss = 0
     grad_norm = None
@@ -71,7 +74,7 @@ def train_step(
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    if distributed_backend == DistributedBackend.torch and hasattr(model, "set_requires_gradient_sync"):
+    if distributed_backend == DistributedBackend.torch and fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
@@ -93,7 +96,10 @@ def train_step(
             loss_micro_step.backward()
 
         if gradient_clipping is not None:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+            if fsdp_algorithm == 1:
+                grad_norm = model.clip_grad_norm_(gradient_clipping)
+            else:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
 
         optimizer.step()
         lr_scheduler.step()
@@ -114,9 +120,9 @@ def track_train_metrics(
     current_lr: float,
     experiments_tracker: ExperimentsTracker,
     loss_running_mean_tracker: RunningMean,
-    flops: float = None,
-    billion_tokens_per_day: float = None,
-    step_time: float = None,
+    flops: float | None = None,
+    billion_tokens_per_day: float | None = None,
+    step_time: float | None = None,
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -126,9 +132,9 @@ def track_train_metrics(
         current_lr (float): learning rate at the current step
         experiments_tracker (ExperimentsTracker): metrics tracker
         loss_running_mean_tracker (RunningMean): running mean accumulator for loss
-        flops (float, optional): total model flops. Defaults to None
-        billion_tokens_per_day (float, optional): billions of tokens per day. Defaults to None
-        step_time (float, optional): time per step in seconds
+        flops (float | None, optional): total model flops. Defaults to None
+        billion_tokens_per_day (float | None, optional): billions of tokens per day. Defaults to None
+        step_time (float | None, optional): time per step in seconds
     """
 
     # update loss running mean
@@ -186,3 +192,45 @@ def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile
         )
 
     return torch_profiler
+
+
+def get_model_tflops(
+    model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
+    config: AutoConfig,
+    batch_size: int,
+    sequence_length: int,
+    gradient_checkpointing_method: GradientCheckpointingMethod | None,
+    gradient_checkpointing_args: dict,
+) -> None:
+    if not is_custom_model(model_class, config.model_type):
+        return 0
+
+    b = batch_size
+    s = sequence_length
+    h = config.n_embd
+    f = config.n_inner
+    n = config.n_head
+    k = config.num_key_value_heads
+    l = config.n_layer
+    v = config.vocab_size
+
+    mlp_flops = 4 * b * s * h * f
+    if is_glu(config.activation_function):
+        mlp_flops += 2 * b * s * h * f
+
+    attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
+
+    forward_flops = attention_flops + mlp_flops
+
+    if gradient_checkpointing_method == GradientCheckpointingMethod.block:
+        num_layers_checkpointed = l // gradient_checkpointing_args.get("checkpoint_every", 1)
+        fraction_of_layers_checkpointed = num_layers_checkpointed / l
+        backward_flops = (2 + fraction_of_layers_checkpointed) * forward_flops
+    else:
+        backward_flops = 2 * forward_flops
+
+    model_flops = l * (forward_flops + backward_flops)
+    model_flops += 6 * b * s * h * v
+    model_flops /= 10**12
+
+    return model_flops

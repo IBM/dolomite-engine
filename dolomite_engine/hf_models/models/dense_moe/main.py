@@ -1,5 +1,3 @@
-from typing import List, Tuple, Union
-
 import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
@@ -32,20 +30,20 @@ class DenseMoEForCausalLM(DenseMoEPreTrainedModel, GPTDolomiteForCausalLM):
 
     def forward(
         self,
-        input_ids: Union[torch.Tensor, List[List[int]]] = None,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: Union[torch.Tensor, List[List[int]]] = None,
-        position_ids: Union[torch.Tensor, List[List[int]]] = None,
-        inputs_embeds: Union[torch.Tensor, List[List[float]]] = None,
-        labels: Union[torch.Tensor, List[List[int]]] = None,
-        use_cache: bool = None,
-        output_attentions: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, CausalLMOutputWithPast]:
+        input_ids: torch.Tensor | list[list[int]] | None = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | list[list[int]] | None = None,
+        position_ids: torch.Tensor | list[list[int]] | None = None,
+        inputs_embeds: torch.Tensor | list[list[float]] | None = None,
+        labels: torch.Tensor | list[list[int]] | None = None,
+        use_cache: bool | None = None,
+        output_attentions: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple | CausalLMOutputWithPast:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(

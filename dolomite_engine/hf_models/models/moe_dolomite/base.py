@@ -1,5 +1,3 @@
-from typing import List, Tuple, Union
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
@@ -86,24 +84,23 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
 
     def forward(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-        output_router_logits: bool = None,
-    ) -> Union[Tuple, MoeModelOutputWithPast]:
+        input_ids: torch.Tensor | None = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+        output_router_logits: bool | None = None,
+    ) -> tuple | MoeModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,
             return_dict,
-            input_shape,
             hidden_states,
             attention_mask,
             position_ids,
@@ -134,8 +131,6 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        output_shape = input_shape + (hidden_states.size(-1),)
-
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
@@ -159,7 +154,6 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
 
         hidden_states = self.ln_f(hidden_states)
 
-        hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
@@ -178,19 +172,19 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
 
     def _prepare_a_bunch_of_stuff(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: List[torch.Tensor] = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        input_ids: torch.Tensor | None = None,
+        past_key_values: list[torch.Tensor] | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         bool,
         bool,
         bool,
@@ -201,7 +195,7 @@ class MoEDolomiteModel(MoEDolomitePreTrainedModel, GPTDolomiteModel):
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
-        Union[Tuple[torch.Tensor], Tuple[Tuple[torch.Tensor, torch.Tensor]]],
+        tuple[torch.Tensor],
     ]:
         output_router_logits = (
             output_router_logits if output_router_logits is not None else self.config.output_router_logits

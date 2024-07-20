@@ -10,35 +10,35 @@ from torch.distributed.device_mesh import DeviceMesh, init_device_mesh
 
 
 # general
-_MESH: DeviceMesh = None
-_GLOBAL_RANK: int = None
-_LOCAL_RANK: int = None
-_WORLD_SIZE: int = None
+_MESH: DeviceMesh | None = None
+_GLOBAL_RANK: int | None = None
+_LOCAL_RANK: int | None = None
+_WORLD_SIZE: int | None = None
 
 # tensor parallel
-_TENSOR_PARALLEL_MESH: DeviceMesh = None
-_TENSOR_PARALLEL_GROUP: ProcessGroup = None
-_TENSOR_PARALLEL_RANK: int = None
-_TENSOR_PARALLEL_WORLD_SIZE: int = None
-_TENSOR_PARALLEL_FIRST_RANK: int = None
+_TENSOR_PARALLEL_MESH: DeviceMesh | None = None
+_TENSOR_PARALLEL_GROUP: ProcessGroup | None = None
+_TENSOR_PARALLEL_RANK: int | None = None
+_TENSOR_PARALLEL_WORLD_SIZE: int | None = None
+_TENSOR_PARALLEL_FIRST_RANK: int | None = None
 
 # data parallel
-_DATA_PARALLEL_MESH: DeviceMesh = None
-_DATA_PARALLEL_GROUP: ProcessGroup = None
-_DATA_PARALLEL_RANK: int = None
-_DATA_PARALLEL_WORLD_SIZE: int = None
-_DATA_PARALLEL_REPLICATION_WORLD_SIZE: int = None
-_DATA_PARALLEL_SHARDING_WORLD_SIZE: int = None
+_DATA_PARALLEL_MESH: DeviceMesh | None = None
+_DATA_PARALLEL_GROUP: ProcessGroup | None = None
+_DATA_PARALLEL_RANK: int | None = None
+_DATA_PARALLEL_WORLD_SIZE: int | None = None
+_DATA_PARALLEL_REPLICATION_WORLD_SIZE: int | None = None
+_DATA_PARALLEL_SHARDING_WORLD_SIZE: int | None = None
 
 
 class ProcessGroupManager:
     def __init__(
         self,
         tensor_parallel_size: int = 1,
-        data_parallel_size: int = None,
-        data_parallel_replication_world_size: int = None,
-        data_parallel_sharding_world_size: int = None,
-        timeout_minutes: int = None,
+        data_parallel_size: int | None = None,
+        data_parallel_replication_world_size: int | None = None,
+        data_parallel_sharding_world_size: int | None = None,
+        timeout_minutes: int | None = None,
     ) -> None:
         if timeout_minutes is not None:
             timeout_minutes = timedelta(timeout_minutes)
