@@ -1,5 +1,4 @@
 import math
-from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -55,5 +54,5 @@ def interleave_up_gate_tensor_for_mlp(up_weight: torch.Tensor, gate_weight: torc
     return torch.cat([up_weight, gate_weight])
 
 
-def split_up_gate_tensor_for_mlp(c_fc_weight: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def split_up_gate_tensor_for_mlp(c_fc_weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return c_fc_weight.chunk(2)

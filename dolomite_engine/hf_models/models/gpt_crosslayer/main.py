@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from ...modeling_utils import ParameterizedLinear
 from ..gpt_dolomite import GPTDolomiteForCausalLM
 from .base import GPTCrossLayerModel, GPTCrossLayerPreTrainedModel
@@ -23,5 +21,5 @@ class GPTCrossLayerForCausalLM(GPTCrossLayerPreTrainedModel, GPTDolomiteForCausa
         # Initialize weights and apply final processing
         self.post_init()
 
-    def get_global_local_idx(self, index: int) -> Tuple[int, int]:
+    def get_global_local_idx(self, index: int) -> tuple[int, int]:
         return self.transformer.layer_map[index]

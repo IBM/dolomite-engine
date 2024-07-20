@@ -2,7 +2,6 @@ import logging
 import time
 from contextlib import nullcontext
 from functools import partial
-from typing import List
 
 import torch
 from torch.distributed.tensor.parallel import loss_parallel
@@ -15,15 +14,14 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders
-from .distributed import wrap_model_for_distributed_training
+from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .train_utils import get_torch_profiler, track_train_metrics, train_step
+from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
     RunningMean,
-    enable_dtensors_for_computation,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -37,7 +35,7 @@ if is_transformer_engine_available():
 
 
 def track_val_metrics(
-    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str = None
+    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str | None = None
 ) -> None:
     """tracks metrics like validation loss
 
@@ -45,7 +43,7 @@ def track_val_metrics(
         global_step (int): global step during training
         val_loss (float): validation loss for the validation data
         experiments_tracker (ExperimentsTracker): metrics tracker
-        group_name (str): group name for the validation / test set
+        group_name (str | None): group name for the validation / test set
     """
 
     message = f"step = {global_step}, val_loss = {val_loss:.4f}"
@@ -64,8 +62,8 @@ def train(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
-    val_dataloaders: List[DataLoader],
-    test_dataloaders: List[DataLoader],
+    val_dataloaders: list[DataLoader],
+    test_dataloaders: list[DataLoader],
     experiments_tracker: ExperimentsTracker,
     starting_iteration: int = 0,
 ) -> None:
@@ -77,8 +75,8 @@ def train(
         optimizer (Optimizer): optimizer
         lr_scheduler (LRScheduler): learning rate scheduler
         train_dataloader (DataLoader): training dataloader
-        val_dataloaders (List[DataLoader]): validation dataloaders
-        test_dataloaders (List[DataLoader]): test dataloaders
+        val_dataloaders (list[DataLoader]): validation dataloaders
+        test_dataloaders (list[DataLoader]): test dataloaders
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
@@ -92,8 +90,6 @@ def train(
     distributed_backend = args.distributed_args.distributed_backend
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
-
-    use_dtensors_for_computation = args.distributed_args.use_dtensors_for_computation
 
     val_weighted_split_paths = args.datasets[0].class_args.get("val_weighted_split_paths")
     group_names = [None]
@@ -116,7 +112,17 @@ def train(
     tokens_per_batch = global_batch_size * sequence_length
 
     # model flops per GPU
-    model_flops = model.get_model_tflops(global_batch_size, sequence_length) / ProcessGroupManager.get_world_size()
+    model_flops = (
+        get_model_tflops(
+            model_class=args.model_args.model_class,
+            config=model.config,
+            batch_size=global_batch_size,
+            sequence_length=sequence_length,
+            gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
+            gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
+        )
+        / ProcessGroupManager.get_world_size()
+    )
 
     forward_context = (
         partial(
@@ -128,19 +134,12 @@ def train(
         else nullcontext
     )
 
-    backward_context = (
-        loss_parallel
-        if use_dtensors_for_computation and args.distributed_args.tensor_parallel_word_embeddings
-        else nullcontext
-    )
+    backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
 
     torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
 
     if torch_profiler is not None:
         torch_profiler.__enter__()
-
-    if use_dtensors_for_computation:
-        enable_dtensors_for_computation().__enter__()
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
@@ -213,31 +212,28 @@ def train(
     if eval_during_training:
         evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
-    if use_dtensors_for_computation:
-        enable_dtensors_for_computation().__exit__()
-
     if torch_profiler is not None:
         torch_profiler.__exit__()
 
 
 @torch.no_grad()
 def evaluate(
-    val_dataloaders: List[DataLoader],
+    val_dataloaders: list[DataLoader],
     model: ModelWrapperForPretraining,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
-    group_names: List[str],
+    group_names: list[str],
 ) -> float:
     """main validation loop for the program
 
     Args:
-        val_dataloaders (List[DataLoader]): list of validation dataloaders
+        val_dataloaders (list[DataLoader]): list of validation dataloaders
         model (ModelWrapperForPretraining): model
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
-        group_names (List[str]): names of the datasets in validation/test group
+        group_names (list[str]): names of the datasets in validation/test group
 
     Returns:
         float: loss at the current step
@@ -296,6 +292,9 @@ def main() -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
+
+    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
+        set_deepspeed_config(args)
 
     model = get_model(args, mode)
     model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)

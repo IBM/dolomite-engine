@@ -4,12 +4,17 @@
 # export NCCL_TOPO_DUMP_FILE="$LOG_PATH/NCCL_TOP.%h.xml"
 export NCCL_SOCKET_IFNAME="ib,bond"
 export NCCL_IB_CUDA_SUPPORT=1
+export NCCL_IB_HCA="^=mlx5_1,mlx5_6"
+export NCCL_SOCKET_IFNAME="=ibp26s0,ibp60s0,ibp77s0,ibp94s0,ibp156s0,ibp188s0,ibp204s0,ibp220s0"
+
+export OMP_NUM_THREADS=8
+export HOME=/proj/checkpoints/yikang/
 
 MASTER_ADDRESS=$(echo ${LSB_MCPU_HOSTS} | tr ' ' '\n' | head -n 1)
 MASTER_PORT=5${LSB_JOBID: -5:-1}
 NNODES=$(echo ${LSB_MCPU_HOSTS} | tr ' ' '\n' | sed 'n; d' | wc -w)
 GPUS_PER_NODE=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -w)
-NODE_RANK=$(($(echo ${LSB_MCPU_HOSTS} | tr ' ' '\n' | sed 'n; d' | grep -n -m1 $HOSTNAME | cut -d':' -f1)-1))
+NODE_RANK=$(($(echo ${LSB_MCPU_HOSTS} | tr ' ' '\n' | sed 'n; d' | grep -n -m1 $(echo $HOSTNAME | cut -d'.' -f1) | cut -d':' -f1)-1))
 
 TOKENIZERS_PARALLELISM=false \
 torchrun --nnodes=$NNODES \

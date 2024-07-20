@@ -3,7 +3,6 @@
 import logging
 import os
 import time
-from typing import Dict, Tuple
 
 import numpy
 from transformers import AutoTokenizer
@@ -81,7 +80,7 @@ class GPTDataset(MegatronDataset):
         """
         return self.sample_index.shape[0] - 1
 
-    def __getitem__(self, idx: int) -> Dict[str, numpy.ndarray]:
+    def __getitem__(self, idx: int) -> dict[str, numpy.ndarray]:
         """Abstract method implementation
 
         Args:
@@ -115,14 +114,14 @@ class GPTDataset(MegatronDataset):
         """
         return True
 
-    def _query_document_sample_shuffle_indices(self, idx: int) -> Tuple[numpy.ndarray, numpy.ndarray]:
+    def _query_document_sample_shuffle_indices(self, idx: int) -> tuple[numpy.ndarray, numpy.ndarray]:
         """Get the text (token ids) and document ids for a given index
 
         Args:
             idx (int): The index into the dataset
 
         Returns:
-            Tuple[numpy.ndarray, numpy.ndarray]: The text ids and document ids
+            tuple[numpy.ndarray, numpy.ndarray]: The text ids and document ids
         """
         # Do the shuffle mapping
         idx = self.shuffle_index[idx]
@@ -241,7 +240,7 @@ class GPTDataset(MegatronDataset):
 
     def _build_document_sample_shuffle_indices(
         self,
-    ) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
+    ) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
         """Build the document index, the sample index, and the shuffle index
 
         The document index:
@@ -512,16 +511,16 @@ def _build_shuffle_index(
 
 # From https://github.com/EleutherAI/gpt-neox/blob/FIM-clean/megatron/data/gpt2_dataset.py#L339
 def permute(
-    sample,
-    np_rng,
-    fim_rate,
-    fim_spm_rate,
-    tokenizer,
-    truncate_or_pad=True,
-    suffix_tok_id=None,
-    prefix_tok_id=None,
-    middle_tok_id=None,
-    pad_tok_id=None,
+    sample: numpy.ndarray,
+    np_rng: numpy.random.RandomState,
+    fim_rate: float,
+    fim_spm_rate: float,
+    tokenizer: AutoTokenizer,
+    truncate_or_pad: bool = True,
+    suffix_tok_id: int | None = None,
+    prefix_tok_id: int | None = None,
+    middle_tok_id: int | None = None,
+    pad_tok_id: int | None = None,
 ):
     """
     Take in a sample (np array w/ size (0,chunklength)) and perform a FIM transformation on it.

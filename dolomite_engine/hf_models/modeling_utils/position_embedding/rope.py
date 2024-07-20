@@ -1,7 +1,6 @@
 """Logic is copied from transformers.models.llama.modeling_utils with slight modifications"""
 
 import math
-from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -23,7 +22,7 @@ class RoPE(nn.Module):
 
         self.reset_parameters()
 
-    def forward(self, seq_len: int, dtype: torch.dtype, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, seq_len: int, dtype: torch.dtype, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
         if seq_len > self.max_seq_len_cached:
             self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
 
@@ -102,8 +101,8 @@ class YaRNScaledRoPE(RoPE):
 
 
 def apply_rotary_pos_emb(
-    x: torch.Tensor, cos_sin: Tuple[torch.Tensor, torch.Tensor]
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    x: torch.Tensor, cos_sin: tuple[torch.Tensor, torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor]:
     cos, sin = cos_sin
     x = (x * cos) + (_rotate_half(x) * sin)
     return x

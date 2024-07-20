@@ -1,5 +1,4 @@
 import logging
-from typing import List, Tuple
 
 import torch
 import torch.distributed
@@ -110,7 +109,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
     # Option 4: data loading using --(train|val|test)-weighted-split-paths
     elif train_weighted_split_paths:
 
-        def _parse_and_get_dataset(weighted_split_paths: List[dict], dataset_split: Split) -> List[GPTDataset]:
+        def _parse_and_get_dataset(weighted_split_paths: list[dict], dataset_split: Split) -> list[GPTDataset]:
             if weighted_split_paths is None:
                 return []
 
@@ -150,7 +149,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
 
     log_rank_0(logging.INFO, "> finished creating GPT datasets ...")
 
-    def _get_dataloader(dataset: GPTDataset, consumed_samples: int):
+    def _get_dataloader(dataset: GPTDataset | None, consumed_samples: int):
         # we use batch sampler here to match the data order of NVIDIA's megatron repo
         if dispatching_dataloader:
             is_dataset_none_on_source_rank = [dataset is None if is_built_on_rank else False]
@@ -219,7 +218,7 @@ def _get_train_val_test_samples(
     gradient_accumulation_steps: int,
     eval_interval: int,
     eval_steps: int,
-) -> Tuple[int]:
+) -> tuple[int]:
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
 
     train_samples = num_training_steps * micro_batch_size * gradient_accumulation_steps * dp_world_size

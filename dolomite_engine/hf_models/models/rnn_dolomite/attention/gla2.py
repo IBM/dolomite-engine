@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Tuple
+import math
 
 import torch
 import torch.nn as nn
@@ -16,6 +17,7 @@ from .....utils import is_einops_available, is_fla_available
 from ....config import CommonConfig
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_normalization_function
+from .utils import ParameterizedShortConvolution
 
 
 if TYPE_CHECKING:
@@ -74,6 +76,8 @@ class GatedLinearAttention2(nn.Module):
         config: CommonConfig,
         mode: str = 'chunk',
         chunk_size: int = 64,
+        conv_size: int = 4,
+        conv_bias: bool = False,
         use_output_gate: bool = True,
         gate_fn: str = 'swish',
         elementwise_affine: Optional[bool] = True,
@@ -89,6 +93,7 @@ class GatedLinearAttention2(nn.Module):
         self.num_heads = config.n_head
         self.chunk_size = chunk_size
 
+        self.use_short_conv = config.use_short_conv
         self.use_output_gate = use_output_gate
 
         assert self.hidden_size % self.num_heads == 0, f"Hidden size {self.hidden_size} is not divisible by the number of heads {self.num_heads}."
@@ -99,13 +104,26 @@ class GatedLinearAttention2(nn.Module):
 
         assert mode in ['chunk', 'fused_recurrent', 'fused_chunk'], f"Not suppoerted mode `{mode}`."
 
-        self.q_proj = nn.Linear(self.hidden_size, self.num_slot, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_slot, bias=False)
-        if self.use_output_gate:
-            self.og_proj = nn.Linear(self.value_dim, self.value_dim, bias=False)
-            self.ig_proj = nn.Linear(self.hidden_size, self.value_dim, bias=False)
+        initializer_range = config.initializer_range
+        std_in = initializer_range
+        init_method = InitMethod(config.init_method)
+        if init_method == InitMethod.mup:
+            std_in /= math.sqrt(config.m_width)
+        self.q_proj = ParameterizedLinear(self.hidden_size, self.num_slot, bias=False, std=std_in)
+        self.k_proj = ParameterizedLinear(self.hidden_size, self.num_slot, bias=False, std=std_in)
+        self.v_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
 
-        # self.o_proj = nn.Linear(self.value_dim, self.hidden_size, bias=False)
+        if self.use_short_conv:
+            std_conv = std_in
+            self.conv_size = conv_size
+            self.q_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv)
+            self.k_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv)
+            self.v_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv)
+
+        if self.use_output_gate:
+            self.og_proj = ParameterizedLinear(self.value_dim, self.value_dim, bias=False, std=std_in)
+            self.ig_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
+        # self.o_proj = ParameterizedLinear(self.value_dim, self.hidden_size, bias=False, std=std_out)
 
         if gate_fn == 'swish' and fuse_norm and use_output_gate:
             self.g_norm_swish_gate = FusedRMSNormSwishGate(self.value_dim, elementwise_affine, norm_eps)
@@ -116,17 +134,6 @@ class GatedLinearAttention2(nn.Module):
             self.gate_fn = ACT2FN[gate_fn]
 
         self.gate_logit_normalizer = gate_logit_normalizer
-
-        self.apply(self._initialize_weights)
-
-    def _initialize_weights(self, module: nn.Module):
-        if getattr(module, "_is_hf_initialized", False):
-            return
-        if isinstance(module, nn.Linear):
-            nn.init.xavier_uniform_(module.weight, gain=2 ** -2.5)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        module._is_hf_initialized = True
 
     def forward(
         self,
@@ -141,16 +148,35 @@ class GatedLinearAttention2(nn.Module):
         mode = 'fused_recurrent' if hidden_states.shape[1] == 1 else self.mode
 
         last_state = past_key_values[self.layer_idx] if use_cache else None
-        q = self.q_proj(hidden_states)
-        k = self.k_proj(hidden_states)
-        v = hidden_states
+        if self.use_short_conv:
+            conv_state_q = last_state[0] if use_cache else None
+            conv_state_k = last_state[1] if use_cache else None
+            conv_state_vg = last_state[2] if use_cache else None
+            q = self.q_proj(hidden_states)
+            k = self.k_proj(hidden_states)
+            v = self.v_proj(hidden_states)
+            q = self.q_conv1d(q, attention_mask, conv_state_q)
+            k = self.k_conv1d(k, attention_mask, conv_state_k)
+            v = self.v_conv1d(v, attention_mask, conv_state_vg)
+        else:
+            q = self.q_proj(hidden_states)
+            k = self.k_proj(hidden_states)
+            v = self.v_proj(hidden_states)
+        # v = hidden_states
 
         q = q[:, None, :, :]
         k = k[:, None, :, :]
         v = v[:, None, :, :]
 
+        # dealing with left-padding
+        if attention_mask is not None:
+            v = v.mul_(attention_mask.unsqueeze(-1))
+            
+        # improve precision
+        k = k.float()
+
         q = swish(q)
-        k = F.sigmoid(k)
+        k = F.sigmoid(k).to(v)
         gf = F.logsigmoid(-k)
 
         recurrent_state = last_state[-1] if use_cache else None
@@ -164,7 +190,10 @@ class GatedLinearAttention2(nn.Module):
             raise NotImplementedError(f"Not supported mode `{mode}`.")
 
         if past_key_values is not None:
-            last_state = (recurrent_state,)
+            if self.use_short_conv:
+                last_state = (conv_state_q, conv_state_k, conv_state_vg, recurrent_state)
+            else:
+                last_state = (recurrent_state,)
             past_key_values.update(last_state, self.layer_idx, q.shape[2])
 
         o = rearrange(o, 'b h l d -> b l (h d)')

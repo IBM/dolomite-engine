@@ -1,5 +1,3 @@
-from typing import Type, Union
-
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .models import (
@@ -46,14 +44,12 @@ def register_model_classes() -> None:
         _CUSTOM_MODEL_CLASSES.append(auto_model_for_causal_lm_class)
 
 
-def is_custom_model(
-    model_class: Union[Type[AutoModelForCausalLM], Type[AutoModelForSeq2SeqLM]], model_type: str
-) -> bool:
+def is_custom_model(model_class: type[AutoModelForCausalLM] | type[AutoModelForSeq2SeqLM], model_type: str) -> bool:
     return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
 
 
 def is_tensor_parallel_compatible_model(
-    model_class: Union[Type[AutoModelForCausalLM], Type[AutoModelForSeq2SeqLM]], model_type: str
+    model_class: type[AutoModelForCausalLM] | type[AutoModelForSeq2SeqLM], model_type: str
 ) -> bool:
     return model_class.__name__ == "GPTDolomiteForCausalLM" or model_type == "gpt_dolomite"
 

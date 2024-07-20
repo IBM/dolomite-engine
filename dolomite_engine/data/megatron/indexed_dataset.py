@@ -14,7 +14,6 @@ from enum import Enum
 from functools import lru_cache
 from itertools import accumulate
 from types import TracebackType
-from typing import List, Optional, Tuple, Type, Union
 
 import numpy
 import torch
@@ -38,11 +37,11 @@ class DType(Enum):
     uint16 = 8
 
     @classmethod
-    def code_from_dtype(cls, value: Type[numpy.number]) -> int:
+    def code_from_dtype(cls, value: type[numpy.number]) -> int:
         """Get the code from the dtype
 
         Args:
-            value (Type[numpy.number]): The dtype
+            value (type[numpy.number]): The dtype
 
         Returns:
             int: The code
@@ -50,23 +49,23 @@ class DType(Enum):
         return cls[value.__name__].value
 
     @classmethod
-    def dtype_from_code(cls, value: int) -> Type[numpy.number]:
+    def dtype_from_code(cls, value: int) -> type[numpy.number]:
         """Get the dtype from the code
 
         Args:
             value (int): The code
 
         Returns:
-            Type[numpy.number]: The dtype
+            type[numpy.number]: The dtype
         """
         return getattr(numpy, cls(value).name)
 
     @staticmethod
-    def size(key: Union[int, Type[numpy.number]]) -> int:
+    def size(key: int | type[numpy.number]) -> int:
         """Get the size of the dtype/code in bytes
 
         Args:
-            key (Union[int, Type[numpy.number]]): The dtype or code
+            key (int | type[numpy.number]): The dtype or code
 
         Raises:
             ValueError: If the key is neither dtype nor integer code
@@ -82,14 +81,14 @@ class DType(Enum):
             raise ValueError
 
     @staticmethod
-    def optimal_dtype(cardinality: Optional[int]) -> Type[numpy.number]:
+    def optimal_dtype(cardinality: int | None) -> type[numpy.number]:
         """Get the dtype to use for an index of a certain cardinality
 
         Args:
-            cardinality (Optional[int]): The number of elements to be indexed
+            cardinality (int | None): The number of elements to be indexed
 
         Returns:
-            Type[numpy.number]: The dtype to use for the index
+            type[numpy.number]: The dtype to use for the index
         """
         if cardinality is not None and cardinality < 65500:
             return numpy.uint16
@@ -103,10 +102,10 @@ class _IndexWriter:
     Args:
         idx_path (str): The path to the index file
 
-        dtype (Type[numpy.number]): The dtype of the index file
+        dtype (type[numpy.number]): The dtype of the index file
     """
 
-    def __init__(self, idx_path: str, dtype: Type[numpy.number]) -> None:
+    def __init__(self, idx_path: str, dtype: type[numpy.number]) -> None:
         self.idx_path = idx_path
         self.dtype = dtype
 
@@ -126,39 +125,31 @@ class _IndexWriter:
         return self
 
     def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
-    ) -> Optional[bool]:
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> bool | None:
         """Exit the context introduced by the 'with' keyword
 
         Args:
-            exc_type (Optional[Type[BaseException]]): Exception type
+            exc_type (type[BaseException] | None): Exception type
 
-            exc_val (Optional[BaseException]): Exception value
+            exc_val (BaseException | None): Exception value
 
-            exc_tb (Optional[TracebackType]): Exception traceback object
+            exc_tb (TracebackType | None): Exception traceback object
 
         Returns:
-            Optional[bool]: Whether to silence the exception
+            bool | None: Whether to silence the exception
         """
         self.idx_writer.close()
 
-    def write(
-        self,
-        sequence_lengths: List[int],
-        sequence_modes: Optional[List[int]],
-        document_indices: List[int],
-    ) -> None:
+    def write(self, sequence_lengths: list[int], sequence_modes: list[int], document_indices: list[int]) -> None:
         """Write the index (.idx) file
 
         Args:
-            sequence_lengths (List[int]): The length of each sequence
+            sequence_lengths (list[int]): The length of each sequence
 
-            sequence_modes (Optional[List[int]]): The mode of each sequences
+            sequence_modes (list[int]): The mode of each sequences
 
-            document_indices (List[int]): The sequence indices demarcating the end of each document
+            document_indices (list[int]): The sequence indices demarcating the end of each document
         """
         sequence_pointers = self._sequence_pointers(sequence_lengths)
 
@@ -193,14 +184,14 @@ class _IndexWriter:
             self.idx_writer.write(sequence_modes.tobytes(order="C"))
             del sequence_modes
 
-    def _sequence_pointers(self, sequence_lengths: List[int]) -> List[int]:
+    def _sequence_pointers(self, sequence_lengths: list[int]) -> list[int]:
         """Build the sequence pointers per the sequence lengths and dtype size
 
         Args:
-            sequence_lengths (List[int]): The length of each sequence
+            sequence_lengths (list[int]): The length of each sequence
 
         Returns:
-            List[int]: The pointer to the beginning of each sequence
+            list[int]: The pointer to the beginning of each sequence
         """
         itemsize = DType.size(self.dtype)
         curr_ptr = 0
@@ -327,14 +318,14 @@ class _IndexReader:
         return self.sequence_count
 
     @lru_cache(maxsize=8)
-    def __getitem__(self, idx: int) -> Tuple[numpy.int32, numpy.int64, Optional[numpy.int8]]:
+    def __getitem__(self, idx: int) -> tuple[numpy.int32, numpy.int64, numpy.int8 | None]:
         """Return the pointer, length, and mode at the index
 
         Args:
             idx (int): The index into the dataset
 
         Returns:
-            Tuple[numpy.int64, numpy.int32, Optional[numpy.int8]]: The pointer, length and mode at
+            Tuple[numpy.int64, numpy.int32, numpy.int8 | None]: The pointer, length and mode at
             the index
         """
         return (
@@ -381,19 +372,19 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         self.bin_buffer_mmap = numpy.memmap(get_bin_path(self.path_prefix), mode="r", order="C")
         self.bin_buffer = memoryview(self.bin_buffer_mmap)
 
-    def __getstate__(self) -> Tuple[str, bool]:
+    def __getstate__(self) -> tuple[str, bool]:
         """Get the state during pickling
 
         Returns:
-            Tuple[str, bool]: The state tuple
+            tuple[str, bool]: The state tuple
         """
         return self.path_prefix, self.multimodal
 
-    def __setstate__(self, state: Tuple[str, bool]) -> None:
+    def __setstate__(self, state: tuple[str, bool]) -> None:
         """Set the state during un-pickling
 
         Args:
-            state (Tuple[str, bool]): The state tuple
+            state (tuple[str, bool]): The state tuple
         """
         path_prefix, multimodal = state
         self.initialize(path_prefix, multimodal)
@@ -413,20 +404,18 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         """
         return len(self.index)
 
-    def __getitem__(
-        self, idx: Union[int, numpy.integer, slice]
-    ) -> Union[numpy.ndarray, Tuple[numpy.ndarray, numpy.ndarray]]:
+    def __getitem__(self, idx: int | numpy.integer | slice) -> numpy.ndarray | tuple[numpy.ndarray, numpy.ndarray]:
         """Return from the dataset
 
         Args:
-            idx (Union[int, numpy.integer, slice]): The index or index slice into the dataset
+            idx (int | numpy.integer | slice): The index or index slice into the dataset
 
         Raises:
             ValueError: When the index slice is non-contiguous
             TypeError: When the index is of an unexpected type
 
         Returns:
-            Union[numpy.ndarray, Tuple[numpy.ndarray, numpy.ndarray]]: The sequence tokens and
+            numpy.ndarray | tuple[numpy.ndarray, numpy.ndarray]: The sequence tokens and
             modes at the index or index slice
         """
         if isinstance(idx, (int, numpy.integer)):
@@ -458,7 +447,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         else:
             raise TypeError("Unexpected type received for idx: {}".format(type(idx)))
 
-    def get(self, idx: int, offset: int = 0, length: Optional[int] = None) -> numpy.ndarray:
+    def get(self, idx: int, offset: int = 0, length: int | None = None) -> numpy.ndarray:
         """Retrieve a single item from the dataset with the option to only
         return a portion of the item.
 
@@ -537,12 +526,12 @@ class MMapIndexedDatasetBuilder:
     Args:
         bin_path (str): The path to the data (.bin) file
 
-        dtype (Type[numpy.number], optional): The dtype of the index file. Defaults to numpy.int32.
+        dtype (numpy.dtype, optional): The dtype of the index file. Defaults to numpy.int32.
 
         multimodal (bool, optional): Whether the dataset is multimodal. Defaults to False.
     """
 
-    def __init__(self, bin_path: str, dtype: Type[numpy.number] = numpy.int32, multimodal: bool = False) -> None:
+    def __init__(self, bin_path: str, dtype: numpy.dtype = numpy.int32, multimodal: bool = False) -> None:
         self.data_file = open(bin_path, "wb")
         self.dtype = dtype
         self.multimodal = multimodal
@@ -565,7 +554,7 @@ class MMapIndexedDatasetBuilder:
         if self.multimodal:
             self.sequence_modes.append(mode)
 
-    def add_document(self, tensor: torch.Tensor, lengths: List[int], modes: Optional[List[int]] = None) -> None:
+    def add_document(self, tensor: torch.Tensor, lengths: list[int], modes: list[int] | None = None) -> None:
         """Add an entire document to the dataset
 
         Args:

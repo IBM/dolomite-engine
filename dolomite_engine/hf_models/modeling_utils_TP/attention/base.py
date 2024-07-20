@@ -1,21 +1,32 @@
 import math
-from typing import Tuple
+from typing import Any, Mapping
 
 import torch
 import torch.distributed
 import torch.nn as nn
+from torch.distributed._tensor.api import DTensor
+from torch.distributed._tensor.placement_types import Replicate, Shard
+from torch.distributed._tensor.placement_types import _Partial as Partial
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ...modeling_utils import Attention
+from ...modeling_utils import Attention, ParameterizedLinear
 from ...utils import divide_if_divisible
 from ..dropout import Dropout_TP
-from ..linear import ColumnParallelLinear, RowParallelLinear, TensorParallelSharedLinear
+from ..linear import ColumnParallelLinear, RowParallelLinear
+from ..TP import dtensor_to_tensor, modify_state_dict_to_dtensor_dict, tensor_to_dtensor
 
 
-class Attention_TP(Attention):
-    def __init__(self, config: CommonConfig, causal: bool, layer_idx: int = None) -> None:
+class _BaseAttention_TP(nn.Module):
+    def __init__(
+        self,
+        config: CommonConfig,
+        causal: bool,
+        layer_idx: int | None = None,
+        use_padding_free_transformer: bool = False,
+        sequence_parallel: bool = False,
+    ) -> None:
         nn.Module.__init__(self)
 
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -54,9 +65,6 @@ class Attention_TP(Attention):
 
         self.layer_idx = layer_idx
         self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
-        self.scale_attention_softmax_in_fp32 = (
-            config.scale_attention_softmax_in_fp32 and config.attention_softmax_in_fp32
-        )
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -77,6 +85,8 @@ class Attention_TP(Attention):
                 self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
             )
         elif self.attention_head_type == AttentionHeadType.gqa:
             assert (
@@ -105,6 +115,8 @@ class Attention_TP(Attention):
                 self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
             )
         elif self.attention_head_type == AttentionHeadType.mqa:
             if self.global_num_key_value_heads is None:
@@ -116,14 +128,23 @@ class Attention_TP(Attention):
 
             self.num_key_value_heads = 1
 
-            self.c_attn = _MQA_QueryKeyValueProjection(config)
+            self.c_attn = _MQA_QueryKeyValueProjection(
+                config, use_padding_free_transformer=use_padding_free_transformer, sequence_parallel=sequence_parallel
+            )
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = RowParallelLinear(self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
+        self.c_proj = RowParallelLinear(
+            self.global_hidden_size,
+            self.global_hidden_size,
+            bias=self.add_bias,
+            std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
+        )
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop
@@ -138,8 +159,8 @@ class Attention_TP(Attention):
         self.c_proj.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix=prefix + "c_proj.")
 
     def _prepare_qkv_for_forward_mqa(
-        self, query_key_value: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        self, query_key_value: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query, key, value = query_key_value
         batch_size, query_length = query.shape[:-1]
 
@@ -153,7 +174,9 @@ class Attention_TP(Attention):
 
 
 class _MQA_QueryKeyValueProjection(nn.Module):
-    def __init__(self, config: CommonConfig) -> None:
+    def __init__(
+        self, config: CommonConfig, use_padding_free_transformer: bool = False, sequence_parallel: bool = False
+    ) -> None:
         super().__init__()
 
         self.global_hidden_size = config.n_embd
@@ -180,17 +203,27 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.q_attn = ColumnParallelLinear(
-            self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
+            self.global_hidden_size,
+            self.global_hidden_size,
+            bias=self.add_bias,
+            std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
         )
 
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.kv_attn = TensorParallelSharedLinear(
-            self.global_hidden_size, 2 * self.head_dim, bias=self.add_bias, std=std
+        self.kv_attn = _MQASharedLinear(
+            self.global_hidden_size,
+            2 * self.head_dim,
+            bias=self.add_bias,
+            std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query = self.q_attn(hidden_states)
 
         key_value = self.kv_attn(hidden_states)
@@ -220,3 +253,71 @@ class _MQA_QueryKeyValueProjection(nn.Module):
 
         self.q_attn.load_state_dict(q_attn_state_dict)
         self.kv_attn.load_state_dict(kv_attn_state_dict)
+
+
+class _MQASharedLinear(ParameterizedLinear):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
+        use_padding_free_transformer: bool = False,
+        sequence_parallel: bool = False,
+    ) -> None:
+        super().__init__(in_features, out_features, bias, device, dtype, std)
+
+        self.weight = nn.Parameter(
+            DTensor.from_local(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            )
+        )
+        if bias:
+            self.bias = nn.Parameter(
+                DTensor.from_local(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                )
+            )
+
+        if sequence_parallel:
+            if use_padding_free_transformer:
+                self.input_placement = Shard(0)
+            else:
+                self.input_placement = Shard(1)
+        else:
+            self.input_placement = Replicate()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        input = tensor_to_dtensor(input, current_placement=self.input_placement)
+        input = super().forward(input)
+        input = dtensor_to_tensor(input, desired_placement=Replicate(), grad_placement=Partial())
+        return input
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        with get_cuda_rng_tracker().fork():
+            return super().reset_parameters()
+
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
+        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
+        return super().load_state_dict(state_dict, strict, assign)
+
+
+class Attention_TP(_BaseAttention_TP, Attention):
+    def __init__(
+        self,
+        config: CommonConfig,
+        causal: bool,
+        layer_idx: int | None = None,
+        sequence_parallel: bool = False,
+    ) -> None:
+        _BaseAttention_TP.__init__(
+            self,
+            config,
+            causal,
+            layer_idx=layer_idx,
+            use_padding_free_transformer=False,
+            sequence_parallel=sequence_parallel,
+        )

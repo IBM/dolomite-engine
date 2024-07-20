@@ -21,7 +21,7 @@ class DenseMoEConfig(PretrainedConfig):
         n_embd: int = 768,
         n_layer: int = 12,
         n_head: int = 12,
-        n_inner: int = None,
+        n_inner: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         resid_pdrop: float = 0.1,
         embd_pdrop: float = 0.1,
@@ -30,23 +30,22 @@ class DenseMoEConfig(PretrainedConfig):
         layer_norm_epsilon: float = 0.00001,
         initializer_range: float = 0.02,
         scale_attn_weights: bool = True,
-        attention_multiplier: float = None,
+        attention_multiplier: float | None = None,
         use_cache: bool = True,
         bos_token_id: int = 50256,
         eos_token_id: int = 50256,
         pad_token_id: int = 50256,
         attention_softmax_in_fp32: bool = True,
-        scale_attention_softmax_in_fp32: bool = True,
         add_bias: bool = True,
         position_embedding_type: str = "learned_absolute",
         rope_theta: int = 10000,
-        rope_scaling: dict = None,
+        rope_scaling: dict | None = None,
         num_experts: int = 8,
         output_router_logits: bool = False,
         router_aux_loss_coef: float = 0.001,
-        m_emb: float = None,
-        m_width: float = None,
-        m_residual: float = None,
+        m_emb: float | None = None,
+        m_width: float | None = None,
+        m_residual: float | None = None,
         upcast_logits_for_loss: bool = False,
         **kwargs,
     ) -> None:
@@ -67,7 +66,6 @@ class DenseMoEConfig(PretrainedConfig):
         self.attention_multiplier = attention_multiplier
         self.use_cache = use_cache
         self.attention_softmax_in_fp32 = attention_softmax_in_fp32
-        self.scale_attention_softmax_in_fp32 = scale_attention_softmax_in_fp32
         self.position_embedding_type = position_embedding_type
         self.add_bias = add_bias
         self.rope_theta = rope_theta

@@ -1,5 +1,4 @@
 from collections import defaultdict
-from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -88,23 +87,22 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
 
     def forward(
         self,
-        input_ids: torch.Tensor = None,
-        past_key_values: List[torch.Tensor] = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, BaseModelOutputWithPast]:
+        input_ids: torch.Tensor | None = None,
+        past_key_values: list[torch.Tensor] | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        use_cache: bool | None = None,
+        output_hidden_states: bool | None = None,
+        return_dict: bool | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple | BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,
             return_dict,
-            input_shape,
             hidden_states,
             attention_mask,
             position_ids,
@@ -124,8 +122,6 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
             max_seqlen=max_seqlen,
         )
 
-        output_shape = input_shape + (hidden_states.size(-1),)
-
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
@@ -143,7 +139,6 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
 
         hidden_states = self.ln_f(hidden_states)
 
-        hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
@@ -157,5 +152,5 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
             hidden_states=all_hidden_states,
         )
 
-    def get_global_local_idx(self, index: int) -> Tuple[int, int]:
+    def get_global_local_idx(self, index: int) -> tuple[int, int]:
         return self.layer_map[index]

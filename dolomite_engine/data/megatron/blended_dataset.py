@@ -6,7 +6,6 @@ import logging
 import os
 import time
 from collections import OrderedDict
-from typing import Dict, List, Tuple, Union
 
 import numpy
 import torch
@@ -24,9 +23,9 @@ class BlendedDataset(torch.utils.data.Dataset):
     """Conjugating class for a set of MegatronDataset instances
 
     Args:
-        datasets (List[MegatronDataset]): The MegatronDataset instances to blend
+        datasets (list[MegatronDataset]): The MegatronDataset instances to blend
 
-        weights (List[float]): The weights which determines the dataset blend ratios
+        weights (list[float]): The weights which determines the dataset blend ratios
 
         size (int): The number of samples to draw from the blend
 
@@ -38,8 +37,8 @@ class BlendedDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        datasets: List[MegatronDataset],
-        weights: List[float],
+        datasets: list[MegatronDataset],
+        weights: list[float],
         size: int,
         config: BlendedMegatronDatasetConfig,
         caching_allowed: bool,
@@ -84,7 +83,7 @@ class BlendedDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return self.size
 
-    def __getitem__(self, idx: int) -> Dict[str, Union[int, numpy.ndarray]]:
+    def __getitem__(self, idx: int) -> dict[str, int | numpy.ndarray]:
         dataset_id = self.dataset_index[idx]
         dataset_sample_id = self.dataset_sample_index[idx]
         return {
@@ -92,7 +91,7 @@ class BlendedDataset(torch.utils.data.Dataset):
             **self.datasets[dataset_id][dataset_sample_id],
         }
 
-    def _build_indices(self) -> Tuple[numpy.ndarray, numpy.ndarray]:
+    def _build_indices(self) -> tuple[numpy.ndarray, numpy.ndarray]:
         """Build and optionally cache the dataset index and the dataset sample index
 
         The dataset index is a 1-D mapping which determines the dataset to query. The dataset
@@ -100,7 +99,7 @@ class BlendedDataset(torch.utils.data.Dataset):
         dataset.
 
         Returns:
-            Tuple[numpy.ndarray, numpy.ndarray]: The dataset index and the dataset sample index
+            tuple[numpy.ndarray, numpy.ndarray]: The dataset index and the dataset sample index
         """
 
         path_to_cache = getattr(self.config, "path_to_cache")

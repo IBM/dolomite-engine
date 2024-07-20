@@ -2,9 +2,8 @@
 
 import hashlib
 import json
-from abc import ABC, abstractmethod, abstractstaticmethod
+from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict, List
 
 import numpy
 import torch
@@ -78,17 +77,18 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
         """
 
     @abstractmethod
-    def __getitem__(self, idx: int) -> Dict[str, numpy.ndarray]:
+    def __getitem__(self, idx: int) -> dict[str, numpy.ndarray]:
         """Return from the dataset
 
         Args:
             idx (int): The index into the dataset
 
         Returns:
-            Dict[str, numpy.ndarray]: See abstract implementation
+            dict[str, numpy.ndarray]: See abstract implementation
         """
 
-    @abstractstaticmethod
+    @staticmethod
+    @abstractmethod
     def is_multimodal() -> bool:
         """Return True if the inheritor class and its internal MMapIndexedDataset are multimodal
 
@@ -96,7 +96,8 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
             bool: See abstract implementation
         """
 
-    @abstractstaticmethod
+    @staticmethod
+    @abstractmethod
     def is_split_by_sequence() -> bool:
         """Return whether the dataset is split by sequence
 
@@ -118,13 +119,13 @@ class MegatronDataset(ABC, torch.utils.data.Dataset):
         return not cls.is_split_by_sequence()
 
     @staticmethod
-    def _key_config_attributes() -> List[str]:
+    def _key_config_attributes() -> list[str]:
         """Return all config attributes which contribute to uniquely identifying the dataset.
 
         These attributes will be used to build a uniquely identifying string and MD5 hash which
         will be used to cache/load the dataset from run to run.
 
         Returns:
-            List[str]: The key config attributes
+            list[str]: The key config attributes
         """
         return ["name", "split", "random_seed", "sequence_length"]

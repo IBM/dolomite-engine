@@ -12,7 +12,6 @@
 
 
 import math
-from typing import Tuple
 
 import torch
 
@@ -164,7 +163,7 @@ class _TorchTitanRMSNorm(torch.autograd.Function):
         return y
 
     @staticmethod
-    def backward(ctx, dy: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, None]:
+    def backward(ctx, dy: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, None]:
         x, weight, rstd = ctx.saved_tensors
         eps = ctx.eps
         x_shape_start = ctx.x_shape_start

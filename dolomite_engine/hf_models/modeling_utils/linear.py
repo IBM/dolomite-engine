@@ -8,9 +8,9 @@ class ParameterizedLinear(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        device: torch.device = None,
-        dtype: torch.dtype = None,
-        std: float = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
     ) -> None:
         self.std = std
         super().__init__(in_features, out_features, bias, device, dtype)

@@ -91,7 +91,6 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         scale_attn_weights=config.scale_attn_weights,
         use_cache=config.use_cache,
         attention_softmax_in_fp32=config.attention_softmax_in_fp32,
-        scale_attention_softmax_in_fp32=config.scale_attention_softmax_in_fp32,
         multi_query=config.multi_query,
         tie_word_embeddings=config.tie_word_embeddings,
         bos_token_id=config.bos_token_id,

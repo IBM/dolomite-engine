@@ -26,6 +26,7 @@ from .register_hf import (
     is_tensor_parallel_compatible_model,
     register_model_classes,
 )
+from .utils import convert_padding_free_lists_to_tensors
 
 
 register_model_classes()

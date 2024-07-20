@@ -1,5 +1,3 @@
-from typing import List
-
 from datasets import load_dataset
 
 from ...enums import DatasetSplit
@@ -7,7 +5,7 @@ from .base import BaseInstructionDataset
 
 
 class DollyDataset(BaseInstructionDataset):
-    def prepare_examples(self) -> List[dict]:
+    def prepare_examples(self) -> list[dict]:
         if self.split != DatasetSplit.train:
             return []
 
