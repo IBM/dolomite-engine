@@ -43,8 +43,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             if self.tp_rank == 0:
                 tokens: torch.Tensor = batch["text"]
-                if not tokens.is_cuda:
-                    tokens = tokens.to(torch.cuda.current_device())
+                tokens = tokens.to(torch.cuda.current_device())
             else:
                 tokens = torch.empty(
                     (self.micro_batch_size, self.sequence_length + 1),
@@ -71,8 +70,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
         else:
             tokens: torch.Tensor = batch["text"]
-            if not tokens.is_cuda:
-                tokens = tokens.to(torch.cuda.current_device())
+            tokens = tokens.to(torch.cuda.current_device())
 
             input_ids = tokens[:, :-1]
             labels = tokens[:, 1:]

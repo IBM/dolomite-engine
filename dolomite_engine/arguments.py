@@ -322,7 +322,9 @@ class DistributedArgs(BaseArgs):
     # data parallel world size
     data_parallel_size: Optional[int] = None
     # distributed timeout for NCCL in minutes
-    timeout_minutes: Optional[int] = None
+    timeout_minutes: int | None = None
+    # fsdp algorithm
+    fsdp_algorithm: int = 1
 
     def model_post_init(self, __context: Any) -> None:
         if self.zero_quantized_weights or self.zero_quantized_gradients:

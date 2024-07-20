@@ -136,11 +136,12 @@ def train_step(
 
     no_sync = contextlib.nullcontext
     if distributed_backend == DistributedBackend.torch:
-        # FSDP-2
-        if hasattr(model, "set_requires_gradient_sync"):
-            model.set_requires_gradient_sync(False)
-        else:
+        fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+        if fsdp_algorithm == 1:
             no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
 
     loss = 0
     grad_norm = None
@@ -163,7 +164,7 @@ def train_step(
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    if distributed_backend == DistributedBackend.torch and hasattr(model, "set_requires_gradient_sync"):
+    if distributed_backend == DistributedBackend.torch and fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
@@ -183,8 +184,10 @@ def train_step(
         loss_micro_step.backward()
 
         if gradient_clipping is not None:
-            assert ProcessGroupManager.get_tensor_parallel_world_size() == 1
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+            if fsdp_algorithm == 1:
+                grad_norm = model.clip_grad_norm_(gradient_clipping)
+            else:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
 
         optimizer.step()
         lr_scheduler.step()
