@@ -4,6 +4,7 @@ import torch
 import torch.distributed
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
+from torch.distributed.pipelining import PipelineStage
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
@@ -200,6 +201,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         super()._setup_model()
 
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
+
+        if not self.is_pp_first_stage:
+            return
 
         if self.use_padding_free_transformer:
             if not self.reset_attention_mask:

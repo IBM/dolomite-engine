@@ -1,5 +1,8 @@
 import torch
 import torch.distributed
+from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
+
+from dolomite_engine.enums import AttentionImplementation, DistributedBackend, Mode
 
 from ..communication import Communication
 from ..hf_models import convert_padding_free_lists_to_tensors
@@ -8,6 +11,48 @@ from .base import ModelWrapper
 
 
 class ModelWrapperForFinetuning(ModelWrapper):
+    def __init__(
+        self,
+        mode: Mode,
+        model_name: str | None,
+        pretrained_config: dict | None,
+        model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
+        dtype: torch.dtype,
+        efficient_initialization: bool,
+        attention_implementation: AttentionImplementation,
+        use_padding_free_transformer: bool,
+        tensor_parallel_word_embeddings: bool,
+        sequence_parallel: bool,
+        distributed_backend: DistributedBackend,
+        random_seed: int,
+        neft_alpha: float | None = None,
+        trust_remote_code: bool = False,
+        tokenizer_name: str | None = None,
+        additional_special_tokens: list[str] | None = None,
+        upcast_logits_for_loss: bool = False,
+    ) -> None:
+        super().__init__(
+            mode,
+            model_name,
+            pretrained_config,
+            model_class,
+            dtype,
+            efficient_initialization,
+            attention_implementation,
+            use_padding_free_transformer,
+            tensor_parallel_word_embeddings,
+            sequence_parallel,
+            distributed_backend,
+            random_seed,
+            neft_alpha,
+            trust_remote_code,
+            tokenizer_name,
+            additional_special_tokens,
+            upcast_logits_for_loss,
+        )
+
+        assert self.pp_world_size == 1, "pipeline parallel is not supported for finetuning"
+
     def forward(self, batch: dict) -> torch.Tensor:
         """forward function for a batch
 
