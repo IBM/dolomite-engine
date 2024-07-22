@@ -10,7 +10,6 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
 from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
-from torch.distributed.pipelining import PipelineStage
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -226,13 +225,6 @@ def wrap_model_for_distributed_training(
 
         if torch_compile:
             model = torch.compile(model)
-
-        if args.distributed_args.pipeline_parallel_size > 1:
-            model = PipelineStage(
-                model,
-                stage_index=ProcessGroupManager.get_pipeline_parallel_rank(),
-                num_stages=ProcessGroupManager.get_pipeline_parallel_world_size(),
-            )
 
         optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(
             optimizer_class_name=args.optimizer_args.class_name,
