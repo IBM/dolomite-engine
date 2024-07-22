@@ -27,7 +27,6 @@ _PIPELINE_PARALLEL_MESH: DeviceMesh | None = None
 _PIPELINE_PARALLEL_GROUP: ProcessGroup | None = None
 _PIPELINE_PARALLEL_RANK: int | None = None
 _PIPELINE_PARALLEL_WORLD_SIZE: int | None = None
-_PIPELINE_PARALLEL_FIRST_RANK: int | None = None
 
 # data parallel
 _DATA_PARALLEL_MESH: DeviceMesh | None = None
@@ -231,16 +230,6 @@ class ProcessGroupManager:
         if _PIPELINE_PARALLEL_WORLD_SIZE is None:
             _PIPELINE_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_pipeline_parallel_mesh().size()
         return _PIPELINE_PARALLEL_WORLD_SIZE
-
-    @staticmethod
-    def get_pipeline_parallel_first_rank() -> int:
-        global _PIPELINE_PARALLEL_FIRST_RANK
-
-        if _PIPELINE_PARALLEL_FIRST_RANK is None:
-            group = ProcessGroupManager.get_pipeline_parallel_group()
-            ranks = torch.distributed.get_process_group_ranks(group)
-            _PIPELINE_PARALLEL_FIRST_RANK = ranks[0]
-        return _PIPELINE_PARALLEL_FIRST_RANK
 
     # data parallel
     @staticmethod
