@@ -16,6 +16,11 @@ class GPTDolomitePreTrainedModel_TP(GPTDolomitePreTrainedModel):
     def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
         GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
 
+        self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
+        self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
+        self.is_pp_first_stage = self.pp_rank == 0
+        self.is_pp_last_stage = self.pp_rank == self.pp_world_size - 1
+
         self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
 
@@ -32,17 +37,27 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         self.initializer_range = config.initializer_range
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-        self.wte = Embedding_TP(
-            config.vocab_size,
-            self.embed_dim,
-            std=self.initializer_range,
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-            use_padding_free_transformer=self._use_padding_free_transformer,
-            sequence_parallel=self.sequence_parallel,
-        )
+        if self.is_pp_first_stage:
+            self.wte = Embedding_TP(
+                config.vocab_size,
+                self.embed_dim,
+                std=self.initializer_range,
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                sequence_parallel=self.sequence_parallel,
+            )
 
-        self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
+            self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
+
+        if config.num_hidden_layers % self.pp_world_size == 0:
+            num_layers = config.num_hidden_layers // self.pp_world_size
+        else:
+            num_layers = (
+                config.num_hidden_layers % self.pp_world_size
+                if self.is_pp_last_stage
+                else config.num_hidden_layers // self.pp_world_size
+            )
+
         self.h = nn.ModuleList(
             [
                 GPTDolomiteBlock_TP(
@@ -53,17 +68,19 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
                 )
-                for i in range(config.num_hidden_layers)
+                for i in range(num_layers)
             ]
         )
-        self.ln_f = get_normalization_function_TP(
-            config.normalization_function,
-            self.embed_dim,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=self.normalization_implementation,
-            use_padding_free_transformer=self._use_padding_free_transformer,
-            sequence_parallel=self.sequence_parallel,
-        )
+
+        if self.is_pp_last_stage:
+            self.ln_f = get_normalization_function_TP(
+                config.normalization_function,
+                self.embed_dim,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=self.normalization_implementation,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                sequence_parallel=self.sequence_parallel,
+            )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self._setup_positional_encoding()
@@ -109,14 +126,15 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         max_position_embeddings = self.config.max_position_embeddings
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            self.wpe = Embedding_TP(
-                max_position_embeddings,
-                self.embed_dim,
-                std=self.initializer_range,
-                tensor_parallel_word_embeddings=False,
-                use_padding_free_transformer=self._use_padding_free_transformer,
-                sequence_parallel=self.sequence_parallel,
-            )
+            if self.is_pp_first_stage:
+                self.wpe = Embedding_TP(
+                    max_position_embeddings,
+                    self.embed_dim,
+                    std=self.initializer_range,
+                    tensor_parallel_word_embeddings=False,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    sequence_parallel=self.sequence_parallel,
+                )
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
             self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:

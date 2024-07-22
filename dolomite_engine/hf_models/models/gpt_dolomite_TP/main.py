@@ -9,7 +9,7 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import SafeTensorsWeightsManager
 from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM
 from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
@@ -19,23 +19,22 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
     def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
         GPTDolomitePreTrainedModel_TP.__init__(self, config, **kwargs)
 
-        self.vocab_size = config.vocab_size
-
         self.transformer = GPTDolomiteModel_TP(config, **kwargs)
 
-        if not self._tied_word_embeddings:
-            self.lm_head = LMHead_TP(
-                self.vocab_size,
-                config.n_embd,
-                std=config.initializer_range,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-                sequence_parallel=self.sequence_parallel,
-            )
+        if self.is_pp_last_stage:
+            self.vocab_size = config.vocab_size
 
-        self.m_width = config.m_width
-        self.upcast_logits_for_loss = config.upcast_logits_for_loss
+            if not self._tied_word_embeddings:
+                self.lm_head = LMHead_TP(
+                    self.vocab_size,
+                    config.n_embd,
+                    std=config.initializer_range,
+                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                    sequence_parallel=self.sequence_parallel,
+                )
 
-        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+            self.m_width = config.m_width
+            self.upcast_logits_for_loss = config.upcast_logits_for_loss
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -57,22 +56,23 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | CausalLMOutputWithPast:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        assert not output_attentions
+        if self.is_pp_first_stage:
+            return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+            assert not output_attentions
 
-        input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            position_ids=position_ids,
-            token_type_ids=token_type_ids,
-            labels=labels,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-        )
+            input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                position_ids=position_ids,
+                token_type_ids=token_type_ids,
+                labels=labels,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+            )
 
         transformer_outputs = self.transformer(
             input_ids,
@@ -89,32 +89,35 @@ class GPTDolomiteForCausalLM_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteForCau
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.get_lm_logits(hidden_states)
+        if self.is_pp_last_stage:
+            lm_logits = self.get_lm_logits(hidden_states)
 
-        if self.m_width is not None:
-            lm_logits = lm_logits / self.m_width
+            if self.m_width is not None:
+                lm_logits = lm_logits / self.m_width
 
-        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+            loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
-        if output_parallel_lm_logits:
-            assert self.tensor_parallel_word_embeddings
+            if output_parallel_lm_logits:
+                assert self.tensor_parallel_word_embeddings
+            else:
+                if self.tensor_parallel_word_embeddings:
+                    # all gather
+                    lm_logits = tensor_to_dtensor(lm_logits, current_placement=Shard(-1))
+                    lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
+
+            if not return_dict:
+                output = (lm_logits,) + transformer_outputs[1:]
+                return ((loss,) + output) if loss is not None else output
+
+            return CausalLMOutputWithPast(
+                loss=loss,
+                logits=lm_logits,
+                past_key_values=transformer_outputs.past_key_values,
+                hidden_states=transformer_outputs.hidden_states,
+                attentions=transformer_outputs.attentions,
+            )
         else:
-            if self.tensor_parallel_word_embeddings:
-                # all gather
-                lm_logits = tensor_to_dtensor(lm_logits, current_placement=Shard(-1))
-                lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
-
-        if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
-            return ((loss,) + output) if loss is not None else output
-
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=lm_logits,
-            past_key_values=transformer_outputs.past_key_values,
-            hidden_states=transformer_outputs.hidden_states,
-            attentions=transformer_outputs.attentions,
-        )
+            return hidden_states
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return (
