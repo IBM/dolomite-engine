@@ -2,9 +2,8 @@ import torch
 import torch.distributed
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from dolomite_engine.enums import AttentionImplementation, DistributedBackend, Mode
-
 from ..communication import Communication
+from ..enums import AttentionImplementation, DistributedBackend, Mode
 from ..hf_models import convert_padding_free_lists_to_tensors
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper

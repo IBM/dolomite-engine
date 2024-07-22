@@ -4,7 +4,6 @@ import torch
 import torch.distributed
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed.pipelining import PipelineStage
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
