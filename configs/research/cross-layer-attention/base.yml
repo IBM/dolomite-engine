@@ -62,7 +62,6 @@ model_args:
     scale_attn_weights: true
     vocab_size: 50304
   efficient_initialization: false
-  dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
@@ -100,6 +99,9 @@ lr_scheduler_args:
   lr_decay_style: cosine
   num_warmup_steps: 2000
   num_decay_steps: 23000
+
+mixed_precision_args:
+  dtype: bf16
 
 distributed_args:
   distributed_backend: torch
