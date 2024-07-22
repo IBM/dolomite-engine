@@ -22,6 +22,12 @@ _TENSOR_PARALLEL_RANK: int | None = None
 _TENSOR_PARALLEL_WORLD_SIZE: int | None = None
 _TENSOR_PARALLEL_FIRST_RANK: int | None = None
 
+# pipeline parallel
+_PIPELINE_PARALLEL_MESH: DeviceMesh | None = None
+_PIPELINE_PARALLEL_GROUP: ProcessGroup | None = None
+_PIPELINE_PARALLEL_RANK: int | None = None
+_PIPELINE_PARALLEL_WORLD_SIZE: int | None = None
+
 # data parallel
 _DATA_PARALLEL_MESH: DeviceMesh | None = None
 _DATA_PARALLEL_GROUP: ProcessGroup | None = None
@@ -190,6 +196,40 @@ class ProcessGroupManager:
         yield
 
         _TENSOR_PARALLEL_FIRST_RANK = original_rank
+
+    # pipeline parallel
+    @staticmethod
+    def get_pipeline_parallel_mesh() -> DeviceMesh:
+        global _PIPELINE_PARALLEL_MESH
+
+        if _PIPELINE_PARALLEL_MESH is None:
+            global _MESH
+            _PIPELINE_PARALLEL_MESH = _MESH["pp"]
+        return _PIPELINE_PARALLEL_MESH
+
+    @staticmethod
+    def get_pipeline_parallel_group() -> ProcessGroup:
+        global _PIPELINE_PARALLEL_GROUP
+
+        if _PIPELINE_PARALLEL_GROUP is None:
+            _PIPELINE_PARALLEL_GROUP = ProcessGroupManager.get_pipeline_parallel_mesh().get_group()
+        return _PIPELINE_PARALLEL_GROUP
+
+    @staticmethod
+    def get_pipeline_parallel_rank() -> int:
+        global _PIPELINE_PARALLEL_RANK
+
+        if _PIPELINE_PARALLEL_RANK is None:
+            _PIPELINE_PARALLEL_RANK = ProcessGroupManager.get_pipeline_parallel_mesh().get_local_rank()
+        return _PIPELINE_PARALLEL_RANK
+
+    @staticmethod
+    def get_pipeline_parallel_world_size() -> int:
+        global _PIPELINE_PARALLEL_WORLD_SIZE
+
+        if _PIPELINE_PARALLEL_WORLD_SIZE is None:
+            _PIPELINE_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_pipeline_parallel_mesh().size()
+        return _PIPELINE_PARALLEL_WORLD_SIZE
 
     # data parallel
     @staticmethod
