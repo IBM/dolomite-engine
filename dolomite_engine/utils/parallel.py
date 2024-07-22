@@ -41,6 +41,7 @@ class ProcessGroupManager:
     def __init__(
         self,
         tensor_parallel_size: int = 1,
+        pipeline_parallel_size: int = 1,
         data_parallel_size: int | None = None,
         data_parallel_replication_world_size: int | None = None,
         data_parallel_sharding_world_size: int | None = None,
@@ -58,9 +59,9 @@ class ProcessGroupManager:
         total_gpus = int(os.getenv("WORLD_SIZE", 1))
 
         if data_parallel_size is None:
-            data_parallel_size = total_gpus // tensor_parallel_size
+            data_parallel_size = total_gpus // (tensor_parallel_size * pipeline_parallel_size)
 
-        assert tensor_parallel_size * data_parallel_size == total_gpus
+        assert tensor_parallel_size * pipeline_parallel_size * data_parallel_size == total_gpus
 
         if data_parallel_replication_world_size is None:
             assert data_parallel_sharding_world_size is None
@@ -77,8 +78,8 @@ class ProcessGroupManager:
 
         _MESH = init_device_mesh(
             "cuda",
-            (data_parallel_size, tensor_parallel_size),
-            mesh_dim_names=("dp", "tp"),
+            (pipeline_parallel_size, data_parallel_size, tensor_parallel_size),
+            mesh_dim_names=("pp", "dp", "tp"),
         )
 
         local_rank = int(os.getenv("LOCAL_RANK", 0))
