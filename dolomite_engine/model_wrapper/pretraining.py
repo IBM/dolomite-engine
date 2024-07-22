@@ -9,6 +9,7 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..enums import AttentionImplementation, DistributedBackend, Mode
+from ..hf_models import divide_if_divisible
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
@@ -201,7 +202,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         super()._setup_model()
 
         if self.pp_world_size > 1:
-            self.model = PipelineStage(
+            self.stage = PipelineStage(
                 self.model, stage_index=self.pp_rank, num_stages=self.pp_world_size, device=torch.cuda.current_device()
             )
 
@@ -246,3 +247,19 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
+
+    def _stage_ids_on_pipeline_parallel_rank(self, num_stages: int, style: str = "loop") -> tuple[int]:
+        stages_per_rank = divide_if_divisible(
+            num_stages,
+            self.pp_world_size,
+            f"num_stages {num_stages} must be evenly divisible by pp_size {self.pp_world_size}",
+        )
+
+        if style == "loop":
+            stage_ids = tuple(self.pp_rank + s * self.pp_world_size for s in range(stages_per_rank))
+        elif style == "v":
+            assert stages_per_rank == 2, f"v schedules assume 2 stages per rank, got {stages_per_rank}"
+            stage_v_pairs = list(zip(range(self.pp_world_size), range(num_stages - 1, self.pp_world_size - 1, -1)))
+            stage_ids = stage_v_pairs[self.pp_rank]
+
+        return stage_ids
