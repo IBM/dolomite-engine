@@ -105,7 +105,8 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | BaseModelOutputWithPast:
-        if self.pp_world_size == 1:
+        # if pipeline parallel is disabled, fall back to original forward
+        if self.num_pp_stages == 1:
             output = super().forward(
                 input_ids=input_ids,
                 past_key_values=past_key_values,
@@ -144,15 +145,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                     max_seqlen=max_seqlen,
                 )
 
-            if self.pp_world_size == 1:
-                past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-                all_hidden_states = () if output_hidden_states else None
-
             for block in self.h:
-                if self.pp_world_size == 1:
-                    if output_hidden_states:
-                        all_hidden_states += (hidden_states,)
-
                 hidden_states = block(
                     hidden_states,
                     past_key_values=past_key_values,
@@ -165,19 +158,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             if self.is_pp_last_stage:
                 hidden_states = self.ln_f(hidden_states)
 
-            if self.pp_world_size == 1:
-                # Add last hidden state
-                if output_hidden_states:
-                    all_hidden_states += (hidden_states,)
-
-            if not return_dict:
-                return tuple(v for v in [hidden_states, past_key_values, all_hidden_states] if v is not None)
-
-            output = BaseModelOutputWithPast(
-                last_hidden_state=hidden_states,
-                past_key_values=past_key_values,
-                hidden_states=all_hidden_states,
-            )
+            output = hidden_states
 
         return output
 
