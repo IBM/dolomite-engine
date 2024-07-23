@@ -41,7 +41,10 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEDolomiteModel):
         self.h = nn.ModuleList(
             [
                 DenseMoEBlock(
-                    config, self.normalization_implementation, layer_idx=i, inference_method=self.inference_method
+                    config,
+                    normalization_implementation=self.normalization_implementation,
+                    layer_idx=i,
+                    inference_method=self.inference_method,
                 )
                 for i in range(config.num_hidden_layers)
             ]

@@ -58,9 +58,9 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, GPTDolomiteModel):
             [
                 RNNDolomiteBlock(
                     config,
-                    self.normalization_implementation,
-                    self.attention_patterns[i],
-                    self._use_padding_free_transformer,
+                    normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_patterns[i],
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                 )
                 for i in range(config.num_hidden_layers)

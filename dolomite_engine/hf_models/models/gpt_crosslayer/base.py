@@ -63,9 +63,9 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
             [
                 GPTCrossLayerBlock(
                     config,
-                    self.normalization_implementation,
-                    self.attention_implementation,
-                    self._use_padding_free_transformer,
+                    normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_implementation,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_indices=sub_layer_map[i],
                     layer_idx=i,
                 )
