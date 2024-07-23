@@ -506,29 +506,9 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
         #     rope_cos_sin -> 2 * (key_length, head_dim)
         # ==========================================================================================
 
-        # prepare causal mask only if not using flash attention
-        if self._use_sdpa:
-            # we use the causal/non-causal argument of SDPA for attention in this case
-            if attention_mask is not None:
-                attention_mask = self._prepare_causal_attention_mask(
-                    attention_mask, batch_size, query_length, key_length, device
-                )
-
-                attention_mask = torch.where(
-                    attention_mask,
-                    ~attention_mask if alibi_bias is None else alibi_bias,
-                    self._get_mask_value(attention_mask.device, hidden_states.dtype),
-                )
-        elif self._use_eager_attention:
-            attention_mask = self._prepare_causal_attention_mask(
-                attention_mask, batch_size, query_length, key_length, device
-            )
-
-            attention_mask = torch.where(
-                attention_mask,
-                ~attention_mask if alibi_bias is None else alibi_bias,
-                self._get_mask_value(attention_mask.device, hidden_states.dtype),
-            )
+        attention_mask = self._get_maybe_causal_mask(
+            attention_mask, alibi_bias, batch_size, query_length, key_length, hidden_states.dtype, device
+        )
 
         return (
             output_hidden_states,
@@ -575,3 +555,38 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
         if self.mask_value is None or self.mask_value.dtype != dtype or self.mask_value.device != device:
             self.mask_value = torch.full([], torch.finfo(torch.float16).min, dtype=dtype, device=device)
         return self.mask_value
+
+    def _get_maybe_causal_mask(
+        self,
+        attention_mask: torch.Tensor | None,
+        alibi_bias: torch.Tensor | None,
+        batch_size: int,
+        query_length: int,
+        key_length: int,
+        dtype: torch.dtype,
+        device: torch.device,
+    ) -> torch.Tensor:
+        if self._use_sdpa:
+            # we use the causal/non-causal argument of SDPA for attention in this case
+            if attention_mask is not None:
+                attention_mask = self._prepare_causal_attention_mask(
+                    attention_mask, batch_size, query_length, key_length, device
+                )
+
+                attention_mask = torch.where(
+                    attention_mask,
+                    ~attention_mask if alibi_bias is None else alibi_bias,
+                    self._get_mask_value(attention_mask.device, dtype),
+                )
+        elif self._use_eager_attention:
+            attention_mask = self._prepare_causal_attention_mask(
+                attention_mask, batch_size, query_length, key_length, device
+            )
+
+            attention_mask = torch.where(
+                attention_mask,
+                ~attention_mask if alibi_bias is None else alibi_bias,
+                self._get_mask_value(attention_mask.device, dtype),
+            )
+
+        return attention_mask
