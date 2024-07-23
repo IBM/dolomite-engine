@@ -32,25 +32,27 @@ class RoPE(nn.Module):
         return cos, sin
 
     def reset_parameters(self) -> None:
-        inv_freq = 1.0 / (self.base ** (torch.arange(0, self.head_dim, 2).float() / self.head_dim))
-        self.register_buffer("inv_freq", inv_freq, persistent=False)
-
-        # Build here to make `torch.jit.trace` work.
-        self._set_cos_sin_cache(
-            seq_len=self.max_position_embeddings, device=self.inv_freq.device, dtype=torch.get_default_dtype()
-        )
+        self._set_cos_sin_cache(seq_len=self.max_position_embeddings, device=None, dtype=torch.float32)
 
     @torch.no_grad()
     def _set_cos_sin_cache(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> None:
         self.max_seq_len_cached = seq_len
-        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
 
-        freqs = torch.outer(t, self.inv_freq)
+        inv_freq = self._get_inv_freq(device)
+        t = torch.arange(self.max_seq_len_cached, dtype=torch.float32, device=device)
+
+        freqs = torch.outer(t, inv_freq)
+
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
 
         self.register_buffer("cos_cached", (emb.cos() * self.mscale).to(dtype), persistent=False)
         self.register_buffer("sin_cached", (emb.sin() * self.mscale).to(dtype), persistent=False)
+
+    def _get_inv_freq(self, device: torch.device) -> torch.Tensor:
+        return 1.0 / (
+            self.base ** (torch.arange(0, self.head_dim, 2, dtype=torch.float32, device=device) / self.head_dim)
+        )
 
 
 class YaRNScaledRoPE(RoPE):
@@ -83,7 +85,7 @@ class YaRNScaledRoPE(RoPE):
 
         self.reset_parameters()
 
-    def reset_parameters(self) -> None:
+    def _get_inv_freq(self, device: torch.device) -> torch.Tensor:
         pos_freqs = self.base ** (torch.arange(0, self.head_dim, 2).float() / self.head_dim)
         inv_freq_extrapolation = 1.0 / pos_freqs
         inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
@@ -95,9 +97,8 @@ class YaRNScaledRoPE(RoPE):
             1 - _yarn_linear_ramp_mask(low, high, self.head_dim // 2).float()
         ) * self.extrapolation_factor  # Get n-d rotational scaling corrected for extrapolation
         inv_freq = inv_freq_interpolation * (1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
-        self.register_buffer("inv_freq", inv_freq, persistent=False)
 
-        self._set_cos_sin_cache(self.max_position_embeddings, dtype=torch.get_default_dtype())
+        return inv_freq
 
 
 def apply_rotary_pos_emb(
