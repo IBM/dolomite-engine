@@ -143,6 +143,14 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                     cu_seqlens=cu_seqlens,
                     max_seqlen=max_seqlen,
                 )
+            else:
+                hidden_states, attention_mask, rope_cos_sin, cu_seqlens, max_seqlen = (
+                    input_ids,
+                    past_key_values,
+                    attention_mask,
+                    token_type_ids,
+                    position_ids,
+                )
 
             for block in self.h:
                 hidden_states = block(
@@ -157,7 +165,7 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             if self.is_pp_last_stage:
                 hidden_states = self.ln_f(hidden_states)
 
-            output = hidden_states
+            output = hidden_states, attention_mask, rope_cos_sin, cu_seqlens, max_seqlen
 
         return output
 
