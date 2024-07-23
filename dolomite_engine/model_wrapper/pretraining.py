@@ -203,7 +203,12 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if self.pp_world_size > 1:
             self.stage = PipelineStage(
-                self.model, stage_index=self.pp_rank, num_stages=self.pp_world_size, device=torch.cuda.current_device()
+                self.model,
+                stage_index=self.pp_rank,
+                num_stages=self.pp_world_size,
+                device=torch.cuda.current_device(),
+                input_args=torch.empty(4, 8),
+                group=ProcessGroupManager.get_pipeline_parallel_group(),
             )
 
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
