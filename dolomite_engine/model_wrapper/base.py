@@ -83,7 +83,6 @@ class ModelWrapper(nn.Module):
 
         self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
         self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
-        self.is_pp_first_stage = self.pp_rank == 0
 
         self.distributed_backend = distributed_backend if self.mode == Mode.training else None
 
@@ -200,6 +199,9 @@ class ModelWrapper(nn.Module):
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
+        if self.pp_world_size > 1:
+            model_kwargs["num_pp_stages"] = self.pp_world_size
+            model_kwargs["pp_stage"] = self.pp_rank
 
         def _get_model(**extras):
             if self.model_name is None:

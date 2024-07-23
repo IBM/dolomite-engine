@@ -4,7 +4,7 @@ from tqdm import tqdm
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import SafeTensorsWeightsManager
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_normalization_function_TP
@@ -18,10 +18,10 @@ class GPTDolomitePreTrainedModel_TP(GPTDolomitePreTrainedModel):
     def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
         GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
 
-        self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
-        self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
-        self.is_pp_first_stage = self.pp_rank == 0
-        self.is_pp_last_stage = self.pp_rank == self.pp_world_size - 1
+        self.pp_stage = kwargs.get("pp_stage", 0)
+        self.num_pp_stages = kwargs.get("num_pp_stages", 1)
+        self.is_pp_first_stage = self.pp_stage == 0
+        self.is_pp_last_stage = self.pp_stage == self.num_pp_stages - 1
 
         self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
@@ -51,18 +51,13 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
 
             self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
 
-        if config.num_hidden_layers % self.pp_world_size == 0:
-            num_layers = config.num_hidden_layers // self.pp_world_size
-        else:
-            num_layers = (
-                config.num_hidden_layers % self.pp_world_size
-                if self.is_pp_last_stage
-                else config.num_hidden_layers // self.pp_world_size
-            )
+        layers_per_stage = config.num_hidden_layers // self.num_pp_stages
+        start_layer = layers_per_stage * self.pp_stage
+        end_layer = min(layers_per_stage * (self.pp_stage + 1), config.num_hidden_layers)
 
-        self.h = nn.ModuleList(
-            [
-                GPTDolomiteBlock_TP(
+        self.h = nn.ModuleDict(
+            {
+                str(i): GPTDolomiteBlock_TP(
                     config,
                     self.normalization_implementation,
                     self.attention_implementation,
@@ -70,8 +65,8 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
                 )
-                for i in range(num_layers)
-            ]
+                for i in range(start_layer, end_layer)
+            }
         )
 
         if self.is_pp_last_stage:
