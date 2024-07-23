@@ -425,9 +425,6 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
-        if batch_size <= 0:
-            raise ValueError("batch_size has to be defined and > 0")
-
         device = input_ids.device if input_ids is not None else inputs_embeds.device
 
         if self._use_padding_free_transformer:
