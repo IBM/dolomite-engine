@@ -5,7 +5,7 @@ from transformers import DynamicCache
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
 from .config import MoEDolomiteConfig
-from .moe import SparseMoE
+from .moe import get_moe
 
 
 class SparseMoEBlock(nn.Module):
@@ -15,6 +15,7 @@ class SparseMoEBlock(nn.Module):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
+        moe_implementation: str,
         layer_idx: int | None = None,
     ) -> None:
         super().__init__()
@@ -40,7 +41,12 @@ class SparseMoEBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = SparseMoE(config, use_padding_free_transformer=use_padding_free_transformer)
+        self.mlp = get_moe(
+            config,
+            moe_implementation=moe_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            layer_idx=layer_idx,
+        )
 
     def forward(
         self,

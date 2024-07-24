@@ -27,8 +27,8 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
     _supports_sdpa = True
     _supports_flash_attn_2 = True
 
-    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs) -> None:
-        super().__init__(config, *inputs, **kwargs)
+    def __init__(self, config: GPTDolomiteConfig, *args, **kwargs) -> None:
+        super().__init__(config, *args, **kwargs)
 
         self.normalization_implementation = kwargs.get(
             "normalization_implementation", DEFAULT_NORMALIZATION_IMPLEMENTATION
@@ -140,9 +140,9 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
             [
                 GPTDolomiteBlock(
                     config,
-                    self.normalization_implementation,
-                    self.attention_implementation,
-                    self._use_padding_free_transformer,
+                    normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_implementation,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                 )
                 for i in range(config.num_hidden_layers)

@@ -23,6 +23,8 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
     ) -> None:
         nn.Module.__init__(self)
 
+        assert not use_padding_free_transformer
+
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
         self.attention_head_type = AttentionHeadType(config.attention_head_type)

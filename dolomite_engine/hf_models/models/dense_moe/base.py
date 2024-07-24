@@ -12,8 +12,8 @@ class DenseMoEPreTrainedModel(MoEDolomitePreTrainedModel):
     config_class = DenseMoEConfig
     _no_split_modules = ["DenseMoEBlock"]
 
-    def __init__(self, config: DenseMoEConfig, *inputs, **kwargs) -> None:
-        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
+    def __init__(self, config: DenseMoEConfig, *args, **kwargs) -> None:
+        GPTDolomitePreTrainedModel.__init__(self, config, *args, **kwargs)
 
         assert self._use_sdpa, "only SDPA is supported for dense_moe"
         self.inference_method = kwargs.get("inference_method")
@@ -41,7 +41,10 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEDolomiteModel):
         self.h = nn.ModuleList(
             [
                 DenseMoEBlock(
-                    config, self.normalization_implementation, layer_idx=i, inference_method=self.inference_method
+                    config,
+                    normalization_implementation=self.normalization_implementation,
+                    layer_idx=i,
+                    inference_method=self.inference_method,
                 )
                 for i in range(config.num_hidden_layers)
             ]

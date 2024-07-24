@@ -15,8 +15,8 @@ from .layer import GPTDolomiteBlock_TP
 class GPTDolomitePreTrainedModel_TP(GPTDolomitePreTrainedModel):
     _no_split_modules = ["GPTDolomiteBlock_TP"]
 
-    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
-        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
+    def __init__(self, config: GPTDolomiteConfig, *args, **kwargs):
+        GPTDolomitePreTrainedModel.__init__(self, config, *args, **kwargs)
 
         self.pp_stage = kwargs.get("pp_stage", 0)
         self.num_pp_stages = kwargs.get("num_pp_stages", 1)
@@ -59,9 +59,9 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             {
                 str(i): GPTDolomiteBlock_TP(
                     config,
-                    self.normalization_implementation,
-                    self.attention_implementation,
-                    self._use_padding_free_transformer,
+                    normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_implementation,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
                 )
