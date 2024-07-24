@@ -156,3 +156,17 @@ except ImportError:
 
 def is_einops_available() -> bool:
     return _IS_EINOPS_AVAILABLE
+
+
+try:
+    import scattermoe
+
+    _IS_SCATTERMOE_AVAILABLE = True
+except ImportError:
+    _IS_SCATTERMOE_AVAILABLE = False
+
+    warn_rank_0("scattermoe is not installed, install from https://github.com/shawntan/scattermoe")
+
+
+def is_scattermoe_available() -> bool:
+    return _IS_SCATTERMOE_AVAILABLE

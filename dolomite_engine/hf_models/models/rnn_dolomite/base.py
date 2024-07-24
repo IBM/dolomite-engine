@@ -27,8 +27,8 @@ class RNNDolomitePreTrainedModel(GPTDolomitePreTrainedModel):
     _supports_sdpa = False
     _supports_flash_attn_2 = True
 
-    def __init__(self, config: RNNDolomiteConfig, *inputs, **kwargs):
-        super().__init__(config, *inputs, **kwargs)
+    def __init__(self, config: RNNDolomiteConfig, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
 
         assert not self._use_padding_free_transformer, "RNN models are not implemented with padding free transformer"
 

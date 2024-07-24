@@ -16,8 +16,8 @@ class GPTCrossLayerPreTrainedModel(GPTDolomitePreTrainedModel):
     config_class = GPTCrossLayerConfig
     _no_split_modules = ["GPTCrossLayerBlock"]
 
-    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
-        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
+    def __init__(self, config: GPTDolomiteConfig, *args, **kwargs):
+        GPTDolomitePreTrainedModel.__init__(self, config, *args, **kwargs)
         self.sharing_pattern = config.sharing_pattern
 
 
