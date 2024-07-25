@@ -78,8 +78,8 @@ class ModelArgs(BaseArgs):
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
         if self.pretrained_config is not None:
-            assert self.upcast_logits_for_loss == getattr(
-                self.pretrained_config, "upcast_logits_for_loss", False
+            assert self.upcast_logits_for_loss == self.pretrained_config.get(
+                "upcast_logits_for_loss", False
             ), "`upcast_logits_for_loss` should match in the model pretrained_config and the model_args"
 
 
