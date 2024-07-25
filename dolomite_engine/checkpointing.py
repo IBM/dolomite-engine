@@ -369,6 +369,15 @@ def load_checkpoint_for_inference(
                     no_dist=True,
                 )
 
+            was_compiled_model = args_from_checkpoint.distributed_args.torch_compile
+
+            # fix state dict if torch compile was used to train the model
+            if was_compiled_model:
+                for key in list(state.keys()):
+                    assert key.startswith("_orig_mod.")
+                    new_key = key.split("_orig_mod.")[1]
+                    state[new_key] = state.pop(key)
+
             with (
                 torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
                 ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
