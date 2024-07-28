@@ -111,19 +111,22 @@ class GatedLinearAttention2(nn.Module):
             std_in /= math.sqrt(config.m_width)
         self.q_proj = ParameterizedLinear(self.hidden_size, self.num_slot, bias=False, std=std_in)
         self.k_proj = ParameterizedLinear(self.hidden_size, self.num_slot, bias=False, std=std_in)
-        self.v_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
 
         if self.use_short_conv:
             std_conv = std_in
             self.conv_size = conv_size
-            self.q_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv)
-            self.k_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv)
-            self.v_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv)
+            self.q_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv, activation=None)
+            self.k_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv, activation=None)
+            self.v_conv1d = ParameterizedShortConvolution(self.num_slot, conv_size, std=std_conv, activation=None)
 
         if self.use_output_gate:
             self.og_proj = ParameterizedLinear(self.value_dim, self.value_dim, bias=False, std=std_in)
             self.ig_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
-        # self.o_proj = ParameterizedLinear(self.value_dim, self.hidden_size, bias=False, std=std_out)
+
+        std_out = initializer_range / math.sqrt(2 * config.n_layer)
+        if init_method == InitMethod.mup:
+            std_out /= math.sqrt(config.m_width)
+        self.o_proj = ParameterizedLinear(self.value_dim, self.hidden_size, bias=False, std=std_out)
 
         if gate_fn == 'swish' and fuse_norm and use_output_gate:
             self.g_norm_swish_gate = FusedRMSNormSwishGate(self.value_dim, elementwise_affine, norm_eps)
@@ -154,15 +157,14 @@ class GatedLinearAttention2(nn.Module):
             conv_state_vg = last_state[2] if use_cache else None
             q = self.q_proj(hidden_states)
             k = self.k_proj(hidden_states)
-            v = self.v_proj(hidden_states)
+            v = hidden_states
             q = self.q_conv1d(q, attention_mask, conv_state_q)
             k = self.k_conv1d(k, attention_mask, conv_state_k)
             v = self.v_conv1d(v, attention_mask, conv_state_vg)
         else:
             q = self.q_proj(hidden_states)
             k = self.k_proj(hidden_states)
-            v = self.v_proj(hidden_states)
-        # v = hidden_states
+            v = hidden_states
 
         q = q[:, None, :, :]
         k = k[:, None, :, :]
@@ -175,7 +177,7 @@ class GatedLinearAttention2(nn.Module):
         # improve precision
         k = k.float()
 
-        q = swish(q)
+        q = F.softmax(q, dim=-1)
         k = F.sigmoid(k).to(v)
         gf = F.logsigmoid(-k)
 
@@ -185,7 +187,7 @@ class GatedLinearAttention2(nn.Module):
         elif mode == 'fused_chunk':
             o, recurrent_state = fused_chunk_gla(q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache)
         elif mode == 'chunk':
-            o, recurrent_state = chunk_gla(q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache)
+            o, recurrent_state = chunk_gla(q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache, scale=1)
         else:
             raise NotImplementedError(f"Not supported mode `{mode}`.")
 
@@ -206,7 +208,7 @@ class GatedLinearAttention2(nn.Module):
                 o = o * self.gate_fn(go)
         else:
             o = self.g_norm(o)
-        # o = self.o_proj(o)
+        o = self.o_proj(o)
 
         return o
 
