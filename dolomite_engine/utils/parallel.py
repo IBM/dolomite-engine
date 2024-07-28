@@ -90,7 +90,7 @@ class ProcessGroupManager:
         return torch.distributed.is_initialized()
 
     @staticmethod
-    def get_mesh() -> int:
+    def get_mesh() -> DeviceMesh:
         global _MESH
         return _MESH
 
@@ -305,6 +305,9 @@ class ProcessGroupManager:
             dp_mesh = DeviceMesh("cuda", dp_mesh)
 
         return dp_mesh
+
+    def get_coordinate(self) -> list[int]:
+        return ProcessGroupManager.get_mesh().get_coordinate()
 
     @staticmethod
     def destroy_process_groups() -> None:
