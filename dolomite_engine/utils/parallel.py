@@ -306,7 +306,8 @@ class ProcessGroupManager:
 
         return dp_mesh
 
-    def get_coordinate(self) -> list[int]:
+    @staticmethod
+    def get_coordinate() -> list[int]:
         return ProcessGroupManager.get_mesh().get_coordinate()
 
     @staticmethod
