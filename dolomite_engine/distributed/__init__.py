@@ -4,6 +4,7 @@ from functools import partial
 from typing import Tuple
 
 import torch
+import torch.nn as nn
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import fully_shard
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
