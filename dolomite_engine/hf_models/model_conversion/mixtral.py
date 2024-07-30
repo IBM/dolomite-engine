@@ -1,3 +1,4 @@
+import torch
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, MixtralConfig
 
 from ...utils import SafeTensorsWeightsManager, download_repo
@@ -105,8 +106,8 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"
         )
 
-        for expert_idx in range(num_experts):
-            state_dict[f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_fc.weight"] = (
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = torch.stack(
+            [
                 interleave_up_gate_tensor_for_mlp(
                     safetensors_weight_manager.get_tensor(
                         f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"
@@ -115,12 +116,18 @@ def _import_state_dict_from_huggingface(
                         f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"
                     ),
                 )
-            )
-            state_dict[f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_proj.weight"] = (
+                for expert_idx in range(num_experts)
+            ]
+        )
+
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = torch.stack(
+            [
                 safetensors_weight_manager.get_tensor(
                     f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"
                 )
-            )
+                for expert_idx in range(num_experts)
+            ]
+        )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
             safetensors_weight_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
@@ -229,20 +236,16 @@ def _export_state_dict_to_huggingface(
             f"transformer.h.{layer_idx}.mlp.gate.weight"
         )
 
+        c_fc_experts = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.weight")
+        c_proj_experts = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_proj.weight")
         for expert_idx in range(num_experts):
-            up_weight, gate_weight = split_up_gate_tensor_for_mlp(
-                safetensors_weight_manager.get_tensor(
-                    f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_fc.weight"
-                )
-            )
+            up_weight, gate_weight = split_up_gate_tensor_for_mlp(c_fc_experts[expert_idx])
+
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"] = up_weight
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"] = gate_weight
-
-            state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"] = (
-                safetensors_weight_manager.get_tensor(
-                    f"transformer.h.{layer_idx}.mlp.experts.{expert_idx}.c_proj.weight"
-                )
-            )
+            state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"] = c_proj_experts[
+                expert_idx
+            ]
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
             safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),

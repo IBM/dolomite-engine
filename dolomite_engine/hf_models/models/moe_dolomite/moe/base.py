@@ -1,10 +1,53 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ....modeling_utils import ParameterizedLinear
-from ...gpt_dolomite.mlp import MLP
+from ....enums import InitMethod
+from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
+
+
+class ParameterizedExperts(nn.Module):
+    def __init__(
+        self, num_experts: int, in_features: int, out_features: int, add_bias: bool = True, std: float | None = None
+    ) -> None:
+        super().__init__()
+
+        self.weight = nn.Parameter(torch.empty(num_experts, out_features, in_features))
+
+        self.bias = None
+        if add_bias:
+            self.bias = nn.Parameter(torch.empty(num_experts, out_features))
+
+        self.std = std
+
+        self.num_experts = num_experts
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.reset_parameters()
+
+    def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
+        input = input.split(num_experts_per_token.tolist(), dim=0)
+        input = [
+            F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
+            for i in range(self.num_experts)
+        ]
+        input = torch.cat(input, dim=0)
+        return input
+
+    def extra_repr(self):
+        return "num_experts={}, in_features={}, out_features={}".format(
+            self.num_experts, self.in_features, self.out_features
+        )
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        nn.init.normal_(self.weight, mean=0, std=self.std)
+        if hasattr(self, "bias") and self.bias is not None:
+            self.bias.zero_()
 
 
 class SparseMoE(nn.Module):
@@ -13,79 +56,126 @@ class SparseMoE(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.hidden_size = config.hidden_size
-
         self.num_experts = config.num_experts
         self.top_k = config.num_experts_per_tok
         self.normalize_expert_weights = config.normalize_expert_weights
         self.use_padding_free_transformer = use_padding_free_transformer
         self.layer_idx = layer_idx
 
-        self.gate = ParameterizedLinear(self.hidden_size, self.num_experts, bias=False)
-        self.experts = nn.ModuleList([MLP(config) for _ in range(self.num_experts)])
+        self.hidden_size = config.hidden_size
+        self.intermediate_size = config.n_inner
+
+        activation_function = config.activation_function
+
+        initializer_range = config.initializer_range
+        m_width = config.m_width
+        n_layer = config.n_layer
+        init_method = InitMethod(config.init_method)
+        residual_dropout = config.resid_pdrop
+
+        self.gate = ParameterizedLinear(
+            in_features=self.hidden_size,
+            out_features=config.num_experts,
+            bias=False,
+            std=config.initializer_range,
+        )
+
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
+        self.c_fc = ParameterizedExperts(
+            num_experts=config.num_experts,
+            in_features=self.hidden_size,
+            out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
+            add_bias=config.add_bias,
+            std=std,
+        )
+
+        self.act = get_activation_function(activation_function)
+
+        std = initializer_range / math.sqrt(2 * n_layer)
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
+        self.c_proj = ParameterizedExperts(
+            num_experts=config.num_experts,
+            in_features=self.intermediate_size,
+            out_features=self.hidden_size,
+            add_bias=config.add_bias,
+            std=std,
+        )
+
+        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
-            hidden_states = hidden_states.view(-1, self.hidden_size)
 
-        router_logits, routing_weights, selected_experts = self._compute_routing_weights(hidden_states)
-        hidden_states = self._compute_expert_outputs(hidden_states, routing_weights, selected_experts)
+        hidden_states = hidden_states.view(-1, self.hidden_size)
+
+        router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
+        hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
 
         if not self.use_padding_free_transformer:
             hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
 
+        hidden_states = self.dropout(hidden_states)
+
         return hidden_states, router_logits
 
-    def _compute_routing_weights(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        # router_logits -> (total_q, num_experts)
+    def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+        # hidden_states -> (total_q, hidden_size)
         router_logits = self.gate(hidden_states)
+        # router_logits -> (total_q, num_experts)
 
-        routing_weights = F.softmax(router_logits, dim=-1, dtype=torch.float)
+        router_weights = F.softmax(router_logits.float(), dim=-1)
 
         if self.top_k == 1:
-            routing_weights, selected_experts = routing_weights.max(dim=-1, keepdim=True)
+            router_weights, selected_experts = router_weights.max(dim=-1, keepdim=True)
         else:
-            routing_weights, selected_experts = routing_weights.topk(self.top_k, dim=-1)
+            router_weights, selected_experts = router_weights.topk(self.top_k, dim=-1)
 
         if self.normalize_expert_weights:
-            routing_weights = routing_weights / routing_weights.sum(dim=-1, keepdim=True)
+            router_weights = router_weights / router_weights.sum(dim=-1, keepdim=True)
 
         # we cast back to the input dtype
-        routing_weights = routing_weights.to(hidden_states.dtype)
+        router_weights = router_weights.type_as(hidden_states)
 
-        return router_logits, routing_weights, selected_experts
+        return router_logits, router_weights, selected_experts
 
-    def _compute_expert_outputs(
-        self, hidden_states: torch.Tensor, routing_weights: torch.Tensor, selected_experts: torch.Tensor
+    def _compute_experts(
+        self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
-        final_hidden_states = torch.zeros_like(hidden_states)
+        total_q = hidden_states.shape[0]
 
-        # One hot encode the selected experts to create an expert mask
-        # this will be used to easily index which expert is going to be sollicitated
-        expert_mask = F.one_hot(selected_experts, num_classes=self.num_experts).permute(2, 1, 0)
-        # expert_mask -> (num_experts, top_k, batch_size * sequence_length)
+        batch_index, batch_gates, num_experts_per_token = self._compute_expert_assignment(
+            router_weights, selected_experts
+        )
+        # batch_index, batch_gates, expert_size, router_logits = self.gate(hidden_states)
+        expert_inputs = hidden_states[batch_index]
 
-        # Loop over all available experts in the model and perform the computation on each expert
-        for expert_idx in range(self.num_experts):
-            expert_layer = self.experts[expert_idx]
-            idx, top_x = torch.where(expert_mask[expert_idx])
+        hidden_states = self.c_fc(expert_inputs, num_experts_per_token)
+        hidden_states = self.act(hidden_states)
+        hidden_states = self.c_proj(hidden_states, num_experts_per_token)
 
-            if top_x.shape[0] == 0:
-                continue
+        hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
+        zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
+        hidden_states = zeros.index_add(0, batch_index, hidden_states)
 
-            # in torch it is faster to index using lists than torch tensors
-            top_x_list = top_x.tolist()
-            idx_list = idx.tolist()
+        return hidden_states
 
-            # Index the correct hidden states and compute the expert hidden state for
-            # the current expert. We need to make sure to multiply the output hidden
-            # states by `routing_weights` on the corresponding tokens (top-1 and top-2)
-            current_state = hidden_states[None, top_x_list].reshape(-1, self.hidden_size)
-            current_hidden_states = expert_layer(current_state) * routing_weights[top_x_list, idx_list, None]
+    def _compute_expert_assignment(
+        self, router_weights: torch.Tensor, selected_experts: torch.Tensor
+    ) -> tuple[torch.Tensor]:
+        selected_experts = selected_experts.flatten()
 
-            # However `index_add_` only support torch tensors for indexing so we'll use
-            # the `top_x` tensor here.
-            final_hidden_states.index_add_(0, top_x, current_hidden_states.to(hidden_states.dtype))
+        num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
 
-        return final_hidden_states
+        # sort and group input tokens according to expert assignment
+        _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
+        batch_index = index_sorted_experts // self.top_k  # [num_tokens * top_k]
+
+        # gather the gate values for grouped input tokens
+        router_weights = router_weights.flatten()  # [num_tokens * top_k]
+        batch_gates = router_weights[index_sorted_experts]  # [num_tokens * top_k]
+
+        return batch_index, batch_gates, num_experts_per_token
