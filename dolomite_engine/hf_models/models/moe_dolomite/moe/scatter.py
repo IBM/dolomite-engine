@@ -59,7 +59,6 @@ class ScatterMoE(SparseMoE):
 
         self.num_experts = config.num_experts
         self.top_k = config.num_experts_per_tok
-        self.normalize_expert_weights = config.normalize_expert_weights
         self.use_padding_free_transformer = use_padding_free_transformer
         self.layer_idx = layer_idx
 
