@@ -2,6 +2,7 @@ import logging
 from contextlib import AbstractContextManager, nullcontext
 
 import torch
+from torch.distributed import ReduceOp
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -11,7 +12,7 @@ from .enums import DistributedBackend, GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapperForFinetuning
-from .utils import ExperimentsTracker, ProcessGroupManager, RunningMean, log_rank_0
+from .utils import ExperimentsTracker, ProcessGroupManager, log_rank_0
 
 
 def train_step(
@@ -106,7 +107,9 @@ def train_step(
     else:
         raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    loss = loss / gradient_accumulation_steps
+    loss /= gradient_accumulation_steps
+    torch.distributed.all_reduce(loss, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+
     loss = loss.item()
     grad_norm = 0 if grad_norm is None else grad_norm.item()
 
@@ -119,7 +122,7 @@ def track_train_metrics(
     grad_norm_step: float,
     current_lr: float,
     experiments_tracker: ExperimentsTracker,
-    loss_running_mean_tracker: RunningMean,
+    loss_running_mean: float,
     flops: float | None = None,
     billion_tokens_per_day: float | None = None,
     step_time: float | None = None,
@@ -131,14 +134,11 @@ def track_train_metrics(
         train_loss_step (float): training loss at the current step
         current_lr (float): learning rate at the current step
         experiments_tracker (ExperimentsTracker): metrics tracker
-        loss_running_mean_tracker (RunningMean): running mean accumulator for loss
+        loss_running_mean (float): running mean for the loss
         flops (float | None, optional): total model flops. Defaults to None
         billion_tokens_per_day (float | None, optional): billions of tokens per day. Defaults to None
         step_time (float | None, optional): time per step in seconds
     """
-
-    # update loss running mean
-    loss_running_mean = loss_running_mean_tracker.add_loss(train_loss_step)
 
     # experiments tracker
     message = {"loss_step": train_loss_step, "loss_running_mean": loss_running_mean, "learning_rate": current_lr}

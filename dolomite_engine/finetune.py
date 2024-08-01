@@ -3,6 +3,7 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
+from torch.distributed import ReduceOp
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -19,7 +20,6 @@ from .train_utils import get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
-    RunningMean,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -78,8 +78,6 @@ def train(
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
-    loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
-
     model.train()
 
     # need this for iterating infinitely
@@ -105,6 +103,8 @@ def train(
     if torch_profiler is not None:
         torch_profiler.__enter__()
 
+    loss_running_sum = 0
+
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
@@ -121,6 +121,8 @@ def train(
             backward_context=backward_context,
         )
 
+        loss_running_sum += loss_step
+
         if torch_profiler is not None:
             torch_profiler.step()
 
@@ -135,8 +137,10 @@ def train(
                     else lr_scheduler.get_lr()[0]
                 ),
                 experiments_tracker=experiments_tracker,
-                loss_running_mean_tracker=loss_running_mean_tracker,
+                loss_running_mean=loss_running_sum / log_interval,
             )
+
+            loss_running_sum = 0
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloader, model, global_step, experiments_tracker)
@@ -188,14 +192,17 @@ def evaluate(
     model.eval()
 
     loss_sum = 0
-    micro_step = 0
+    micro_steps = 0
 
     for batch in val_dataloader:
-        loss_value = model(batch).item()
-        loss_sum += loss_value
-        micro_step += 1
+        loss = model(batch)
+        loss_sum += loss
+        micro_steps += 1
 
-    loss_mean = loss_sum / micro_step
+    loss_mean = loss_sum / micro_steps
+    torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+    loss_mean = loss_mean.item()
+
     track_val_metrics(global_step, loss_mean, experiments_tracker)
 
     model.train()
