@@ -23,7 +23,9 @@ jobs:
           python-version: 3.11
 
       - name: Installation
-        run: make install-dev
+        run: |
+          make install-dev
+          git clone -b granitemoe https://github.com/mayank31398/transformers && cd transformers && pip install . && cd ..
 
       - name: Unit Tests
         run: make test

@@ -126,11 +126,7 @@ class SparseMoE(nn.Module):
         router_logits = self.gate(hidden_states)
         # router_logits -> (total_q, num_experts)
 
-        if self.top_k == 1:
-            router_weights, selected_experts = router_logits.max(dim=-1, keepdim=True)
-        else:
-            router_weights, selected_experts = router_logits.topk(self.top_k, dim=-1)
-
+        router_weights, selected_experts = self._get_topk(router_logits)
         router_weights = F.softmax(router_weights.float(), dim=-1)
 
         # we cast back to the input dtype
@@ -146,7 +142,7 @@ class SparseMoE(nn.Module):
         batch_index, batch_gates, num_experts_per_token = self._compute_expert_assignment(
             router_weights, selected_experts
         )
-        # batch_index, batch_gates, expert_size, router_logits = self.gate(hidden_states)
+
         expert_inputs = hidden_states[batch_index]
 
         hidden_states = self.c_fc(expert_inputs, num_experts_per_token)
@@ -175,3 +171,11 @@ class SparseMoE(nn.Module):
         batch_gates = router_weights[index_sorted_experts]  # [num_tokens * top_k]
 
         return batch_index, batch_gates, num_experts_per_token
+
+    def _get_topk(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.top_k == 1:
+            x, indices = x.max(dim=-1, keepdim=True)
+        else:
+            x, indices = x.topk(self.top_k, dim=-1)
+
+        return x, indices

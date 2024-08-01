@@ -8,6 +8,7 @@ import torch
 import torch.distributed
 import torch.distributed.checkpoint as dcp
 import yaml
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import _CHECKPOINT_WRAPPED_MODULE
 from torch.distributed.checkpoint import FileSystemReader
 from torch.distributed.checkpoint.format_utils import _EmptyStateDictLoadPlanner
 from torch.distributed.checkpoint.state_dict import (
@@ -315,7 +316,7 @@ def load_checkpoint_for_inference(
             for key in list(state.keys()):
                 state[key] = state[key].to(dtype)
                 # fix for gradient checkpointing
-                state[key.replace("._checkpoint_wrapped_module", "")] = state.pop(key)
+                state[key.replace(f".{_CHECKPOINT_WRAPPED_MODULE}", "")] = state.pop(key)
 
             strict = True
 
