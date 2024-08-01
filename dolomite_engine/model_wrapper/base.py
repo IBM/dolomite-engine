@@ -38,7 +38,6 @@ class ModelWrapper(nn.Module):
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
-        upcast_logits_for_loss: bool = False,
     ) -> None:
         """initializes a model wrapper for a HuggingFace model
 
@@ -59,7 +58,6 @@ class ModelWrapper(nn.Module):
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
-            upcast_logits_for_loss (bool, optional): whether to upcast logits for loss computation
         """
 
         super().__init__()
@@ -76,7 +74,6 @@ class ModelWrapper(nn.Module):
         self.sequence_parallel = sequence_parallel
         self.tokenizer_name = tokenizer_name if self.model_name is None else self.model_name
         self.trust_remote_code = trust_remote_code
-        self.upcast_logits_for_loss = upcast_logits_for_loss
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -171,8 +168,10 @@ class ModelWrapper(nn.Module):
 
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
+        self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
 
         log_rank_0(logging.INFO, self.config)
+        log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
 
     def _setup_tokenizer(self) -> None:
         assert self.tokenizer_name is not None, "pass a tokenizer"
@@ -199,17 +198,12 @@ class ModelWrapper(nn.Module):
 
         def _get_model(**extras):
             if self.model_name is None:
-                assert self.upcast_logits_for_loss == getattr(model_kwargs["config"], "upcast_logits_for_loss", False)
-
                 if self.tp_world_size > 1:
                     # avoid inferring the model class so use _from_config instead of from_config
                     model = self.model_class._from_config(**model_kwargs, **extras)
                 else:
                     model = self.model_class.from_config(**model_kwargs, **extras)
             else:
-                if self.upcast_logits_for_loss:
-                    extras["upcast_logits_for_loss"] = True
-
                 model = self.model_class.from_pretrained(**model_kwargs, **extras)
 
             return model

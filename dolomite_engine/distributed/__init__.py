@@ -84,6 +84,8 @@ def wrap_model_for_distributed_training(
     block_names = model.model._no_split_modules
 
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
+        log_rank_0(logging.INFO, "using DeepSpeed")
+
         assert stage in [1, 2, 3]
         assert not torch_compile
         assert tp_world_size == 1
@@ -131,10 +133,14 @@ def wrap_model_for_distributed_training(
 
         if fsdp_algorithm == 1:
             if stage == 0:
+                log_rank_0(logging.INFO, "using DDP")
+
                 assert not efficient_initialization
 
                 sharding_strategy = ShardingStrategy.NO_SHARD
             else:
+                log_rank_0(logging.INFO, "using FSDP-1")
+
                 sharding_strategy = (
                     _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
                     if args.distributed_args.zero_topology.data_parallel_sharding_world_size == 8
@@ -174,6 +180,8 @@ def wrap_model_for_distributed_training(
             )
         else:
             if stage == 0:
+                log_rank_0(logging.INFO, "using DDP")
+
                 assert not efficient_initialization
 
                 mixed_precision_policy = deepcopy(_FSDP1_MIXED_PRECISION_POLICIES[dtype])
@@ -190,6 +198,8 @@ def wrap_model_for_distributed_training(
                     device_mesh=None if tp_world_size == 1 else ProcessGroupManager.get_data_parallel_mesh(),
                 )
             else:
+                log_rank_0(logging.INFO, "using FSDP-2")
+
                 mixed_precision_policy = deepcopy(_FSDP2_MIXED_PRECISION_POLICIES[dtype])
                 if communication_dtype is not None:
                     mixed_precision_policy.reduce_dtype = string_to_torch_dtype(communication_dtype)
@@ -224,6 +234,7 @@ def wrap_model_for_distributed_training(
             )
 
         if torch_compile:
+            log_rank_0(logging.INFO, "using torch compile")
             model = torch.compile(model)
 
         optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(

@@ -34,7 +34,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
-        upcast_logits_for_loss: bool = False,
         reset_attention_mask: bool = False,
         reset_position_ids: bool = False,
     ) -> None:
@@ -59,7 +58,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
-            upcast_logits_for_loss (bool, optional): whether to upcast logits for loss computation
             reset_attention_mask (bool, optional): whether to reset attention mask during pretraining. Defaults to False.
             reset_position_ids (bool, optional): whether to reset position ids during pretraining. Defaults to False.
         """
@@ -86,7 +84,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
-            upcast_logits_for_loss=upcast_logits_for_loss,
         )
 
     def forward(self, batch: dict) -> torch.Tensor:

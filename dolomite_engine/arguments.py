@@ -58,8 +58,6 @@ class ModelArgs(BaseArgs):
     reset_attention_mask: bool = False
     # whether to reset position ids for pretraining
     reset_position_ids: bool = False
-    # whether to upcast logits for loss
-    upcast_logits_for_loss: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.model_class, "model_class")])
@@ -76,11 +74,6 @@ class ModelArgs(BaseArgs):
         ], f"unexpected model_class ({self.model_class})"
 
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
-
-        if self.pretrained_config is not None:
-            assert self.upcast_logits_for_loss == self.pretrained_config.get(
-                "upcast_logits_for_loss", False
-            ), "`upcast_logits_for_loss` should match in the model pretrained_config and the model_args"
 
 
 class PromptTuningArgs(BaseArgs):
