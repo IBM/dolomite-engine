@@ -553,7 +553,7 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
     def _get_mask_value(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         # torch.where expects a tensor. We use a cache to avoid recreating it every time.
         if self.mask_value is None or self.mask_value.dtype != dtype or self.mask_value.device != device:
-            self.mask_value = torch.full([], torch.finfo(torch.float16).min, dtype=dtype, device=device)
+            self.mask_value = torch.full([], torch.finfo(dtype).min, dtype=dtype, device=device)
         return self.mask_value
 
     def _get_maybe_causal_mask(
@@ -577,6 +577,12 @@ class GPTDolomiteModel(GPTDolomitePreTrainedModel):
                     attention_mask,
                     ~attention_mask if alibi_bias is None else alibi_bias,
                     self._get_mask_value(attention_mask.device, dtype),
+                )
+
+                # this is needed to prevent NaN since SDPA
+                # see issue: https://github.com/pytorch/pytorch/issues/110213
+                attention_mask = attention_mask * ~torch.all(
+                    attention_mask == self._get_mask_value(attention_mask.device, dtype), dim=-1, keepdim=True
                 )
         elif self._use_eager_attention:
             attention_mask = self._prepare_causal_attention_mask(
