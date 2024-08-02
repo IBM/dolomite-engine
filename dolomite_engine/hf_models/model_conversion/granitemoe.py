@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
@@ -8,6 +8,12 @@ from ..modeling_utils import (
     split_query_key_value_tensor_for_attention,
 )
 from ..models import MoEDolomiteConfig
+
+
+try:
+    from transformers import GraniteMoeConfig
+except:
+    GraniteMoeConfig = None
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:

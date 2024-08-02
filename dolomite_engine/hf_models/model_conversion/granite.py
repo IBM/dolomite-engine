@@ -1,9 +1,15 @@
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
 from ..models import GPTDolomiteConfig
 from .llama import _export_state_dict_to_huggingface, _import_state_dict_from_huggingface
+
+
+try:
+    from transformers import GraniteConfig
+except:
+    GraniteConfig = None
 
 
 def import_from_huggingface_granite(pretrained_model_name_or_path: str, save_path: str) -> None:
