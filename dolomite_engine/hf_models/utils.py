@@ -18,11 +18,11 @@ def divide_if_divisible(dividend: int, divisor: int, msg: str) -> int:
 
 
 def convert_padding_free_lists_to_tensors(
-    input_ids: list[list[int]] | None,
-    inputs_embeds: list[list[float]] | None,
-    position_ids: list[list[int]] | None,
-    token_type_ids: list[list[int]] | None,
-    labels: list[list[int]] | None,
+    input_ids: list[list[int]] | None = None,
+    inputs_embeds: list[list[float]] | None = None,
+    position_ids: list[list[int]] | None = None,
+    token_type_ids: list[list[int]] | None = None,
+    labels: list[list[int]] | None = None,
 ) -> tuple[torch.Tensor]:
     device = torch.cuda.current_device()
 
