@@ -144,8 +144,24 @@ class _BaseAttention_TP(nn.Module):
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop
 
-        self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else Dropout_TP(self.attn_pdrop)
-        self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else Dropout_TP(self.resid_pdrop)
+        self.attn_dropout = (
+            nn.Identity()
+            if self.attn_pdrop == 0
+            else Dropout_TP(
+                self.attn_pdrop,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+        )
+        self.resid_dropout = (
+            nn.Identity()
+            if self.resid_pdrop == 0
+            else Dropout_TP(
+                self.resid_pdrop,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+        )
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""

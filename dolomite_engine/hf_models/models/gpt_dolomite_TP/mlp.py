@@ -61,7 +61,15 @@ class MLP_TP(MLP):
             sequence_parallel=sequence_parallel,
         )
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
+        self.dropout = (
+            nn.Identity()
+            if residual_dropout == 0
+            else Dropout_TP(
+                residual_dropout,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+        )
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""

@@ -42,7 +42,15 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
             sequence_parallel=self.sequence_parallel,
         )
 
-        self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
+        self.drop = (
+            nn.Identity()
+            if config.embd_pdrop == 0
+            else Dropout_TP(
+                config.embd_pdrop,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                sequence_parallel=self.sequence_parallel,
+            )
+        )
         self.h = nn.ModuleList(
             [
                 GPTDolomiteBlock_TP(
