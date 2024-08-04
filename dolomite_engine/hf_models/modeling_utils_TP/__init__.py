@@ -7,6 +7,7 @@ from .normalization import get_normalization_function_TP
 from .position_embedding import Alibi_TP
 from .TP import (
     dtensor_to_tensor,
+    get_module_placements,
     modify_state_dict_to_dtensor_dict,
     tensor_parallel_split_safetensor_slice,
     tensor_to_dtensor,

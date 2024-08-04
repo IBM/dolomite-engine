@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
-from torch.distributed._tensor.placement_types import Replicate, Shard
+from torch.distributed._tensor.placement_types import Replicate
 
 from .....utils import ProcessGroupManager
-from ...TP import dtensor_to_tensor, tensor_to_dtensor
+from ...TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
 class LayerNorm_TP(nn.LayerNorm):
@@ -28,13 +28,7 @@ class LayerNorm_TP(nn.LayerNorm):
             )
         )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.placement = Shard(0)
-            else:
-                self.placement = Shard(1)
-        else:
-            self.placement = Replicate()
+        self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=self.placement)

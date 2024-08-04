@@ -2,7 +2,7 @@ import torch
 import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
-from torch.distributed._tensor.placement_types import Placement
+from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
 
 from ...utils import ProcessGroupManager
 from ..utils import divide_if_divisible
@@ -76,3 +76,15 @@ def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict) -> di
         placements = getattr(module, key).placements
         result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
     return result
+
+
+def get_module_placements(use_padding_free_transformer: bool, sequence_parallel: bool) -> Placement:
+    if sequence_parallel:
+        if use_padding_free_transformer:
+            placement = Shard(0)
+        else:
+            placement = Shard(1)
+    else:
+        placement = Replicate()
+
+    return placement

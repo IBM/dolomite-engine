@@ -9,7 +9,12 @@ from torch.distributed._tensor.placement_types import _Partial as Partial
 
 from .....utils import ProcessGroupManager, is_scattermoe_available
 from ....modeling_utils import ParameterizedLinear
-from ....modeling_utils_TP import dtensor_to_tensor, modify_state_dict_to_dtensor_dict, tensor_to_dtensor
+from ....modeling_utils_TP import (
+    dtensor_to_tensor,
+    get_module_placements,
+    modify_state_dict_to_dtensor_dict,
+    tensor_to_dtensor,
+)
 from ....utils import divide_if_divisible
 from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
 
@@ -94,13 +99,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts):
             )
         )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.input_placement = Shard(0)
-            else:
-                self.input_placement = Shard(1)
-        else:
-            self.input_placement = Replicate()
+        self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(
         self,
@@ -179,13 +178,7 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts):
             )
         )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.output_placement = Shard(0)
-            else:
-                self.output_placement = Shard(1)
-        else:
-            self.output_placement = Replicate()
+        self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(
         self,
