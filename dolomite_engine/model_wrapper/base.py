@@ -185,6 +185,11 @@ class ModelWrapper(nn.Module):
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
 
+        if self.model_name is None:
+            assert self.tokenizer.bos_token_id == self.config.bos_token_id
+            assert self.tokenizer.eos_token_id == self.config.eos_token_id
+            assert self.tokenizer.pad_token_id == self.config.pad_token_id
+
         def _get_model(**extras):
             if self.model_name is None:
                 if self.tp_world_size > 1:
