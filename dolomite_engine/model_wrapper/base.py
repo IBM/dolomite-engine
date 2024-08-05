@@ -65,7 +65,7 @@ class ModelWrapper(nn.Module):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
-        self.tokenizer_name = tokenizer_name if self.model_name is None else self.model_name
+        self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
@@ -186,9 +186,14 @@ class ModelWrapper(nn.Module):
             model_kwargs["trust_remote_code"] = True
 
         if self.model_name is None:
-            assert self.tokenizer.bos_token_id == self.config.bos_token_id
-            assert self.tokenizer.eos_token_id == self.config.eos_token_id
-            assert self.tokenizer.pad_token_id == self.config.pad_token_id
+            if self.tokenizer.bos_token_id is not None:
+                assert self.tokenizer.bos_token_id == self.config.bos_token_id
+
+            if self.tokenizer.eos_token_id is not None:
+                assert self.tokenizer.eos_token_id == self.config.eos_token_id
+
+            if self.tokenizer.pad_token_id is not None:
+                assert self.tokenizer.pad_token_id == self.config.pad_token_id
 
         def _get_model(**extras):
             if self.model_name is None:

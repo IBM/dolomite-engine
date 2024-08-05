@@ -2,9 +2,10 @@ import json
 import os
 
 import torch
+from huggingface_hub import split_torch_state_dict_into_shards
 from safetensors import safe_open
 from safetensors.torch import save_file
-from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME, shard_checkpoint
+from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME
 
 
 class SafeTensorsWeightsManager:
@@ -77,10 +78,20 @@ class SafeTensorsWeightsManager:
     def save_state_dict(state_dict: dict, save_path: str) -> None:
         os.makedirs(save_path, exist_ok=True)
 
-        shards, index = shard_checkpoint(state_dict, max_shard_size="5GB", weights_name=SAFE_WEIGHTS_NAME)
+        state_dict_split = split_torch_state_dict_into_shards(state_dict)
+        for filename, tensors in state_dict_split.filename_to_tensors.items():
+            shard = {tensor: state_dict[tensor] for tensor in tensors}
+            save_file(
+                shard,
+                os.path.join(save_path, filename),
+                metadata={"format": "pt"},
+            )
 
-        for shard_file, shard in shards.items():
-            save_file(shard, os.path.join(save_path, shard_file), metadata={"format": "pt"})
+        if state_dict_split.is_sharded:
+            index = {
+                "metadata": state_dict_split.metadata,
+                "weight_map": state_dict_split.tensor_to_filename,
+            }
 
-        if index is not None:
-            json.dump(index, open(os.path.join(save_path, SAFE_WEIGHTS_INDEX_NAME), "w"), indent=4)
+            with open(os.path.join(save_path, SAFE_WEIGHTS_INDEX_NAME), "w") as f:
+                f.write(json.dumps(index, indent=2))

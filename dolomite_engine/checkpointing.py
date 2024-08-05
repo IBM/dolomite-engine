@@ -389,6 +389,10 @@ def load_checkpoint_for_inference(
             if use_meta:
                 model = model.to_empty(device="cpu")
 
+            dtype = string_to_torch_dtype(model.dtype)
+            for key in list(state.keys()):
+                state[key] = state[key].to(dtype)
+
             model.load_state_dict(state)
     else:
         raise ValueError(f"unexpected distributed_backend ({args['distributed_args']['distributed_backend']})")
