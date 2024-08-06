@@ -94,12 +94,12 @@ def save_checkpoint(
             ):
                 model_state_dict = model.state_dict()
                 if dp_rank == 0:
-                    torch.save(model_state_dict, _get_model_path(save_path))
+                    torch.save(model_state_dict, f"{_get_model_path(save_path)}.pt")
 
                 if save_optimizer:
                     optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
                     if dp_rank == 0:
-                        torch.save(optimizer_state_dict, _get_optimizer_path(save_path))
+                        torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
         else:
             dcp.save(get_model_state_dict(model), checkpoint_id=_get_model_path(save_path))
 
@@ -205,12 +205,14 @@ def load_checkpoint_for_training(
                 state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
             ):
-                model.load_state_dict(torch.load(_get_model_path(load_path)))
+                model.load_state_dict(torch.load(f"{_get_model_path(load_path)}.pt"))
 
                 if load_optimizer:
                     optimizer.load_state_dict(
                         FSDP.optim_state_dict_to_load(
-                            model=model, optim=optimizer, optim_state_dict=torch.load(_get_optimizer_path(load_path))
+                            model=model,
+                            optim=optimizer,
+                            optim_state_dict=torch.load(f"{_get_optimizer_path(load_path)}.pt"),
                         )
                     )
         else:
