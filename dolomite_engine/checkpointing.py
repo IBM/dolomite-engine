@@ -190,10 +190,6 @@ def load_checkpoint_for_training(
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
     if distributed_backend == DistributedBackend.deepspeed:
-        from deepspeed import DeepSpeedEngine
-
-        assert isinstance(model, DeepSpeedEngine)
-
         model.load_checkpoint(
             args.load_args.load_path,
             tag=_get_checkpoint_tag(iteration),
@@ -202,8 +198,6 @@ def load_checkpoint_for_training(
         )
     elif distributed_backend == DistributedBackend.torch:
         if args.distributed_args.fsdp_algorithm == 1:
-            assert isinstance(model, FSDP)
-
             # TODO add support for local state dict
             with FSDP.state_dict_type(
                 model,

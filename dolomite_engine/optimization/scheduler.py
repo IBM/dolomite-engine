@@ -64,14 +64,16 @@ class ConstantScheduler(_LRScheduler):
 
     def _lr_lambda(self, num_steps: int) -> float:
         factor = (
-            _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps) if num_steps <= self.lr_warmup_boundary else 1
+            _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
+            if (self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary)
+            else 1
         )
         return factor
 
 
 class CosineScheduler(_LRScheduler):
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
         elif num_steps <= self.lr_constant_boundary:
             factor = 1
@@ -90,7 +92,7 @@ class CosineScheduler(_LRScheduler):
 
 class ExponentialScheduler(_LRScheduler):
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
         elif num_steps <= self.lr_constant_boundary:
             factor = 1
@@ -108,7 +110,7 @@ class ExponentialScheduler(_LRScheduler):
 
 class LinearScheduler(_LRScheduler):
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
         elif num_steps <= self.lr_constant_boundary:
             factor = 1
@@ -155,7 +157,7 @@ class PowerScheduler(_LRScheduler):
         )
 
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=self._max_lr_during_warmup / self.lr_warmup_boundary, c=0, x=num_steps)
         # note this might also include constant steps
         else:
