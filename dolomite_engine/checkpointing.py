@@ -235,7 +235,12 @@ def load_checkpoint_for_training(
             lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
         else:
             if args.load_args.resume_learning_rate:
-                _resume_learning_rate(args, optimizer=optimizer, lr_scheduler=lr_scheduler, iteration=iteration)
+                _resume_learning_rate(
+                    args,
+                    optimizer=optimizer,
+                    lr_scheduler=lr_scheduler,
+                    iteration=iteration if load_starting_iteration else None,
+                )
     else:
         raise ValueError(f"unexpected distributed_backend ({distributed_backend})")
 
