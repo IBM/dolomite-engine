@@ -190,6 +190,9 @@ class LoadArgs(BaseArgs):
     load_experiments_tracker_state: bool = True
     # whether to load starting iteration
     load_starting_iteration: bool = True
+    # whether to resume learning rate during training
+    # this is a NO-OP if we are loading LR scheduler
+    resume_learning_rate: bool = True
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.load_path, "load_path")])
@@ -198,6 +201,9 @@ class LoadArgs(BaseArgs):
             assert (
                 not self.load_lr_scheduler
             ), "lr_scheduler loading doesn't make sense if you aren't loading optimizer"
+
+        if self.load_lr_scheduler:
+            assert self.resume_learning_rate, "resume learning rate needs to be True when reloading LR scheduler"
 
 
 class DatasetArgs(BaseArgs):

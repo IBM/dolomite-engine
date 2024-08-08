@@ -31,6 +31,7 @@ from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, Mode, TuningMethod
 from .hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model
+from .optimization import get_scheduler
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
@@ -205,14 +206,14 @@ def load_checkpoint_for_training(
                 state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
             ):
-                model.load_state_dict(torch.load(f"{_get_model_path(load_path)}.pt"))
+                model.load_state_dict(torch.load(f"{_get_model_path(load_path)}.pt", map_location="cpu"))
 
                 if load_optimizer:
                     optimizer.load_state_dict(
                         FSDP.optim_state_dict_to_load(
                             model=model,
                             optim=optimizer,
-                            optim_state_dict=torch.load(f"{_get_optimizer_path(load_path)}.pt"),
+                            optim_state_dict=torch.load(f"{_get_optimizer_path(load_path)}.pt", map_location="cpu"),
                         )
                     )
         else:
@@ -229,7 +230,12 @@ def load_checkpoint_for_training(
                 del optimizer_state_dict
 
         if load_lr_scheduler:
+            assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
+
             lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+        else:
+            if args.load_args.resume_learning_rate:
+                _resume_learning_rate(args, optimizer=optimizer, lr_scheduler=lr_scheduler, iteration=iteration)
     else:
         raise ValueError(f"unexpected distributed_backend ({distributed_backend})")
 
@@ -408,6 +414,35 @@ def save_args(args: TrainingArgs | InferenceArgs, save_path: str, mode: Mode) ->
     file_prefix = _TRAINING_CONFIG_PREFIX if mode == Mode.training else _INFERENCE_CONFIG_PREFIX
     save_path = os.path.join(save_path, f"{file_prefix}.yml")
     yaml.dump(args.to_dict(), open(save_path, "w"), indent=2)
+
+
+def _resume_learning_rate(
+    args: TrainingArgs, optimizer: Optimizer, lr_scheduler: LambdaLR, iteration: int | None = None
+) -> None:
+    initial_lr = []
+    for grp in optimizer.param_groups:
+        initial_lr.append(grp["initial_lr"])
+        grp["initial_lr"] = grp["lr"]
+
+    # we create lr scheduler again here since optimizer is loaded from disk and lr scheduler is now out of sync
+    # this helps to resume phase 2
+    lr_scheduler_tmp = get_scheduler(
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+        num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+        num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+        num_training_steps=args.training_parameters.num_training_steps,
+        lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+        lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+        extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        last_epoch=-1 if iteration is None else iteration - 1,
+    )
+
+    for grp, lr_ in zip(optimizer.param_groups, initial_lr):
+        grp["initial_lr"] = lr_
+
+    lr_scheduler.load_state_dict(lr_scheduler_tmp.state_dict())
+    del lr_scheduler_tmp
 
 
 def _get_checkpoint_tag(iteration: int) -> str:
