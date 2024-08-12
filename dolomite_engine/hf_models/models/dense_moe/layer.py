@@ -36,3 +36,5 @@ class DenseMoEBlock(SparseMoEBlock):
             normalization_implementation=normalization_implementation,
         )
         self.mlp = DenseMoE(config, inference_method=inference_method)
+
+        self.shared_mlp = None

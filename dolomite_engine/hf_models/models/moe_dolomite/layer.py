@@ -1,9 +1,12 @@
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
+from ..gpt_dolomite.mlp import MLP
 from .config import MoEDolomiteConfig
 from .moe import get_moe
 
@@ -48,6 +51,13 @@ class SparseMoEBlock(nn.Module):
             layer_idx=layer_idx,
         )
 
+        self.shared_mlp = None
+        if config.shared_n_inner is not None:
+            shared_config = deepcopy(config)
+            shared_config.n_inner = config.shared_n_inner
+            self.shared_mlp = MLP(shared_config)
+            del shared_config
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -80,6 +90,8 @@ class SparseMoEBlock(nn.Module):
         hidden_states = self.ln_2(hidden_states)
 
         feed_forward_hidden_states, router_logits = self.mlp(hidden_states)
+        if self.shared_mlp is not None:
+            feed_forward_hidden_states = feed_forward_hidden_states + self.shared_mlp(hidden_states)
 
         if self.m_residual is not None:
             feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
