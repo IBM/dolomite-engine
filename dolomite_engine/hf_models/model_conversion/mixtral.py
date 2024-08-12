@@ -102,11 +102,11 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.post_attention_layernorm.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.gate.weight"] = safetensors_weight_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weight_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = torch.stack(
+        state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = torch.stack(
             [
                 interleave_up_gate_tensor_for_mlp(
                     safetensors_weight_manager.get_tensor(
@@ -120,7 +120,7 @@ def _import_state_dict_from_huggingface(
             ]
         )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = torch.stack(
+        state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = torch.stack(
             [
                 safetensors_weight_manager.get_tensor(
                     f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"
@@ -236,11 +236,11 @@ def _export_state_dict_to_huggingface(
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"] = safetensors_weight_manager.get_tensor(
-            f"transformer.h.{layer_idx}.mlp.gate.weight"
+            f"transformer.h.{layer_idx}.moe.gate.weight"
         )
 
-        c_fc_experts = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.weight")
-        c_proj_experts = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_proj.weight")
+        c_fc_experts = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
+        c_proj_experts = safetensors_weight_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
         for expert_idx in range(num_experts):
             up_weight, gate_weight = split_up_gate_tensor_for_mlp(c_fc_experts[expert_idx])
 

@@ -44,18 +44,18 @@ class SparseMoEBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = get_moe(
+        self.moe = get_moe(
             config,
             moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,
         )
 
-        self.shared_mlp = None
+        self.mlp = None
         if config.shared_n_inner is not None:
             shared_config = deepcopy(config)
             shared_config.n_inner = config.shared_n_inner
-            self.shared_mlp = MLP(shared_config)
+            self.mlp = MLP(shared_config)
             del shared_config
 
     def forward(
@@ -71,7 +71,7 @@ class SparseMoEBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        attn_output = self.attn(
+        hidden_states = self.attn(
             hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -81,23 +81,26 @@ class SparseMoEBlock(nn.Module):
         )
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = attn_output + residual
+        hidden_states = hidden_states + residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states, router_logits = self.mlp(hidden_states)
-        if self.shared_mlp is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states + self.shared_mlp(hidden_states)
+        feed_forward_hidden_states, router_logits = self.moe(hidden_states)
+        if self.mlp is not None:
+            feed_forward_hidden_states = feed_forward_hidden_states + self.mlp(hidden_states)
+
+        hidden_states = feed_forward_hidden_states
+        del feed_forward_hidden_states
 
         if self.m_residual is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = residual + feed_forward_hidden_states
+        hidden_states = hidden_states + residual
 
         outputs = (hidden_states,)
 
