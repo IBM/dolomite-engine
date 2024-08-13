@@ -1,6 +1,5 @@
 import torch
-
-from .base import RMSNorm
+import torch.nn as nn
 
 
 def is_apex_rmsnorm_available() -> bool:
@@ -21,7 +20,7 @@ def apex_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float, memory_e
     return FusedRMSNormAffineMixedDtypesFunction.apply(input, weight, normalized_shape, eps, memory_efficient)
 
 
-class ApexRMSNorm(RMSNorm):
+class ApexRMSNorm(nn.RMSNorm):
     def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
         if not is_apex_rmsnorm_available():
             raise ImportError("build apex from source")
