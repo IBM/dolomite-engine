@@ -8,7 +8,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import Alibi, ParameterizedEmbedding, RMSNorm, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import check_list_type, divide_if_divisible, flatten_and_convert_to_tensors
 from .config import GPTDolomiteConfig
 from .layer import GPTDolomiteBlock
@@ -63,7 +63,7 @@ class GPTDolomitePreTrainedModel(PreTrainedModel):
         )
 
     def _init_weights(self, module: nn.Module) -> None:
-        if isinstance(module, (nn.Embedding, nn.Linear, nn.LayerNorm, RMSNorm, Alibi, RoPE)):
+        if isinstance(module, (nn.Embedding, nn.Linear, nn.LayerNorm, nn.RMSNorm, Alibi, RoPE)):
             module.reset_parameters()
 
     def prepare_inputs_for_model(

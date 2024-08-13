@@ -3,14 +3,13 @@ import numbers
 import torch
 import torch.nn as nn
 
-from .....modeling_utils import RMSNorm
 
-
-class EnsembleRMSNorm(RMSNorm):
+class EnsembleRMSNorm(nn.RMSNorm):
     def __init__(self, normalized_shape: int, tp_world_size: int, eps: float = 1e-6) -> None:
         nn.Module.__init__(self)
 
         self.tp_world_size = tp_world_size
+        self.elementwise_affine = True
 
         self.weight = nn.Parameter(torch.ones(tp_world_size * normalized_shape))
         self.eps = eps
