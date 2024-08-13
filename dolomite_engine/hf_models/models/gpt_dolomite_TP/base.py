@@ -49,11 +49,19 @@ class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, GPTDolomiteModel):
                 sequence_parallel=self.sequence_parallel,
             )
 
-            self.drop = nn.Identity() if config.embd_pdrop == 0 else Dropout_TP(config.embd_pdrop)
+            self.drop = (
+                nn.Identity()
+                if config.embd_pdrop == 0
+                else Dropout_TP(
+                    config.embd_pdrop,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    sequence_parallel=self.sequence_parallel,
+                )
+            )
 
-        layers_per_stage = config.num_hidden_layers // self.num_pp_stages
+        layers_per_stage = config.n_layer // self.num_pp_stages
         start_layer = layers_per_stage * self.pp_stage
-        end_layer = min(layers_per_stage * (self.pp_stage + 1), config.num_hidden_layers)
+        end_layer = min(layers_per_stage * (self.pp_stage + 1), config.n_layer)
 
         self.h = nn.ModuleDict(
             {

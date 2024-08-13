@@ -122,6 +122,11 @@ sh scripts/generate.sh configs/sst2/inference.yml
 sh scripts/unshard.sh configs/sst2/unshard.yml
 ```
 
+## Running basic inference
+
+For a simple HuggingFace inference example, refer to [tools/inference.py](tools/inference.py).
+For an example running tensor parallel inference, refer to [tools/tensor_parallel_inference.py](tools/tensor_parallel_inference.py).
+
 ## Using custom datasets
 The data directory should obey the following structure:
 ```text

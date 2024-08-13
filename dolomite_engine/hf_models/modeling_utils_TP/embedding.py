@@ -1,5 +1,4 @@
 import math
-from contextlib import nullcontext
 from typing import Any, Mapping
 
 import torch
@@ -9,10 +8,10 @@ from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed._tensor.placement_types import _Partial as Partial
 
-from ...utils import ProcessGroupManager, SafeTensorsWeightsManager, get_cuda_rng_tracker
+from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ..modeling_utils import ParameterizedEmbedding
 from ..utils import divide_if_divisible
-from .TP import dtensor_to_tensor, modify_state_dict_to_dtensor_dict, tensor_to_dtensor
+from .TP import dtensor_to_tensor, get_module_placements, modify_state_dict_to_dtensor_dict, tensor_to_dtensor
 
 
 class Embedding_TP(ParameterizedEmbedding):
@@ -39,8 +38,7 @@ class Embedding_TP(ParameterizedEmbedding):
 
             placement = Shard(0)
         else:
-            with get_cuda_rng_tracker().fork():
-                super().__init__(num_embeddings, embedding_dim, std=std)
+            super().__init__(num_embeddings, embedding_dim, std=std)
 
             placement = Replicate()
 
@@ -50,13 +48,7 @@ class Embedding_TP(ParameterizedEmbedding):
             )
         )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.output_placement = Shard(0)
-            else:
-                self.output_placement = Shard(1)
-        else:
-            self.output_placement = Replicate()
+        self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.tensor_parallel_word_embeddings:
@@ -102,12 +94,6 @@ class Embedding_TP(ParameterizedEmbedding):
             weight = safetensors_weight_manager.get_tensor(prefix + "weight")
 
         self.load_state_dict({"weight": weight})
-
-    def reset_parameters(self) -> None:
-        context = nullcontext if self.tensor_parallel_word_embeddings else get_cuda_rng_tracker().fork
-
-        with context():
-            return super().reset_parameters()
 
     def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
         state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)

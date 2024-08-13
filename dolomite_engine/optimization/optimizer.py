@@ -8,12 +8,18 @@ from torch.optim.adamax import Adamax as TorchAdamax
 from torch.optim.adamw import AdamW as TorchAdamW
 from torch.optim.asgd import ASGD as TorchASGD
 from torch.optim.lbfgs import LBFGS as TorchLBFGS
+from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.nadam import NAdam as TorchNAdam
 from torch.optim.radam import RAdam as TorchRAdam
 from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
+from ..enums import LRDecaySchedule, ParamsGroupMethod
+from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteConfig, RNNDolomiteForCausalLM
+from ..hf_models.modeling_utils import Attention
+from ..hf_models.models.gpt_dolomite.layer import MLP
+from ..model_wrapper import ModelWrapper
 from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
 
 
@@ -76,15 +82,64 @@ _OPTIMIZER_CLASSES = {
 }
 
 
+def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None):
+    if params_group_method is None:
+        trainable_parameters_or_param_groups = model.parameters()
+    elif params_group_method == ParamsGroupMethod.mup:
+        assert isinstance(
+            model.config, (GPTDolomiteConfig, RNNDolomiteConfig)
+        ), "mup is not supported with this model architecture"
+        assert isinstance(
+            model.model, (GPTDolomiteForCausalLM, RNNDolomiteForCausalLM)
+        ), "mup is not supported with this model architecture"
+        assert (
+            model.config.init_method == "mup"
+        ), "both init method for model and params group method for optimizer should be set to mup"
+
+        # collect parameters with mup learning rate
+        mup_group = {}
+        for module_name, module in model.named_modules():
+            if isinstance(module, (Attention, MLP)):
+                for param_name, param in module.named_parameters():
+                    # we don't add bias to mup group
+                    if not param_name.endswith("bias"):
+                        # add name of module to name of subparam
+                        mup_group[f"{module_name}.{param_name}"] = param
+
+        # collect parameters without mup learning rate
+        normal_group = []
+        for param_name, param in model.named_parameters():
+            if param_name not in mup_group:
+                normal_group.append(param)
+
+        assert len(normal_group) + len(mup_group) == len(
+            list(model.parameters())
+        ), "params in groups don't sum up to total parameters"
+
+        trainable_parameters_or_param_groups = [
+            {"params": normal_group},
+            {"params": list(mup_group.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
+        ]
+    else:
+        raise ValueError(f"unexpected params_group_method ({params_group_method})")
+
+    return trainable_parameters_or_param_groups
+
+
 def get_optimizer(
-    optimizer_class_name: str, optimizer_class_args: dict, cpu_offload: bool, parameters: list
+    optimizer_class_name: str,
+    optimizer_class_args: dict,
+    cpu_offload: bool,
+    model: ModelWrapper,
+    params_group_method: ParamsGroupMethod,
 ) -> Optimizer:
     """setup optimizer for the model
 
     Args:
         optimizer_class_name (str): optimizer class name
         optimizer_class_args (dict): args for the optimizer class
-        parameters (list): list of model parameters
+        model (ModelWrapper): model
+        params_group_method (ParamsGroupMethod): the params grouping to use
 
     Returns:
         Optimizer: an optimizer
@@ -103,5 +158,7 @@ def get_optimizer(
             "cpu offloading enabled with an unsupported optimizer, weird behaviour or performance drop might be observed",
         )
 
-    optimizer = optimizer_class(parameters, **optimizer_class_args)
+    optimizer = optimizer_class(
+        _get_param_groups(model, optimizer_class_args, params_group_method), **optimizer_class_args
+    )
     return optimizer

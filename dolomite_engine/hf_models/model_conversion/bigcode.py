@@ -74,6 +74,10 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
     assert config.normalization_function == "layernorm"
     assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
     assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
+    assert config.m_emb is None
+    assert config.m_residual is None
+    assert config.m_width is None
+    assert config.attention_multiplier is None
 
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,

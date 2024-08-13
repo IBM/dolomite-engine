@@ -3,6 +3,7 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
+from torch.distributed import ReduceOp
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -15,11 +16,11 @@ from .data import ResumableDataLoader, get_dataloader, infinite_iterator
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
+from .optimization import get_optimizer, get_scheduler
 from .train_utils import get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
-    RunningMean,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -78,8 +79,6 @@ def train(
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
-    loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
-
     model.train()
 
     # need this for iterating infinitely
@@ -105,6 +104,8 @@ def train(
     if torch_profiler is not None:
         torch_profiler.__enter__()
 
+    loss_running_sum = 0
+
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
@@ -121,6 +122,8 @@ def train(
             backward_context=backward_context,
         )
 
+        loss_running_sum += loss_step
+
         if torch_profiler is not None:
             torch_profiler.step()
 
@@ -135,8 +138,10 @@ def train(
                     else lr_scheduler.get_lr()[0]
                 ),
                 experiments_tracker=experiments_tracker,
-                loss_running_mean_tracker=loss_running_mean_tracker,
+                loss_running_mean=loss_running_sum / log_interval,
             )
+
+            loss_running_sum = 0
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloader, model, global_step, experiments_tracker)
@@ -188,14 +193,17 @@ def evaluate(
     model.eval()
 
     loss_sum = 0
-    micro_step = 0
+    micro_steps = 0
 
     for batch in val_dataloader:
-        loss_value = model(batch).item()
-        loss_sum += loss_value
-        micro_step += 1
+        loss = model(batch)
+        loss_sum += loss
+        micro_steps += 1
 
-    loss_mean = loss_sum / micro_step
+    loss_mean = loss_sum / micro_steps
+    torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+    loss_mean = loss_mean.item()
+
     track_val_metrics(global_step, loss_mean, experiments_tracker)
 
     model.train()
@@ -245,7 +253,30 @@ def main() -> None:
             is_encoder_decoder=model.is_encoder_decoder,
         )
 
-    model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)
+    model = wrap_model_for_distributed_training(args, model)
+
+    if args.distributed_args.distributed_backend == DistributedBackend.torch:
+        optimizer = get_optimizer(
+            optimizer_class_name=args.optimizer_args.class_name,
+            optimizer_class_args=args.optimizer_args.class_args,
+            cpu_offload=args.distributed_args.cpu_offload,
+            model=model,
+            params_group_method=args.optimizer_args.params_group_method,
+        )
+
+        lr_scheduler = get_scheduler(
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+            num_training_steps=args.training_parameters.num_training_steps,
+            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        )
+    else:
+        optimizer = None
+        lr_scheduler = None
 
     log_model(model)
 

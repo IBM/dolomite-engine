@@ -39,7 +39,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    apply_residual_connection_post_layernorm: false
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     bos_token_id: 0
@@ -119,7 +118,7 @@ training_parameters:
   gradient_accumulation_steps: 4
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 3e-4
     weight_decay: 0.1

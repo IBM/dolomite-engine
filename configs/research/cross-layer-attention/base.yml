@@ -39,7 +39,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    apply_residual_connection_post_layernorm: false
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     bos_token_id: 0
@@ -47,7 +46,7 @@ model_args:
     eos_token_id: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
-    model_type: gpt_megatron
+    model_type: gpt_dolomite
     n_embd: 3072
     n_head: 12
     n_inner: 8192
@@ -86,7 +85,7 @@ training_parameters:
   gradient_accumulation_steps: 4
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 3e-4
     weight_decay: 0.1

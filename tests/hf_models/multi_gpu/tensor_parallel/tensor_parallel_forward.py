@@ -6,13 +6,7 @@ import torch.distributed
 from transformers import set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
-from dolomite_engine.utils import (
-    CUDA_RNGStatesTracker,
-    ProcessGroupManager,
-    SafeTensorsWeightsManager,
-    set_cuda_rng_tracker,
-    string_to_torch_dtype,
-)
+from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
 
@@ -31,12 +25,6 @@ args = parser.parse_args()
 set_seed(42)
 
 ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
-
-# this is needed when combining different kinds of parallelism for training
-# leave as is if unaware of what you are doing
-cuda_rng_tracker = CUDA_RNGStatesTracker()
-cuda_rng_tracker.add("tensor-parallel-seed", 42)
-set_cuda_rng_tracker(cuda_rng_tracker)
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 

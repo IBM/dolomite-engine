@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 
 from .embedding import Embedding_TP
-from .TP import dtensor_to_tensor, tensor_to_dtensor
+from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
 class LMHead_TP(Embedding_TP):
@@ -24,15 +24,9 @@ class LMHead_TP(Embedding_TP):
         use_padding_free_transformer: bool,
         sequence_parallel: bool,
     ) -> torch.Tensor:
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                input_placement = Shard(0)
-            else:
-                input_placement = Shard(1)
-        else:
-            input_placement = Replicate()
-
-        input = tensor_to_dtensor(input, current_placement=input_placement)
+        input = tensor_to_dtensor(
+            input, current_placement=get_module_placements(use_padding_free_transformer, sequence_parallel)
+        )
         input = F.linear(input, weight)
         input = dtensor_to_tensor(
             input, desired_placement=Shard(-1) if tensor_parallel_word_embeddings else Replicate()

@@ -35,4 +35,6 @@ class DenseMoEBlock(SparseMoEBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = DenseMoE(config, inference_method=inference_method)
+        self.moe = DenseMoE(config, inference_method=inference_method)
+
+        self.mlp = None

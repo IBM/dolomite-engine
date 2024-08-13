@@ -77,10 +77,15 @@ def collate_fn(
     if not use_padding_free_transformer:
         input_ids = torch.tensor(input_ids)
         attention_mask = torch.tensor(attention_mask)
+
         if labels is not None:
             labels = torch.tensor(labels)
 
-    result = {"input_ids": input_ids, "attention_mask": attention_mask}
+    result = {"input_ids": input_ids}
+
+    if not use_padding_free_transformer:
+        result["attention_mask"] = attention_mask
+
     if mode == Mode.training:
         result["labels"] = labels
 

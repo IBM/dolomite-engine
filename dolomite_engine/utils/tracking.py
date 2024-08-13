@@ -13,36 +13,6 @@ if is_wandb_available():
     import wandb
 
 
-class RunningMean:
-    """tracks running mean for loss"""
-
-    def __init__(self, window: int = 100) -> None:
-        self.loss_list = []
-        self.loss_sum = 0
-        self.window = window
-
-    def add_loss(self, loss: float) -> float:
-        """accumulates loss of the current step to the running mean
-
-        Args:
-            loss (float): loss at current step
-
-        Returns:
-            float: running mean of loss
-        """
-
-        self.loss_list.append(loss)
-        self.loss_sum += loss
-
-        if len(self.loss_list) > self.window:
-            loss_remove = self.loss_list[0]
-            self.loss_list = self.loss_list[1:]
-            self.loss_sum -= loss_remove
-
-        loss_mean = self.loss_sum / len(self.loss_list)
-        return loss_mean
-
-
 class ProgressBar:
     """progress bar for training or validation"""
 

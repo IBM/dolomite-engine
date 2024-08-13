@@ -5,6 +5,8 @@
 
 # Essentially re-written in entirety
 
+from __future__ import annotations
+
 import logging
 import os
 import shutil
@@ -109,7 +111,7 @@ class _IndexWriter:
         self.idx_path = idx_path
         self.dtype = dtype
 
-    def __enter__(self) -> "_IndexWriter":
+    def __enter__(self) -> _IndexWriter:
         """Enter the context introduced by the 'with' keyword
 
         Returns:

@@ -10,14 +10,12 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
 from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 
 from ..arguments import TrainingArgs
 from ..enums import DistributedBackend, FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..model_wrapper import ModelWrapper
-from ..optimization import get_optimizer_and_lr_scheduler
+from ..optimization import get_optimizer, get_scheduler
 from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
 from .deepspeed import get_deepspeed_config, set_deepspeed_config
 from .fp8 import convert_model_to_transformer_engine
@@ -46,9 +44,7 @@ _FSDP2_MIXED_PRECISION_POLICIES = {
 }
 
 
-def wrap_model_for_distributed_training(
-    args: TrainingArgs, model: nn.Module
-) -> tuple[ModelWrapper, Optimizer, LambdaLR]:
+def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) -> ModelWrapper:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -56,7 +52,7 @@ def wrap_model_for_distributed_training(
         model (ModelWrapper): any nn.Module object
 
     Returns:
-        tuple[ModelWrapper, Optimizer, LambdaLR]: parallelized model, optimizer and lr_scheduler
+        ModelWrapper: parallelized model
     """
 
     stage = args.distributed_args.stage
@@ -84,22 +80,28 @@ def wrap_model_for_distributed_training(
     block_names = model.model._no_split_modules
 
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
+        log_rank_0(logging.INFO, "using DeepSpeed")
+
         assert stage in [1, 2, 3]
         assert not torch_compile
         assert tp_world_size == 1
 
-        optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(
+        optimizer = get_optimizer(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
             cpu_offload=cpu_offload,
             model=model,
+            params_group_method=args.optimizer_args.params_group_method,
+        )
+
+        lr_scheduler = get_scheduler(
+            optimizer=optimizer,
             num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
             num_constant_steps=args.lr_scheduler_args.num_constant_steps,
             num_decay_steps=args.lr_scheduler_args.num_decay_steps,
             num_training_steps=args.training_parameters.num_training_steps,
             lr_decay_style=args.lr_scheduler_args.lr_decay_style,
             lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
-            params_group_method=args.optimizer_args.params_group_method,
             extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
         )
 
@@ -121,20 +123,20 @@ def wrap_model_for_distributed_training(
             lr_scheduler=lr_scheduler,
             config=get_deepspeed_config(),
         )
-
-        # we don't need the optimizer and scheduler when using deepspeed backend
-        optimizer = None
-        lr_scheduler = None
     elif args.distributed_args.distributed_backend == DistributedBackend.torch:
         assert stage in [0, 2, 3]
         assert not cpu_offload
 
         if fsdp_algorithm == 1:
             if stage == 0:
+                log_rank_0(logging.INFO, "using DDP")
+
                 assert not efficient_initialization
 
                 sharding_strategy = ShardingStrategy.NO_SHARD
             else:
+                log_rank_0(logging.INFO, "using FSDP-1")
+
                 sharding_strategy = (
                     _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
                     if args.distributed_args.zero_topology.data_parallel_sharding_world_size == 8
@@ -174,6 +176,8 @@ def wrap_model_for_distributed_training(
             )
         else:
             if stage == 0:
+                log_rank_0(logging.INFO, "using DDP")
+
                 assert not efficient_initialization
 
                 mixed_precision_policy = deepcopy(_FSDP1_MIXED_PRECISION_POLICIES[dtype])
@@ -190,6 +194,8 @@ def wrap_model_for_distributed_training(
                     device_mesh=None if tp_world_size == 1 else ProcessGroupManager.get_data_parallel_mesh(),
                 )
             else:
+                log_rank_0(logging.INFO, "using FSDP-2")
+
                 mixed_precision_policy = deepcopy(_FSDP2_MIXED_PRECISION_POLICIES[dtype])
                 if communication_dtype is not None:
                     mixed_precision_policy.reduce_dtype = string_to_torch_dtype(communication_dtype)
@@ -224,21 +230,7 @@ def wrap_model_for_distributed_training(
             )
 
         if torch_compile:
+            log_rank_0(logging.INFO, "using torch compile")
             model = torch.compile(model)
 
-        optimizer, lr_scheduler = get_optimizer_and_lr_scheduler(
-            optimizer_class_name=args.optimizer_args.class_name,
-            optimizer_class_args=args.optimizer_args.class_args,
-            cpu_offload=cpu_offload,
-            model=model,
-            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
-            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
-            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
-            num_training_steps=args.training_parameters.num_training_steps,
-            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
-            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
-            params_group_method=args.optimizer_args.params_group_method,
-            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
-        )
-
-    return model, optimizer, lr_scheduler
+    return model

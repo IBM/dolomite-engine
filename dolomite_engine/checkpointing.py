@@ -8,6 +8,7 @@ import torch
 import torch.distributed
 import torch.distributed.checkpoint as dcp
 import yaml
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import _CHECKPOINT_WRAPPED_MODULE
 from torch.distributed.checkpoint import FileSystemReader
 from torch.distributed.checkpoint.format_utils import _EmptyStateDictLoadPlanner
 from torch.distributed.checkpoint.state_dict import (
@@ -30,6 +31,7 @@ from .distributed import wrap_model_for_distributed_training
 from .enums import DistributedBackend, Mode, TuningMethod
 from .hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model
+from .optimization import get_scheduler
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
@@ -93,12 +95,12 @@ def save_checkpoint(
             ):
                 model_state_dict = model.state_dict()
                 if dp_rank == 0:
-                    torch.save(model_state_dict, _get_model_path(save_path))
+                    torch.save(model_state_dict, f"{_get_model_path(save_path)}.pt")
 
                 if save_optimizer:
                     optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
                     if dp_rank == 0:
-                        torch.save(optimizer_state_dict, _get_optimizer_path(save_path))
+                        torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
         else:
             dcp.save(get_model_state_dict(model), checkpoint_id=_get_model_path(save_path))
 
@@ -189,10 +191,6 @@ def load_checkpoint_for_training(
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
     if distributed_backend == DistributedBackend.deepspeed:
-        from deepspeed import DeepSpeedEngine
-
-        assert isinstance(model, DeepSpeedEngine)
-
         model.load_checkpoint(
             args.load_args.load_path,
             tag=_get_checkpoint_tag(iteration),
@@ -201,8 +199,6 @@ def load_checkpoint_for_training(
         )
     elif distributed_backend == DistributedBackend.torch:
         if args.distributed_args.fsdp_algorithm == 1:
-            assert isinstance(model, FSDP)
-
             # TODO add support for local state dict
             with FSDP.state_dict_type(
                 model,
@@ -210,12 +206,14 @@ def load_checkpoint_for_training(
                 state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
             ):
-                model.load_state_dict(torch.load(_get_model_path(load_path)))
+                model.load_state_dict(torch.load(f"{_get_model_path(load_path)}.pt", map_location="cpu"))
 
                 if load_optimizer:
                     optimizer.load_state_dict(
                         FSDP.optim_state_dict_to_load(
-                            model=model, optim=optimizer, optim_state_dict=torch.load(_get_optimizer_path(load_path))
+                            model=model,
+                            optim=optimizer,
+                            optim_state_dict=torch.load(f"{_get_optimizer_path(load_path)}.pt", map_location="cpu"),
                         )
                     )
         else:
@@ -232,7 +230,12 @@ def load_checkpoint_for_training(
                 del optimizer_state_dict
 
         if load_lr_scheduler:
+            assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
+
             lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+        else:
+            if args.load_args.resume_learning_rate:
+                _resume_learning_rate(args, optimizer=optimizer, lr_scheduler=lr_scheduler, iteration=iteration)
     else:
         raise ValueError(f"unexpected distributed_backend ({distributed_backend})")
 
@@ -315,7 +318,7 @@ def load_checkpoint_for_inference(
             for key in list(state.keys()):
                 state[key] = state[key].to(dtype)
                 # fix for gradient checkpointing
-                state[key.replace("._checkpoint_wrapped_module", "")] = state.pop(key)
+                state[key.replace(f".{_CHECKPOINT_WRAPPED_MODULE}", "")] = state.pop(key)
 
             strict = True
 
@@ -388,6 +391,10 @@ def load_checkpoint_for_inference(
             if use_meta:
                 model = model.to_empty(device="cpu")
 
+            dtype = string_to_torch_dtype(model.dtype)
+            for key in list(state.keys()):
+                state[key] = state[key].to(dtype)
+
             model.load_state_dict(state)
     else:
         raise ValueError(f"unexpected distributed_backend ({args['distributed_args']['distributed_backend']})")
@@ -407,6 +414,35 @@ def save_args(args: TrainingArgs | InferenceArgs, save_path: str, mode: Mode) ->
     file_prefix = _TRAINING_CONFIG_PREFIX if mode == Mode.training else _INFERENCE_CONFIG_PREFIX
     save_path = os.path.join(save_path, f"{file_prefix}.yml")
     yaml.dump(args.to_dict(), open(save_path, "w"), indent=2)
+
+
+def _resume_learning_rate(
+    args: TrainingArgs, optimizer: Optimizer, lr_scheduler: LambdaLR, iteration: int | None = None
+) -> None:
+    initial_lr = []
+    for grp in optimizer.param_groups:
+        initial_lr.append(grp["initial_lr"])
+        grp["initial_lr"] = grp["lr"]
+
+    # we create lr scheduler again here since optimizer is loaded from disk and lr scheduler is now out of sync
+    # this helps to resume phase 2
+    lr_scheduler_tmp = get_scheduler(
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+        num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+        num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+        num_training_steps=args.training_parameters.num_training_steps,
+        lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+        lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+        extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        last_epoch=-1 if iteration is None else iteration - 1,
+    )
+
+    for grp, lr_ in zip(optimizer.param_groups, initial_lr):
+        grp["initial_lr"] = lr_
+
+    lr_scheduler.load_state_dict(lr_scheduler_tmp.state_dict())
+    del lr_scheduler_tmp
 
 
 def _get_checkpoint_tag(iteration: int) -> str:

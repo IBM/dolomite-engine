@@ -31,6 +31,7 @@ class _LRScheduler(LambdaLR):
         num_decay_steps: int,
         num_training_steps: int,
         lr_decay_factor: float,
+        last_epoch: int = -1,
     ) -> None:
         self.lr_warmup_boundary = num_warmup_steps
         self.lr_constant_boundary = self.lr_warmup_boundary + num_constant_steps
@@ -41,7 +42,7 @@ class _LRScheduler(LambdaLR):
 
         self.lr_decay_factor = lr_decay_factor
 
-        super().__init__(optimizer, self._lr_lambda)
+        super().__init__(optimizer, lr_lambda=self._lr_lambda, last_epoch=last_epoch)
 
     def _lr_lambda(num_steps: int): ...
 
@@ -55,23 +56,32 @@ class ConstantScheduler(_LRScheduler):
         num_decay_steps: int,
         num_training_steps: int,
         lr_decay_factor: float,
+        last_epoch: int = -1,
     ) -> None:
         assert num_decay_steps == 0, "num_decay_steps should be 0 for constant schedule"
 
         super().__init__(
-            optimizer, num_warmup_steps, num_constant_steps, num_decay_steps, num_training_steps, lr_decay_factor
+            optimizer=optimizer,
+            num_warmup_steps=num_warmup_steps,
+            num_constant_steps=num_constant_steps,
+            num_decay_steps=num_decay_steps,
+            num_training_steps=num_training_steps,
+            lr_decay_factor=lr_decay_factor,
+            last_epoch=last_epoch,
         )
 
     def _lr_lambda(self, num_steps: int) -> float:
         factor = (
-            _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps) if num_steps <= self.lr_warmup_boundary else 1
+            _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
+            if (self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary)
+            else 1
         )
         return factor
 
 
 class CosineScheduler(_LRScheduler):
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
         elif num_steps <= self.lr_constant_boundary:
             factor = 1
@@ -90,7 +100,7 @@ class CosineScheduler(_LRScheduler):
 
 class ExponentialScheduler(_LRScheduler):
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
         elif num_steps <= self.lr_constant_boundary:
             factor = 1
@@ -108,7 +118,7 @@ class ExponentialScheduler(_LRScheduler):
 
 class LinearScheduler(_LRScheduler):
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=1 / self.lr_warmup_boundary, c=0, x=num_steps)
         elif num_steps <= self.lr_constant_boundary:
             factor = 1
@@ -136,6 +146,7 @@ class PowerScheduler(_LRScheduler):
         a: float,
         b: float,
         c: float,
+        last_epoch: int = -1,
     ) -> None:
         assert num_constant_steps == 0, "num_constant_steps should be 0 for power law scheduler"
 
@@ -151,11 +162,17 @@ class PowerScheduler(_LRScheduler):
         )
 
         super().__init__(
-            optimizer, num_warmup_steps, num_constant_steps, num_decay_steps, num_training_steps, lr_decay_factor
+            optimizer=optimizer,
+            num_warmup_steps=num_warmup_steps,
+            num_constant_steps=num_constant_steps,
+            num_decay_steps=num_decay_steps,
+            num_training_steps=num_training_steps,
+            lr_decay_factor=lr_decay_factor,
+            last_epoch=last_epoch,
         )
 
     def _lr_lambda(self, num_steps: int) -> float:
-        if num_steps <= self.lr_warmup_boundary:
+        if self.lr_warmup_boundary > 0 and num_steps <= self.lr_warmup_boundary:
             factor = _linear(m=self._max_lr_during_warmup / self.lr_warmup_boundary, c=0, x=num_steps)
         # note this might also include constant steps
         else:
@@ -182,6 +199,7 @@ def get_scheduler(
     lr_decay_style: LRDecaySchedule,
     lr_decay_factor: float,
     extra_lr_scheduler_args: dict,
+    last_epoch: int = -1,
 ) -> LambdaLR:
     if lr_decay_style not in _LR_SCHEDULER_CLASSES:
         raise ValueError(f"invalid lr_decay_style ({lr_decay_style})")
@@ -196,5 +214,6 @@ def get_scheduler(
         num_training_steps=num_training_steps,
         lr_decay_factor=lr_decay_factor,
         **extra_lr_scheduler_args,
+        last_epoch=last_epoch,
     )
     return lr_scheduler
