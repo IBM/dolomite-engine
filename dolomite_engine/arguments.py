@@ -2,7 +2,9 @@ import logging
 from argparse import ArgumentParser
 from typing import Any
 
+import torch
 import transformers
+from packaging.version import Version
 from peft import PromptTuningInit
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
@@ -349,6 +351,22 @@ class DistributedArgs(BaseArgs):
 
         if self.sequence_parallel:
             assert self.tensor_parallel_size > 1, "tensor parallel needs to be enabled for sequence parallel"
+
+        if self.tensor_parallel_word_embeddings:
+            assert (
+                self.tensor_parallel_size > 1
+            ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
+
+        if self.tensor_parallel_size > 1:
+            version = Version(torch.__version__).release
+            version = [str(i) for i in version]
+            version = ".".join(version)
+            version = Version(version)
+
+            assert version >= Version("2.5.0"), (
+                "the current release of pytorch doesn't support tensor parallel, switch to version >= 2.5.0 "
+                "or the latest nightly"
+            )
 
 
 class AimArgs(BaseArgs):
