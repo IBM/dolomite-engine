@@ -14,7 +14,7 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
-from .data import get_megatron_gpt_dataloaders
+from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
@@ -110,6 +110,8 @@ def train(
     )
     tokens_per_batch = global_batch_size * sequence_length
 
+    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
+
     # model flops per GPU
     model_flops = (
         get_model_tflops(
@@ -120,7 +122,7 @@ def train(
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
             gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
         )
-        / ProcessGroupManager.get_world_size()
+        / dp_world_size
     )
 
     forward_context = (
@@ -201,12 +203,7 @@ def train(
                 None,
                 experiments_tracker,
                 global_step,
-                {
-                    "consumed_samples": global_step
-                    * micro_batch_size
-                    * gradient_accumulation_steps
-                    * ProcessGroupManager.get_data_parallel_world_size()
-                },
+                {"consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size},
             )
 
             start_time = time.perf_counter()
@@ -242,7 +239,9 @@ def evaluate(
         float: loss at the current step
     """
 
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+
+    if tp_world_size > 1:
         # other tensor parallel ranks need to be told if val dataloader is None or not
         is_val_dataloader_none = (
             val_dataloaders is None or len(val_dataloaders) == 0
@@ -265,11 +264,15 @@ def evaluate(
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
         loss_sum = 0
         for _ in range(eval_steps):
-            batch = next(val_dataloader)
+            batch = get_next_batch(val_dataloader)
             loss = model(batch)
             loss_sum += loss
 
         loss_mean = loss_sum / eval_steps
+
+        if tp_world_size > 1:
+            loss_mean = loss_mean.to_local()
+
         torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
         loss_mean = loss_mean.item()
 
@@ -295,6 +298,7 @@ def main() -> None:
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
+        zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)

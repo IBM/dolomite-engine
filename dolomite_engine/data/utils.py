@@ -92,11 +92,12 @@ def collate_fn(
     return result
 
 
-def infinite_iterator(x: Iterable | None) -> Iterable:
+def custom_iterator(x: Iterable | None, infinite: bool) -> Iterable:
     """converts and iterable into a non-ending infinite iterable, will return None if input is None
 
     Args:
         x (Iterable): the iterable to convert
+        infinite (bool): whether to return an infinite iterator
 
     Returns:
         Iterable: the converted iterable
@@ -108,9 +109,13 @@ def infinite_iterator(x: Iterable | None) -> Iterable:
     if x is None:
         return None
 
-    while True:
-        for i in x:
-            yield i
+    def infinite_iterator(q):
+        while True:
+            for i in q:
+                yield i
+
+    iterator_function = infinite_iterator if infinite else iter
+    return iterator_function(x)
 
 
 def get_next_batch(x: Iterable | None) -> dict:

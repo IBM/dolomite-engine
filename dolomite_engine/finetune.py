@@ -11,8 +11,7 @@ from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
-from .communication import Communication
-from .data import ResumableDataLoader, get_dataloader, infinite_iterator
+from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
@@ -82,7 +81,7 @@ def train(
     model.train()
 
     # need this for iterating infinitely
-    train_dataloader_infinite = infinite_iterator(train_dataloader)
+    train_dataloader_infinite = custom_iterator(train_dataloader, infinite=True)
 
     if eval_during_training:
         evaluate(val_dataloader, model, starting_iteration, experiments_tracker)
@@ -172,35 +171,38 @@ def evaluate(
         float: loss at the current step
     """
 
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
-        # other tensor parallel ranks need to be told if val dataloader is None or not
-        is_val_dataloader_none = (
-            val_dataloader is None or len(val_dataloader) == 0
-            if ProcessGroupManager.get_tensor_parallel_rank() == 0
-            else None
-        )
-        is_val_dataloader_none = Communication.broadcast_object(
-            is_val_dataloader_none,
-            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
-            group=ProcessGroupManager.get_tensor_parallel_group(),
-        )
-    else:
-        is_val_dataloader_none = val_dataloader is None or len(val_dataloader) == 0
+    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
-    if is_val_dataloader_none:
+    if tp_world_size > 1:
+        if ProcessGroupManager.get_tensor_parallel_rank() == 0:
+            num_steps = 0 if val_dataloader is None else len(val_dataloader)
+        else:
+            num_steps = 0
+
+        num_steps = torch.tensor(num_steps, device=torch.cuda.current_device(), dtype=torch.long)
+        torch.distributed.all_reduce(num_steps)
+        num_steps = num_steps.item()
+    else:
+        num_steps = 0 if val_dataloader is None else len(val_dataloader)
+
+    if num_steps == 0:
         return
 
     model.eval()
 
     loss_sum = 0
-    micro_steps = 0
+    val_dataloader = custom_iterator(val_dataloader, infinite=False)
 
-    for batch in val_dataloader:
+    for _ in range(num_steps):
+        batch = get_next_batch(val_dataloader)
         loss = model(batch)
         loss_sum += loss
-        micro_steps += 1
 
-    loss_mean = loss_sum / micro_steps
+    loss_mean = loss_sum / num_steps
+
+    if tp_world_size > 1:
+        loss_mean = loss_mean.to_local()
+
     torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
     loss_mean = loss_mean.item()
 
@@ -226,6 +228,7 @@ def main() -> None:
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
+        zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
