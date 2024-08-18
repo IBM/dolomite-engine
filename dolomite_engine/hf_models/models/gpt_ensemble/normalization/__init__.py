@@ -21,4 +21,4 @@ def get_ensemble_normalization_function(
             normalization_implementation=normalization_implementation,
         )
 
-    raise ValueError(f"unexpected `normalization_implementation` {normalization_implementation}")
+    raise ValueError(f"unexpected `normalization_function` {name}")

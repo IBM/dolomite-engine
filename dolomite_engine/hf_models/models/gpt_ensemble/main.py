@@ -1,21 +1,6 @@
-from ...modeling_utils import ParameterizedLinear
-from ..gpt_dolomite import GPTDolomiteForCausalLM
+from ...mixins import CausalLMModelMixin
 from .base import GPTEnsembleModel, GPTEnsemblePreTrainedModel
-from .config import GPTEnsembleConfig
 
 
-class GPTEnsembleForCausalLM(GPTEnsemblePreTrainedModel, GPTDolomiteForCausalLM):
-    def __init__(self, config: GPTEnsembleConfig, **kwargs) -> None:
-        super().__init__(config, **kwargs)
-        self.transformer = GPTEnsembleModel(config, **kwargs)
-
-        if not self._tied_word_embeddings:
-            self.lm_head = ParameterizedLinear(
-                config.n_embd, config.vocab_size, bias=False, std=config.initializer_range
-            )
-
-        self.m_width = config.m_width
-        self.upcast_logits_for_loss = config.upcast_logits_for_loss
-
-        # Initialize weights and apply final processing
-        self.post_init()
+class GPTEnsembleForCausalLM(GPTEnsemblePreTrainedModel, CausalLMModelMixin):
+    base_model_class = GPTEnsembleModel
