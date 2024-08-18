@@ -348,16 +348,6 @@ def load_checkpoint_for_inference(
                     no_dist=True,
                 )
 
-            new_state = {}
-            for key in state:
-                if "linears.0" in key:
-                    new_state[key.replace("linears.0.", "")] = torch.stack(
-                        [state[key.replace("linears.0.", f"linears.{i}.")] for i in range(4)]
-                    ).transpose(1, 2)
-                elif "linears." not in key:
-                    new_state[key] = state[key]
-            state = new_state
-
             if checkpoint_tp_world_size > 1:
                 state = fix_unsharded_state_dict(
                     model.config, state, tensor_parallel_size=checkpoint_tp_world_size, prefix="model."
