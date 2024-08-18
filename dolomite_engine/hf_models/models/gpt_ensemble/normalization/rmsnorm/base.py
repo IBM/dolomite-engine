@@ -9,6 +9,7 @@ class EnsembleRMSNorm(nn.RMSNorm):
         nn.Module.__init__(self)
 
         self.tp_world_size = tp_world_size
+        self.elementwise_affine = True
 
         self.weight = nn.Parameter(torch.ones(tp_world_size * normalized_shape))
         self.eps = eps
