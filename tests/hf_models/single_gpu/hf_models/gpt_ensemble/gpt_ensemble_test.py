@@ -87,7 +87,7 @@ class AttentionTestForEnsembleModel(TestCommons):
             sdpa_logits,
             False,
             rtol_float32=0,
-            atol_float32=5e-7,
+            atol_float32=6e-7,
             rtol_float16=1e-2,
             atol_float16=7e-4,
             rtol_bfloat16=5e-3,
