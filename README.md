@@ -4,15 +4,10 @@
   <img src="assets/dolomite.jpeg" width="300px" height="300px">
 </p>
 
-<!-- Organization -->
-[IBM]: https://img.shields.io/static/v1?label=&message=IBM&color=blue
-[Third-Party]: https://img.shields.io/static/v1?label=&message=Third-Party&color=orange
-
 <!-- Topic -->
-[Efficient Finetuning]: https://img.shields.io/static/v1?label=&message=Efficient%20Finetuning&color=blueviolet
+[Efficient Training]: https://img.shields.io/static/v1?label=&message=Efficient%20Training&color=blueviolet
 [Efficient Inference]: https://img.shields.io/static/v1?label=&message=Efficient%20Inference&color=blueviolet
 [Instruction Finetuning]: https://img.shields.io/static/v1?label=&message=Instruction%20Finetuning&color=blueviolet
-[Memory Reduction]: https://img.shields.io/static/v1?label=&message=Memory%20Reduction&color=blueviolet
 [Mixture of Experts]: https://img.shields.io/static/v1?label=&message=Mixture%20of%20Experts&color=blueviolet
 [Model Architecture]: https://img.shields.io/static/v1?label=&message=Model%20Architecture&color=blueviolet
 
@@ -20,19 +15,25 @@
 This repository contains code used for pretraining and finetuning IBM's Granite models. It also includes the following key innovations on model architectures, finetuning methods, systems optimizations:
 1. [Saving Memory Using Padding-Free Transformer Layers during Finetuning](https://huggingface.co/blog/mayank-mishra/padding-free-transformer)  
 _Mayank Mishra_  
-![image][IBM] ![image][Memory Reduction] ![image][Efficient Finetuning]
+![image][Efficient Training]
 1. [Reducing Transformer Key-Value Cache Size with Cross-Layer Attention](https://arxiv.org/abs/2405.12981)  
 _William Brandon, Mayank Mishra, Aniruddha Nrusimha, Rameswar Panda, Jonathan Ragan Kelly_  
-![image][IBM] ![image][Memory Reduction] ![image][Efficient Inference] ![image][Model Architecture]
+![image][Efficient Inference] ![image][Model Architecture]
 1. [Dense Training, Sparse Inference: Rethinking Training of Mixture-of-Experts Language Models](https://arxiv.org/abs/2404.05567)  
 _Bowen Pan, Yikang Shen, Haokun Liu, Mayank Mishra, Gaoyuan Zhang, Aude Oliva, Colin Raffel, Rameswar Panda_  
-![image][IBM] ![image][Mixture of Experts] ![image][Efficient Inference] ![image][Model Architecture]
+![image][Mixture of Experts] ![image][Efficient Inference] ![image][Model Architecture]
 1. [NEFTune: Noisy Embeddings Improve Instruction Finetuning](https://arxiv.org/abs/2310.05914)  
 _Neel Jain, Ping-yeh Chiang, Yuxin Wen, John Kirchenbauer, Hong-Min Chu, Gowthami Somepalli, Brian R. Bartoldson, Bhavya Kailkhura, Avi Schwarzschild, Aniruddha Saha, Micah Goldblum, Jonas Geiping, Tom Goldstein_  
-![image][Third-Party] ![image][Instruction Finetuning]
+![image][Instruction Finetuning]
+1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
+_Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
+![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
+1. [Scattered Mixture-of-Experts Implementation](https://arxiv.org/abs/2403.08245)  
+_Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_  
+![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
 
 # Getting Started
-Run `make install` or `pip install -r requirements.txt` to install the requirements for this repository. You might need to install `flash-attn`.
+Run `make install` to install the requirements for this repository. You might need to install `flash-attn`.
 
 # Distributed finetuning
 This repository is meant for finetuning large language models (of any scale) using multiple backends. The following backends are currently supported:
@@ -103,7 +104,12 @@ Note that padding free transformers doesn't support generation and thus for runn
 The typical training workflow looks like:
 1. [Pretraining](scripts/pretrain.sh) or [Finetuning](scripts/finetune.sh): This is the actual training process
 ```shell
-sh scripts/train.sh configs/sst2/training.yml
+# for finetuning
+sh scripts/finetune.sh configs/sst2/training.yml
+```
+```shell
+# for pretraining
+sh scripts/pretrain.sh configs/pretraining-examples/pretrain-1.yml
 ```
 
 2. [Inference](scripts/generate.sh): Run inference on the trained models or the un-trained model
@@ -111,12 +117,17 @@ sh scripts/train.sh configs/sst2/training.yml
 sh scripts/generate.sh configs/sst2/inference.yml
 ```
 
-3. [Export to HuggingFace-compatible checkpoint](scripts/export.sh): This is used to export the model to a safetensors checkpoint
+3. [Unshard the checkpoint](scripts/unshard.sh): This is used to unshard the model to a safetensors checkpoint since dolomite-engine saves a sharded model during training
 ```shell
-sh scripts/export.sh configs/sst2/export.yml
+sh scripts/unshard.sh configs/sst2/unshard.yml
 ```
 
-## Dataset
+## Running basic inference
+
+For a simple HuggingFace inference example, refer to [tools/inference.py](tools/inference.py).
+For an example running tensor parallel inference, refer to [tools/tensor_parallel_inference.py](tools/tensor_parallel_inference.py).
+
+## Using custom datasets
 The data directory should obey the following structure:
 ```text
 📦data
@@ -170,6 +181,9 @@ HuggingFaceDataset
 SlimOrcaDataset
 SST2Dataset
 ```
+
+## Using Megatron Dataset outside of this repository
+This repository implements the dataloader from Megatron-LM for efficient pretraining. If for some reason you need to use that dataloader outside this repository, take a look at [this example](tools/megatron_dataset/megatron_dataloader.py).
 
 ## Supported optimizers
 We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [DeepSpeed](https://github.com/microsoft/DeepSpeed) or [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.

@@ -1,4 +1,4 @@
-from typing import Any, Callable, Iterable, List
+from typing import Callable, Iterable
 
 import torch
 import torch.distributed
@@ -24,15 +24,15 @@ class DispatchingDataLoader(ResumableDataLoader):
         dataset: Dataset,
         batch_size: int | None = 1,
         sampler: Sampler | Iterable | None = None,
-        batch_sampler: Sampler[List] | Iterable[List] | None = None,
+        batch_sampler: Sampler[list] | Iterable[list] | None = None,
         num_workers: int = 0,
-        collate_fn: Callable[[List], Any] | None = None,
+        collate_fn: Callable | None = None,
         pin_memory: bool = False,
         drop_last: bool = False,
         source_broadcast_mapping: dict[int, ProcessGroup] = None,
         broadcast_world_size: int = None,
         static_shape_per_rank: tuple[int, int] = None,
-        keys: List[str] = ["input_ids", "attention_mask", "labels"],
+        keys: list[str] = ["input_ids", "attention_mask", "labels"],
     ) -> None:
         self.broadcast_world_size = broadcast_world_size
 

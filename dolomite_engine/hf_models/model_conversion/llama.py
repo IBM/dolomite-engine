@@ -180,6 +180,10 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
+    assert config.m_emb is None
+    assert config.m_residual is None
+    assert config.m_width is None
+    assert config.attention_multiplier is None
 
     original_config = LlamaConfig(
         vocab_size=config.vocab_size,

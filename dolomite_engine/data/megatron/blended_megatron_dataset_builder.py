@@ -2,7 +2,7 @@
 
 import math
 from copy import deepcopy
-from typing import Any, List, Optional, Tuple, Type, Union
+from typing import Any, List, Optional, Type, Union
 
 import numpy
 import torch
@@ -171,22 +171,19 @@ class BlendedMegatronDatasetBuilder(object):
             return blended_datasets
 
     def _build_megatron_dataset_splits(
-        self,
-        path_prefix: str,
-        split: List[float],
-        sizes: List[int],
-    ) -> List[Optional[MegatronDataset]]:
+        self, path_prefix: str, split: list[float], sizes: list[int]
+    ) -> list[MegatronDataset | None]:
         """Build each MegatronDataset split from a single MMapIndexedDataset
 
         Args:
             path_prefix (str): The MMapIndexedDataset .bin and .idx file prefix
 
-            split (List[float]): The dataset split ratios (must sum to 1.00)
+            split (list[float]): The dataset split ratios (must sum to 1.00)
 
-            sizes (List[int]): The number of total samples to draw from each split
+            sizes (list[int]): The number of total samples to draw from each split
 
         Returns:
-            List[Optional[MegatronDataset]]: The MegatronDatset (or None) per split
+            list[MegatronDataset | None]: The MegatronDatset (or None) per split
         """
         indexed_dataset = self._get_indexed_dataset(path_prefix)
 
@@ -229,12 +226,12 @@ class BlendedMegatronDatasetBuilder(object):
 
     def build_dataset_single_split(
         self,
-        group_names: List[List[str]],
-        split_paths: List[List[str]],
-        split_splits: List[List[str]],
-        split_weights: List[List[str]],
+        group_names: list[list[str]],
+        split_paths: list[list[str]],
+        split_splits: list[list[str]],
+        split_weights: list[list[str]],
         data_split: Split,
-    ) -> List[Optional[Union[BlendedDataset, MegatronDataset]]]:
+    ) -> list[BlendedDataset | MegatronDataset | None]:
         megatron_datasets = []
         data_split_index = data_split.value
 
@@ -284,7 +281,7 @@ class BlendedMegatronDatasetBuilder(object):
 
     def _build_megatron_dataset_single_split(
         self, group_name: str, path_prefix: str, split: str, size: int, data_split: Split
-    ) -> List[Optional[MegatronDataset]]:
+    ) -> list[MegatronDataset | None]:
         indexed_dataset = self._get_indexed_dataset(path_prefix)
 
         start, end = _parse_split(split)
@@ -324,24 +321,20 @@ class BlendedMegatronDatasetBuilder(object):
 
         return megatron_dataset
 
-    def _build_generic_dataset(
-        self,
-        cls: Type[DistributedDataset],
-        **kwargs: Any,
-    ) -> Optional[DistributedDataset]:
+    def _build_generic_dataset(self, cls: type[DistributedDataset], **kwargs: Any) -> DistributedDataset | None:
         """Build the DistributedDataset
 
         Return None if and only if the underlying MegatronDataset class is not built on the current
         rank and torch.distributed is initialized.
 
         Args:
-            cls (Type[DistributedDataset]): The DistributedDataset class to be built
+            cls (type[DistributedDataset]): The DistributedDataset class to be built
 
         Raises:
             Exception: When the dataset constructor raises an OSError
 
         Returns:
-            Optional[DistributedDataset]: The DistributedDataset instantion or None
+            DistributedDataset | None: The DistributedDataset instantion or None
         """
         if torch.distributed.is_initialized():
             rank = ProcessGroupManager.get_global_rank()
@@ -372,7 +365,7 @@ class BlendedMegatronDatasetBuilder(object):
 
         return cls(**kwargs, caching_allowed=True)
 
-    def _get_indexed_dataset(self, path_prefix: str) -> Optional[MMapIndexedDataset]:
+    def _get_indexed_dataset(self, path_prefix: str) -> MMapIndexedDataset | None:
         indexed_dataset = None
         if not torch.distributed.is_initialized() or self.config.is_built_on_rank:
             indexed_dataset = MMapIndexedDataset(path_prefix, self.cls.is_multimodal())
@@ -380,17 +373,17 @@ class BlendedMegatronDatasetBuilder(object):
         return indexed_dataset
 
 
-def _get_split_indices(split: List[float], num_elements: int) -> List[int]:
+def _get_split_indices(split: list[float], num_elements: int) -> List[int]:
     """Determine the document index bounds per split
 
     Args:
-        split (List[float]): The dataset split ratios (must sum to 1.00)
+        split (list[float]): The dataset split ratios (must sum to 1.00)
 
         num_elements (int): The number of elements, e.g. sequences or documents, available for
         the split
 
     Returns:
-        List[int]: The indices for all three splits e.g. [0, 900, 990, 1000] for a 1000-document
+        list[int]: The indices for all three splits e.g. [0, 900, 990, 1000] for a 1000-document
         set and a [90.0, 9.0, 1.0] split
     """
     split_indices = [0]
@@ -405,19 +398,19 @@ def _get_split_indices(split: List[float], num_elements: int) -> List[int]:
 
 
 def _get_prefixes_weights_and_sizes_for_blend(
-    blend: List[str], target_num_samples_per_split: List[int]
-) -> Tuple[List[str], List[float], List[List[int]]]:
+    blend: list[str], target_num_samples_per_split: list[int]
+) -> tuple[list[str], list[float], list[list[int]]]:
     """Determine the contribution of the MegatronDataset splits to the BlendedDataset splits
 
     Args:
-        blend (List[str]): e.g. ["30", "path/to/dataset_1_prefix", "70",
+        blend (list[str]): e.g. ["30", "path/to/dataset_1_prefix", "70",
         "path/to/dataset_2_prefix"]
 
-        target_num_samples_per_split (List[int]): The number of samples to target for each
+        target_num_samples_per_split (list[int]): The number of samples to target for each
         BlendedDataset split
 
     Returns:
-        Tuple[List[str], List[float], List[List[int]]]: The prefix strings e.g.
+        tuple[list[str], list[float], list[list[int]]]: The prefix strings e.g.
         ["path/to/dataset_1_prefix", "path/to/dataset_2_prefix"], the normalized weights e.g.
         [0.3, 0.7], and the number of samples to request per MegatronDataset per split
     """
@@ -434,7 +427,7 @@ def _get_prefixes_weights_and_sizes_for_blend(
     return prefixes, weights, sizes_per_dataset
 
 
-def _parse_split(start_end: str) -> Tuple[float]:
+def _parse_split(start_end: str) -> tuple[float]:
     start, end = start_end.split(":")
     start = float(start)
     end = float(end)

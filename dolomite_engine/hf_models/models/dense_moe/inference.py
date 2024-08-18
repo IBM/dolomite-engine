@@ -1,7 +1,7 @@
 import torch
 
 
-def mask_probability(p: torch.Tensor, inference_method: dict) -> torch.Tensor:
+def mask_probability(p: torch.Tensor, inference_method: dict | None) -> torch.Tensor:
     if inference_method is None:
         return p
 

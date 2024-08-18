@@ -5,4 +5,4 @@ load_args:
 mixed_precision_args:
   dtype: fp32
 
-export_path: exported_huggingface_model
+unsharded_path: unsharded_model

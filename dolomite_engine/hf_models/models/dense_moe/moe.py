@@ -10,7 +10,7 @@ from .inference import mask_probability
 
 
 class DenseMoE(MLP):
-    def __init__(self, config: DenseMoEConfig, inference_method: dict = None) -> None:
+    def __init__(self, config: DenseMoEConfig, inference_method: dict | None = None) -> None:
         hidden_size = config.n_embd
 
         self.num_experts = config.num_experts

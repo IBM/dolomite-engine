@@ -58,7 +58,6 @@ model_args:
     position_embedding_type: rope
     resid_pdrop: 0
     rope_theta: 10000
-    scale_attention_softmax_in_fp32: true
     scale_attn_weights: true
     sharing_pattern:
       - 0
@@ -119,7 +118,7 @@ training_parameters:
   gradient_accumulation_steps: 4
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 3e-4
     weight_decay: 0.1
@@ -134,7 +133,7 @@ lr_scheduler_args:
   num_decay_steps: 23000
 
 mixed_precision_args:
-  dtype: bfloat16
+  dtype: bf16
 
 distributed_args:
   distributed_backend: torch

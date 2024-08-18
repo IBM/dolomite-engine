@@ -125,3 +125,48 @@ except ImportError:
 
 def is_triton_available() -> bool:
     return _IS_TRITON_AVAILABLE
+
+
+try:
+    import fla
+
+    _IS_FLA_AVAILABLE = True
+except ImportError:
+    _IS_FLA_AVAILABLE = False
+
+    warn_rank_0(
+        "FlashLinearAttention (FLA) is not installed, install from "
+        "https://github.com/sustcsonglin/flash-linear-attention/"
+    )
+
+
+def is_fla_available() -> bool:
+    return _IS_FLA_AVAILABLE
+
+
+try:
+    import einops
+
+    _IS_EINOPS_AVAILABLE = True
+except ImportError:
+    _IS_EINOPS_AVAILABLE = False
+
+    warn_rank_0("einops is not installed")
+
+
+def is_einops_available() -> bool:
+    return _IS_EINOPS_AVAILABLE
+
+
+try:
+    import scattermoe
+
+    _IS_SCATTERMOE_AVAILABLE = True
+except ImportError:
+    _IS_SCATTERMOE_AVAILABLE = False
+
+    warn_rank_0("scattermoe is not installed, install from https://github.com/shawntan/scattermoe")
+
+
+def is_scattermoe_available() -> bool:
+    return _IS_SCATTERMOE_AVAILABLE

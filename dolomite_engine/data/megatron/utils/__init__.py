@@ -3,7 +3,6 @@
 import logging
 import os
 from enum import Enum
-from typing import List
 
 import numpy
 import torch
@@ -36,7 +35,7 @@ def compile_helpers() -> None:
 def build_blending_indices(
     dataset_index: numpy.ndarray,
     dataset_sample_index: numpy.ndarray,
-    weights: List[float],
+    weights: list[float],
     num_datasets: int,
     size: int,
     verbose: bool,
@@ -63,14 +62,14 @@ def build_sample_idx(
     return sample_idx
 
 
-def normalize(weights: List[float]) -> List[float]:
+def normalize(weights: list[float]) -> list[float]:
     """Do non-exponentiated normalization
 
     Args:
-        weights (List[float]): The weights
+        weights (list[float]): The weights
 
     Returns:
-        List[float]: The normalized weights
+        list[float]: The normalized weights
     """
     w = numpy.array(weights, dtype=numpy.float64)
     w_sum = numpy.sum(w)

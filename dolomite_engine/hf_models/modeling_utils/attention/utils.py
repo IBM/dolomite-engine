@@ -1,11 +1,9 @@
-from typing import Tuple
-
 import torch
 import torch.nn.functional as F
 
 
 # Copied from transformers.models.llama.modeling_llama._get_unpad_data
-def get_unpad_data(attention_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
@@ -38,7 +36,7 @@ def interleave_query_key_value_tensor_for_mha(
 
 def split_query_key_value_tensor_for_mha(
     query_key_value_weight: torch.Tensor, num_heads: int
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     original_shape = query_key_value_weight.shape
 
     query_key_value_weight = query_key_value_weight.view(num_heads, -1)
@@ -78,7 +76,7 @@ def interleave_query_key_value_tensor_for_gqa(
 
 def split_query_key_value_tensor_for_gqa(
     query_key_value_weight: torch.Tensor, num_heads: int, num_key_value_heads: int, head_dim: int
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     query_heads_per_group = num_heads // num_key_value_heads
     original_shape = query_key_value_weight.shape
 
@@ -104,7 +102,7 @@ def interleave_query_key_value_tensor_for_mqa(
 
 def split_query_key_value_tensor_for_mqa(
     query_key_value_weight: torch.Tensor, num_heads: int, head_dim: int
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     return query_key_value_weight.split((num_heads * head_dim, head_dim, head_dim))
 
 

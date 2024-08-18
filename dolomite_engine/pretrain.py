@@ -1,9 +1,11 @@
-import contextlib
 import logging
 import time
-from typing import List
+from contextlib import nullcontext
+from functools import partial
 
 import torch
+from torch.distributed import ReduceOp
+from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
@@ -12,15 +14,15 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
-from .data import get_megatron_gpt_dataloaders
-from .distributed import wrap_model_for_distributed_training
+from .data import get_megatron_gpt_dataloaders, get_next_batch
+from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode
-from .finetune import track_train_metrics, train_step
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
+from .optimization import get_optimizer, get_scheduler
+from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     ProcessGroupManager,
-    RunningMean,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -34,7 +36,7 @@ if is_transformer_engine_available():
 
 
 def track_val_metrics(
-    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str = None
+    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str | None = None
 ) -> None:
     """tracks metrics like validation loss
 
@@ -42,7 +44,7 @@ def track_val_metrics(
         global_step (int): global step during training
         val_loss (float): validation loss for the validation data
         experiments_tracker (ExperimentsTracker): metrics tracker
-        group_name (str): group name for the validation / test set
+        group_name (str | None): group name for the validation / test set
     """
 
     message = f"step = {global_step}, val_loss = {val_loss:.4f}"
@@ -61,8 +63,8 @@ def train(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: DataLoader,
-    val_dataloaders: List[DataLoader],
-    test_dataloaders: List[DataLoader],
+    val_dataloaders: list[DataLoader],
+    test_dataloaders: list[DataLoader],
     experiments_tracker: ExperimentsTracker,
     starting_iteration: int = 0,
 ) -> None:
@@ -74,8 +76,8 @@ def train(
         optimizer (Optimizer): optimizer
         lr_scheduler (LRScheduler): learning rate scheduler
         train_dataloader (DataLoader): training dataloader
-        val_dataloaders (List[DataLoader]): validation dataloaders
-        test_dataloaders (List[DataLoader]): test dataloaders
+        val_dataloaders (list[DataLoader]): validation dataloaders
+        test_dataloaders (list[DataLoader]): test dataloaders
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
@@ -95,8 +97,6 @@ def train(
     if val_weighted_split_paths is not None:
         group_names = [key for key in val_weighted_split_paths.keys()[0]]
 
-    loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
-
     model.train()
 
     if eval_during_training:
@@ -105,34 +105,51 @@ def train(
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-
-    model_flops = model.get_model_tflops(micro_batch_size * gradient_accumulation_steps, sequence_length)
-
     global_batch_size = (
         micro_batch_size * gradient_accumulation_steps * ProcessGroupManager.get_data_parallel_world_size()
     )
     tokens_per_batch = global_batch_size * sequence_length
 
-    log_rank_0(logging.INFO, f"global batch size = {global_batch_size}")
-    log_rank_0(logging.INFO, f"tokens per batch = {tokens_per_batch}")
+    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
+
+    # model flops per GPU
+    model_flops = (
+        get_model_tflops(
+            model_class=args.model_args.model_class,
+            config=model.config,
+            batch_size=global_batch_size,
+            sequence_length=sequence_length,
+            gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
+            gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
+        )
+        / dp_world_size
+    )
+
+    forward_context = (
+        partial(
+            te.fp8_autocast,
+            enabled=True,
+            fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
+        )
+        if args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
+        else nullcontext
+    )
+
+    backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
+
+    torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
+
+    if torch_profiler is not None:
+        torch_profiler.__enter__()
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
-    train_step_context = contextlib.nullcontext()
-    use_nvte_fp8 = (
-        args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
-    )
+    loss_running_sum = 0
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
-
-        if use_nvte_fp8:
-            train_step_context = te.fp8_autocast(
-                enabled=True,
-                fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
-            )
 
         loss_step, grad_norm_step = train_step(
             model=model,
@@ -142,8 +159,14 @@ def train(
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
-            train_step_context=train_step_context,
+            forward_context=forward_context,
+            backward_context=backward_context,
         )
+
+        loss_running_sum += loss_step
+
+        if torch_profiler is not None:
+            torch_profiler.step()
 
         if global_step % log_interval == 0:
             time_elapsed = time.perf_counter() - start_time
@@ -159,13 +182,14 @@ def train(
                     else lr_scheduler.get_lr()[0]
                 ),
                 experiments_tracker=experiments_tracker,
-                loss_running_mean_tracker=loss_running_mean_tracker,
+                loss_running_mean=loss_running_sum / log_interval,
                 flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
                 billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
                 step_time=step_time,
             )
             start_time = time.perf_counter()
             steps_since_start_time = 0
+            loss_running_sum = 0
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
@@ -179,12 +203,7 @@ def train(
                 None,
                 experiments_tracker,
                 global_step,
-                {
-                    "consumed_samples": global_step
-                    * micro_batch_size
-                    * gradient_accumulation_steps
-                    * ProcessGroupManager.get_data_parallel_world_size()
-                },
+                {"consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size},
             )
 
             start_time = time.perf_counter()
@@ -193,31 +212,36 @@ def train(
     if eval_during_training:
         evaluate(test_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
 
+    if torch_profiler is not None:
+        torch_profiler.__exit__()
+
 
 @torch.no_grad()
 def evaluate(
-    val_dataloaders: List[DataLoader],
+    val_dataloaders: list[DataLoader],
     model: ModelWrapperForPretraining,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
-    group_names: List[str],
+    group_names: list[str],
 ) -> float:
     """main validation loop for the program
 
     Args:
-        val_dataloaders (List[DataLoader]): list of validation dataloaders
+        val_dataloaders (list[DataLoader]): list of validation dataloaders
         model (ModelWrapperForPretraining): model
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
-        group_names (List[str]): names of the datasets in validation/test group
+        group_names (list[str]): names of the datasets in validation/test group
 
     Returns:
         float: loss at the current step
     """
 
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+
+    if tp_world_size > 1:
         # other tensor parallel ranks need to be told if val dataloader is None or not
         is_val_dataloader_none = (
             val_dataloaders is None or len(val_dataloaders) == 0
@@ -240,11 +264,18 @@ def evaluate(
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
         loss_sum = 0
         for _ in range(eval_steps):
-            batch = next(val_dataloader)
-            loss_value = model(batch).item()
-            loss_sum += loss_value
+            batch = get_next_batch(val_dataloader)
+            loss = model(batch)
+            loss_sum += loss
 
         loss_mean = loss_sum / eval_steps
+
+        if tp_world_size > 1:
+            loss_mean = loss_mean.to_local()
+
+        torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+        loss_mean = loss_mean.item()
+
         track_val_metrics(global_step, loss_mean, experiments_tracker, group_name)
 
     model.train()
@@ -267,12 +298,38 @@ def main() -> None:
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
+        zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
 
+    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
+        set_deepspeed_config(args)
+
     model = get_model(args, mode)
-    model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)
+    model = wrap_model_for_distributed_training(args, model)
+
+    if args.distributed_args.distributed_backend == DistributedBackend.torch:
+        optimizer = get_optimizer(
+            optimizer_class_name=args.optimizer_args.class_name,
+            optimizer_class_args=args.optimizer_args.class_args,
+            model=model,
+            params_group_method=args.optimizer_args.params_group_method,
+        )
+
+        lr_scheduler = get_scheduler(
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+            num_training_steps=args.training_parameters.num_training_steps,
+            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        )
+    else:
+        optimizer = None
+        lr_scheduler = None
 
     log_model(model)
 
@@ -313,6 +370,8 @@ def main() -> None:
         experiments_tracker=experiments_tracker,
         starting_iteration=starting_iteration,
     )
+
+    ProcessGroupManager.destroy_process_groups()
 
 
 if __name__ == "__main__":

@@ -1,27 +1,27 @@
 import torch.nn as nn
 
 from ...enums import PositionEmbeddingType
+from ...mixins import BaseMoEModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..gpt_dolomite import GPTDolomitePreTrainedModel
-from ..moe_dolomite import MoEDolomiteModel, MoEDolomitePreTrainedModel
 from .config import DenseMoEConfig
 from .layer import DenseMoEBlock
 
 
-class DenseMoEPreTrainedModel(MoEDolomitePreTrainedModel):
+class DenseMoEPreTrainedModel(PreTrainedModelMixin):
     config_class = DenseMoEConfig
+    layer_class = DenseMoEBlock
     _no_split_modules = ["DenseMoEBlock"]
 
-    def __init__(self, config: DenseMoEConfig, *inputs, **kwargs):
-        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
+    def __init__(self, config: DenseMoEConfig, *args, **kwargs) -> None:
+        super().__init__(config, *args, **kwargs)
 
         assert self._use_sdpa, "only SDPA is supported for dense_moe"
         self.inference_method = kwargs.get("inference_method")
 
 
-class DenseMoEModel(DenseMoEPreTrainedModel, MoEDolomiteModel):
+class DenseMoEModel(DenseMoEPreTrainedModel, BaseMoEModelMixin):
     def __init__(self, config: DenseMoEConfig, **kwargs) -> None:
-        DenseMoEPreTrainedModel.__init__(self, config, **kwargs)
+        super().__init__(config, **kwargs)
 
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
@@ -40,8 +40,11 @@ class DenseMoEModel(DenseMoEPreTrainedModel, MoEDolomiteModel):
         self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList(
             [
-                DenseMoEBlock(
-                    config, self.normalization_implementation, layer_idx=i, inference_method=self.inference_method
+                self.layer_class(
+                    config,
+                    normalization_implementation=self.normalization_implementation,
+                    layer_idx=i,
+                    inference_method=self.inference_method,
                 )
                 for i in range(config.num_hidden_layers)
             ]

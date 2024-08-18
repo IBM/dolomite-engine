@@ -1,30 +1,27 @@
 from collections import defaultdict
-from typing import List, Tuple, Union
 
-import torch
 import torch.nn as nn
-from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .config import GPTCrossLayerConfig
 from .layer import GPTCrossLayerBlock
 
 
-class GPTCrossLayerPreTrainedModel(GPTDolomitePreTrainedModel):
+class GPTCrossLayerPreTrainedModel(PreTrainedModelMixin):
     config_class = GPTCrossLayerConfig
+    layer_class = GPTCrossLayerBlock
     _no_split_modules = ["GPTCrossLayerBlock"]
 
-    def __init__(self, config: GPTDolomiteConfig, *inputs, **kwargs):
-        GPTDolomitePreTrainedModel.__init__(self, config, *inputs, **kwargs)
+    def __init__(self, config: GPTCrossLayerConfig, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
         self.sharing_pattern = config.sharing_pattern
 
 
-class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
+class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
     def __init__(self, config: GPTCrossLayerConfig, **kwargs) -> None:
-        GPTCrossLayerPreTrainedModel.__init__(self, config, **kwargs)
+        super().__init__(config, **kwargs)
 
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
@@ -62,11 +59,11 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
 
         self.h = nn.ModuleList(
             [
-                GPTCrossLayerBlock(
+                self.layer_class(
                     config,
-                    self.normalization_implementation,
-                    self.attention_implementation,
-                    self._use_padding_free_transformer,
+                    normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_implementation,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_indices=sub_layer_map[i],
                     layer_idx=i,
                 )
@@ -86,73 +83,5 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    def forward(
-        self,
-        input_ids: torch.Tensor = None,
-        past_key_values: List[torch.Tensor] = None,
-        attention_mask: torch.Tensor = None,
-        token_type_ids: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        use_cache: bool = None,
-        output_hidden_states: bool = None,
-        return_dict: bool = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Union[Tuple, BaseModelOutputWithPast]:
-        (
-            output_hidden_states,
-            use_cache,
-            return_dict,
-            input_shape,
-            hidden_states,
-            attention_mask,
-            position_ids,
-            rope_cos_sin,
-            past_key_values,
-        ) = self._prepare_a_bunch_of_stuff(
-            input_ids=input_ids,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
-
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_hidden_states = () if output_hidden_states else None
-        for block in self.h:
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-
-            hidden_states = block(
-                hidden_states,
-                past_key_values=past_key_values,
-                attention_mask=attention_mask,
-                rope_cos_sin=rope_cos_sin,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-            )
-
-        hidden_states = self.ln_f(hidden_states)
-
-        # Add last hidden state
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        if not return_dict:
-            return tuple(v for v in [hidden_states, past_key_values, all_hidden_states] if v is not None)
-
-        return BaseModelOutputWithPast(
-            last_hidden_state=hidden_states,
-            past_key_values=past_key_values,
-            hidden_states=all_hidden_states,
-        )
-
-    def get_global_local_idx(self, index: int) -> Tuple[int, int]:
+    def get_global_local_idx(self, index: int) -> tuple[int, int]:
         return self.layer_map[index]

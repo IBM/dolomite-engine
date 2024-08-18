@@ -12,11 +12,11 @@ class SDPA(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)

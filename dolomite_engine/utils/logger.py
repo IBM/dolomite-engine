@@ -1,8 +1,6 @@
 import logging
 from warnings import warn
 
-import torch.distributed
-
 from .parallel import ProcessGroupManager, run_rank_n
 
 

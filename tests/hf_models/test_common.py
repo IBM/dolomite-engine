@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 from itertools import product
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any
 from unittest import TestCase
 
 import torch
@@ -23,26 +23,26 @@ from dolomite_engine.hf_models.config import CommonConfig
 
 class TestCommons(TestCase):
     @staticmethod
-    def get_all_devices() -> List[torch.device]:
+    def get_all_devices() -> list[torch.device]:
         return [torch.device("cpu"), torch.device("cuda")]
 
     @staticmethod
-    def get_attention_head_types() -> List[AttentionHeadType]:
+    def get_attention_head_types() -> list[AttentionHeadType]:
         return [AttentionHeadType.mha, AttentionHeadType.mqa, AttentionHeadType.gqa]
 
     @staticmethod
-    def get_attention_implementations() -> List[str]:
+    def get_attention_implementations() -> list[str]:
         return ["eager", "sdpa", "flash_attention_2"]
 
     @staticmethod
-    def get_position_embedding_types() -> List[PositionEmbeddingType]:
+    def get_position_embedding_types() -> list[PositionEmbeddingType]:
         return [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.alibi, PositionEmbeddingType.rope]
 
     @staticmethod
-    def get_dtypes() -> List[torch.dtype]:
+    def get_dtypes() -> list[torch.dtype]:
         return [torch.float32, torch.float16, torch.bfloat16]
 
-    def make_args_matrix(*args_lists) -> List[Any]:
+    def make_args_matrix(*args_lists) -> list[Any]:
         return [p for p in product(*args_lists)]
 
     def skip_test_if_device_unavailable(self, device: torch.device) -> None:
@@ -69,6 +69,10 @@ class TestCommons(TestCase):
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
+        m_emb: float = None,
+        m_width: float = None,
+        m_residual: float = None,
+        attention_multiplier: float = None,
     ) -> GPTDolomiteConfig:
         return GPTDolomiteConfig(
             vocab_size=2048,
@@ -86,6 +90,10 @@ class TestCommons(TestCase):
             bos_token_id=0,
             eos_token_id=1,
             pad_token_id=2,
+            m_emb=m_emb,
+            m_width=m_width,
+            m_residual=m_residual,
+            attention_multiplier=attention_multiplier,
         )
 
     @staticmethod
@@ -98,6 +106,10 @@ class TestCommons(TestCase):
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
+        m_emb: float = None,
+        m_width: float = None,
+        m_residual: float = None,
+        attention_multiplier: float = None,
     ) -> MoEDolomiteConfig:
         return MoEDolomiteConfig(
             vocab_size=2048,
@@ -117,11 +129,13 @@ class TestCommons(TestCase):
             bos_token_id=0,
             eos_token_id=1,
             pad_token_id=2,
+            m_emb=m_emb,
+            m_width=m_width,
+            m_residual=m_residual,
+            attention_multiplier=attention_multiplier,
         )
 
-    def get_dummy_inputs(
-        self, device: torch.device, return_list: bool = False
-    ) -> Tuple[Union[torch.Tensor, List[int]]]:
+    def get_dummy_inputs(self, device: torch.device, return_list: bool = False) -> tuple[torch.Tensor | list[int]]:
         if return_list:
             # needed for flash attention
             input_ids = [list(range(5, 15)), list(range(10, 15))]
@@ -218,6 +232,8 @@ class TestCommons(TestCase):
 
         attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
+        moe_implementation = kwargs.pop("moe_implementation", None)
+
         if use_padding_free_transformer:
             assert model._use_padding_free_transformer
 
@@ -233,6 +249,11 @@ class TestCommons(TestCase):
             else:
                 assert "FlashAttention2" in str(model)
 
+        if moe_implementation == "eager":
+            assert "SparseMoE" in str(model)
+        elif moe_implementation == "scattermoe":
+            assert "ScatterMoE" in str(model)
+
         kwargs.pop("torch_dtype", None)
         assert len(kwargs) == 0
 
@@ -243,12 +264,12 @@ class TestCommons(TestCase):
         x: torch.Tensor,
         y: torch.Tensor,
         exact_match: bool,
-        rtol_float32: float = None,
-        atol_float32: float = None,
-        rtol_float16: float = None,
-        atol_float16: float = None,
-        rtol_bfloat16: float = None,
-        atol_bfloat16: float = None,
+        rtol_float32: float | None = None,
+        atol_float32: float | None = None,
+        rtol_float16: float | None = None,
+        atol_float16: float | None = None,
+        rtol_bfloat16: float | None = None,
+        atol_bfloat16: float | None = None,
     ) -> None:
         if exact_match:
             assert x.equal(y)

@@ -2,4 +2,4 @@ load_args:
   load_path: checkpoints/full_finetuning
   iteration: 4000
 
-export_path: exported_huggingface_model
+unsharded_path: unsharded_model

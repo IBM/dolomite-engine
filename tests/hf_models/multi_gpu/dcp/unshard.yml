@@ -1,0 +1,8 @@
+load_args:
+  load_path: checkpoints
+  iteration: 5000
+
+mixed_precision_args:
+  dtype: fp32
+
+unsharded_path: unsharded_model

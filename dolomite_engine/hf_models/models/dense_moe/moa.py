@@ -1,5 +1,4 @@
 from copy import deepcopy
-from typing import Tuple
 
 import torch
 import torch.nn.functional as F
@@ -13,7 +12,7 @@ from .inference import mask_probability
 
 class DenseMoA_SDPA(SDPA):
     def __init__(
-        self, config: DenseMoEConfig, causal: bool, layer_idx: int = None, inference_method: dict = None
+        self, config: DenseMoEConfig, causal: bool, layer_idx: int | None = None, inference_method: dict | None = None
     ) -> None:
         assert (
             config.n_head % config.num_experts == 0
@@ -33,13 +32,13 @@ class DenseMoA_SDPA(SDPA):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================

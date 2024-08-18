@@ -74,6 +74,10 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
     assert config.normalization_function == "layernorm"
     assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
     assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
+    assert config.m_emb is None
+    assert config.m_residual is None
+    assert config.m_width is None
+    assert config.attention_multiplier is None
 
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,
@@ -91,7 +95,6 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         scale_attn_weights=config.scale_attn_weights,
         use_cache=config.use_cache,
         attention_softmax_in_fp32=config.attention_softmax_in_fp32,
-        scale_attention_softmax_in_fp32=config.scale_attention_softmax_in_fp32,
         multi_query=config.multi_query,
         tie_word_embeddings=config.tie_word_embeddings,
         bos_token_id=config.bos_token_id,
