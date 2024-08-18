@@ -262,7 +262,6 @@ def main() -> None:
         optimizer = get_optimizer(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
-            cpu_offload=args.distributed_args.cpu_offload,
             model=model,
             params_group_method=args.optimizer_args.params_group_method,
         )

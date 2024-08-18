@@ -4,8 +4,10 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
-from torch.distributed._composable.fsdp import fully_shard
+from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
+from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
 from torch.distributed.fsdp import ShardingStrategy
@@ -87,7 +89,6 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
         optimizer = get_optimizer(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
-            cpu_offload=cpu_offload,
             model=model,
             params_group_method=args.optimizer_args.params_group_method,
         )
@@ -133,7 +134,6 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
             )
     elif args.distributed_args.distributed_backend == DistributedBackend.torch:
         assert stage in [0, 2, 3]
-        assert not cpu_offload
 
         dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
 
@@ -181,6 +181,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
             model = FSDP(
                 model,
                 sharding_strategy=sharding_strategy,
+                cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
                 mixed_precision=mixed_precision_policy,
                 auto_wrap_policy=partial(
                     transformer_auto_wrap_policy,
@@ -207,6 +208,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                 model = FSDP(
                     model,
                     sharding_strategy=ShardingStrategy.NO_SHARD,
+                    cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
                     mixed_precision=mixed_precision_policy,
                     device_id=torch.cuda.current_device(),
                     limit_all_gathers=True,
@@ -227,9 +229,20 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                     for block_class in block_classes:
                         if isinstance(module, block_class):
                             fully_shard(
-                                module, mesh=dp_mesh, reshard_after_forward=zero3, mp_policy=mixed_precision_policy
+                                module,
+                                mesh=dp_mesh,
+                                reshard_after_forward=zero3,
+                                mp_policy=mixed_precision_policy,
+                                offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
                             )
-                fully_shard(model, mesh=dp_mesh, reshard_after_forward=zero3, mp_policy=mixed_precision_policy)
+
+                fully_shard(
+                    model,
+                    mesh=dp_mesh,
+                    reshard_after_forward=zero3,
+                    mp_policy=mixed_precision_policy,
+                    offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+                )
 
                 if efficient_initialization and args.model_args.model_name is None:
                     model = model.to_empty(device=torch.cuda.current_device())

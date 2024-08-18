@@ -402,7 +402,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         query_length = None
         key_length = None
         if self._use_padding_free_transformer:
-            key_length = max_seqlen
+            key_length = max_seqlen.item()
         else:
             past_length = 0 if past_key_values is None else past_key_values.get_seq_length()
             query_length = input_shape[-1]
