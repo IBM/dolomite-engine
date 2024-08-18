@@ -82,10 +82,6 @@ class ModelWrapper(nn.Module):
                 self.model_class, self.config.model_type
             ), "tensor parallel is not supported with this model"
 
-            rng_tracker = CUDA_RNGStatesTracker()
-            rng_tracker.add(seed=args.random_args.seed)
-            set_cuda_rng_tracker(rng_tracker)
-
         if self.use_padding_free_transformer:
             assert is_custom_model(
                 self.model_class, self.config.model_type
