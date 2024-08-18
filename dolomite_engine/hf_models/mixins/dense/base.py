@@ -83,6 +83,7 @@ class PreTrainedModelMixin(PreTrainedModel):
                         position_ids=position_ids,
                         token_type_ids=token_type_ids,
                         labels=labels,
+                        device=torch.cuda.current_device(),
                     )
                 )
             else:

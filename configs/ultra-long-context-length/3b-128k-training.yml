@@ -10,7 +10,7 @@ datasets:
     max_output_tokens: 65536
 
 model_args:
-  model_name: ibm-granite/granite-3b-code-instruct-128k
+  model_name: /proj/checkpoints/mayank/granite-3b-code-instruct-128k
   model_class: AutoModelForCausalLM
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
@@ -25,6 +25,7 @@ save_args:
 training_parameters:
   num_training_steps: 100
   eval_interval: 50
+  eval_during_training: false
   micro_batch_size: 1
   gradient_accumulation_steps: 1
   gradient_clipping: 1

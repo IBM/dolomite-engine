@@ -368,6 +368,8 @@ class DistributedArgs(BaseArgs):
                 "or the latest nightly"
             )
 
+            assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
+
 
 class AimArgs(BaseArgs):
     # aim repo, experiment logs are saved here

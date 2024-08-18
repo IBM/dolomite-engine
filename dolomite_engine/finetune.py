@@ -180,7 +180,7 @@ def evaluate(
             num_steps = 0
 
         num_steps = torch.tensor(num_steps, device=torch.cuda.current_device(), dtype=torch.long)
-        torch.distributed.all_reduce(num_steps)
+        torch.distributed.all_reduce(num_steps, group=ProcessGroupManager.get_tensor_parallel_group())
         num_steps = num_steps.item()
     else:
         num_steps = 0 if val_dataloader is None else len(val_dataloader)
