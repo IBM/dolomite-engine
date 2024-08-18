@@ -337,16 +337,13 @@ def load_checkpoint_for_inference(
         if args_from_checkpoint.distributed_args.fsdp_algorithm == 1:
             state = torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
         else:
-            if args_from_checkpoint.distributed_args.fsdp_algorithm == 1:
-                state = torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
-            else:
-                state = {}
-                _load_state_dict(
-                    state,
-                    storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
-                    planner=_EmptyStateDictLoadPlanner(),
-                    no_dist=True,
-                )
+            state = {}
+            _load_state_dict(
+                state,
+                storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
+                planner=_EmptyStateDictLoadPlanner(),
+                no_dist=True,
+            )
 
             if checkpoint_tp_world_size > 1:
                 state = fix_unsharded_state_dict(
