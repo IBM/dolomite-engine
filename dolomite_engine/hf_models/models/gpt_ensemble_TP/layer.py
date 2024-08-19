@@ -1,13 +1,14 @@
 import torch.nn as nn
 
+from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...modeling_utils import get_normalization_function
-from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
+from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_ensemble import GPTEnsembleConfig
 from .attention import get_attention_module
 from .mlp import EnsembleMLP_TP
 
 
-class GPTEnsembleBlock_TP(GPTDolomiteBlock_TP):
+class GPTEnsembleBlock_TP(GPTDolomiteBlock):
     def __init__(
         self,
         config: GPTEnsembleConfig,
@@ -21,6 +22,9 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock_TP):
         hidden_size = config.hidden_size
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
+
+        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+        self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
 
         self.ln_1 = get_normalization_function(
             config.normalization_function,
@@ -38,3 +42,31 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock_TP):
             normalization_implementation=normalization_implementation,
         )
         self.mlp = EnsembleMLP_TP(config)
+
+    def load_from_safetensors_weights_manager(
+        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
+    ) -> None:
+        state_dict = {
+            "weight": safetensors_weight_manager.get_tensor(prefix + "ln_1.weight").view(self.tp_world_size, -1)[
+                self.tp_rank
+            ]
+        }
+        if hasattr(self.ln_1, "bias"):
+            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_1.bias").view(
+                self.tp_world_size, -1
+            )[self.tp_rank]
+        self.ln_1.load_state_dict(state_dict)
+
+        state_dict = {
+            "weight": safetensors_weight_manager.get_tensor(prefix + "ln_2.weight").view(self.tp_world_size, -1)[
+                self.tp_rank
+            ]
+        }
+        if hasattr(self.ln_2, "bias"):
+            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_2.bias").view(
+                self.tp_world_size, -1
+            )[self.tp_rank]
+        self.ln_2.load_state_dict(state_dict)
+
+        self.attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "attn.")
+        self.mlp.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "mlp.")
