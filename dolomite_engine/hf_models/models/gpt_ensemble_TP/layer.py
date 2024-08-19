@@ -2,6 +2,7 @@ import torch.nn as nn
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...modeling_utils import get_normalization_function
+from ...modeling_utils_TP import tensor_parallel_split_safetensor_slice
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_ensemble import GPTEnsembleConfig
 from .attention import get_attention_module
@@ -47,25 +48,25 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
     ) -> None:
         state_dict = {
-            "weight": safetensors_weight_manager.get_tensor(prefix + "ln_1.weight").view(self.tp_world_size, -1)[
-                self.tp_rank
-            ]
+            "weight": tensor_parallel_split_safetensor_slice(
+                safetensors_weight_manager.get_slice(prefix + "ln_1.weight"), dim=0
+            )
         }
         if hasattr(self.ln_1, "bias"):
-            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_1.bias").view(
-                self.tp_world_size, -1
-            )[self.tp_rank]
+            state_dict["bias"] = tensor_parallel_split_safetensor_slice(
+                safetensors_weight_manager.get_slice(prefix + "ln_1.bias"), dim=0
+            )
         self.ln_1.load_state_dict(state_dict)
 
         state_dict = {
-            "weight": safetensors_weight_manager.get_tensor(prefix + "ln_2.weight").view(self.tp_world_size, -1)[
-                self.tp_rank
-            ]
+            "weight": tensor_parallel_split_safetensor_slice(
+                safetensors_weight_manager.get_slice(prefix + "ln_2.weight"), dim=0
+            )
         }
         if hasattr(self.ln_2, "bias"):
-            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_2.bias").view(
-                self.tp_world_size, -1
-            )[self.tp_rank]
+            state_dict["bias"] = tensor_parallel_split_safetensor_slice(
+                safetensors_weight_manager.get_slice(prefix + "ln_2.weight"), dim=0
+            )
         self.ln_2.load_state_dict(state_dict)
 
         self.attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "attn.")
