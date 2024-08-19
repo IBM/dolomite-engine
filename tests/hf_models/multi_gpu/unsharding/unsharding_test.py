@@ -27,7 +27,7 @@ class UnshardingTest(TestCommons):
                 "--nproc_per_node",
                 str(gpus_per_node),
                 "-m",
-                "tests.hf_models.multi_gpu.unsharding.unsharding",
+                "tests.hf_models.multi_gpu.unsharding.gpt_dolomite_unsharding",
                 "--attention-head-type",
                 attention_head_type.value,
                 "--activation-function",
