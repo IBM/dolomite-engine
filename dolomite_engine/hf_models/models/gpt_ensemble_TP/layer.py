@@ -47,26 +47,22 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
     ) -> None:
-        state_dict = {
-            "weight": tensor_parallel_split_safetensor_slice(
-                safetensors_weight_manager.get_slice(prefix + "ln_1.weight"), dim=0
-            )
-        }
+        weight = safetensors_weight_manager.get_slice(prefix + "ln_1.weight")
+        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
+        state_dict = {"weight": weight}
         if hasattr(self.ln_1, "bias"):
-            state_dict["bias"] = tensor_parallel_split_safetensor_slice(
-                safetensors_weight_manager.get_slice(prefix + "ln_1.bias"), dim=0
-            )
+            bias = safetensors_weight_manager.get_slice(prefix + "ln_1.bias")
+            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
+            state_dict["bias"] = bias
         self.ln_1.load_state_dict(state_dict)
 
-        state_dict = {
-            "weight": tensor_parallel_split_safetensor_slice(
-                safetensors_weight_manager.get_slice(prefix + "ln_2.weight"), dim=0
-            )
-        }
+        weight = safetensors_weight_manager.get_slice(prefix + "ln_2.weight")
+        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
+        state_dict = {"weight": weight}
         if hasattr(self.ln_2, "bias"):
-            state_dict["bias"] = tensor_parallel_split_safetensor_slice(
-                safetensors_weight_manager.get_slice(prefix + "ln_2.weight"), dim=0
-            )
+            bias = safetensors_weight_manager.get_slice(prefix + "ln_2.bias")
+            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
+            state_dict["bias"] = bias
         self.ln_2.load_state_dict(state_dict)
 
         self.attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "attn.")
