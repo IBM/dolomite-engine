@@ -1,4 +1,4 @@
-from .attention import get_attention_module_TP
+from .attention import Attention_TP, get_attention_module_TP
 from .dropout import Dropout_TP
 from .embedding import Embedding_TP
 from .linear import ColumnParallelLinear, RowParallelLinear
