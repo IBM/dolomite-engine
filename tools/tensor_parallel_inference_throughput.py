@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+from copy import deepcopy
 from time import perf_counter
 
 import torch
@@ -93,7 +94,9 @@ config = GPTEnsembleConfig(**kwargs)
 
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
-    model = AutoModelForCausalLM.from_config(config)
+    config_copy = deepcopy(config)
+    config_copy.normalization_function = "rmsnorm"
+    model = AutoModelForCausalLM.from_config(config_copy)
 
     num_parameters = 0
     for param_name, param in model.named_parameters():
