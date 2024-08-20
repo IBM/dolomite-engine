@@ -95,7 +95,7 @@ class EnsembleAttention_TP(Attention_TP):
             std /= math.sqrt(m_width)
 
         # first layer needs and any attention after an mlp with all reduce needs column parallel
-        if layer_idx == 0 or config.reduce_pattern[str(layer_idx - 1)]["mlp"]:
+        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
             self.c_attn = ColumnParallelLinear(
                 self.global_hidden_size,
                 self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
@@ -114,7 +114,7 @@ class EnsembleAttention_TP(Attention_TP):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
-        if config.reduce_pattern[str(layer_idx)]["attention"]:
+        if config.reduce_pattern[layer_idx]["attention"]:
             self.c_proj = RowParallelLinear(
                 self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
             )

@@ -33,7 +33,7 @@ class EnsembleMLP_TP(MLP_TP):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
-        if config.reduce_pattern[str(layer_idx)]["attention"]:
+        if config.reduce_pattern[layer_idx]["attention"]:
             self.c_fc = ColumnParallelLinear(
                 hidden_size,
                 2 * intermediate_size if self.is_glu_activation else intermediate_size,
@@ -58,7 +58,7 @@ class EnsembleMLP_TP(MLP_TP):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
-        if layer_idx == config.n_layer - 1 or config.reduce_pattern[str(layer_idx)]["mlp"]:
+        if layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]:
             self.c_proj = RowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
         else:
             self.c_proj = ParameterizedLinear(
