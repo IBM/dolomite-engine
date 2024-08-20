@@ -7,13 +7,7 @@ import torch
 import torch.distributed
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
-    GPTEnsembleConfig,
-    GPTEnsembleForCausalLM_TP,
-)
+from dolomite_engine.hf_models import AttentionHeadType, GPTEnsembleConfig, GPTEnsembleForCausalLM_TP
 from dolomite_engine.utils import CUDA_RNGStatesTracker, ProcessGroupManager, set_cuda_rng_tracker
 
 
@@ -63,43 +57,33 @@ kwargs = dict(
 )
 
 if args.model_scale == "34b":
-    config = GPTDolomiteConfig(**kwargs)
-    model_class = GPTDolomiteForCausalLM_TP
+    pass
 elif args.model_scale == "34b-ensemble":
-    config = GPTEnsembleConfig(**kwargs)
-    model_class = GPTEnsembleForCausalLM_TP
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in kwargs["n_layer"]}
 elif args.model_scale == "70b":
     kwargs["n_embd"] = 8192
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
-
-    config = GPTDolomiteConfig(**kwargs)
-    model_class = GPTDolomiteForCausalLM_TP
 elif args.model_scale == "70b-ensemble":
     kwargs["n_embd"] = 8192
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
-
-    config = GPTEnsembleConfig(**kwargs)
-    model_class = GPTEnsembleForCausalLM_TP
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in kwargs["n_layer"]}
 elif args.model_scale == "176b":
     kwargs["n_embd"] = 14336
     kwargs["n_inner"] = 57344
     kwargs["n_head"] = 112
     kwargs["n_layer"] = 70
-
-    config = GPTDolomiteConfig(**kwargs)
-    model_class = GPTDolomiteForCausalLM_TP
 elif args.model_scale == "176b-ensemble":
     kwargs["n_embd"] = 14336
     kwargs["n_inner"] = 57344
     kwargs["n_head"] = 112
     kwargs["n_layer"] = 70
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in kwargs["n_layer"]}
 
-    config = GPTEnsembleConfig(**kwargs)
-    model_class = GPTEnsembleForCausalLM_TP
+config = GPTEnsembleConfig(**kwargs)
 
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
@@ -115,7 +99,7 @@ with torch.device("meta"):
     del model
 
     # try sharding vocab matrices if really struggling for memory
-    model_tp = model_class._from_config(
+    model_tp = GPTEnsembleForCausalLM_TP._from_config(
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
