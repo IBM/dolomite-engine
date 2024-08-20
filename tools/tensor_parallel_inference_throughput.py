@@ -78,6 +78,12 @@ elif args.model_scale == "70b-ensemble-2x":
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
     kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": i % 2 != 0} for i in range(kwargs["n_layer"])}
+elif args.model_scale == "70b-ensemble-infinite":
+    kwargs["n_embd"] = 8192
+    kwargs["n_inner"] = 28672
+    kwargs["n_head"] = 64
+    kwargs["n_layer"] = 80
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": False} for i in range(kwargs["n_layer"])}
 elif args.model_scale == "176b":
     kwargs["n_embd"] = 14336
     kwargs["n_inner"] = 57344
