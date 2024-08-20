@@ -59,7 +59,7 @@ kwargs = dict(
 if args.model_scale == "34b":
     pass
 elif args.model_scale == "34b-ensemble":
-    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in kwargs["n_layer"]}
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in range(kwargs["n_layer"])}
 elif args.model_scale == "70b":
     kwargs["n_embd"] = 8192
     kwargs["n_inner"] = 28672
@@ -70,7 +70,13 @@ elif args.model_scale == "70b-ensemble":
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
-    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in kwargs["n_layer"]}
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in range(kwargs["n_layer"])}
+elif args.model_scale == "70b-ensemble-2x":
+    kwargs["n_embd"] = 8192
+    kwargs["n_inner"] = 28672
+    kwargs["n_head"] = 64
+    kwargs["n_layer"] = 80
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": i % 2 != 0} for i in range(kwargs["n_layer"])}
 elif args.model_scale == "176b":
     kwargs["n_embd"] = 14336
     kwargs["n_inner"] = 57344
@@ -81,7 +87,7 @@ elif args.model_scale == "176b-ensemble":
     kwargs["n_inner"] = 57344
     kwargs["n_head"] = 112
     kwargs["n_layer"] = 70
-    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in kwargs["n_layer"]}
+    kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in range(kwargs["n_layer"])}
 
 config = GPTEnsembleConfig(**kwargs)
 
