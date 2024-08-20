@@ -5,7 +5,7 @@ import torch.nn as nn
 from .....utils import ProcessGroupManager
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear
-from ....modeling_utils_TP import ColumnParallelLinear
+from ....modeling_utils_TP import ColumnParallelLinear, RowParallelLinear
 from ....modeling_utils_TP.attention import Attention_TP
 from ....utils import divide_if_divisible
 from ...gpt_ensemble import GPTEnsembleConfig
@@ -55,10 +55,6 @@ class EnsembleAttention_TP(Attention_TP):
             config.scale_attention_softmax_in_fp32 and config.attention_softmax_in_fp32
         )
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = self.global_num_heads
@@ -68,13 +64,6 @@ class EnsembleAttention_TP(Attention_TP):
             ), f"{self.__class__.__name__} should have same number of heads for query, keys and values"
 
             self.num_key_value_heads = self.num_heads
-
-            self.c_attn = ColumnParallelLinear(
-                self.global_hidden_size,
-                self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
-                bias=self.add_bias,
-                std=std,
-            )
         elif self.attention_head_type == AttentionHeadType.gqa:
             assert (
                 self.global_num_key_value_heads is not None
@@ -96,22 +85,41 @@ class EnsembleAttention_TP(Attention_TP):
                 tp_world_size,
                 f"`num_key_value_heads` ({self.global_num_key_value_heads}) must be divisible by `tensor_parallel_world_size` ({tp_world_size})",
             )
+        elif self.attention_head_type == AttentionHeadType.mqa:
+            raise ValueError("mqa is not supported with EnsembleAttention")
+        else:
+            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
+
+        # first layer needs and any attention after an mlp with all reduce needs column parallel
+        if layer_idx == 0 or config.reduce_pattern[str(layer_idx - 1)]["mlp"]:
             self.c_attn = ColumnParallelLinear(
                 self.global_hidden_size,
                 self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
             )
-        elif self.attention_head_type == AttentionHeadType.mqa:
-            raise ValueError("mqa is not supported with EnsembleAttention")
         else:
-            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
+            self.c_attn = ParameterizedLinear(
+                self.global_hidden_size,
+                self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+                bias=self.add_bias,
+                std=std,
+            )
 
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedLinear(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
+
+        if config.reduce_pattern[str(layer_idx)]["attention"]:
+            self.c_proj = RowParallelLinear(
+                self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
+            )
+        else:
+            self.c_proj = ParameterizedLinear(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop

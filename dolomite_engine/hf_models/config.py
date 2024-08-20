@@ -46,6 +46,7 @@ class CommonConfig(PretrainedConfig):
         m_residual: float = None,
         init_method: str = "normal",
         upcast_logits_for_loss: bool = False,
+        reduce_pattern: dict | None = None,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -109,5 +110,9 @@ class CommonConfig(PretrainedConfig):
             assert (
                 self.n_head % self.num_key_value_heads == 0
             ), "GroupedQueryAttention should have more than 1 head for keys and values"
+
+        if reduce_pattern is None:
+            reduce_pattern = {str(i): {"attention": True, "mlp": True} for i in range(n_layer)}
+        self.reduce_pattern = reduce_pattern
 
         super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)

@@ -37,4 +37,4 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock_TP):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = EnsembleMLP_TP(config)
+        self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)
