@@ -1,14 +1,15 @@
-from enum import Enum
 from typing import Any
 
 import torch.distributed
+import torch.distributed._functional_collectives as funcol
 from torch.distributed import DeviceMesh, ProcessGroup, ReduceOp
 
 from ..utils import ProcessGroupManager
+from .async_tensor import DolomiteAsyncCollectiveTensor
+from .backend import CommunicationBackend
 
 
-class CommunicationBackend(Enum):
-    torch_distributed = "torch_distributed"
+_REDUCE_OP_MAP = {ReduceOp.SUM: "sum"}
 
 
 class Communication:
@@ -31,15 +32,20 @@ class Communication:
         group: ProcessGroup | None = None,
         backend: CommunicationBackend | None = None,
     ) -> torch.Tensor:
-        if mesh is not None:
-            assert group is None
-        elif group is not None:
-            assert mesh is not None
-
         if backend == CommunicationBackend.torch_distributed:
             if mesh is not None:
+                assert group is None
                 group = mesh.get_group()
+            elif group is not None:
+                assert mesh is not None
 
-            handle = torch.distributed.all_reduce(tensor, op=op, group=group, async_op=True)
+            work = torch.distributed.all_reduce(tensor, op=op, group=group, async_op=True)
+
+            torch._C._distributed_c10d._register_work(tensor, work)
+            tensor = DolomiteAsyncCollectiveTensor(tensor)
+        elif backend == CommunicationBackend.torch_functional:
+            tensor = funcol.all_reduce(tensor, reduceOp=_REDUCE_OP_MAP[op], group=mesh or group)
         else:
             raise ValueError
+
+        return tensor

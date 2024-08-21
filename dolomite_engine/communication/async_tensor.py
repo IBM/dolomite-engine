@@ -1,13 +1,15 @@
 import torch
-from torch.distributed._functional_collectives import AsyncCollectiveTensor, wait_tensor
+from torch.distributed._functional_collectives import (
+    AsyncCollectiveTensor,
+    _are_we_tracing,
+    _is_view_op,
+    tree_map_only,
+    wait_tensor,
+)
+from torch.utils._cxx_pytree import tree_map_only
 
 
 class DolomiteAsyncCollectiveTensor(AsyncCollectiveTensor):
-    handle = None
-
-    def tolist(self):
-        return self.trigger_wait().tolist()
-
     @staticmethod
     def __tensor_unflatten__(inner_tensors, meta, outer_size, outer_stride):
         assert meta is None
@@ -16,17 +18,6 @@ class DolomiteAsyncCollectiveTensor(AsyncCollectiveTensor):
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.trigger_wait()})"
-
-    def trigger_wait(self):
-        if not self.completed:
-            out = wait_tensor(self.elem)
-            self.completed = True
-            return out
-        else:
-            return self.elem
-
-    def wait(self) -> torch.Tensor:
-        return wait_tensor(self.elem)
 
     def _get_acs_underlying_tensor(self):
         """This method enables  _functional_collectives_impl to test if a tensor is an ACS"""
@@ -43,7 +34,7 @@ class DolomiteAsyncCollectiveTensor(AsyncCollectiveTensor):
 
         is_view_op = _is_view_op(func)
 
-        def unwrap(e: AsyncCollectiveTensor):
+        def unwrap(e: DolomiteAsyncCollectiveTensor):
             # wait_tensor is idepotent and will do stream sync only once
             if not is_view_op:
                 return e.trigger_wait()
@@ -51,12 +42,12 @@ class DolomiteAsyncCollectiveTensor(AsyncCollectiveTensor):
 
         def wrap(e: torch.Tensor):
             # wait_tensor is idepotent and will do stream sync only once
-            assert not isinstance(e, AsyncCollectiveTensor)
-            res = AsyncCollectiveTensor(e)
+            assert not isinstance(e, DolomiteAsyncCollectiveTensor)
+            res = DolomiteAsyncCollectiveTensor(e)
             return res
 
-        unwrapped_args = tree_map_only(AsyncCollectiveTensor, unwrap, args)
-        unwrapped_kwargs = tree_map_only(AsyncCollectiveTensor, unwrap, kwargs)
+        unwrapped_args = tree_map_only(DolomiteAsyncCollectiveTensor, unwrap, args)
+        unwrapped_kwargs = tree_map_only(DolomiteAsyncCollectiveTensor, unwrap, kwargs)
 
         # we don't wrap the result as it doesn't need to be waited on.
         out = func(*unwrapped_args, **unwrapped_kwargs)
@@ -67,10 +58,8 @@ class DolomiteAsyncCollectiveTensor(AsyncCollectiveTensor):
 
         return out
 
-    def numpy(self):
-        return self.wait().numpy()
 
-
-def wait_tensor(tensor: DolomiteAsyncCollectiveTensor, handle) -> torch.Tensor:
-    handle.wait()
-    return tensor.elem
+def maybe_wrap_tensor(tensor: torch.Tensor) -> torch.Tensor:
+    if _are_we_tracing():
+        return wait_tensor(tensor)
+    return DolomiteAsyncCollectiveTensor(tensor)
