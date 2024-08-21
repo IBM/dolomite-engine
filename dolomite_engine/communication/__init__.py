@@ -44,7 +44,7 @@ class Communication:
             tensor = funcol.AsyncCollectiveTensor(tensor)
         elif backend == CommunicationBackend.torch_functional:
             tensor = funcol.all_reduce(tensor, reduceOp=_REDUCE_OP_MAP[op], group=mesh or group)
-        else:
+        elif backend == CommunicationBackend.mscclpp:
             raise ValueError
 
         return tensor
