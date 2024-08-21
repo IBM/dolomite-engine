@@ -11,7 +11,10 @@ class DolomiteWork(Work):
         self.backend = backend
 
     def wait(self, timeout: timedelta = ...) -> bool:
-        if self.backend == CommunicationBackend.torch_distributed:
+        if (
+            self.backend == CommunicationBackend.torch_distributed
+            or self.backend == CommunicationBackend.torch_functional
+        ):
             output = super().wait(timeout)
 
         return output

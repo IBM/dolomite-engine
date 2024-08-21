@@ -5,7 +5,6 @@ import torch.distributed._functional_collectives as funcol
 from torch.distributed import DeviceMesh, ProcessGroup, ReduceOp
 
 from ..utils import ProcessGroupManager
-from .async_tensor import DolomiteAsyncCollectiveTensor
 from .backend import CommunicationBackend
 
 
@@ -40,9 +39,9 @@ class Communication:
                 assert mesh is not None
 
             work = torch.distributed.all_reduce(tensor, op=op, group=group, async_op=True)
-
             torch._C._distributed_c10d._register_work(tensor, work)
-            tensor = DolomiteAsyncCollectiveTensor(tensor)
+
+            tensor = funcol.AsyncCollectiveTensor(tensor)
         elif backend == CommunicationBackend.torch_functional:
             tensor = funcol.all_reduce(tensor, reduceOp=_REDUCE_OP_MAP[op], group=mesh or group)
         else:
