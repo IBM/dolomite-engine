@@ -3,6 +3,7 @@ from typing import Any
 import torch.distributed
 import torch.distributed._functional_collectives as funcol
 from torch.distributed import DeviceMesh, ProcessGroup, ReduceOp
+from torch.distributed._functional_collectives import AsyncCollectiveTensor
 
 from ..utils import ProcessGroupManager
 from .backend import CommunicationBackend
@@ -41,7 +42,7 @@ class Communication:
             work = torch.distributed.all_reduce(tensor, op=op, group=group, async_op=True)
             torch._C._distributed_c10d._register_work(tensor, work)
 
-            tensor = funcol.AsyncCollectiveTensor(tensor)
+            tensor = AsyncCollectiveTensor(tensor)
         elif backend == CommunicationBackend.torch_functional:
             if not isinstance(op, str):
                 op = _REDUCE_OP_MAP[op]
