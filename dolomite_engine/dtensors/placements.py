@@ -10,12 +10,16 @@ from torch.distributed._tensor._collective_utils import (
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 from torch.distributed.device_mesh import DeviceMesh
 
+from ..communication import Communication, CommunicationBackend
+
 
 class DolomitePartialPlacement(Partial):
     def _reduce_value(self, tensor: torch.Tensor, mesh: DeviceMesh, mesh_dim: int) -> torch.Tensor:
         # Partial placement contract #1:
         # _reduce_value: reduce the value of the tensor on the mesh dimension
-        return funcol.all_reduce(tensor, reduceOp=self.reduce_op, group=(mesh, mesh_dim))
+        return Communication.all_reduce(
+            tensor=tensor, op=self.reduce_op, group=(mesh, mesh_dim), backend=CommunicationBackend.torch_distributed
+        )
 
     def _reduce_shard_value(
         self,

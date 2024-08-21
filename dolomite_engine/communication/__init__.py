@@ -26,7 +26,7 @@ class Communication:
     @staticmethod
     def all_reduce(
         tensor: torch.Tensor,
-        op: ReduceOp = ReduceOp.SUM,
+        op: ReduceOp | str = ReduceOp.SUM,
         mesh: DeviceMesh | None = None,
         group: ProcessGroup | None = None,
         backend: CommunicationBackend | None = None,
@@ -43,7 +43,10 @@ class Communication:
 
             tensor = funcol.AsyncCollectiveTensor(tensor)
         elif backend == CommunicationBackend.torch_functional:
-            tensor = funcol.all_reduce(tensor, reduceOp=_REDUCE_OP_MAP[op], group=mesh or group)
+            if not isinstance(op, str):
+                op = _REDUCE_OP_MAP[op]
+
+            tensor = funcol.all_reduce(tensor, reduceOp=op, group=mesh or group)
         elif backend == CommunicationBackend.mscclpp:
             raise ValueError
 

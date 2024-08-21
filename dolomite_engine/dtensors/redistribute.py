@@ -9,6 +9,8 @@ from torch.distributed._tensor._redistribute import _gen_transform_infos, logger
 from torch.distributed._tensor.device_mesh import DeviceMesh
 from torch.distributed._tensor.placement_types import DTensorSpec, Partial, Placement, Replicate, Shard, TensorMeta
 
+from ..communication import Communication
+
 
 def redistribute_local_tensor(
     local_tensor: torch.Tensor,
@@ -43,7 +45,6 @@ def redistribute_local_tensor(
     for transform_info in transform_infos:
         i = transform_info.mesh_dim
         current, target = transform_info.src_dst_placements
-        num_chunks = device_mesh.size(mesh_dim=i)
 
         if current == target:
             # short cut, just use the original local tensor
