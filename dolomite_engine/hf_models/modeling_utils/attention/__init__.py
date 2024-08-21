@@ -9,7 +9,6 @@ from .flash import FlashAttention2
 from .padding_free import PaddingFreeAttention
 from .sdpa import SDPA
 from .utils import (
-    get_unpad_data,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
     interleave_query_key_value_tensor_for_mqa,
