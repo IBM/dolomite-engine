@@ -26,7 +26,6 @@ class ModelWrapper(nn.Module):
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         distributed_backend: DistributedBackend,
-        random_seed: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -46,7 +45,6 @@ class ModelWrapper(nn.Module):
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
-            random_seed (int): random seed to use for tensor parallel seed management
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.

@@ -27,7 +27,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         distributed_backend: DistributedBackend,
-        random_seed: int,
         micro_batch_size: int,
         sequence_length: int,
         neft_alpha: float | None = None,
@@ -51,7 +50,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
-            random_seed (int): random seed to use for tensor parallel seed management
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -79,7 +77,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             distributed_backend=distributed_backend,
-            random_seed=random_seed,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
