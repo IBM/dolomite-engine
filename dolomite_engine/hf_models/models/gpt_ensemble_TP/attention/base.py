@@ -5,7 +5,13 @@ import torch.nn as nn
 from .....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear
-from ....modeling_utils_TP import Attention_TP, ColumnParallelLinear, tensor_parallel_split_safetensor_slice
+from ....modeling_utils_TP import (
+    Attention_TP,
+    ColumnParallelLinear,
+    RowParallelLinear,
+    tensor_parallel_split_safetensor_slice,
+)
+from ....modeling_utils_TP.attention import Attention_TP
 from ....utils import divide_if_divisible
 from ...gpt_ensemble import GPTEnsembleConfig
 
@@ -89,6 +95,26 @@ class EnsembleAttention_TP(Attention_TP):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
+
+        # first layer needs and any attention after an mlp with all reduce needs column parallel
+        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+            self.c_attn = ColumnParallelLinear(
+                self.global_hidden_size,
+                self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
+                bias=self.add_bias,
+                std=std,
+            )
+        else:
+            self.c_attn = ParameterizedLinear(
+                self.global_hidden_size,
+                self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+                bias=self.add_bias,
+                std=std,
+            )
+
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.c_attn = ColumnParallelLinear(
             self.global_hidden_size,
             self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
@@ -99,7 +125,13 @@ class EnsembleAttention_TP(Attention_TP):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedLinear(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
+
+        if config.reduce_pattern[layer_idx]["attention"]:
+            self.c_proj = RowParallelLinear(
+                self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
+            )
+        else:
+            self.c_proj = ParameterizedLinear(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop

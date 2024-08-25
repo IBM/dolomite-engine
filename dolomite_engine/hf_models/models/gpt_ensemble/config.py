@@ -39,6 +39,7 @@ class GPTEnsembleConfig(CommonConfig):
         init_method: str = "normal",
         upcast_logits_for_loss: bool = False,
         pretraining_tensor_parallel_size: int = 1,
+        reduce_pattern: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -80,3 +81,7 @@ class GPTEnsembleConfig(CommonConfig):
 
         if position_embedding_type == PositionEmbeddingType.alibi:
             raise NotImplementedError("currently GPTEnsemble doesn't support alibi")
+
+        self.reduce_pattern = (
+            {i: {"attention": True, "mlp": True} for i in range(n_layer)} if reduce_pattern is None else reduce_pattern
+        )

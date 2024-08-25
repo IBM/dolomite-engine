@@ -42,7 +42,7 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = EnsembleMLP_TP(config)
+        self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)
 
     def load_from_safetensors_weights_manager(
         self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
@@ -67,3 +67,4 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
 
         self.attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "attn.")
         self.mlp.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "mlp.")
+        self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)
