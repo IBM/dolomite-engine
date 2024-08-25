@@ -269,9 +269,4 @@ class EnsembleAttention(Attention):
             attn_output = attn_output.sum(dim=0, keepdim=True)
 
         attn_output = self.resid_dropout(attn_output)
-
-        # ==========================================================================================
-        # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
         return attn_output
