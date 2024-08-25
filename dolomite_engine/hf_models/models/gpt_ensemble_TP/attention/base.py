@@ -11,7 +11,6 @@ from ....modeling_utils_TP import (
     RowParallelLinear,
     tensor_parallel_split_safetensor_slice,
 )
-from ....modeling_utils_TP.attention import Attention_TP
 from ....utils import divide_if_divisible
 from ...gpt_ensemble import GPTEnsembleConfig
 

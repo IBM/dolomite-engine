@@ -2,8 +2,8 @@ import torch.nn as nn
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
-from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, get_normalization_function
-from ...utils import check_list_type, divide_if_divisible, flatten_and_convert_to_tensors
+from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
+from ...utils import divide_if_divisible
 from .config import GPTDolomiteConfig
 from .layer import GPTDolomiteBlock
 
