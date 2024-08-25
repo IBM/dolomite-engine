@@ -74,6 +74,3 @@ lr_scheduler_args:
 
 mixed_precision_args:
   dtype: bf16
-
-distributed_args:
-  distributed_backend: torch

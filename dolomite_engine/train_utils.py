@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .data import ResumableDataLoader, get_next_batch
-from .enums import DistributedBackend, GradientCheckpointingMethod
+from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapperForFinetuning
@@ -19,7 +19,6 @@ def train_step(
     model: ModelWrapperForFinetuning,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
-    distributed_backend: DistributedBackend,
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
@@ -32,7 +31,6 @@ def train_step(
         model (ModelWrapperForFinetuning): model
         optimizer (Optimizer): optimizer
         lr_scheduler (LamdaLR): learning rate scheduler
-        distributed_backend (DistributedBackend): distributed backend
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
@@ -43,19 +41,17 @@ def train_step(
         tuple[float, float]: loss at the current step, grad norm at the current step
     """
 
-    no_sync = nullcontext
-    if distributed_backend == DistributedBackend.torch:
-        fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+    fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
 
-        if fsdp_algorithm == 1:
-            no_sync = model.no_sync
-        else:
-            model.set_requires_gradient_sync(False)
+    no_sync = nullcontext
+    if fsdp_algorithm == 1:
+        no_sync = model.no_sync
+    else:
+        model.set_requires_gradient_sync(False)
 
     loss = 0
     grad_norm = None
-    if distributed_backend == DistributedBackend.torch:
-        optimizer.zero_grad()
+    optimizer.zero_grad()
 
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
@@ -65,17 +61,10 @@ def train_step(
             loss += loss_micro_step
 
             # compute gradients
-            if distributed_backend == DistributedBackend.deepspeed:
-                with backward_context():
-                    model.backward(loss_micro_step)
-                model.step()
-            elif distributed_backend == DistributedBackend.torch:
-                with backward_context():
-                    loss_micro_step.backward()
-            else:
-                raise ValueError(f"unexpected distributed backend ({distributed_backend})")
+            with backward_context():
+                loss_micro_step.backward()
 
-    if distributed_backend == DistributedBackend.torch and fsdp_algorithm == 2:
+    if fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
@@ -84,28 +73,17 @@ def train_step(
     loss += loss_micro_step
 
     # compute gradients
-    if distributed_backend == DistributedBackend.deepspeed:
-        with backward_context():
-            model.backward(loss_micro_step)
+    with backward_context():
+        loss_micro_step.backward()
 
-        if gradient_clipping is not None:
-            grad_norm = model.get_global_grad_norm()
+    if gradient_clipping is not None:
+        if fsdp_algorithm == 1:
+            grad_norm = model.clip_grad_norm_(gradient_clipping)
+        else:
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
 
-        model.step()
-    elif distributed_backend == DistributedBackend.torch:
-        with backward_context():
-            loss_micro_step.backward()
-
-        if gradient_clipping is not None:
-            if fsdp_algorithm == 1:
-                grad_norm = model.clip_grad_norm_(gradient_clipping)
-            else:
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
-
-        optimizer.step()
-        lr_scheduler.step()
-    else:
-        raise ValueError(f"unexpected distributed backend ({distributed_backend})")
+    optimizer.step()
+    lr_scheduler.step()
 
     loss /= gradient_accumulation_steps
 

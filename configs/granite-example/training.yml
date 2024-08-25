@@ -70,8 +70,6 @@ mixed_precision_args:
 distributed_args:
   # use ZeRO-3 for model sharding, saves most memory but needs more communication. this is fine since we are doing training on 2 GPUs and they are connected via NVLink
   stage: 3
-  # deepspeed or torch, torch backend will use FSDP
-  distributed_backend: torch
   # enable at your own risk as this is not tested completely
   torch_compile: false
   # this will load dataset only on the first GPU and send part of the data to the other GPUs, not recommended unless the datasets are immensely large

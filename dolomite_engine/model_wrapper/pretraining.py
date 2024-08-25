@@ -7,7 +7,7 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
+from ..enums import AttentionImplementation, Mode
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
@@ -26,7 +26,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
-        distributed_backend: DistributedBackend,
         micro_batch_size: int,
         sequence_length: int,
         neft_alpha: float | None = None,
@@ -49,7 +48,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
-            distributed_backend (DistributedBackend): distributed backend to use for model
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -76,7 +74,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
-            distributed_backend=distributed_backend,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,

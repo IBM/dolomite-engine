@@ -52,11 +52,6 @@ class TuningMethod(str, Enum):
     lora = "lora"
 
 
-class DistributedBackend(str, Enum):
-    deepspeed = "deepspeed"
-    torch = "torch"
-
-
 class FP8Backend(str, Enum):
     msamp = "msamp"
     nvte = "nvte"
