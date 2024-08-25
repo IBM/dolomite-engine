@@ -66,6 +66,9 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
 
     block_names = model.model._no_split_modules
 
+    dtype = None if dtype is None else string_to_torch_dtype(dtype)
+    communication_dtype = None if communication_dtype is None else string_to_torch_dtype(communication_dtype)
+
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
         log_rank_0(logging.INFO, "using DeepSpeed")
 
@@ -166,8 +169,8 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                 sharding_strategy=sharding_strategy,
                 cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
                 mixed_precision=_get_fsdp_mixed_precision(
-                    dtype=string_to_torch_dtype(dtype),
-                    communication_dtype=string_to_torch_dtype(communication_dtype),
+                    dtype=dtype,
+                    communication_dtype=communication_dtype,
                     fsdp_algorithm=1,
                 ),
                 auto_wrap_policy=partial(
@@ -193,8 +196,8 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                     sharding_strategy=ShardingStrategy.NO_SHARD,
                     cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
                     mixed_precision=_get_fsdp_mixed_precision(
-                        dtype=string_to_torch_dtype(dtype),
-                        communication_dtype=string_to_torch_dtype(communication_dtype),
+                        dtype=dtype,
+                        communication_dtype=communication_dtype,
                         fsdp_algorithm=1,
                     ),
                     device_id=torch.cuda.current_device(),
@@ -206,8 +209,8 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                 log_rank_0(logging.INFO, "using FSDP-2")
 
                 mixed_precision_policy = _get_fsdp_mixed_precision(
-                    dtype=string_to_torch_dtype(dtype),
-                    communication_dtype=string_to_torch_dtype(communication_dtype),
+                    dtype=dtype,
+                    communication_dtype=communication_dtype,
                     fsdp_algorithm=2,
                 )
 
