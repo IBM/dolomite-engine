@@ -259,14 +259,15 @@ class EnsembleAttention(Attention):
         attn_output = attn_output.transpose(1, 2)
         attn_output = attn_output.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
 
-        if self.reduce_allowed:
-            attn_output = attn_output.sum(dim=0, keepdim=True)
-
         # ==========================================================================================
         # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         attn_output = self.c_proj(attn_output)
+
+        if self.reduce_allowed:
+            attn_output = attn_output.sum(dim=0, keepdim=True)
+
         attn_output = self.resid_dropout(attn_output)
 
         # ==========================================================================================

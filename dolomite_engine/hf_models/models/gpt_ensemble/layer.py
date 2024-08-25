@@ -1,6 +1,4 @@
 import torch.nn as nn
-from torch import Tensor
-from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ..gpt_dolomite.layer import GPTDolomiteBlock
