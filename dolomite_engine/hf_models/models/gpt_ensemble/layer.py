@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import torch.nn as nn
 from torch import Tensor
 from transformers import DynamicCache
@@ -46,20 +44,4 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = EnsembleMLP(config)
-
-    def forward(
-        self,
-        hidden_states: Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: Tensor = None,
-        rope_cos_sin: Tensor = None,
-        cu_seqlens: Tensor = None,
-        max_seqlen: Tensor = None,
-    ) -> Tuple[Tensor] | Tuple[Tensor, Tensor] | Tuple[Tensor, Tensor, Tensor]:
-        hidden_states = hidden_states.unsqueeze(0)
-        hidden_states = super().forward(
-            hidden_states, past_key_values, attention_mask, rope_cos_sin, cu_seqlens, max_seqlen
-        )
-        hidden_states = hidden_states.mean(dim=0)
-        return hidden_states
+        self.mlp = EnsembleMLP(config, layer_idx=layer_idx)

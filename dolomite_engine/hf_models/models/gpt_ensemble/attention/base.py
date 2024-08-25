@@ -54,6 +54,8 @@ class EnsembleAttention(Attention):
         self.layer_idx = layer_idx
         self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
+        self.reduce_allowed = config.reduce_pattern[layer_idx]["attention"]
+
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = self.global_num_heads
@@ -256,6 +258,9 @@ class EnsembleAttention(Attention):
 
         attn_output = attn_output.transpose(1, 2)
         attn_output = attn_output.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
+
+        if self.reduce_allowed:
+            attn_output = attn_output.sum(dim=0, keepdim=True)
 
         # ==========================================================================================
         # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)

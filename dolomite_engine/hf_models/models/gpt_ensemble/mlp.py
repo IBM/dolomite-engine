@@ -1,5 +1,6 @@
 import math
 
+import torch
 import torch.nn as nn
 
 from ...enums import InitMethod
@@ -11,7 +12,7 @@ from .linear import EnsembleLinear
 
 
 class EnsembleMLP(MLP):
-    def __init__(self, config: GPTEnsembleConfig) -> None:
+    def __init__(self, config: GPTEnsembleConfig, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
         hidden_size = config.n_embd
@@ -24,6 +25,8 @@ class EnsembleMLP(MLP):
         initializer_range = config.initializer_range
         m_width = config.m_width
         n_layer = config.n_layer
+
+        self.reduce_allowed = layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -50,3 +53,14 @@ class EnsembleMLP(MLP):
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.c_fc(hidden_states)
+        hidden_states = self.act(hidden_states)
+        hidden_states = self.c_proj(hidden_states)
+
+        if self.reduce_allowed:
+            hidden_states = hidden_states.sum(dim=0, keepdim=True)
+
+        hidden_states = self.dropout(hidden_states)
+        return hidden_states
