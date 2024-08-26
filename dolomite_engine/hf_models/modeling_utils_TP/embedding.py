@@ -1,5 +1,4 @@
 import math
-from typing import Any, Mapping
 
 import torch
 import torch.nn as nn
@@ -11,10 +10,11 @@ from torch.distributed._tensor.placement_types import _Partial as Partial
 from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ..modeling_utils import ParameterizedEmbedding
 from ..utils import divide_if_divisible
+from .dtensor_module import DTensorModule
 from .TP import dtensor_to_tensor, get_module_placements, modify_state_dict_to_dtensor_dict, tensor_to_dtensor
 
 
-class Embedding_TP(ParameterizedEmbedding):
+class Embedding_TP(ParameterizedEmbedding, DTensorModule):
     def __init__(
         self,
         num_embeddings: int,
@@ -94,10 +94,6 @@ class Embedding_TP(ParameterizedEmbedding):
             weight = safetensors_weight_manager.get_tensor(prefix + "weight")
 
         self.load_state_dict({"weight": weight})
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)
 
 
 def get_tensor_parallel_vocab_info(vocab_size: int, make_vocab_size_divisible_by: int = 64) -> tuple[int, int, int]:
