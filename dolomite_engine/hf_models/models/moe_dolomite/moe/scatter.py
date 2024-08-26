@@ -17,11 +17,20 @@ if is_scattermoe_available():
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
     def __init__(
-        self, num_experts: int, in_features: int, out_features: int, add_bias: bool = True, std: float | None = None
+        self,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        add_bias: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
     ) -> None:
         assert not add_bias, "scattermoe doesn't support bias"
 
-        super().__init__(num_experts, in_features, out_features, add_bias=add_bias, std=std)
+        super().__init__(
+            num_experts, in_features, out_features, add_bias=add_bias, device=device, dtype=dtype, std=std
+        )
 
     def forward(
         self,

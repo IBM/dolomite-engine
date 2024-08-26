@@ -43,15 +43,6 @@ class Mode(str, Enum):
     unsharding = "unsharding"
 
 
-class DatasetKeys(str, Enum):
-    """standard keys in the dataset"""
-
-    input = "input"
-    output = "output"
-    generated_text = "generated_text"
-    num_generated_tokens = "num_generated_tokens"
-
-
 class TuningMethod(str, Enum):
     """training method"""
 
