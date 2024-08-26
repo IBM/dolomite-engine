@@ -1,5 +1,4 @@
 import math
-from typing import Any, Mapping
 
 import torch
 import torch.distributed
@@ -12,10 +11,10 @@ from .....utils import ProcessGroupManager, is_scattermoe_available
 from ....enums import InitMethod
 from ....modeling_utils import get_activation_function, is_glu
 from ....modeling_utils_TP import (
+    DTensorModule,
     ReplicatedLinear,
     dtensor_to_tensor,
     get_module_placements,
-    modify_state_dict_to_dtensor_dict,
     tensor_to_dtensor,
 )
 from ....utils import divide_if_divisible
@@ -29,7 +28,7 @@ if is_scattermoe_available():
     from scattermoe.parallel_experts import parallel_linear as scattered_experts
 
 
-class ColumnParallelScatteredExperts(ParameterizedScatteredExperts):
+class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
     def __init__(
         self,
         num_experts: int,
@@ -105,12 +104,8 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts):
 
         return results
 
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)
 
-
-class RowParallelScatteredExperts(ParameterizedScatteredExperts):
+class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
     def __init__(
         self,
         num_experts: int,
@@ -184,12 +179,8 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts):
 
         return inputs
 
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)
 
-
-class ScatterMoE_TP(ScatterMoE):
+class ScatterMoE_TP(ScatterMoE, DTensorModule):
     def __init__(
         self,
         config: MoEDolomiteConfig,
@@ -249,7 +240,3 @@ class ScatterMoE_TP(ScatterMoE):
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)

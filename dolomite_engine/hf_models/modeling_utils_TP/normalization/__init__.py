@@ -1,9 +1,5 @@
-from functools import partial
-from typing import Any, Mapping
-
 import torch.nn as nn
 
-from ..TP import modify_state_dict_to_dtensor_dict
 from .layernorm import get_layernorm
 from .rmsnorm import get_rmsnorm
 
@@ -30,13 +26,5 @@ def get_normalization_function_TP(
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
-
-    original_load_state_dict = normalization_function.load_state_dict
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return original_load_state_dict(state_dict, strict, assign)
-
-    normalization_function.load_state_dict = partial(load_state_dict, normalization_function)
 
     return normalization_function
