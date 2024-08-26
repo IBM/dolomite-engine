@@ -10,11 +10,11 @@ from dolomite_engine.hf_models import AttentionHeadType
 from ...test_common import TestCommons
 
 
-class UnshardingTest(TestCommons):
+class GPTDolomiteTP_Test(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True])
     )
-    def test_unsharding(
+    def test_gpt_dolomite_tp_unsharding(
         self, attention_head_type: AttentionHeadType, activation_function: str, tensor_parallel_word_embeddings: bool
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
