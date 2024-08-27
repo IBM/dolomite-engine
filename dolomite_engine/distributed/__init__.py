@@ -66,6 +66,9 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
 
     assert stage in [0, 2, 3]
 
+    dtype = None if dtype is None else string_to_torch_dtype(dtype)
+    communication_dtype = None if communication_dtype is None else string_to_torch_dtype(communication_dtype)
+
     dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
 
     if args.distributed_args.gradient_checkpointing_method is not None:
@@ -137,8 +140,8 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                 sharding_strategy=ShardingStrategy.NO_SHARD,
                 cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
                 mixed_precision=_get_fsdp_mixed_precision(
-                    dtype=string_to_torch_dtype(dtype),
-                    communication_dtype=string_to_torch_dtype(communication_dtype),
+                    dtype=dtype,
+                    communication_dtype=communication_dtype,
                     fsdp_algorithm=1,
                 ),
                 device_id=torch.cuda.current_device(),

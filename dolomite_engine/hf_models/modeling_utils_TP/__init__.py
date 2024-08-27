@@ -1,5 +1,6 @@
 from .attention import get_attention_module_TP
 from .dropout import Dropout_TP
+from .dtensor_module import DTensorModule
 from .embedding import Embedding_TP
 from .linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 from .lm_head import LMHead_TP
