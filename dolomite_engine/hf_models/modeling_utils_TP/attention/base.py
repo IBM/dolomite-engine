@@ -4,7 +4,7 @@ import torch
 import torch.distributed
 import torch.nn as nn
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import ProcessGroupManager
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...modeling_utils import Attention
@@ -163,12 +163,6 @@ class _BaseAttention_TP(nn.Module):
             )
         )
 
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        self.c_attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix=prefix + "c_attn.")
-        self.c_proj.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix=prefix + "c_proj.")
-
     def _prepare_qkv_for_forward_mqa(
         self, query_key_value: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -241,29 +235,6 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         key, value = key_value.chunk(2, -1)
 
         return query, key, value
-
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-
-        hidden_size_per_rank = divide_if_divisible(self.global_hidden_size, self.tp_world_size, "")
-        start_index = tp_rank * hidden_size_per_rank
-        end_index = (tp_rank + 1) * hidden_size_per_rank
-
-        weight = safetensors_weight_manager.get_slice(prefix + "weight")
-        q_attn_state_dict = {"weight": weight[start_index:end_index, :]}
-        kv_attn_state_dict = {
-            "weight": weight[self.global_hidden_size : self.global_hidden_size + 2 * self.head_dim, :]
-        }
-
-        if self.add_bias:
-            bias = safetensors_weight_manager.get_slice(prefix + "bias")
-            q_attn_state_dict["bias"] = bias[start_index:end_index]
-            kv_attn_state_dict["bias"] = bias[self.global_hidden_size : self.global_hidden_size + 2 * self.head_dim]
-
-        self.q_attn.load_state_dict(q_attn_state_dict)
-        self.kv_attn.load_state_dict(kv_attn_state_dict)
 
 
 class Attention_TP(_BaseAttention_TP, Attention):

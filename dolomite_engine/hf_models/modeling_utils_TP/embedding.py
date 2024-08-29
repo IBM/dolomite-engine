@@ -7,11 +7,11 @@ from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed._tensor.placement_types import _Partial as Partial
 
-from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ...utils import ProcessGroupManager
 from ..modeling_utils import ParameterizedEmbedding
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, modify_state_dict_to_dtensor_dict, tensor_to_dtensor
+from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
 class Embedding_TP(ParameterizedEmbedding, DTensorModule):
@@ -75,25 +75,6 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
     #     input = super().forward(input)
     #     input = dtensor_to_tensor(input, desired_placement=self.output_placement)
     #     return input
-
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        if self.tensor_parallel_word_embeddings:
-            weight = safetensors_weight_manager.get_slice(prefix + "weight")[
-                self.vocab_start_index : self.vocab_end_index, :
-            ]
-            if self.num_embeddings > weight.shape[0]:
-                weight = torch.cat(
-                    [
-                        weight,
-                        torch.zeros((self.num_embeddings - weight.shape[0], weight.shape[1])),
-                    ]
-                )
-        else:
-            weight = safetensors_weight_manager.get_tensor(prefix + "weight")
-
-        self.load_state_dict({"weight": weight})
 
 
 def get_tensor_parallel_vocab_info(vocab_size: int, make_vocab_size_divisible_by: int = 64) -> tuple[int, int, int]:
