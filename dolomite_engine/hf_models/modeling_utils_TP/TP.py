@@ -69,12 +69,15 @@ def dtensor_to_tensor(
 
 
 @torch.no_grad()
-def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict) -> dict:
+def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefix: str, strip_keys: bool) -> dict:
     result = {}
     for key, tensor in state_dict.items():
-        device_mesh = getattr(module, key).device_mesh
-        placements = getattr(module, key).placements
-        result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
+        if key.startswith(prefix):
+            striped_key = key.split(prefix)[1] if strip_keys else key
+
+            device_mesh = getattr(module, striped_key).device_mesh
+            placements = getattr(module, striped_key).placements
+            result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
     return result
 
 

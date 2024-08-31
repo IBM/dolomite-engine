@@ -11,7 +11,7 @@ from ..models import MoEDolomiteConfig
 
 
 try:
-    from transformers import GraniteMoeConfig
+    from transformers import GraniteMoeConfig, GraniteMoeForCausalLM
 except:
     GraniteMoeConfig = None
 
@@ -203,6 +203,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.attention_multiplier,
+        architectures=[GraniteMoeForCausalLM.__name__],
     )
 
     return original_config

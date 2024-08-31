@@ -7,7 +7,7 @@ from .llama import _export_state_dict_to_huggingface, _import_state_dict_from_hu
 
 
 try:
-    from transformers import GraniteConfig
+    from transformers import GraniteConfig, GraniteForCausalLM
 except:
     GraniteConfig = None
 
@@ -137,6 +137,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.attention_multiplier,
+        architectures=[GraniteForCausalLM.__name__],
     )
 
     return original_config

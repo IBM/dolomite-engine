@@ -1,7 +1,3 @@
-import torch
-from tqdm import tqdm
-
-from ....utils import SafeTensorsWeightsManager
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
@@ -18,34 +14,6 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
 
 
 class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        # word embeddings
-        self.wte.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "wte.")
-
-        # positional embeddings
-        if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
-            self.wpe.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "wpe.")
-        elif self.position_embedding_type == PositionEmbeddingType.alibi:
-            with torch.device(torch.cuda.current_device()):
-                self.alibi.reset_parameters()
-        elif self.position_embedding_type == PositionEmbeddingType.rope:
-            with torch.device(torch.cuda.current_device()):
-                self.rope.reset_parameters()
-        else:
-            raise ValueError(f"unexpected position_embedding_type ({self.position_embedding_type})")
-
-        # layers
-        for layer_idx, block in tqdm(enumerate(self.h), desc="Loading layers"):
-            block.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + f"h.{layer_idx}.")
-
-        # final layernorm
-        state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "ln_f.weight")}
-        if hasattr(self.ln_f, "bias"):
-            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "ln_f.bias")
-        self.ln_f.load_state_dict(state_dict)
-
     def _setup_positional_encoding(self) -> None:
         max_position_embeddings = self.config.max_position_embeddings
 

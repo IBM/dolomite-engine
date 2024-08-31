@@ -108,20 +108,6 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         return input
 
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        weight = safetensors_weight_manager.get_slice(prefix + "weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-        state_dict = {"weight": weight}
-
-        if self.bias is not None:
-            bias = safetensors_weight_manager.get_slice(prefix + "bias")
-            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
-            state_dict["bias"] = bias
-
-        self.load_state_dict(state_dict)
-
     def extra_repr(self) -> str:
         return "in_features={}, out_features_per_device={}, bias={}".format(
             self.in_features, self.out_features_per_device, self.bias is not None
@@ -178,18 +164,6 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         input = super().forward(input)
         input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         return input
-
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        weight = safetensors_weight_manager.get_slice(prefix + "weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=1)
-        state_dict = {"weight": weight}
-
-        if self.bias is not None:
-            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "bias")
-
-        self.load_state_dict(state_dict)
 
     def extra_repr(self) -> str:
         return "in_features_per_device={}, out_features={}, bias={}".format(

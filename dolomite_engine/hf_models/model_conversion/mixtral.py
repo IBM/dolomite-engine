@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig, MixtralConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, MixtralConfig, MixtralForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
@@ -205,6 +205,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> MixtralConfig:
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
         pad_token_id=config.pad_token_id,
+        architectures=[MixtralForCausalLM.__name__],
     )
 
     return original_config
