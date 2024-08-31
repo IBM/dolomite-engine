@@ -4,8 +4,12 @@ import os
 import torch
 import torch.distributed
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
-from dolomite_engine.hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
+from dolomite_engine.hf_models import (
+    AttentionHeadType,
+    GPTDolomiteConfig,
+    GPTDolomiteForCausalLM_TP,
+    fix_unsharded_state_dict,
+)
 from dolomite_engine.utils import ProcessGroupManager
 
 from ...test_common import TestCommons

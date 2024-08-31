@@ -6,7 +6,7 @@ from ....modeling_utils import is_glu
 from ...gpt_dolomite import GPTDolomiteConfig
 
 
-def unshard_tensor_parallel_state_dicts(
+def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     config: GPTDolomiteConfig,
     tensor_parallel_state_dicts: list[dict],
     tensor_parallel_word_embeddings: bool,
@@ -106,7 +106,7 @@ def unshard_tensor_parallel_state_dicts(
     return output_state_dict
 
 
-def fix_unsharded_state_dict(
+def fix_gpt_dolomite_unsharded_state_dict(
     config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][

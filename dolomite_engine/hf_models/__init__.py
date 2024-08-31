@@ -24,6 +24,7 @@ from .models import (
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
     convert_gpt_dolomite_to_gpt_crosslayer,
+    fix_unsharded_state_dict,
 )
 from .register_hf import (
     get_tensor_parallel_class,

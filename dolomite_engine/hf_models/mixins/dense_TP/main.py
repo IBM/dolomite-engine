@@ -18,8 +18,6 @@ from .base import PreTrainedModelMixin_TP
 
 
 class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
-    tensor_parallel_state_dict_function = None
-
     def __init__(self, config: CommonConfig, **kwargs) -> None:
         PreTrainedModelMixin_TP.__init__(self, config, **kwargs)
 
@@ -195,7 +193,10 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             elif position_embedding_type == PositionEmbeddingType.rope:
                 self.transformer.rope.reset_parameters()
 
-        state_dict = self.__class__.tensor_parallel_state_dict_function(
+        # to avoid circular import
+        from ...models import get_tensor_parallel_state_dict
+
+        state_dict = get_tensor_parallel_state_dict(
             config=self.config,
             safetensors_weights_manager=safetensors_weights_manager,
             tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
