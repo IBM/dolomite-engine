@@ -112,16 +112,6 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
             lr_scheduler=lr_scheduler,
             config=get_deepspeed_config(),
         )
-
-        if args.distributed_args.gradient_checkpointing_method is not None:
-            assert len(block_names) == 1
-
-            apply_gradient_checkpointing(
-                model,
-                args.distributed_args.gradient_checkpointing_method,
-                block_name=block_names[0],
-                **args.distributed_args.gradient_checkpointing_args,
-            )
     elif args.distributed_args.distributed_backend == DistributedBackend.torch:
         assert stage in [0, 2, 3]
 
