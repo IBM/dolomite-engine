@@ -3,10 +3,16 @@ from tqdm import trange
 
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
+from ...gpt_dolomite_TP.weights.unshard import (
+    _concatenate_tensors_from_state_dicts,
+    _get_embeddings_or_lm_head,
+    _get_layernorm,
+    _get_once_from_state_dicts_with_check,
+)
 from ...gpt_ensemble import GPTEnsembleConfig
 
 
-def unshard_tensor_parallel_state_dicts(
+def unshard_gpt_ensemble_tensor_parallel_state_dicts(
     config: GPTEnsembleConfig,
     tensor_parallel_state_dicts: list[dict],
     tensor_parallel_word_embeddings: bool,
@@ -106,7 +112,7 @@ def unshard_tensor_parallel_state_dicts(
     return output_state_dict
 
 
-def fix_unsharded_state_dict(
+def fix_gpt_ensemble_unsharded_state_dict(
     config: GPTEnsembleConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
@@ -115,44 +121,6 @@ def fix_unsharded_state_dict(
     state_dict = _fix_attention_weights(config, state_dict, prefix)
     state_dict = _fix_mlp_weights(config, state_dict, tensor_parallel_size, prefix)
     return state_dict
-
-
-def _get_embeddings_or_lm_head(
-    tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_word_embeddings: bool,
-    prefix: str,
-    vocab_size: int,
-    check_correctness: bool,
-) -> dict:
-    if tensor_parallel_word_embeddings:
-        output = _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts, key=prefix, dim=0)
-    else:
-        output = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix, check_correctness=check_correctness
-        )
-
-    # tensor parallel embeddings uses Embedding_TP class so we need to trim the matrix
-    if tensor_parallel_word_embeddings:
-        assert output.shape[0] >= vocab_size
-        output = output[:vocab_size, :]
-
-    return {prefix: output}
-
-
-def _get_layernorm(
-    tensor_parallel_state_dicts: list[dict], prefix: str, normalization_function: str, check_correctness: bool
-) -> dict:
-    output = {
-        prefix
-        + "weight": _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "weight", check_correctness=check_correctness
-        )
-    }
-    if normalization_function == "layernorm":
-        output[prefix + "bias"] = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "bias", check_correctness=check_correctness
-        )
-    return output
 
 
 def _get_attention(
@@ -234,22 +202,6 @@ def _get_mlp(
                 tensor_parallel_state_dicts, key=prefix + "c_fc.bias", dim=0
             )
 
-    return output
-
-
-def _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts: list[dict], key: str, dim: int) -> torch.Tensor:
-    tensor_list = [state_dict[key] for state_dict in tensor_parallel_state_dicts]
-    tensor = torch.cat(tensor_list, dim=dim)
-    return tensor
-
-
-def _get_once_from_state_dicts_with_check(
-    tensor_parallel_state_dicts: list[dict], key: str, check_correctness: bool
-) -> torch.Tensor:
-    output: torch.Tensor = tensor_parallel_state_dicts[0][key]
-    if check_correctness:
-        for state_dict in tensor_parallel_state_dicts[1:]:
-            assert output.equal(state_dict[key])
     return output
 
 

@@ -6,10 +6,17 @@ from .gpt_dolomite_TP import (
     get_gpt_dolomite_tensor_parallel_state_dict,
     unshard_gpt_dolomite_tensor_parallel_state_dicts,
 )
+from .gpt_ensemble import GPTEnsembleConfig
+from .gpt_ensemble_TP import (
+    fix_gpt_ensemble_unsharded_state_dict,
+    get_gpt_ensemble_tensor_parallel_state_dict,
+    unshard_gpt_ensemble_tensor_parallel_state_dicts,
+)
 
 
 _TENSOR_PARALLEL_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: get_gpt_dolomite_tensor_parallel_state_dict,
+    GPTEnsembleConfig.model_type: get_gpt_ensemble_tensor_parallel_state_dict,
 }
 
 
@@ -28,6 +35,7 @@ def get_tensor_parallel_state_dict(
 
 _FIX_UNSHARDED_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: fix_gpt_dolomite_unsharded_state_dict,
+    GPTEnsembleConfig.model_type: fix_gpt_ensemble_unsharded_state_dict,
 }
 
 
@@ -40,6 +48,7 @@ def fix_unsharded_state_dict(
 
 _UNSHARD_TENSOR_PARALLEL_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: unshard_gpt_dolomite_tensor_parallel_state_dicts,
+    GPTEnsembleConfig.model_type: unshard_gpt_ensemble_tensor_parallel_state_dicts,
 }
 
 

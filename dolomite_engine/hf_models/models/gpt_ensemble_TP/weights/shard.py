@@ -9,7 +9,7 @@ from ...gpt_dolomite_TP.weights.shard import _get_word_embedding_weights
 from ...gpt_ensemble import GPTEnsembleConfig
 
 
-def get_gpt_ensemble_tp_state_dict(
+def get_gpt_ensemble_tensor_parallel_state_dict(
     config: GPTEnsembleConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     tensor_parallel_word_embeddings: bool,
