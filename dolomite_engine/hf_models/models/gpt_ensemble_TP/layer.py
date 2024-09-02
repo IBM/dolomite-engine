@@ -2,6 +2,7 @@ import torch.nn as nn
 
 from ....utils import ProcessGroupManager
 from ...modeling_utils import get_normalization_function
+from ...modeling_utils_TP import get_normalization_function_TP
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_ensemble import GPTEnsembleConfig
 from .attention import get_attention_module
@@ -29,19 +30,42 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
 
-        self.ln_1 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
-        )
+        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+            self.ln_1 = get_normalization_function_TP(
+                config.normalization_function,
+                hidden_size,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=normalization_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+        else:
+            self.ln_1 = get_normalization_function(
+                config.normalization_function,
+                hidden_size,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=normalization_implementation,
+            )
+
         self.attn = get_attention_module(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
-        self.ln_2 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
-        )
+
+        if config.reduce_pattern[layer_idx]["attention"]:
+            self.ln_2 = get_normalization_function_TP(
+                config.normalization_function,
+                hidden_size,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=normalization_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+        else:
+            self.ln_2 = get_normalization_function(
+                config.normalization_function,
+                hidden_size,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=normalization_implementation,
+            )
+
         self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)

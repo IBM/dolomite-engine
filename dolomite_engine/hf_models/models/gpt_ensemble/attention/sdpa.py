@@ -24,6 +24,7 @@ class EnsembleSDPA(Attention):
         self.global_num_heads = config.n_head
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
+        self.reduce_pattern = config.reduce_pattern
 
         initializer_range = config.initializer_range
         m_width = config.m_width
@@ -53,8 +54,6 @@ class EnsembleSDPA(Attention):
 
         self.layer_idx = layer_idx
         self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
-
-        self.reduce_allowed = config.reduce_pattern[layer_idx]["attention"]
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:
@@ -166,6 +165,12 @@ class EnsembleSDPA(Attention):
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
+        if self.layer_idx == 0 or self.reduce_pattern[self.layer_idx - 1]["mlp"]:
+            assert hidden_states.dim() == 3
+            hidden_states = hidden_states.unsqueeze(0)
+        else:
+            assert hidden_states.dim() == 4
+
         # ==========================================================================================
         # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
@@ -231,8 +236,8 @@ class EnsembleSDPA(Attention):
 
         attn_output = self.c_proj(attn_output)
 
-        if self.reduce_allowed:
-            attn_output = attn_output.sum(dim=0, keepdim=True)
+        if self.reduce_pattern[self.layer_idx]["attention"]:
+            attn_output = attn_output.sum(dim=0)
 
         attn_output = self.resid_dropout(attn_output)
         return attn_output

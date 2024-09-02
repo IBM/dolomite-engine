@@ -15,6 +15,9 @@ class EnsembleMLP(MLP):
     def __init__(self, config: GPTEnsembleConfig, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
+        self.layer_idx = layer_idx
+        self.reduce_pattern = config.reduce_pattern
+
         hidden_size = config.n_embd
         intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
         activation_function = config.activation_function
@@ -24,9 +27,7 @@ class EnsembleMLP(MLP):
         init_method = InitMethod(config.init_method)
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
-
-        self.reduce_allowed = layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
+        self.n_layer = config.n_layer
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -41,7 +42,7 @@ class EnsembleMLP(MLP):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range * config.pretraining_tensor_parallel_size / math.sqrt(2 * n_layer)
+        std = initializer_range * config.pretraining_tensor_parallel_size / math.sqrt(2 * self.n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = EnsembleLinear(
@@ -55,12 +56,18 @@ class EnsembleMLP(MLP):
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if self.reduce_pattern[self.layer_idx]["attention"]:
+            assert hidden_states.dim() == 3
+            hidden_states = hidden_states.unsqueeze(0)
+        else:
+            assert hidden_states.dim() == 4
+
         hidden_states = self.c_fc(hidden_states)
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj(hidden_states)
 
-        if self.reduce_allowed:
-            hidden_states = hidden_states.sum(dim=0, keepdim=True)
+        if self.layer_idx == self.n_layer - 1 or self.reduce_pattern[self.layer_idx]["mlp"]:
+            hidden_states = hidden_states.sum(dim=0)
 
         hidden_states = self.dropout(hidden_states)
         return hidden_states
