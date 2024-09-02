@@ -2,15 +2,10 @@ import math
 
 import torch.nn as nn
 
-from .....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from .....utils import ProcessGroupManager
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear
-from ....modeling_utils_TP import (
-    Attention_TP,
-    ColumnParallelLinear,
-    RowParallelLinear,
-    tensor_parallel_split_safetensor_slice,
-)
+from ....modeling_utils_TP import Attention_TP, ColumnParallelLinear, RowParallelLinear
 from ....utils import divide_if_divisible
 from ...gpt_ensemble import GPTEnsembleConfig
 
@@ -137,18 +132,3 @@ class EnsembleAttention_TP(Attention_TP):
 
         self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
         self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
-
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        self.c_attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix=prefix + "c_attn.")
-
-        weight = safetensors_weight_manager.get_slice(prefix + "c_proj.weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-        state = {"weight": weight}
-        if self.add_bias:
-            bias = safetensors_weight_manager.get_slice(prefix + "c_proj.bias")
-            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
-            state["bias"] = bias
-
-        self.c_proj.load_state_dict(state)

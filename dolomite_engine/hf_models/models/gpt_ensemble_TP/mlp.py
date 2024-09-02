@@ -2,15 +2,10 @@ import math
 
 import torch.nn as nn
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import ProcessGroupManager
 from ...enums import InitMethod
 from ...modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ...modeling_utils_TP import (
-    ColumnParallelLinear,
-    Dropout_TP,
-    RowParallelLinear,
-    tensor_parallel_split_safetensor_slice,
-)
+from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP, RowParallelLinear
 from ...utils import divide_if_divisible
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ensemble import GPTEnsembleConfig
@@ -71,17 +66,3 @@ class EnsembleMLP_TP(MLP_TP):
             )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
-
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        weight = safetensors_weight_manager.get_slice(prefix + "c_fc.weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-        state = {"weight": weight}
-        if self.add_bias:
-            bias = safetensors_weight_manager.get_slice(prefix + "c_fc.bias")
-            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
-            state["bias"] = bias
-
-        self.c_fc.load_state_dict(state)
-        self.c_proj.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix=prefix + "c_proj.")

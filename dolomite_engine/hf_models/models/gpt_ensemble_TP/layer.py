@@ -1,8 +1,7 @@
 import torch.nn as nn
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import ProcessGroupManager
 from ...modeling_utils import get_normalization_function
-from ...modeling_utils_TP import tensor_parallel_split_safetensor_slice
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_ensemble import GPTEnsembleConfig
 from .attention import get_attention_module
@@ -42,29 +41,4 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)
-
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        weight = safetensors_weight_manager.get_slice(prefix + "ln_1.weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-        state_dict = {"weight": weight}
-        if hasattr(self.ln_1, "bias"):
-            bias = safetensors_weight_manager.get_slice(prefix + "ln_1.bias")
-            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
-            state_dict["bias"] = bias
-        self.ln_1.load_state_dict(state_dict)
-
-        weight = safetensors_weight_manager.get_slice(prefix + "ln_2.weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-        state_dict = {"weight": weight}
-        if hasattr(self.ln_2, "bias"):
-            bias = safetensors_weight_manager.get_slice(prefix + "ln_2.bias")
-            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
-            state_dict["bias"] = bias
-        self.ln_2.load_state_dict(state_dict)
-
-        self.attn.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "attn.")
-        self.mlp.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "mlp.")
         self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)
