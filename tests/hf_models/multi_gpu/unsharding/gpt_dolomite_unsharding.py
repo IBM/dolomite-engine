@@ -1,6 +1,5 @@
 import argparse
 import os
-import tempfile
 
 import torch
 import torch.distributed
@@ -64,14 +63,16 @@ def run_check(fix: bool):
             config, tp_state_dict_unsharded, ProcessGroupManager.get_tensor_parallel_world_size()
         )
     else:
-        with tempfile.TemporaryDirectory(prefix=args.tmp_path + "-tp") as tmpdir:
-            torch.save(tp_state_dict, os.path.join(tmpdir, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt"))
+        torch.save(
+            tp_state_dict, os.path.join(args.tmp_path, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt")
+        )
 
-            torch.distributed.barrier()
+        torch.distributed.barrier()
 
-            tensor_parallel_state_dicts = [
-                os.path.join(tmpdir, f"tp-{i}.pt") for i in range(ProcessGroupManager.get_tensor_parallel_world_size())
-            ]
+        tensor_parallel_state_dicts = [
+            os.path.join(args.tmp_path, f"tp-{i}.pt")
+            for i in range(ProcessGroupManager.get_tensor_parallel_world_size())
+        ]
 
         tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
             config,
