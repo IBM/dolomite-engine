@@ -45,13 +45,23 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
     # layers
     for layer_idx in trange(config.n_layer):
         # first layernorm
-        output_state_dict.update(
-            _get_ensemble_layernorm(
-                tensor_parallel_state_dicts,
-                prefix=prefix + f"transformer.h.{layer_idx}.ln_1.",
-                normalization_function=config.normalization_function,
+        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+            output_state_dict.update(
+                _get_layernorm(
+                    tensor_parallel_state_dicts,
+                    prefix=prefix + f"transformer.h.{layer_idx}.ln_1.",
+                    normalization_function=config.normalization_function,
+                    check_correctness=check_correctness,
+                )
             )
-        )
+        else:
+            output_state_dict.update(
+                _get_ensemble_layernorm(
+                    tensor_parallel_state_dicts,
+                    prefix=prefix + f"transformer.h.{layer_idx}.ln_1.",
+                    normalization_function=config.normalization_function,
+                )
+            )
 
         # attention
         output_state_dict.update(
@@ -64,13 +74,23 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
         )
 
         # second layernorm
-        output_state_dict.update(
-            _get_ensemble_layernorm(
-                tensor_parallel_state_dicts,
-                prefix=prefix + f"transformer.h.{layer_idx}.ln_2.",
-                normalization_function=config.normalization_function,
+        if config.reduce_pattern[layer_idx]["attention"]:
+            output_state_dict.update(
+                _get_layernorm(
+                    tensor_parallel_state_dicts,
+                    prefix=prefix + f"transformer.h.{layer_idx}.ln_2.",
+                    normalization_function=config.normalization_function,
+                    check_correctness=check_correctness,
+                )
             )
-        )
+        else:
+            output_state_dict.update(
+                _get_ensemble_layernorm(
+                    tensor_parallel_state_dicts,
+                    prefix=prefix + f"transformer.h.{layer_idx}.ln_2.",
+                    normalization_function=config.normalization_function,
+                )
+            )
 
         # mlp
         output_state_dict.update(

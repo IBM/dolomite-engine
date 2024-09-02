@@ -32,13 +32,22 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
     for layer_idx in range(config.n_layer):
         prefix = f"transformer.h.{layer_idx}."
 
-        state_dict.update(_get_ensemble_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
+        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+            state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
+        else:
+            state_dict.update(_get_ensemble_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
+
         state_dict.update(
             _get_attention(
                 config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "attn."
             )
         )
-        state_dict.update(_get_ensemble_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
+
+        if config.reduce_pattern[layer_idx]["attention"]:
+            state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
+        else:
+            state_dict.update(_get_ensemble_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
+
         state_dict.update(
             _get_mlp(config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp.")
         )
