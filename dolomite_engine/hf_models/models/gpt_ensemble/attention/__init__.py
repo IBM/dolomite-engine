@@ -1,10 +1,8 @@
 from ..config import GPTEnsembleConfig
-from .base import EnsembleAttention
 from .sdpa import EnsembleSDPA
 
 
 _ATTENTION_MODULES = {
-    "eager": EnsembleAttention,
     "sdpa": EnsembleSDPA,
 }
 
@@ -15,7 +13,7 @@ def get_attention_module(
     attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
-) -> EnsembleAttention:
+) -> EnsembleSDPA:
     if use_padding_free_transformer:
         raise NotImplementedError("padding free transformer is not implemented with GPTEnsemble")
 

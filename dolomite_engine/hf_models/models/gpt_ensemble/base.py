@@ -13,6 +13,7 @@ class GPTEnsemblePreTrainedModel(PreTrainedModelMixin):
     config_class = GPTEnsembleConfig
     layer_class = GPTEnsembleBlock
     _no_split_modules = ["GPTEnsembleBlock"]
+    _supports_flash_attn_2 = False
 
 
 class GPTEnsembleModel(GPTEnsemblePreTrainedModel, GPTDolomiteModel):
