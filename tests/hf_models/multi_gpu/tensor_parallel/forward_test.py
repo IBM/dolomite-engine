@@ -14,6 +14,7 @@ from ...test_common import TestCommons
 class GPTDolomiteTP_Test(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
+            ["gpt_dolomite"],
             TestCommons.get_attention_head_types(),
             TestCommons.get_position_embedding_types(),
             TestCommons.get_attention_implementations(),
@@ -21,9 +22,18 @@ class GPTDolomiteTP_Test(TestCommons):
             [False, True],
             [False, True],
         )
+        + TestCommons.make_args_matrix(
+            ["gpt_ensemble"],
+            [AttentionHeadType.mha, AttentionHeadType.gqa],
+            [PositionEmbeddingType.rope],
+            [torch.float16],
+            [False],
+            [False],
+        )
     )
     def test_gpt_dolomite_tp(
         self,
+        model_type: str,
         attention_head_type: AttentionHeadType,
         position_embedding_type: PositionEmbeddingType,
         attention_implementation: str,
@@ -54,7 +64,7 @@ class GPTDolomiteTP_Test(TestCommons):
                 "--nproc_per_node",
                 str(gpus_per_node),
                 "-m",
-                "tests.hf_models.multi_gpu.tensor_parallel.gpt_dolomite_forward",
+                "tests.hf_models.multi_gpu.tensor_parallel.forward",
                 "--attention-head-type",
                 attention_head_type.value,
                 "--position-embedding-type",
@@ -65,6 +75,8 @@ class GPTDolomiteTP_Test(TestCommons):
                 attention_implementation,
                 "--tmp-path",
                 tmp_path,
+                "--model-type",
+                model_type,
             ]
 
             if use_padding_free_transformer:
