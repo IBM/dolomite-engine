@@ -1,10 +1,6 @@
-import torch
-
-from .....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from .....utils import SafeTensorsWeightsManager
 from ....enums import AttentionHeadType, PositionEmbeddingType
-from ....modeling_utils import is_glu
 from ....modeling_utils_TP import tensor_parallel_split_safetensor_slice
-from ....utils import divide_if_divisible
 from ...gpt_dolomite_TP.weights.shard import _get_embeddings_or_lm_head, _get_layernorm
 from ...gpt_ensemble import GPTEnsembleConfig
 
@@ -119,7 +115,7 @@ def _get_column_parallel(
 ) -> dict:
     weight = safetensors_weights_manager.get_slice(prefix + "weight")
     weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-    state_dict = {prefix + "weight": weight}
+    state_dict = {prefix + "weight": weight.T}
 
     if config.add_bias:
         bias = safetensors_weights_manager.get_slice(prefix + "bias")
@@ -133,8 +129,8 @@ def _get_row_parallel(
     config: GPTEnsembleConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
 ) -> dict:
     weight = safetensors_weights_manager.get_slice(prefix + "weight")
-    weight = tensor_parallel_split_safetensor_slice(weight, dim=1)
-    state_dict = {prefix + "weight": weight}
+    weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
+    state_dict = {prefix + "weight": weight.T}
 
     if config.add_bias:
         state_dict[prefix + "bias"] = safetensors_weights_manager.get_tensor(prefix + "bias")
