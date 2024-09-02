@@ -35,27 +35,18 @@ def get_gpt_dolomite_tensor_parallel_state_dict(
     for layer_idx in range(config.n_layer):
         prefix = f"transformer.h.{layer_idx}."
 
-        state_dict.update({prefix + "ln_1.weight": safetensors_weights_manager.get_tensor(prefix + "ln_1.weight")})
-        if safetensors_weights_manager.has_tensor(prefix + "ln_1.bias"):
-            state_dict.update({prefix + "ln_1.bias": safetensors_weights_manager.get_tensor(prefix + "ln_1.bias")})
-
+        state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
         state_dict.update(
             _get_attention(
                 config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "attn."
             )
         )
-
-        state_dict.update({prefix + "ln_2.weight": safetensors_weights_manager.get_tensor(prefix + "ln_2.weight")})
-        if safetensors_weights_manager.has_tensor(prefix + "ln_2.bias"):
-            state_dict.update({prefix + "ln_2.bias": safetensors_weights_manager.get_tensor(prefix + "ln_2.bias")})
-
+        state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
         state_dict.update(
             _get_mlp(config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp.")
         )
 
-    state_dict.update({"transformer.ln_f.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight")})
-    if safetensors_weights_manager.has_tensor("transformer.ln_f.bias"):
-        state_dict.update({"transformer.ln_f.bias": safetensors_weights_manager.get_tensor("transformer.ln_f.bias")})
+    state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))
 
     if not config.tie_word_embeddings:
         state_dict.update(
@@ -94,6 +85,14 @@ def _get_embeddings_or_lm_head(
         weight = safetensors_weights_manager.get_tensor(prefix + "weight")
 
     return {prefix + "weight": weight}
+
+
+def _get_layernorm(safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str) -> dict:
+    state_dict = {prefix + "weight": safetensors_weights_manager.get_tensor(prefix + "weight")}
+    if safetensors_weights_manager.has_tensor(prefix + "bias"):
+        state_dict[prefix + "bias"] = safetensors_weights_manager.get_tensor(prefix + "bias")
+
+    return state_dict
 
 
 def _get_attention(
