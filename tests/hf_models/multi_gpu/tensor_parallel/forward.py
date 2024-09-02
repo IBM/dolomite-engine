@@ -52,13 +52,20 @@ if args.model_type == "gpt_dolomite":
 elif args.model_type == "gpt_ensemble":
     config = GPTEnsembleConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        n_layer=4,
         position_embedding_type=args.position_embedding_type,
+        normalization_function="rmsnorm",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         n_embd=128,
         n_head=16,
         pretraining_tensor_parallel_size=8,
+        reduce_pattern=[
+            {"attention": False, "mlp": True},
+            {"attention": False, "mlp": True},
+            {"attention": False, "mlp": True},
+            {"attention": False, "mlp": True},
+        ],
     )
 
 

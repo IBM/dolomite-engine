@@ -25,8 +25,9 @@ class GPTDolomiteTP_Test(TestCommons):
         + TestCommons.make_args_matrix(
             ["gpt_ensemble"],
             [AttentionHeadType.mha, AttentionHeadType.gqa],
-            [PositionEmbeddingType.rope],
-            [torch.float16],
+            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            ["sdpa"],
+            [torch.float32],
             [False],
             [False],
         )
