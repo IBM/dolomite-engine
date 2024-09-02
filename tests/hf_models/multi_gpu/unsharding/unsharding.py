@@ -8,6 +8,8 @@ from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
     GPTDolomiteForCausalLM_TP,
+    GPTEnsembleConfig,
+    GPTEnsembleForCausalLM_TP,
     fix_unsharded_state_dict,
     unshard_tensor_parallel_state_dicts,
 )
@@ -21,6 +23,7 @@ parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
 parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
+parser.add_argument("--model-type", type=str)
 args = parser.parse_args()
 
 
@@ -33,15 +36,27 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-config = GPTDolomiteConfig(
-    attention_head_type=args.attention_head_type,
-    n_layer=1,
-    position_embedding_type="learned_absolute",
-    num_key_value_heads=num_key_value_heads,
-    add_bias=False,
-    n_embd=128,
-    n_head=16,
-)
+if args.model_type == "gpt_dolomite":
+    config = GPTDolomiteConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=1,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+    )
+elif args.model_type == "gpt_ensemble":
+    config = GPTEnsembleConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=1,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+        pretraining_tensor_parallel_size=8,
+    )
 
 if tp_rank == 0:
     model = TestCommons.from_config(None, config)
@@ -49,9 +64,14 @@ if tp_rank == 0:
 
 torch.distributed.barrier()
 
-model_tp = GPTDolomiteForCausalLM_TP.from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
-)
+if args.model_type == "gpt_dolomite":
+    model_tp = GPTDolomiteForCausalLM_TP.from_pretrained(
+        args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
+    )
+else:
+    model_tp = GPTEnsembleForCausalLM_TP.from_pretrained(
+        args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
+    )
 
 tp_state_dict = model_tp.state_dict()
 

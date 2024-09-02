@@ -12,10 +12,19 @@ from ...test_common import TestCommons
 
 class GPTDolomiteTP_Test(TestCommons):
     @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True])
+        TestCommons.make_args_matrix(
+            ["gpt_dolomite"], TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True]
+        )
+        + TestCommons.make_args_matrix(
+            ["gpt_ensemble"], [AttentionHeadType.mha, AttentionHeadType.gqa], ["gelu", "geglu"], [False, True]
+        )
     )
     def test_gpt_dolomite_tp_unsharding(
-        self, attention_head_type: AttentionHeadType, activation_function: str, tensor_parallel_word_embeddings: bool
+        self,
+        model_type: str,
+        attention_head_type: AttentionHeadType,
+        activation_function: str,
+        tensor_parallel_word_embeddings: bool,
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
 
@@ -27,13 +36,15 @@ class GPTDolomiteTP_Test(TestCommons):
                 "--nproc_per_node",
                 str(gpus_per_node),
                 "-m",
-                "tests.hf_models.multi_gpu.unsharding.gpt_dolomite_unsharding",
+                "tests.hf_models.multi_gpu.unsharding.unsharding",
                 "--attention-head-type",
                 attention_head_type.value,
                 "--activation-function",
                 activation_function,
                 "--tmp-path",
                 tmp_path,
+                "--model-type",
+                model_type,
             ]
 
             if tensor_parallel_word_embeddings:
