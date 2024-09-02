@@ -83,5 +83,5 @@ class GPTEnsembleConfig(CommonConfig):
             raise NotImplementedError("currently GPTEnsemble doesn't support alibi")
 
         self.reduce_pattern = (
-            {i: {"attention": True, "mlp": True} for i in range(n_layer)} if reduce_pattern is None else reduce_pattern
+            [{"attention": True, "mlp": True} for i in range(n_layer)] if reduce_pattern is None else reduce_pattern
         )
