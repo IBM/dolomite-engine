@@ -102,7 +102,7 @@ tuning_args:
   tuning_method: pretraining
 
 save_args:
-  save_path: /proj/checkpoints/mayank/ensemble-experiments/1b-ensemble
+  save_path: /proj/checkpoints/mayank/ensemble-experiments/1b-2e-ensemble
   save_interval: 5000
 
 logging_args:
@@ -110,7 +110,7 @@ logging_args:
   experiments_tracker_name: wandb
   wandb_args:
     project: ensemble
-    name: 1b-ensemble
+    name: 1b-2e-ensemble
 
 training_parameters:
   num_training_steps: 25000
