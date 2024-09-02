@@ -52,6 +52,7 @@ elif args.model_type == "gpt_ensemble":
         n_layer=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
+        normalization_function="rmsnorm",
         add_bias=False,
         n_embd=128,
         n_head=16,
