@@ -3,6 +3,7 @@ import os
 
 import torch
 import torch.distributed
+from torch.distributed._tensor.api import DTensor
 
 from dolomite_engine.hf_models import (
     AttentionHeadType,
@@ -81,12 +82,16 @@ def run_check(fix: bool):
     cpu_state_dict = {key: value.to("cpu") for key, value in tp_state_dict.items()}
 
     if fix:
-        tp_state_dict_unsharded = {key: value.full_tensor() for key, value in cpu_state_dict.items()}
+        tp_state_dict_unsharded = {
+            key: value.full_tensor() if isinstance(value, DTensor) else value for key, value in cpu_state_dict.items()
+        }
         tp_state_dict_unsharded = fix_unsharded_state_dict(
             config, tp_state_dict_unsharded, ProcessGroupManager.get_tensor_parallel_world_size()
         )
     else:
-        cpu_state_dict = {key: value.to_local() for key, value in cpu_state_dict.items()}
+        cpu_state_dict = {
+            key: value.to_local() if isinstance(value, DTensor) else value for key, value in cpu_state_dict.items()
+        }
         torch.save(
             cpu_state_dict, os.path.join(args.tmp_path, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt")
         )
@@ -115,7 +120,9 @@ def run_check(fix: bool):
             assert original_state_dict[key].equal(tp_state_dict_unsharded[key])
 
 
-run_check(True)
+if args.model_type == "gpt_dolomite":
+    run_check(True)
+
 run_check(False)
 
 ProcessGroupManager.destroy_process_groups()

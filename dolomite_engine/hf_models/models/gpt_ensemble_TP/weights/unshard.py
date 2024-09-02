@@ -109,7 +109,7 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
 def fix_gpt_ensemble_unsharded_state_dict(
     config: GPTEnsembleConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
 ) -> dict:
-    return state_dict
+    raise NotImplementedError()
 
 
 def _get_ensemble_layernorm(tensor_parallel_state_dicts: list[dict], prefix: str, normalization_function: str) -> dict:
