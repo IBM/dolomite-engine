@@ -106,16 +106,6 @@ class EnsembleAttention_TP(Attention_TP):
                 std=std,
             )
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.c_attn = ColumnParallelLinear(
-            self.global_hidden_size,
-            self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
-            bias=self.add_bias,
-            std=std,
-        )
-
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
