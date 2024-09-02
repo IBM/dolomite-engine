@@ -1,5 +1,6 @@
 import argparse
 import os
+import tempfile
 
 import torch
 import torch.distributed
@@ -9,6 +10,7 @@ from dolomite_engine.hf_models import (
     GPTDolomiteConfig,
     GPTDolomiteForCausalLM_TP,
     fix_unsharded_state_dict,
+    unshard_tensor_parallel_state_dicts,
 )
 from dolomite_engine.utils import ProcessGroupManager
 
@@ -53,16 +55,41 @@ model_tp = GPTDolomiteForCausalLM_TP.from_pretrained(
 )
 
 tp_state_dict = model_tp.state_dict()
-tp_state_dict = {key: value.to("cpu").full_tensor() for key, value in tp_state_dict.items()}
-tp_state_dict = fix_unsharded_state_dict(config, tp_state_dict, ProcessGroupManager.get_tensor_parallel_world_size())
 
-torch.distributed.barrier()
 
-if tp_rank == 0:
-    original_state_dict = model.state_dict()
+def run_check(fix: bool):
+    if fix:
+        tp_state_dict_unsharded = {key: value.to("cpu").full_tensor() for key, value in tp_state_dict.items()}
+        tp_state_dict_unsharded = fix_unsharded_state_dict(
+            config, tp_state_dict_unsharded, ProcessGroupManager.get_tensor_parallel_world_size()
+        )
+    else:
+        with tempfile.TemporaryDirectory(prefix=args.tmp_path + "-tp") as tmpdir:
+            torch.save(tp_state_dict, os.path.join(tmpdir, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt"))
 
-    assert tp_state_dict.keys() == original_state_dict.keys()
-    for key in original_state_dict:
-        assert original_state_dict[key].equal(tp_state_dict[key])
+            torch.distributed.barrier()
+
+            tensor_parallel_state_dicts = [
+                os.path.join(tmpdir, f"tp-{i}.pt") for i in range(ProcessGroupManager.get_tensor_parallel_world_size())
+            ]
+
+        tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
+            config,
+            tensor_parallel_state_dicts=tensor_parallel_state_dicts,
+            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+        )
+
+    torch.distributed.barrier()
+
+    if tp_rank == 0:
+        original_state_dict = model.state_dict()
+
+        assert tp_state_dict_unsharded.keys() == original_state_dict.keys()
+        for key in original_state_dict:
+            assert original_state_dict[key].equal(tp_state_dict_unsharded[key])
+
+
+run_check(False)
+run_check(True)
 
 ProcessGroupManager.destroy_process_groups()
