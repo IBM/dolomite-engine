@@ -18,7 +18,7 @@ class EnsembleLinear(nn.Module):
 
         self.bias = None
         if bias:
-            self.bias = nn.Parameter(torch.empty(self.tensor_parallel_size, self.out_features))
+            self.bias = nn.Parameter(torch.empty(self.tensor_parallel_size * self.out_features))
 
         self.reset_parameters()
 
@@ -39,7 +39,8 @@ class EnsembleLinear(nn.Module):
         if self.bias is None:
             input = torch.bmm(input, weight)
         else:
-            input = torch.baddbmm(self.bias.unsqueeze(1), input, weight, alpha=1, beta=1)
+            bias = self.bias.view(self.tensor_parallel_size, -1).unsqueeze(1)
+            input = torch.baddbmm(bias, input, weight, alpha=1, beta=1)
 
         # input -> (TP, batch_size * sequence_length, out_features)
         input = input.view(self.tensor_parallel_size, batch_size, sequence_length, -1)

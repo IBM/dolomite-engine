@@ -32,7 +32,7 @@ class EnsembleLinearTest(TestCommons):
         for rank in range(tp_world_size):
             i = input[rank, ...]
             w = ensemble_linear.weight.view(tp_world_size, in_features, out_features)[rank, :, :].T
-            b = None if ensemble_linear.bias is None else ensemble_linear.bias[rank, :]
+            b = None if ensemble_linear.bias is None else ensemble_linear.bias.view(tp_world_size, -1)[rank, :]
 
             output.append(F.linear(i, w, b))
 
@@ -59,7 +59,7 @@ class EnsembleLinearTest(TestCommons):
         output = []
         for rank in range(tp_world_size):
             w = ensemble_linear.weight.view(tp_world_size, in_features, out_features)[rank, ...].T
-            b = None if ensemble_linear.bias is None else ensemble_linear.bias[rank, :]
+            b = None if ensemble_linear.bias is None else ensemble_linear.bias.view(tp_world_size, -1)[rank, :]
 
             output.append(F.linear(input.squeeze(0), w, b))
 
