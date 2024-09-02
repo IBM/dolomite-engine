@@ -5,7 +5,7 @@ from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ....modeling_utils_TP import tensor_parallel_split_safetensor_slice
 from ....utils import divide_if_divisible
-from ...gpt_dolomite_TP.weights.shard import _get_word_embedding_weights
+from ...gpt_dolomite_TP.weights.shard import _get_embeddings_or_lm_head
 from ...gpt_ensemble import GPTEnsembleConfig
 
 
@@ -15,7 +15,7 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
     tensor_parallel_word_embeddings: bool,
 ) -> dict:
     # word embeddings
-    state_dict = _get_word_embedding_weights(
+    state_dict = _get_embeddings_or_lm_head(
         safetensors_weights_manager,
         prefix="transformer.wte.",
         vocab_size=config.vocab_size,
@@ -25,7 +25,7 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
     # positional embeddings
     if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
         state_dict.update(
-            _get_word_embedding_weights(
+            _get_embeddings_or_lm_head(
                 safetensors_weights_manager,
                 prefix="transformer.wpe.",
                 vocab_size=config.n_positions,
@@ -41,7 +41,7 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
             state_dict.update({prefix + "ln_1.bias": safetensors_weights_manager.get_tensor(prefix + "ln_1.bias")})
 
         state_dict.update(
-            _get_attention_weights(
+            _get_attention(
                 config=config, safetensors_weight_manager=safetensors_weights_manager, prefix=prefix + "attn."
             )
         )
@@ -51,9 +51,7 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
             state_dict.update({prefix + "ln_2.bias": safetensors_weights_manager.get_tensor(prefix + "ln_2.bias")})
 
         state_dict.update(
-            _get_mlp_weights(
-                config=config, safetensors_weight_manager=safetensors_weights_manager, prefix=prefix + "mlp."
-            )
+            _get_mlp(config=config, safetensors_weight_manager=safetensors_weights_manager, prefix=prefix + "mlp.")
         )
 
     state_dict.update({"transformer.ln_f.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight")})
@@ -62,7 +60,7 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
 
     if not config.tie_word_embeddings:
         state_dict.update(
-            _get_word_embedding_weights(
+            _get_embeddings_or_lm_head(
                 safetensors_weight_manager=safetensors_weights_manager,
                 prefix="lm_head.",
                 vocab_size=config.vocab_size,
@@ -73,7 +71,7 @@ def get_gpt_ensemble_tensor_parallel_state_dict(
     return state_dict
 
 
-def _get_attention_weights(
+def _get_attention(
     config: GPTEnsembleConfig,
     safetensors_weight_manager: SafeTensorsWeightsManager,
     prefix: str,
@@ -103,13 +101,13 @@ def _get_attention_weights(
             state_dict[prefix + "c_attn.kv_attn.bias"] = bias[global_hidden_size : global_hidden_size + 2 * head_dim]
     else:
         state_dict.update(
-            _get_column_parallel_weights(
+            _get_column_parallel(
                 config=config, safetensors_weight_manager=safetensors_weight_manager, prefix=prefix + "c_attn."
             )
         )
 
     state_dict.update(
-        _get_row_parallel_weights(
+        _get_row_parallel(
             config=config, safetensors_weight_manager=safetensors_weight_manager, prefix=prefix + "c_proj."
         )
     )
@@ -117,7 +115,7 @@ def _get_attention_weights(
     return state_dict
 
 
-def _get_mlp_weights(
+def _get_mlp(
     config: GPTEnsembleConfig,
     safetensors_weight_manager: SafeTensorsWeightsManager,
     prefix: str,
@@ -155,12 +153,12 @@ def _get_mlp_weights(
         if config.add_bias:
             state_dict[prefix + "c_fc.bias"] = torch.cat([bias_1, bias_2])
     else:
-        state_dict = _get_column_parallel_weights(
+        state_dict = _get_column_parallel(
             config=config, safetensors_weight_manager=safetensors_weight_manager, prefix=prefix + "c_fc."
         )
 
     state_dict.update(
-        _get_row_parallel_weights(
+        _get_row_parallel(
             config=config, safetensors_weight_manager=safetensors_weight_manager, prefix=prefix + "c_proj."
         )
     )
@@ -168,7 +166,7 @@ def _get_mlp_weights(
     return state_dict
 
 
-def _get_column_parallel_weights(
+def _get_column_parallel(
     config: GPTEnsembleConfig, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str
 ) -> dict:
     weight = safetensors_weight_manager.get_slice(prefix + "weight")
@@ -183,7 +181,7 @@ def _get_column_parallel_weights(
     return state_dict
 
 
-def _get_row_parallel_weights(
+def _get_row_parallel(
     config: GPTEnsembleConfig, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str
 ) -> dict:
     weight = safetensors_weight_manager.get_slice(prefix + "weight")
