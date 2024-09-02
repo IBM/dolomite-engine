@@ -2,12 +2,10 @@ import torch
 from tqdm import trange
 
 from ....enums import AttentionHeadType, PositionEmbeddingType
-from ....modeling_utils import is_glu
 from ...gpt_dolomite_TP.weights.unshard import (
     _concatenate_tensors_from_state_dicts,
     _get_embeddings_or_lm_head,
     _get_layernorm,
-    _get_once_from_state_dicts_with_check,
 )
 from ...gpt_ensemble import GPTEnsembleConfig
 
@@ -48,11 +46,10 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
     for layer_idx in trange(config.n_layer):
         # first layernorm
         output_state_dict.update(
-            _get_layernorm(
+            _get_ensemble_layernorm(
                 tensor_parallel_state_dicts,
                 prefix=prefix + f"transformer.h.{layer_idx}.ln_1.",
                 normalization_function=config.normalization_function,
-                check_correctness=check_correctness,
             )
         )
 
@@ -63,17 +60,15 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
                 attention_head_type=attention_head_type,
                 add_bias=config.add_bias,
                 prefix=prefix + f"transformer.h.{layer_idx}.attn.",
-                check_correctness=check_correctness,
             )
         )
 
         # second layernorm
         output_state_dict.update(
-            _get_layernorm(
+            _get_ensemble_layernorm(
                 tensor_parallel_state_dicts,
                 prefix=prefix + f"transformer.h.{layer_idx}.ln_2.",
                 normalization_function=config.normalization_function,
-                check_correctness=check_correctness,
             )
         )
 
@@ -81,7 +76,6 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_mlp(
                 tensor_parallel_state_dicts,
-                is_glu=is_glu(config.activation_function),
                 add_bias=config.add_bias,
                 prefix=prefix + f"transformer.h.{layer_idx}.mlp.",
                 check_correctness=check_correctness,
@@ -115,12 +109,18 @@ def unshard_gpt_ensemble_tensor_parallel_state_dicts(
 def fix_gpt_ensemble_unsharded_state_dict(
     config: GPTEnsembleConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
 ) -> dict:
-    state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
-        : config.vocab_size, :
-    ]
-    state_dict = _fix_attention_weights(config, state_dict, prefix)
-    state_dict = _fix_mlp_weights(config, state_dict, tensor_parallel_size, prefix)
     return state_dict
+
+
+def _get_ensemble_layernorm(tensor_parallel_state_dicts: list[dict], prefix: str, normalization_function: str) -> dict:
+    assert normalization_function == "rmsnorm"
+
+    output = {
+        prefix
+        + "weight": _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts, key=prefix + "weight", dim=0)
+    }
+
+    return output
 
 
 def _get_attention(
@@ -128,21 +128,20 @@ def _get_attention(
     attention_head_type: AttentionHeadType,
     add_bias: bool,
     prefix: str,
-    check_correctness: bool,
 ) -> dict:
     output = {
         prefix
-        + "c_proj.weight": _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_proj.weight", dim=1
+        + "c_proj.weight": _concatenate_transposed_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_proj.weight", dim=0
         )
     }
     if add_bias:
-        output[prefix + "c_proj.bias"] = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
+        output[prefix + "c_proj.bias"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_proj.bias", dim=0
         )
 
     if attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
-        output[prefix + "c_attn.weight"] = _concatenate_tensors_from_state_dicts(
+        output[prefix + "c_attn.weight"] = _concatenate_transposed_tensors_from_state_dicts(
             tensor_parallel_state_dicts, key=prefix + "c_attn.weight", dim=0
         )
         if add_bias:
@@ -150,92 +149,40 @@ def _get_attention(
                 tensor_parallel_state_dicts, key=prefix + "c_attn.bias", dim=0
             )
     elif attention_head_type == AttentionHeadType.mqa:
-        q_weight = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_attn.q_attn.weight", dim=0
-        )
-        kv_weight = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "c_attn.kv_attn.weight", check_correctness=check_correctness
-        )
-        output[prefix + "c_attn.weight"] = torch.cat([q_weight, kv_weight])
-        if add_bias:
-            q_bias = _concatenate_tensors_from_state_dicts(
-                tensor_parallel_state_dicts, key=prefix + "c_attn.q_attn.bias", dim=0
-            )
-            kv_bias = _get_once_from_state_dicts_with_check(
-                tensor_parallel_state_dicts, key=prefix + "c_attn.kv_attn.bias", check_correctness=check_correctness
-            )
-            output[prefix + "c_attn.bias"] = torch.cat([q_bias, kv_bias])
+        raise ValueError("GPTEnsemble doesn't support mqa")
     else:
         raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
 
     return output
 
 
-def _get_mlp(
-    tensor_parallel_state_dicts: list[dict], is_glu: bool, add_bias: bool, prefix: str, check_correctness: bool
-) -> dict:
+def _get_mlp(tensor_parallel_state_dicts: list[dict], add_bias: bool, prefix: str, check_correctness: bool) -> dict:
     output = {
         prefix
-        + "c_proj.weight": _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_proj.weight", dim=1
+        + "c_proj.weight": _concatenate_transposed_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_proj.weight", dim=0
         )
     }
     if add_bias:
-        output[prefix + "c_proj.bias"] = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
+        output[prefix + "c_proj.bias"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_proj.bias", dim=0
         )
 
-    if is_glu:
-        weights = [state_dict[prefix + "c_fc.weight"].chunk(2) for state_dict in tensor_parallel_state_dicts]
-        weights = (torch.cat([w[0] for w in weights]), torch.cat([w[1] for w in weights]))
-        output[prefix + "c_fc.weight"] = torch.cat(weights)
-        if add_bias:
-            bias = [state_dict[prefix + "c_fc.bias"].chunk(2) for state_dict in tensor_parallel_state_dicts]
-            bias = (torch.cat([b[0] for b in bias]), torch.cat([b[1] for b in bias]))
-            output[prefix + "c_fc.bias"] = torch.cat(bias)
-    else:
-        output[prefix + "c_fc.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_fc.weight", dim=0
+    output[prefix + "c_fc.weight"] = _concatenate_transposed_tensors_from_state_dicts(
+        tensor_parallel_state_dicts, key=prefix + "c_fc.weight", dim=0
+    )
+    if add_bias:
+        output[prefix + "c_fc.bias"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_fc.bias", dim=0
         )
-        if add_bias:
-            output[prefix + "c_fc.bias"] = _concatenate_tensors_from_state_dicts(
-                tensor_parallel_state_dicts, key=prefix + "c_fc.bias", dim=0
-            )
 
     return output
 
 
-def _fix_attention_weights(config: GPTEnsembleConfig, state_dict: dict, prefix: str) -> dict:
-    if AttentionHeadType(config.attention_head_type) == AttentionHeadType.mqa:
-        for layer_idx in range(config.n_layer):
-            q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.q_attn.weight")
-            kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.kv_attn.weight")
-            state_dict[f"{prefix}transformer.h.{layer_idx}.attn.c_attn.weight"] = torch.cat([q_attn_w, kv_attn_w])
-
-            if config.add_bias:
-                q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.q_attn.bias")
-                kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.kv_attn.bias")
-                state_dict[f"{prefix}transformer.h.{layer_idx}.attn.c_attn.bias"] = torch.cat([q_attn_w, kv_attn_w])
-
-    return state_dict
-
-
-def _fix_mlp_weights(config: GPTEnsembleConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
-    if is_glu(config.activation_function):
-        for layer_idx in range(config.n_layer):
-            key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
-            weight = state_dict[key].chunk(tensor_parallel_size)
-            weight = [w.chunk(2) for w in weight]
-            w0 = torch.cat([w[0] for w in weight])
-            w1 = torch.cat([w[1] for w in weight])
-            state_dict[key] = torch.cat([w0, w1])
-
-            if config.add_bias:
-                key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.bias"
-                weight = state_dict[key].chunk(tensor_parallel_size)
-                weight = [w.chunk(2) for w in weight]
-                w0 = torch.cat([w[0] for w in weight])
-                w1 = torch.cat([w[1] for w in weight])
-                state_dict[key] = torch.cat([w0, w1])
-
-    return state_dict
+def _concatenate_transposed_tensors_from_state_dicts(
+    tensor_parallel_state_dicts: list[dict], key: str, dim: int
+) -> torch.Tensor:
+    tensor_list = [state_dict[key] for state_dict in tensor_parallel_state_dicts]
+    tensor_list = [i.T for i in tensor_list]
+    tensor = torch.cat(tensor_list, dim=dim)
+    return tensor
