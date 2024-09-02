@@ -70,7 +70,7 @@ def run_check(fix: bool):
         torch.distributed.barrier()
 
         tensor_parallel_state_dicts = [
-            os.path.join(args.tmp_path, f"tp-{i}.pt")
+            torch.load(os.path.join(args.tmp_path, f"tp-{i}.pt"))
             for i in range(ProcessGroupManager.get_tensor_parallel_world_size())
         ]
 
