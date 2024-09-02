@@ -140,7 +140,9 @@ def _get_attention(
             tensor_parallel_state_dicts, key=prefix + "c_proj.bias", dim=0
         )
 
-    if attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
+    if attention_head_type == AttentionHeadType.mqa:
+        raise ValueError("GPTEnsemble doesn't support mqa")
+    else:
         output[prefix + "c_attn.weight"] = _concatenate_transposed_tensors_from_state_dicts(
             tensor_parallel_state_dicts, key=prefix + "c_attn.weight", dim=0
         )
@@ -148,10 +150,6 @@ def _get_attention(
             output[prefix + "c_attn.bias"] = _concatenate_tensors_from_state_dicts(
                 tensor_parallel_state_dicts, key=prefix + "c_attn.bias", dim=0
             )
-    elif attention_head_type == AttentionHeadType.mqa:
-        raise ValueError("GPTEnsemble doesn't support mqa")
-    else:
-        raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
 
     return output
 
