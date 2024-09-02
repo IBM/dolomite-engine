@@ -25,6 +25,7 @@ class EnsembleSDPA(Attention):
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
         self.reduce_pattern = config.reduce_pattern
+        self.m_residual = config.m_residual
 
         initializer_range = config.initializer_range
         m_width = config.m_width
@@ -118,6 +119,8 @@ class EnsembleSDPA(Attention):
         self.resid_pdrop = config.resid_pdrop
 
         self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
+
+        assert self.resid_pdrop == 0, "residual dropout is not supported with GPTEnsemble"
         self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
 
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -159,6 +162,7 @@ class EnsembleSDPA(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
+        residual: torch.Tensor,
         past_key_values: DynamicCache = None,
         attention_mask: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
@@ -236,8 +240,14 @@ class EnsembleSDPA(Attention):
 
         attn_output = self.c_proj(attn_output)
 
+        if self.m_residual is not None:
+            attn_output = attn_output * self.m_residual
+
         if self.reduce_pattern[self.layer_idx]["attention"]:
+            attn_output = attn_output + residual / self.tp_world_size
             attn_output = attn_output.sum(dim=0)
+        else:
+            attn_output = attn_output + residual
 
         attn_output = self.resid_dropout(attn_output)
         return attn_output

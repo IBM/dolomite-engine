@@ -1,5 +1,6 @@
 import math
 
+import torch
 import torch.nn as nn
 
 from ....utils import ProcessGroupManager
@@ -9,6 +10,7 @@ from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP, RowParallelLi
 from ...utils import divide_if_divisible
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ensemble import GPTEnsembleConfig
+from .linear import EnsembleRowParallelLinear
 
 
 class EnsembleMLP_TP(MLP_TP):
@@ -21,11 +23,14 @@ class EnsembleMLP_TP(MLP_TP):
         self.add_bias = config.add_bias
         residual_dropout = config.resid_pdrop
         self.is_glu_activation = is_glu(activation_function)
+        self.m_residual = config.m_residual
 
         init_method = InitMethod(config.init_method)
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        self.n_layer = config.n_layer
+        self.layer_idx = layer_idx
+        self.reduce_pattern = config.reduce_pattern
 
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
@@ -54,15 +59,32 @@ class EnsembleMLP_TP(MLP_TP):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * self.n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
         if layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]:
-            self.c_proj = RowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
+            self.c_proj = EnsembleRowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
         else:
             self.c_proj = ParameterizedLinear(
                 divide_if_divisible(intermediate_size, tp_world_size, ""), hidden_size, bias=self.add_bias, std=std
             )
 
+        assert residual_dropout == 0, "residual dropout is not supported with GPTEnsemble"
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
+
+    def forward(self, hidden_states: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.c_fc(hidden_states)
+        hidden_states = self.act(hidden_states)
+
+        if self.m_residual is not None:
+            hidden_states = hidden_states * self.m_residual
+
+        if self.layer_idx == self.n_layer - 1 or self.reduce_pattern[self.layer_idx]["mlp"]:
+            hidden_states = self.c_proj(hidden_states, residual)
+        else:
+            attn_output = self.c_proj(attn_output)
+            attn_output = attn_output + residual
+
+        hidden_states = self.dropout(hidden_states)
+        return hidden_states

@@ -66,3 +66,44 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             )
 
         self.mlp = EnsembleMLP(config, layer_idx=layer_idx)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor]:
+        if self.layer_idx == 0 or self.reduce_pattern[self.layer_idx - 1]["mlp"]:
+            assert hidden_states.dim() == 3
+            hidden_states = hidden_states.unsqueeze(0)
+        else:
+            assert hidden_states.dim() == 4
+
+        residual = hidden_states
+        hidden_states = self.ln_1(hidden_states)
+
+        hidden_states = self.attn(
+            hidden_states,
+            residual,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            rope_cos_sin=rope_cos_sin,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+        )
+
+        if self.reduce_pattern[self.layer_idx]["attention"]:
+            assert hidden_states.dim() == 3
+            hidden_states = hidden_states.unsqueeze(0)
+        else:
+            assert hidden_states.dim() == 4
+
+        residual = hidden_states
+        hidden_states = self.ln_2(hidden_states)
+
+        hidden_states = self.mlp(hidden_states, residual)
+
+        return hidden_states

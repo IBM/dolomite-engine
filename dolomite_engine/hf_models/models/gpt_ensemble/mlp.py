@@ -17,6 +17,8 @@ class EnsembleMLP(MLP):
 
         self.layer_idx = layer_idx
         self.reduce_pattern = config.reduce_pattern
+        self.m_residual = config.m_residual
+        self.tp_world_size = config.pretraining_tensor_parallel_size
 
         hidden_size = config.n_embd
         intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
@@ -53,21 +55,22 @@ class EnsembleMLP(MLP):
             std=std,
         )
 
+        assert residual_dropout == 0, "residual dropout is not supported with GPTEnsemble"
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        if self.reduce_pattern[self.layer_idx]["attention"]:
-            assert hidden_states.dim() == 3
-            hidden_states = hidden_states.unsqueeze(0)
-        else:
-            assert hidden_states.dim() == 4
-
+    def forward(self, hidden_states: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc(hidden_states)
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj(hidden_states)
 
+        if self.m_residual is not None:
+            hidden_states = hidden_states * self.m_residual
+
         if self.layer_idx == self.n_layer - 1 or self.reduce_pattern[self.layer_idx]["mlp"]:
+            hidden_states = hidden_states + residual / self.tp_world_size
             hidden_states = hidden_states.sum(dim=0)
+        else:
+            hidden_states = hidden_states + residual
 
         hidden_states = self.dropout(hidden_states)
         return hidden_states

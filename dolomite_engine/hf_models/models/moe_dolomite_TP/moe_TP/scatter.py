@@ -4,8 +4,7 @@ import torch
 import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
-from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed._tensor.placement_types import _Partial as Partial
+from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....utils import ProcessGroupManager, is_scattermoe_available
 from ....enums import InitMethod
