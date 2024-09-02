@@ -60,6 +60,7 @@ elif args.model_type == "gpt_ensemble":
         n_embd=128,
         n_head=16,
         pretraining_tensor_parallel_size=8,
+        resid_pdrop=0,
         reduce_pattern=[
             {"attention": False, "mlp": True},
             {"attention": False, "mlp": True},

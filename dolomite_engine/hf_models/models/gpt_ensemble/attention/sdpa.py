@@ -169,12 +169,6 @@ class EnsembleSDPA(Attention):
         cu_seqlens: torch.Tensor = None,
         max_seqlen: torch.Tensor = None,
     ) -> torch.Tensor:
-        if self.layer_idx == 0 or self.reduce_pattern[self.layer_idx - 1]["mlp"]:
-            assert hidden_states.dim() == 3
-            hidden_states = hidden_states.unsqueeze(0)
-        else:
-            assert hidden_states.dim() == 4
-
         # ==========================================================================================
         # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
