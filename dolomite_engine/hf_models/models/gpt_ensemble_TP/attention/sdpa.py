@@ -25,7 +25,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
         self.global_num_heads = config.n_head
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
-
+        self.reduce_pattern = config.reduce_pattern
         self.m_residual = config.m_residual
 
         initializer_range = config.initializer_range
@@ -56,8 +56,6 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
 
         self.layer_idx = layer_idx
         self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
-
-        self.reduce_pattern = config.reduce_pattern
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:

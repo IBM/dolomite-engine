@@ -44,7 +44,7 @@ class EnsembleMLP(MLP):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range * config.pretraining_tensor_parallel_size / math.sqrt(2 * self.n_layer)
+        std = initializer_range / math.sqrt(2 * self.n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = EnsembleLinear(
