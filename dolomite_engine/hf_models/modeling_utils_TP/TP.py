@@ -72,6 +72,9 @@ def dtensor_to_tensor(
 def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefix: str, strip_keys: bool) -> dict:
     result = {}
     for key, tensor in state_dict.items():
+        if isinstance(tensor, DTensor):
+            continue
+
         if key.startswith(prefix):
             striped_key = key.split(prefix)[1] if strip_keys else key
 
