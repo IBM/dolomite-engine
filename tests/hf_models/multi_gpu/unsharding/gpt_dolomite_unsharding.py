@@ -65,6 +65,7 @@ def run_check(fix: bool):
             config, tp_state_dict_unsharded, ProcessGroupManager.get_tensor_parallel_world_size()
         )
     else:
+        cpu_state_dict = {key: value.to_local() for key, value in cpu_state_dict.items()}
         torch.save(
             cpu_state_dict, os.path.join(args.tmp_path, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt")
         )
