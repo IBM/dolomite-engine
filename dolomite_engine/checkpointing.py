@@ -335,7 +335,7 @@ def load_checkpoint_for_inference(
         model.load_state_dict(state, strict=strict)
     elif distributed_backend == DistributedBackend.torch:
         if args_from_checkpoint.distributed_args.fsdp_algorithm == 1:
-            state = torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
+            state = torch.load(f"{_get_model_path(_get_base_path(load_path, iteration))}.pt", map_location="cpu")
         else:
             state = {}
             _load_state_dict(
