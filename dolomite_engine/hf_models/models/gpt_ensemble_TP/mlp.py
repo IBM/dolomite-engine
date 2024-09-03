@@ -83,8 +83,8 @@ class EnsembleMLP_TP(MLP_TP):
         if self.layer_idx == self.n_layer - 1 or self.reduce_pattern[self.layer_idx]["mlp"]:
             hidden_states = self.c_proj(hidden_states, residual)
         else:
-            attn_output = self.c_proj(attn_output)
-            attn_output = attn_output + residual
+            hidden_states = self.c_proj(hidden_states)
+            hidden_states = hidden_states + residual
 
         hidden_states = self.dropout(hidden_states)
         return hidden_states
