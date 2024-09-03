@@ -27,7 +27,15 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        input_dtype = input.dtype
+        input = input.float()
+
         input = tensor_to_dtensor(input, current_placement=self.placement)
-        input = super().forward(input)
+
+        variance = input.pow(2).mean(-1, keepdim=True)
+        input = input * torch.rsqrt(variance + self.eps)
+        input = self.weight * input.to(input_dtype)
+
         input = dtensor_to_tensor(input, desired_placement=self.placement)
+
         return input
