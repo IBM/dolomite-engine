@@ -211,18 +211,14 @@ def load_checkpoint_for_training(
                 state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
             ):
-                model.load_state_dict(
-                    torch.load(f"{_get_model_path(load_path)}.pt", map_location="cpu", weights_only=True)
-                )
+                model.load_state_dict(torch.load(f"{_get_model_path(load_path)}.pt", map_location="cpu"))
 
                 if load_optimizer:
                     optimizer.load_state_dict(
                         FSDP.optim_state_dict_to_load(
                             model=model,
                             optim=optimizer,
-                            optim_state_dict=torch.load(
-                                f"{_get_optimizer_path(load_path)}.pt", map_location="cpu", weights_only=True
-                            ),
+                            optim_state_dict=torch.load(f"{_get_optimizer_path(load_path)}.pt", map_location="cpu"),
                         )
                     )
         else:
@@ -241,7 +237,7 @@ def load_checkpoint_for_training(
         if load_lr_scheduler:
             assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
-            lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path), weights_only=True))
+            lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
         else:
             if args.load_args.resume_learning_rate:
                 _resume_learning_rate(
@@ -254,7 +250,7 @@ def load_checkpoint_for_training(
         raise ValueError(f"unexpected distributed_backend ({distributed_backend})")
 
     if load_rng_state:
-        rng_state = torch.load(_get_rng_state_path(load_path), weights_only=True)
+        rng_state = torch.load(_get_rng_state_path(load_path))
         random.setstate(rng_state["random_rng_state"])
         np.random.set_state(rng_state["np_rng_state"])
         torch.set_rng_state(rng_state["torch_rng_state"])
@@ -265,7 +261,7 @@ def load_checkpoint_for_training(
         metadata = json.load(open(_get_metadata_path(load_path), "r"))
 
     if load_dataloader_state and train_dataloader is not None:
-        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path), weights_only=True))
+        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
 
     experiments_tracker_json = None
     if load_experiments_tracker_state and os.path.exists(_get_experiments_tracker_path(load_path)):
@@ -339,9 +335,7 @@ def load_checkpoint_for_inference(
         model.load_state_dict(state, strict=strict)
     elif distributed_backend == DistributedBackend.torch:
         if args_from_checkpoint.distributed_args.fsdp_algorithm == 1:
-            state = torch.load(
-                f"{_get_model_path(_get_base_path(load_path, iteration))}.pt", map_location="cpu", weights_only=True
-            )
+            state = torch.load(f"{_get_model_path(_get_base_path(load_path, iteration))}.pt", map_location="cpu")
         else:
             state = {}
             _load_state_dict(
