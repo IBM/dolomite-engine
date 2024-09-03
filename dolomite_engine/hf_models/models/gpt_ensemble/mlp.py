@@ -18,6 +18,7 @@ class EnsembleMLP(MLP):
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
         self.tp_world_size = config.pretraining_tensor_parallel_size
+        self.n_layer = config.n_layer
         self.current_mlp_all_reduce = layer_idx == self.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
 
         hidden_size = config.n_embd
@@ -29,7 +30,6 @@ class EnsembleMLP(MLP):
         init_method = InitMethod(config.init_method)
         initializer_range = config.initializer_range
         m_width = config.m_width
-        self.n_layer = config.n_layer
 
         std = initializer_range
         if init_method == InitMethod.mup:
