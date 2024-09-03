@@ -25,11 +25,12 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.layer_idx = layer_idx
         self.m_residual = config.m_residual
-        self.reduce_pattern = config.reduce_pattern
 
-        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+        self.previous_mlp_all_reduce = layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]
+        self.current_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
+
+        if self.previous_mlp_all_reduce:
             self.ln_1 = get_normalization_function(
                 config.normalization_function,
                 hidden_size,
@@ -49,7 +50,7 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
 
-        if config.reduce_pattern[layer_idx]["attention"]:
+        if self.current_attention_all_reduce:
             self.ln_2 = get_normalization_function(
                 config.normalization_function,
                 hidden_size,
@@ -76,11 +77,7 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
-        if self.layer_idx == 0 or self.reduce_pattern[self.layer_idx - 1]["mlp"]:
-            assert hidden_states.dim() == 3
-            hidden_states = hidden_states.unsqueeze(0)
-        else:
-            assert hidden_states.dim() == 4
+        hidden_states = self._prepare_hidden_states(hidden_states, self.previous_mlp_all_reduce)
 
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
@@ -95,15 +92,20 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
             max_seqlen=max_seqlen,
         )
 
-        if self.reduce_pattern[self.layer_idx]["attention"]:
-            assert hidden_states.dim() == 3
-            hidden_states = hidden_states.unsqueeze(0)
-        else:
-            assert hidden_states.dim() == 4
+        hidden_states = self._prepare_hidden_states(hidden_states, self.current_attention_all_reduce)
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.mlp(hidden_states, residual)
+
+        return hidden_states
+
+    def _prepare_hidden_states(self, hidden_states: torch.Tensor, was_all_reduce_called: bool) -> torch.Tensor:
+        if was_all_reduce_called:
+            assert hidden_states.dim() == 3
+            hidden_states = hidden_states.unsqueeze(0)
+        else:
+            assert hidden_states.dim() == 4
 
         return hidden_states

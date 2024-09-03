@@ -30,7 +30,9 @@ class EnsembleMLP_TP(MLP_TP):
         m_width = config.m_width
         self.n_layer = config.n_layer
         self.layer_idx = layer_idx
-        self.reduce_pattern = config.reduce_pattern
+
+        self.current_mlp_all_reduce = layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
+        self.current_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
 
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
@@ -38,7 +40,7 @@ class EnsembleMLP_TP(MLP_TP):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
-        if config.reduce_pattern[layer_idx]["attention"]:
+        if self.current_attention_all_reduce:
             self.c_fc = ColumnParallelLinear(
                 hidden_size,
                 2 * intermediate_size if self.is_glu_activation else intermediate_size,
@@ -63,7 +65,7 @@ class EnsembleMLP_TP(MLP_TP):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
-        if layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]:
+        if self.current_mlp_all_reduce:
             self.c_proj = EnsembleRowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
         else:
             self.c_proj = ParameterizedLinear(
@@ -80,7 +82,7 @@ class EnsembleMLP_TP(MLP_TP):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        if self.layer_idx == self.n_layer - 1 or self.reduce_pattern[self.layer_idx]["mlp"]:
+        if self.current_mlp_all_reduce:
             hidden_states = self.c_proj(hidden_states, residual)
         else:
             hidden_states = self.c_proj(hidden_states)

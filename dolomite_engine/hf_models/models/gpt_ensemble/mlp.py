@@ -16,9 +16,9 @@ class EnsembleMLP(MLP):
         nn.Module.__init__(self)
 
         self.layer_idx = layer_idx
-        self.reduce_pattern = config.reduce_pattern
         self.m_residual = config.m_residual
         self.tp_world_size = config.pretraining_tensor_parallel_size
+        self.current_mlp_all_reduce = layer_idx == self.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
 
         hidden_size = config.n_embd
         intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
@@ -66,7 +66,7 @@ class EnsembleMLP(MLP):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        if self.layer_idx == self.n_layer - 1 or self.reduce_pattern[self.layer_idx]["mlp"]:
+        if self.current_mlp_all_reduce:
             hidden_states = hidden_states + residual / self.tp_world_size
             hidden_states = hidden_states.sum(dim=0)
         else:

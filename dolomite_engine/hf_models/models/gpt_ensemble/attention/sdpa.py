@@ -24,8 +24,8 @@ class EnsembleSDPA(Attention):
         self.global_num_heads = config.n_head
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
-        self.reduce_pattern = config.reduce_pattern
         self.m_residual = config.m_residual
+        self.curent_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
 
         initializer_range = config.initializer_range
         m_width = config.m_width
@@ -237,7 +237,7 @@ class EnsembleSDPA(Attention):
         if self.m_residual is not None:
             attn_output = attn_output * self.m_residual
 
-        if self.reduce_pattern[self.layer_idx]["attention"]:
+        if self.curent_attention_all_reduce:
             attn_output = attn_output + residual / self.tp_world_size
             attn_output = attn_output.sum(dim=0)
         else:

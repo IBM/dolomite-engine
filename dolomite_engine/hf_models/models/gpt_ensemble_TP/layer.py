@@ -32,7 +32,10 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
 
-        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+        self.previous_mlp_all_reduce = layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]
+        self.current_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
+
+        if self.previous_mlp_all_reduce:
             self.ln_1 = get_normalization_function_TP(
                 config.normalization_function,
                 hidden_size,
@@ -53,7 +56,7 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
 
-        if config.reduce_pattern[layer_idx]["attention"]:
+        if self.current_attention_all_reduce:
             self.ln_2 = get_normalization_function_TP(
                 config.normalization_function,
                 hidden_size,

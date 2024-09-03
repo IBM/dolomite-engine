@@ -25,8 +25,10 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
         self.global_num_heads = config.n_head
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
-        self.reduce_pattern = config.reduce_pattern
         self.m_residual = config.m_residual
+
+        self.previous_mlp_all_reduce = layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]
+        self.current_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
 
         initializer_range = config.initializer_range
         m_width = config.m_width
@@ -97,7 +99,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
             std /= math.sqrt(m_width)
 
         # first layer needs and any attention after an mlp with all reduce needs column parallel
-        if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
+        if self.previous_mlp_all_reduce:
             self.c_attn = ColumnParallelLinear(
                 self.global_hidden_size,
                 self.global_hidden_size + 2 * self.global_num_key_value_heads * self.head_dim,
@@ -116,7 +118,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 
-        if config.reduce_pattern[layer_idx]["attention"]:
+        if self.current_attention_all_reduce:
             self.c_proj = EnsembleRowParallelLinear(
                 self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
             )
@@ -203,7 +205,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
         if self.m_residual is not None:
             attn_output = attn_output * self.m_residual
 
-        if self.reduce_pattern[self.layer_idx]["attention"]:
+        if self.current_attention_all_reduce:
             attn_output = self.c_proj(attn_output, residual)
         else:
             attn_output = self.c_proj(attn_output)
