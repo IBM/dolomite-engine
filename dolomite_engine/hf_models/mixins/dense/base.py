@@ -48,7 +48,7 @@ class PreTrainedModelMixin(PreTrainedModel):
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
     def _init_weights(self, module: nn.Module) -> None:
-        if isinstance(module, (nn.Embedding, nn.Linear, nn.LayerNorm, nn.RMSNorm, Alibi, RoPE)):
+        if hasattr(module, "reset_parameters"):
             module.reset_parameters()
 
     def prepare_inputs_for_model(
