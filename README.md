@@ -226,7 +226,7 @@ If you find this repository useful, please consider citing it in your research:
     author = {Mishra, Mayank},
     month = jun,
     title = {{Dolomite Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},
-    url = {https://github.com/ibm-granite/dolomite-engine},
+    url = {https://github.com/ibm/dolomite-engine},
     year = {2024}
 }
 ```
