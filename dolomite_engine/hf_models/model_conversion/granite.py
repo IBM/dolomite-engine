@@ -7,7 +7,7 @@ from .llama import _export_state_dict_to_huggingface, _import_state_dict_from_hu
 
 
 try:
-    from transformers import GraniteConfig
+    from transformers import GraniteConfig, GraniteForCausalLM
 except:
     GraniteConfig = None
 
@@ -16,9 +16,9 @@ def import_from_huggingface_granite(pretrained_model_name_or_path: str, save_pat
     original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
 
-    safetensors_weight_manager = SafeTensorsWeightsManager(downloaded_model_path)
+    safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
     state_dict = _import_state_dict_from_huggingface(
-        safetensors_weight_manager,
+        safetensors_weights_manager,
         config.n_layer,
         config.n_head,
         config.num_key_value_heads,
@@ -84,9 +84,9 @@ def export_to_huggingface_granite(pretrained_model_name_or_path: str, save_path:
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
-    safetensors_weight_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
+    safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
     state_dict = _export_state_dict_to_huggingface(
-        safetensors_weight_manager,
+        safetensors_weights_manager,
         config.n_layer,
         config.n_head,
         config.num_key_value_heads,
@@ -137,6 +137,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.attention_multiplier,
+        architectures=[GraniteForCausalLM.__name__],
     )
 
     return original_config

@@ -27,8 +27,6 @@ _DATA_PARALLEL_MESH: DeviceMesh | None = None
 _DATA_PARALLEL_GROUP: ProcessGroup | None = None
 _DATA_PARALLEL_RANK: int | None = None
 _DATA_PARALLEL_WORLD_SIZE: int | None = None
-_DATA_PARALLEL_REPLICATION_WORLD_SIZE: int | None = None
-_DATA_PARALLEL_SHARDING_WORLD_SIZE: int | None = None
 
 
 class ProcessGroupManager:
@@ -38,6 +36,7 @@ class ProcessGroupManager:
         data_parallel_size: int | None = None,
         data_parallel_replication_world_size: int | None = None,
         data_parallel_sharding_world_size: int | None = None,
+        zero_stage: int = 3,
         timeout_minutes: int | None = None,
     ) -> None:
         if timeout_minutes is not None:
@@ -56,23 +55,28 @@ class ProcessGroupManager:
 
         assert tensor_parallel_size * data_parallel_size == total_gpus
 
-        if data_parallel_replication_world_size is None:
-            assert data_parallel_sharding_world_size is None
+        if zero_stage == 0:
+            assert data_parallel_sharding_world_size is None or data_parallel_sharding_world_size == 1
+
+            data_parallel_replication_world_size = data_parallel_size
+            data_parallel_sharding_world_size = 1
         else:
-            assert data_parallel_sharding_world_size is not None
-            assert data_parallel_replication_world_size * data_parallel_sharding_world_size == data_parallel_size
+            if data_parallel_replication_world_size is None:
+                assert data_parallel_sharding_world_size is None
 
-            global _DATA_PARALLEL_REPLICATION_WORLD_SIZE, _DATA_PARALLEL_SHARDING_WORLD_SIZE
+                data_parallel_replication_world_size = 1
+                data_parallel_sharding_world_size = data_parallel_size
+            else:
+                assert data_parallel_sharding_world_size is not None
 
-            _DATA_PARALLEL_REPLICATION_WORLD_SIZE = data_parallel_replication_world_size
-            _DATA_PARALLEL_SHARDING_WORLD_SIZE = data_parallel_sharding_world_size
+        assert data_parallel_replication_world_size * data_parallel_sharding_world_size == data_parallel_size
 
         global _MESH
 
         _MESH = init_device_mesh(
             "cuda",
-            (data_parallel_size, tensor_parallel_size),
-            mesh_dim_names=("dp", "tp"),
+            (data_parallel_replication_world_size, data_parallel_sharding_world_size, tensor_parallel_size),
+            mesh_dim_names=("ddp", "fsdp", "tp"),
         )
 
         local_rank = int(os.getenv("LOCAL_RANK", 0))
@@ -198,7 +202,7 @@ class ProcessGroupManager:
 
         if _DATA_PARALLEL_MESH is None:
             global _MESH
-            _DATA_PARALLEL_MESH = _MESH["dp"]
+            _DATA_PARALLEL_MESH = _MESH["ddp", "fsdp"]
         return _DATA_PARALLEL_MESH
 
     @staticmethod
@@ -206,7 +210,7 @@ class ProcessGroupManager:
         global _DATA_PARALLEL_GROUP
 
         if _DATA_PARALLEL_GROUP is None:
-            _DATA_PARALLEL_GROUP = ProcessGroupManager.get_data_parallel_mesh().get_group()
+            _DATA_PARALLEL_GROUP = ProcessGroupManager.get_data_parallel_mesh()._flatten().get_group()
         return _DATA_PARALLEL_GROUP
 
     @staticmethod
@@ -214,7 +218,7 @@ class ProcessGroupManager:
         global _DATA_PARALLEL_RANK
 
         if _DATA_PARALLEL_RANK is None:
-            _DATA_PARALLEL_RANK = ProcessGroupManager.get_data_parallel_mesh().get_local_rank()
+            _DATA_PARALLEL_RANK = ProcessGroupManager.get_data_parallel_mesh()._flatten().get_local_rank()
         return _DATA_PARALLEL_RANK
 
     @contextmanager
@@ -251,19 +255,6 @@ class ProcessGroupManager:
 
     def __str__(self) -> str:
         return str(self.get_mesh())
-
-    @staticmethod
-    def get_data_parallel_mesh_with_topology() -> DeviceMesh:
-        global _DATA_PARALLEL_REPLICATION_WORLD_SIZE, _DATA_PARALLEL_SHARDING_WORLD_SIZE
-
-        dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
-
-        if _DATA_PARALLEL_REPLICATION_WORLD_SIZE is not None:
-            dp_mesh = dp_mesh.mesh
-            dp_mesh = dp_mesh.view(_DATA_PARALLEL_REPLICATION_WORLD_SIZE, _DATA_PARALLEL_SHARDING_WORLD_SIZE).T
-            dp_mesh = DeviceMesh("cuda", dp_mesh)
-
-        return dp_mesh
 
     @staticmethod
     def destroy_process_groups() -> None:

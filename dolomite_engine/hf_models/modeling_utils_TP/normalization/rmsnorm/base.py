@@ -4,11 +4,11 @@ from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate
 
 from .....utils import ProcessGroupManager
-from ....modeling_utils import RMSNorm
+from ...dtensor_module import DTensorModule
 from ...TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
-class RMSNorm_TP(RMSNorm):
+class RMSNorm_TP(nn.RMSNorm, DTensorModule):
     def __init__(
         self,
         normalized_shape: int,

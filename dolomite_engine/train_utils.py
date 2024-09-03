@@ -108,6 +108,10 @@ def train_step(
         raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
     loss /= gradient_accumulation_steps
+
+    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+        loss = loss.to_local()
+
     torch.distributed.all_reduce(loss, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
 
     loss = loss.item()

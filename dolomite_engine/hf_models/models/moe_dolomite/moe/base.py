@@ -11,15 +11,22 @@ from ..config import MoEDolomiteConfig
 
 class ParameterizedExperts(nn.Module):
     def __init__(
-        self, num_experts: int, in_features: int, out_features: int, add_bias: bool = True, std: float | None = None
+        self,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        add_bias: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
     ) -> None:
         super().__init__()
 
-        self.weight = nn.Parameter(torch.empty(num_experts, out_features, in_features))
+        self.weight = nn.Parameter(torch.empty(num_experts, out_features, in_features, device=device, dtype=dtype))
 
         self.bias = None
         if add_bias:
-            self.bias = nn.Parameter(torch.empty(num_experts, out_features))
+            self.bias = nn.Parameter(torch.empty(num_experts, out_features, device=device, dtype=dtype))
 
         self.std = std
 

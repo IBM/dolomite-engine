@@ -56,6 +56,7 @@ class DataLoaderTest(TestCommons):
                     eos_token_id=tokenizer.eos_token_id,
                     is_encoder_decoder=False,
                     use_padding_free_transformer=args.model_args.use_padding_free_transformer,
+                    device="cpu",
                 ),
             )
 

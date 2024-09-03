@@ -1,5 +1,3 @@
-import logging
-
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -8,7 +6,6 @@ from torch.optim.adamax import Adamax as TorchAdamax
 from torch.optim.adamw import AdamW as TorchAdamW
 from torch.optim.asgd import ASGD as TorchASGD
 from torch.optim.lbfgs import LBFGS as TorchLBFGS
-from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.nadam import NAdam as TorchNAdam
 from torch.optim.radam import RAdam as TorchRAdam
 from torch.optim.rmsprop import RMSprop as TorchRMSprop
@@ -20,7 +17,7 @@ from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteCo
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
+from ..utils import is_apex_available, is_deepspeed_available
 
 
 if is_apex_available():
@@ -129,7 +126,6 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
 def get_optimizer(
     optimizer_class_name: str,
     optimizer_class_args: dict,
-    cpu_offload: bool,
     model: ModelWrapper,
     params_group_method: ParamsGroupMethod,
 ) -> Optimizer:
@@ -151,12 +147,6 @@ def get_optimizer(
     optimizer_class = _OPTIMIZER_CLASSES[optimizer_class_name]
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
-
-    if cpu_offload and optimizer_class not in [DeepSpeedCPUAdam, DeepSpeedCPUAdagrad]:
-        log_rank_0(
-            logging.WARN,
-            "cpu offloading enabled with an unsupported optimizer, weird behaviour or performance drop might be observed",
-        )
 
     optimizer = optimizer_class(
         _get_param_groups(model, optimizer_class_args, params_group_method), **optimizer_class_args
