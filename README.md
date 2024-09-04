@@ -178,6 +178,7 @@ AlpacaDataset
 DebugDataset
 DollyDataset
 HuggingFaceDataset
+HuggingFaceChatDataset
 SlimOrcaDataset
 SST2Dataset
 ```
