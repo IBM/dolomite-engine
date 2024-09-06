@@ -22,11 +22,16 @@ def compile_helpers() -> None:
 
     log_rank_0(logging.INFO, "compiling helpers.cpp")
 
+    build_directory = os.path.join(os.path.dirname(__file__), "build")
+    os.makedirs(build_directory, exist_ok=True)
+
     if torch.cuda.current_device() == 0:
         load_cpp_extension(
             "helpers",
             sources=os.path.join(os.path.dirname(__file__), "helpers.cpp"),
             extra_cflags=["-O3", "-Wall", "-shared", "-std=c++11", "-fPIC", "-fdiagnostics-color"],
+            build_directory=build_directory,
+            verbose=True,
         )
 
     torch.distributed.barrier()
