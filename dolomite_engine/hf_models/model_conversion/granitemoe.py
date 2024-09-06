@@ -42,7 +42,7 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
 
 
 def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDolomiteConfig:
-    assert original_config.activation_function == "silu"
+    assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
         attention_head_type = "mha"
