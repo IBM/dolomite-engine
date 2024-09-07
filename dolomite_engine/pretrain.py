@@ -283,10 +283,8 @@ def evaluate(
     return loss_mean
 
 
-def main() -> None:
+def main(mode: Mode = Mode.training) -> None:
     """main program"""
-
-    mode = Mode.training
 
     setup_tf32()
 
