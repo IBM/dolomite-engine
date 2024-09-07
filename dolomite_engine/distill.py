@@ -203,6 +203,8 @@ def train(
         starting_iteration (int): starting iteration
     """
 
+    assert args.distributed_args.fsdp_algorithm == 2, "Distillation is only supported with FSDP-2"
+
     num_training_steps = args.training_parameters.num_training_steps
     gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
     gradient_clipping = args.training_parameters.gradient_clipping
