@@ -11,10 +11,12 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
 from .arguments import TrainingArgs
+from .checkpointing import save_checkpoint
 from .communication import Communication
 from .data import ResumableDataLoader, get_next_batch
 from .enums import DistributedBackend, FP8Backend, Mode
 from .model_wrapper import ModelWrapperForFinetuning, ModelWrapperForPretraining
+from .pretrain import main
 from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
 from .utils import ExperimentsTracker, ProcessGroupManager, is_transformer_engine_available, log_rank_0
 
@@ -98,6 +100,8 @@ def train_step(
             model.set_requires_gradient_sync(False)
 
     loss = 0
+    lm_loss = 0
+    kl_divergence = 0
     grad_norm = None
     if distributed_backend == DistributedBackend.torch:
         optimizer.zero_grad()
@@ -106,8 +110,10 @@ def train_step(
         for _ in range(gradient_accumulation_steps - 1):
             batch = get_next_batch(train_dataloader)
             with forward_context():
-                loss_micro_step = model(batch)
+                loss_micro_step, lm_loss_step, kl_divergence_step = model(batch)
             loss += loss_micro_step
+            lm_loss += lm_loss_step
+            kl_divergence += kl_divergence_step
 
             # compute gradients
             if distributed_backend == DistributedBackend.deepspeed:
@@ -125,8 +131,10 @@ def train_step(
 
     batch = get_next_batch(train_dataloader)
     with forward_context():
-        loss_micro_step = model(batch)
+        loss_micro_step, lm_loss_step, kl_divergence_step = model(batch)
     loss += loss_micro_step
+    lm_loss += lm_loss_step
+    kl_divergence += kl_divergence_step
 
     # compute gradients
     if distributed_backend == DistributedBackend.deepspeed:
@@ -153,16 +161,21 @@ def train_step(
         raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
     loss /= gradient_accumulation_steps
+    lm_loss /= gradient_accumulation_steps
+    kl_divergence /= gradient_accumulation_steps
 
     if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
         loss = loss.to_local()
+        raise NotImplementedError()
 
-    torch.distributed.all_reduce(loss, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+    tensor = torch.cat([loss, lm_loss, kl_divergence])
+    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
 
-    loss = loss.item()
+    tensor = tensor.item()
+    loss, lm_loss, kl_divergence = tensor
     grad_norm = 0 if grad_norm is None else grad_norm.item()
 
-    return loss, grad_norm
+    return loss, lm_loss, kl_divergence, grad_norm
 
 
 def train(
@@ -253,13 +266,15 @@ def train(
     start_time = time.perf_counter()
     steps_since_start_time = 0
     loss_running_sum = 0
+    lm_loss_running_sum = 0
+    kl_divergence_running_sum = 0
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
 
-        loss_step, grad_norm_step = train_step(
+        loss_step, lm_loss_step, kl_divergence_step, grad_norm_step = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -272,6 +287,8 @@ def train(
         )
 
         loss_running_sum += loss_step
+        lm_loss_running_sum += lm_loss_step
+        kl_divergence_running_sum += kl_divergence_step
 
         if torch_profiler is not None:
             torch_profiler.step()
@@ -294,10 +311,16 @@ def train(
                 flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
                 billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
                 step_time=step_time,
+                extras={
+                    "train_lm_loss (running_mean)": lm_loss_running_sum / log_interval,
+                    "train_KL (running_mean)": kl_divergence_running_sum / log_interval,
+                },
             )
             start_time = time.perf_counter()
             steps_since_start_time = 0
             loss_running_sum = 0
+            lm_loss_running_sum = 0
+            kl_divergence_running_sum = 0
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)

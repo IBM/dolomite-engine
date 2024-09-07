@@ -130,6 +130,7 @@ def track_train_metrics(
     flops: float | None = None,
     billion_tokens_per_day: float | None = None,
     step_time: float | None = None,
+    extras: dict = {},
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -159,6 +160,7 @@ def track_train_metrics(
     if step_time is not None:
         message["step time (sec)"] = step_time
 
+    message.update(extras)
     experiments_tracker.track(message, step=global_step, context="train")
 
     # terminal
@@ -179,6 +181,9 @@ def track_train_metrics(
 
     if step_time is not None:
         message += f", step_time = {step_time:.3f} sec"
+
+    for key, value in extras.items():
+        message += f", {key} = {value:.4f}"
 
     log_rank_0(logging.INFO, message)
 
