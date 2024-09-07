@@ -85,6 +85,11 @@ def _get_param_groups(
     model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
 ) -> list[dict]:
     if params_group_method is None:
+        if model.has_teacher_model():
+            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+            # this is the student model
+            model = model.model
+
         trainable_parameters_or_param_groups = model.parameters()
     elif params_group_method == ParamsGroupMethod.mup:
         assert isinstance(
