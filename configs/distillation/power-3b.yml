@@ -31,15 +31,11 @@ tuning_args:
   tuning_method: distillation
 
 save_args:
-  save_path: /proj/checkpoints/mayank/ensemble-experiments/1b-base-fineweb-edu
+  save_path: /proj/checkpoints/mayank/tmp
   save_interval: 5000
 
 logging_args:
   log_interval: 10
-  experiments_tracker_name: wandb
-  wandb_args:
-    project: ensemble
-    name: 1b-base-fineweb-edu
 
 training_parameters:
   num_training_steps: 25000
