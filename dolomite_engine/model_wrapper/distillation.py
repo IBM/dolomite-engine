@@ -63,9 +63,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             reset_position_ids (bool, optional): whether to reset position ids during pretraining. Defaults to False.
         """
 
-        if self.tp_world_size > 1:
-            raise NotImplementedError()
-
         self.teacher_model_class = teacher_model_class
         self.teacher_model_name = teacher_model_name
         self.teacher_model_dtype = teacher_model_dtype
@@ -92,6 +89,9 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             reset_position_ids=reset_position_ids,
         )
 
+        if self.tp_world_size > 1:
+            raise NotImplementedError()
+
     def _setup_config(self) -> None:
         super()._setup_config()
 
@@ -110,4 +110,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
     def _setup_model(self) -> None:
         super()._setup_model()
 
-        self.teacher_model = self.teacher_model_class.from_pretrained(torch_dtype=self.teacher_model_dtype)
+        self.teacher_model = self.teacher_model_class.from_pretrained(
+            self.teacher_model_name, torch_dtype=self.teacher_model_dtype
+        )
