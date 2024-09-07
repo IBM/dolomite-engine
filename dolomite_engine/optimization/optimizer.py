@@ -1,3 +1,5 @@
+import logging
+
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -17,7 +19,7 @@ from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteCo
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
 
 
 if is_apex_available():
@@ -79,8 +81,15 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None):
+def _get_param_groups(
+    model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
+) -> list[dict]:
     if params_group_method is None:
+        if model.has_teacher_model():
+            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+            # this is the student model
+            model = model.model
+
         trainable_parameters_or_param_groups = model.parameters()
     elif params_group_method == ParamsGroupMethod.mup:
         assert isinstance(
@@ -92,6 +101,11 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
         assert (
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
+
+        if model.has_teacher_model():
+            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+            # this is the student model
+            model = model.model
 
         # collect parameters with mup learning rate
         mup_group = {}

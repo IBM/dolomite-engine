@@ -15,6 +15,7 @@ from .enums import (
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,
+    KLDivergenceMethod,
     LossMask,
     LRDecaySchedule,
     Mode,
@@ -423,6 +424,32 @@ class ResearchArgs(BaseArgs):
     neft_alpha: float | None = None
 
 
+class TeacherArgs(BaseArgs):
+    # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
+    model_class: str = None
+    # model name on huggingface hub
+    model_name: str | None = None
+    # teacher dtype
+    dtype: str = "fp32"
+    # KL divergence method
+    kl_divergence_method: KLDivergenceMethod = None
+    # KL divergence weight
+    kl_divergence_weight: float = 1
+
+    def model_post_init(self, __context: Any) -> None:
+        # dtype
+        self.dtype = normalize_dtype_string(self.dtype)
+
+        assert self.model_class in [
+            AutoModelForCausalLM.__name__,
+            AutoModelForSeq2SeqLM.__name__,
+        ], f"unexpected model_class ({self.model_class})"
+
+        self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
+
+        _check_not_None([(self.kl_divergence_method, "kl_divergence_method")])
+
+
 class TrainingArgs(BaseArgs):
     # randomization related arguments
     random_args: RandomArgs = RandomArgs()
@@ -537,10 +564,21 @@ class UnshardingArgs(BaseArgs):
         _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
 
 
+class DistillationArgs(TrainingArgs):
+    # teacher model arguments
+    teacher_args: TeacherArgs = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.teacher_args, "teacher_args")])
+
+        super().model_post_init(__context)
+
+
 _MODE_ARGS_MAP = {
     Mode.training: TrainingArgs,
     Mode.inference: InferenceArgs,
     Mode.unsharding: UnshardingArgs,
+    Mode.distillation: DistillationArgs,
 }
 
 
