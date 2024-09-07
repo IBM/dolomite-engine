@@ -64,6 +64,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         self.teacher_model_class = teacher_model_class
         self.teacher_model_name = teacher_model_name
         self.teacher_model_dtype = teacher_model_dtype
+        self.kl_divergence_method = kl_divergence_method
 
         super().__init__(
             mode=mode,
