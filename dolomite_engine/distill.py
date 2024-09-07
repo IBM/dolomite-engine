@@ -171,7 +171,7 @@ def train_step(
     tensor = torch.stack([loss, lm_loss, kl_divergence])
     torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
 
-    tensor = tensor.item()
+    tensor = tensor.tolist()
     loss, lm_loss, kl_divergence = tensor
     grad_norm = 0 if grad_norm is None else grad_norm.item()
 
@@ -414,7 +414,7 @@ def evaluate(
 
         tensor = torch.stack([loss_mean, lm_loss_mean, kl_divergence_mean])
         torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
-        tensor = tensor.item()
+        tensor = tensor.tolist()
         loss_mean, lm_loss_mean, kl_divergence_mean = tensor
 
         track_val_metrics(global_step, loss_mean, lm_loss_mean, kl_divergence_mean, experiments_tracker, group_name)
