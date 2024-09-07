@@ -85,7 +85,8 @@ def save_checkpoint(
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
             ):
                 model_state_dict = model.state_dict()
-                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)  # filter out teacher model
+                if model.has_teacher_model():
+                    model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
                 if dp_rank == 0:
                     torch.save(model_state_dict, f"{_get_model_path(save_path)}.pt")
@@ -96,7 +97,8 @@ def save_checkpoint(
                         torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
         else:
             model_state_dict = get_model_state_dict(model)
-            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)  # filter out teacher model
+            if model.has_teacher_model():
+                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
             dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
 
             if save_optimizer:
