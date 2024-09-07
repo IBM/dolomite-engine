@@ -424,6 +424,8 @@ class ResearchArgs(BaseArgs):
 
 
 class TeacherArgs(BaseArgs):
+    # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
+    model_class: str = None
     # model name on huggingface hub
     model_name: str | None = None
     # teacher dtype
@@ -432,6 +434,13 @@ class TeacherArgs(BaseArgs):
     def model_post_init(self, __context: Any) -> None:
         # dtype
         self.dtype = normalize_dtype_string(self.dtype)
+
+        assert self.model_class in [
+            AutoModelForCausalLM.__name__,
+            AutoModelForSeq2SeqLM.__name__,
+        ], f"unexpected model_class ({self.model_class})"
+
+        self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
 
 class TrainingArgs(BaseArgs):

@@ -51,6 +51,7 @@ class TuningMethod(str, Enum):
     full_finetuning = "full_finetuning"
     prompt_tuning = "prompt_tuning"
     lora = "lora"
+    distillation = "distillation"
 
 
 class DistributedBackend(str, Enum):
