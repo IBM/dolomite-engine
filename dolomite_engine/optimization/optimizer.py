@@ -97,7 +97,7 @@ def _get_param_groups(
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
 
-        if hasattr(model, "teacher_model"):
+        if model.has_teacher_model():
             log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
             # this is the student model
             model = model.model

@@ -262,3 +262,6 @@ class ModelWrapper(nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
+
+    def has_teacher_model(self) -> bool:
+        return False

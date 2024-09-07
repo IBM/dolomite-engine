@@ -33,7 +33,7 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 
-def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) -> ModelWrapper:
+def wrap_model_for_distributed_training(args: TrainingArgs, model: ModelWrapper) -> ModelWrapper:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -65,7 +65,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
         dtype = "bf16"
 
     block_names = model.model._no_split_modules
-    teacher_block_names = model.teacher_model._no_split_modules if hasattr(model, "teacher_model") else []
+    teacher_block_names = model.teacher_model._no_split_modules if model.has_teacher_model() else []
 
     dtype = None if dtype is None else string_to_torch_dtype(dtype)
     communication_dtype = None if communication_dtype is None else string_to_torch_dtype(communication_dtype)

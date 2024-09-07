@@ -207,7 +207,7 @@ def load_checkpoint_for_training(
             load_lr_scheduler_states=load_lr_scheduler,
         )
     elif distributed_backend == DistributedBackend.torch:
-        has_teacher_model = hasattr(model, "teacher_model")
+        has_teacher_model = model.has_teacher_model()
         if has_teacher_model:
             log_rank_0(
                 logging.WARN,
