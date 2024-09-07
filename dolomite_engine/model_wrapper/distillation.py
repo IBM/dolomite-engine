@@ -29,6 +29,9 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         distributed_backend: DistributedBackend,
         micro_batch_size: int,
         sequence_length: int,
+        teacher_model_name: str | None,
+        teacher_model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
+        teacher_model_dtype: torch.dtype,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -62,6 +65,10 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
 
         if self.tp_world_size > 1:
             raise NotImplementedError()
+
+        self.teacher_model_class = teacher_model_class
+        self.teacher_model_name = teacher_model_name
+        self.teacher_model_dtype = teacher_model_dtype
 
         super().__init__(
             mode=mode,
@@ -103,4 +110,4 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
     def _setup_model(self) -> None:
         super()._setup_model()
 
-        self.teacher_model = self.from_pretrained(torch_dtype=self.teacher_model_dtype)
+        self.teacher_model = self.teacher_model_class.from_pretrained(torch_dtype=self.teacher_model_dtype)
