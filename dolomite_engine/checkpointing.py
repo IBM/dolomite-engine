@@ -313,6 +313,10 @@ def load_checkpoint_for_inference(
     args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yml")
     args_from_checkpoint = load_yaml(args_file)
 
+    if "teacher_args" in args_from_checkpoint:
+        args_from_checkpoint["tuning_args"]["tuning_method"] = "pretraining"
+        args_from_checkpoint.pop("teacher_args")
+
     args_from_checkpoint = TrainingArgs(**args_from_checkpoint)
 
     if args.mixed_precision_args is not None:

@@ -218,7 +218,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: ModelWrapper)
                 zero3 = stage == 3
 
                 for module in model.modules():
-                    if isinstance(module, block_classes):
+                    if isinstance(module, tuple(block_classes)):
                         fully_shard(
                             module,
                             mesh=dp_mesh,
