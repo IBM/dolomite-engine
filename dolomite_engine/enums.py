@@ -71,6 +71,13 @@ class LossMask(str, Enum):
     no_mask = "no_mask"
 
 
+class KLDivergenceMethod(str, Enum):
+    """Type of KL divergence"""
+
+    forward = "forward"
+    backward = "backward"
+
+
 class ExperimentsTrackerName(str, Enum):
     """Experiment tracker to use"""
 

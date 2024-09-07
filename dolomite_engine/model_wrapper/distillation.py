@@ -3,13 +3,10 @@ import logging
 import torch
 import torch.distributed
 import torch.nn.functional as F
-from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
-from ..hf_models.modeling_utils_TP import tensor_to_dtensor
-from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
+from ..enums import AttentionImplementation, DistributedBackend, KLDivergenceMethod, Mode
+from ..utils import log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
 
@@ -32,6 +29,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         teacher_model_name: str | None,
         teacher_model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         teacher_model_dtype: torch.dtype,
+        kl_divergence_method: KLDivergenceMethod,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -91,6 +89,56 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
 
         if self.tp_world_size > 1:
             raise NotImplementedError()
+
+    def forward(self, batch: dict) -> torch.Tensor:
+        """forward function for a batch
+
+        Args:
+            batch (dict): a dict of key, value pairs for a batch
+
+        Returns:
+            torch.Tensor: loss tensor
+        """
+
+        # for pretraining we compute loss externally here instead of relying on transformers.
+        # this is done because megatron's dataset returns batches of length (sequence_length + 1)
+        # instead of (sequence_length), so we need to trim the input_ids before forward pass.
+        # transformers does forward pass before however and then trims the tokens.
+
+        input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
+        batch = self._prepare_model_inputs(input_ids)
+
+        model_outputs = self.model(**batch)
+        logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
+
+        if self.upcast_logits_for_loss:
+            logits = logits.float()
+
+        lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+        with torch.inference_mode():
+            model_outputs = self.teacher_model(**batch)
+            teacher_logits: torch.Tensor = (
+                model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
+            )
+
+            if self.upcast_logits_for_loss:
+                teacher_logits = teacher_logits.float()
+
+        if self.kl_divergence_method == KLDivergenceMethod.forward:
+            # sum [student * ln(student / teacher)]
+            teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1)
+            student_softmax = F.softmax(logits, dim=-1)
+
+            kl_divergence = F.kl_div(teacher_log_softmax, student_softmax)
+        elif self.kl_divergence_method == KLDivergenceMethod.backward:
+            # sum [teacher * ln(teacher / student)]
+            student_log_softmax = F.log_softmax(logits, dim=-1)
+            teacher_softmax = F.softmax(teacher_logits, dim=-1)
+
+            kl_divergence = F.kl_div(student_log_softmax, teacher_softmax)
+
+        return lm_loss, kl_divergence
 
     def _setup_config(self) -> None:
         super()._setup_config()

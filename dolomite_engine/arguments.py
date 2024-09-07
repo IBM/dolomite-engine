@@ -15,6 +15,7 @@ from .enums import (
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,
+    KLDivergenceMethod,
     LossMask,
     LRDecaySchedule,
     Mode,
@@ -430,6 +431,8 @@ class TeacherArgs(BaseArgs):
     model_name: str | None = None
     # teacher dtype
     dtype: str = "fp32"
+    # KL divergence method
+    kl_divergence_method: KLDivergenceMethod = None
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
@@ -441,6 +444,8 @@ class TeacherArgs(BaseArgs):
         ], f"unexpected model_class ({self.model_class})"
 
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
+
+        _check_not_None([(self.kl_divergence_method, "kl_divergence_method")])
 
 
 class TrainingArgs(BaseArgs):
@@ -558,6 +563,7 @@ class UnshardingArgs(BaseArgs):
 
 
 class DistillationArgs(TrainingArgs):
+    # teacher model arguments
     teacher_args: TeacherArgs = None
 
     def model_post_init(self, __context: Any) -> None:

@@ -51,6 +51,7 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         kwargs["teacher_model_name"] = args.teacher_args.model_name
         kwargs["teacher_model_class"] = args.teacher_args.model_class
         kwargs["teacher_model_dtype"] = args.teacher_args.dtype
+        kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
 
     if tuning_method in _MODEL_CLASS_MAPPING:
         return _MODEL_CLASS_MAPPING[tuning_method](**kwargs)

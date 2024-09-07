@@ -119,7 +119,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 loss_context = loss_parallel
 
         with loss_context():
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1))
 
         return loss
 
