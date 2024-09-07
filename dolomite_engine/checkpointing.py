@@ -99,6 +99,7 @@ def save_checkpoint(
             model_state_dict = get_model_state_dict(model)
             if model.has_teacher_model():
                 model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
             dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
 
             if save_optimizer:
