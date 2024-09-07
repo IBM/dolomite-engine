@@ -9,7 +9,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..enums import AttentionImplementation, DistributedBackend, Mode
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
-from ..utils import ProcessGroupManager, log_rank_0
+from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
 
@@ -111,5 +111,5 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         super()._setup_model()
 
         self.teacher_model = self.teacher_model_class.from_pretrained(
-            self.teacher_model_name, torch_dtype=self.teacher_model_dtype
+            self.teacher_model_name, torch_dtype=string_to_torch_dtype(self.teacher_model_dtype)
         )
