@@ -168,7 +168,7 @@ def train_step(
         loss = loss.to_local()
         raise NotImplementedError()
 
-    tensor = torch.cat([loss, lm_loss, kl_divergence])
+    tensor = torch.stack([loss, lm_loss, kl_divergence])
     torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
 
     tensor = tensor.item()
@@ -412,7 +412,7 @@ def evaluate(
         if tp_world_size > 1:
             loss_mean = loss_mean.to_local()
 
-        tensor = torch.cat([loss_mean, lm_loss_mean, kl_divergence_mean])
+        tensor = torch.stack([loss_mean, lm_loss_mean, kl_divergence_mean])
         torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
         tensor = tensor.item()
         loss_mean, lm_loss_mean, kl_divergence_mean = tensor
