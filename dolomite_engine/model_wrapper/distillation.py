@@ -30,6 +30,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         teacher_model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         teacher_model_dtype: torch.dtype,
         kl_divergence_method: KLDivergenceMethod,
+        kl_divergence_weight: float = 1,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -65,6 +66,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         self.teacher_model_name = teacher_model_name
         self.teacher_model_dtype = teacher_model_dtype
         self.kl_divergence_method = kl_divergence_method
+        self.kl_divergence_weight = kl_divergence_weight
 
         super().__init__(
             mode=mode,
@@ -139,7 +141,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
 
             kl_divergence = F.kl_div(student_log_softmax, teacher_softmax, reduction="batchmean")
 
-        loss = lm_loss + kl_divergence
+        loss = lm_loss + self.kl_divergence_weight * kl_divergence
 
         return loss, lm_loss, kl_divergence
 

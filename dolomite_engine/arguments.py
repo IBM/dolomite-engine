@@ -433,6 +433,8 @@ class TeacherArgs(BaseArgs):
     dtype: str = "fp32"
     # KL divergence method
     kl_divergence_method: KLDivergenceMethod = None
+    # KL divergence weight
+    kl_divergence_weight: float = 1
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
