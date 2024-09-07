@@ -82,11 +82,8 @@ _OPTIMIZER_CLASSES = {
 
 
 def _get_param_groups(
-    model: ModelWrapper,
-    optimizer_class_args: dict,
-    params_group_method: ParamsGroupMethod | None,
-    is_distillation: bool,
-):
+    model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
+) -> list[dict]:
     if params_group_method is None:
         trainable_parameters_or_param_groups = model.parameters()
     elif params_group_method == ParamsGroupMethod.mup:
