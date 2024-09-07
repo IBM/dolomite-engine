@@ -79,7 +79,12 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None):
+def _get_param_groups(
+    model: ModelWrapper,
+    optimizer_class_args: dict,
+    params_group_method: ParamsGroupMethod | None,
+    is_distillation: bool,
+):
     if params_group_method is None:
         trainable_parameters_or_param_groups = model.parameters()
     elif params_group_method == ParamsGroupMethod.mup:
@@ -92,6 +97,10 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
         assert (
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
+
+        if is_distillation:
+            # this is the student model
+            model = model.model
 
         # collect parameters with mup learning rate
         mup_group = {}
@@ -128,6 +137,7 @@ def get_optimizer(
     optimizer_class_args: dict,
     model: ModelWrapper,
     params_group_method: ParamsGroupMethod,
+    is_distillation: bool = False,
 ) -> Optimizer:
     """setup optimizer for the model
 
@@ -149,6 +159,7 @@ def get_optimizer(
         raise ImportError("relevant package for the optimizer is not installed")
 
     optimizer = optimizer_class(
-        _get_param_groups(model, optimizer_class_args, params_group_method), **optimizer_class_args
+        _get_param_groups(model, optimizer_class_args, params_group_method, is_distillation=is_distillation),
+        **optimizer_class_args,
     )
     return optimizer

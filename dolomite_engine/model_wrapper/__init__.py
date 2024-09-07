@@ -4,6 +4,7 @@ from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode, TuningMethod
 from ..utils import log_rank_0, run_rank_n
 from .base import ModelWrapper
+from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
 from .peft import ModelWrapperForPEFT
 from .pretraining import ModelWrapperForPretraining
@@ -14,6 +15,7 @@ _MODEL_CLASS_MAPPING = {
     TuningMethod.full_finetuning: ModelWrapperForFinetuning,
     TuningMethod.lora: ModelWrapperForPEFT,
     TuningMethod.prompt_tuning: ModelWrapperForPEFT,
+    TuningMethod.distillation: ModelWrapperForDistillation,
 }
 
 

@@ -41,6 +41,7 @@ class Mode(str, Enum):
     training = "training"
     inference = "inference"
     unsharding = "unsharding"
+    distillation = "distillation"
 
 
 class TuningMethod(str, Enum):

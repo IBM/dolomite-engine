@@ -423,6 +423,17 @@ class ResearchArgs(BaseArgs):
     neft_alpha: float | None = None
 
 
+class TeacherArgs(BaseArgs):
+    # model name on huggingface hub
+    model_name: str | None = None
+    # teacher dtype
+    dtype: str = "fp32"
+
+    def model_post_init(self, __context: Any) -> None:
+        # dtype
+        self.dtype = normalize_dtype_string(self.dtype)
+
+
 class TrainingArgs(BaseArgs):
     # randomization related arguments
     random_args: RandomArgs = RandomArgs()
@@ -537,10 +548,20 @@ class UnshardingArgs(BaseArgs):
         _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
 
 
+class DistillationArgs(TrainingArgs):
+    teacher_args: TeacherArgs = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.teacher_args, "teacher_args")])
+
+        super().model_post_init(__context)
+
+
 _MODE_ARGS_MAP = {
     Mode.training: TrainingArgs,
     Mode.inference: InferenceArgs,
     Mode.unsharding: UnshardingArgs,
+    Mode.distillation: DistillationArgs,
 }
 
 
