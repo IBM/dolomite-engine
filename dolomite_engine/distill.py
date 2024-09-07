@@ -45,7 +45,7 @@ def track_val_metrics(
 
     message = (
         f"step = {global_step}, val_loss = {val_loss:.4f}, val_lm_loss = {val_lm_loss:.4f}, "
-        "val_KL = {val_kl_divergence:.4f}"
+        f"val_KL = {val_kl_divergence:.4f}"
     )
     if group_name is not None:
         message += f", group_name = {group_name}"
