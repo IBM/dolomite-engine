@@ -425,4 +425,4 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    main(Mode.distillation)
+    main(Mode.distillation, train_func=train)

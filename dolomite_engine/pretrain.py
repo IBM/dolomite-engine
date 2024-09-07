@@ -2,6 +2,7 @@ import logging
 import time
 from contextlib import nullcontext
 from functools import partial
+from typing import Callable
 
 import torch
 from torch.distributed import ReduceOp
@@ -283,7 +284,7 @@ def evaluate(
     return loss_mean
 
 
-def main(mode: Mode = Mode.training) -> None:
+def main(mode: Mode = Mode.training, train_func: Callable = train) -> None:
     """main program"""
 
     setup_tf32()
@@ -366,7 +367,7 @@ def main(mode: Mode = Mode.training) -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    train(
+    train_func(
         args,
         model=model,
         optimizer=optimizer,
