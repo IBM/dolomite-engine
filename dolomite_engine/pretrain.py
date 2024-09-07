@@ -16,7 +16,7 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DistributedBackend, FP8Backend, Mode
+from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .optimization import get_optimizer, get_scheduler
 from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
@@ -289,6 +289,15 @@ def main(mode: Mode = Mode.training) -> None:
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
+
+    if mode == Mode.training:
+        assert (
+            args.tuning_args.tuning_method == TuningMethod.pretraining
+        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
+    elif mode == Mode.distillation:
+        assert (
+            args.tuning_args.tuning_method == TuningMethod.distillation
+        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(

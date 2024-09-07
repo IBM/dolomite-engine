@@ -1,3 +1,5 @@
+import logging
+
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -17,7 +19,7 @@ from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteCo
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
 
 
 if is_apex_available():
@@ -98,7 +100,8 @@ def _get_param_groups(
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
 
-        if is_distillation:
+        if hasattr(model, "teacher_model"):
+            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
             # this is the student model
             model = model.model
 
@@ -137,7 +140,6 @@ def get_optimizer(
     optimizer_class_args: dict,
     model: ModelWrapper,
     params_group_method: ParamsGroupMethod,
-    is_distillation: bool = False,
 ) -> Optimizer:
     """setup optimizer for the model
 
@@ -159,7 +161,6 @@ def get_optimizer(
         raise ImportError("relevant package for the optimizer is not installed")
 
     optimizer = optimizer_class(
-        _get_param_groups(model, optimizer_class_args, params_group_method, is_distillation=is_distillation),
-        **optimizer_class_args,
+        _get_param_groups(model, optimizer_class_args, params_group_method), **optimizer_class_args
     )
     return optimizer
