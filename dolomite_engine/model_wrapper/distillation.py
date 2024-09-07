@@ -115,7 +115,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         if self.upcast_logits_for_loss:
             logits = logits.float()
 
-        lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1))
+        lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
         with torch.inference_mode():
             model_outputs = self.teacher_model(**batch)
@@ -131,15 +131,17 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1)
             student_softmax = F.softmax(logits, dim=-1)
 
-            kl_divergence = F.kl_div(teacher_log_softmax, student_softmax)
+            kl_divergence = F.kl_div(teacher_log_softmax, student_softmax, reduction="batchmean")
         elif self.kl_divergence_method == KLDivergenceMethod.backward:
             # sum [teacher * ln(teacher / student)]
             student_log_softmax = F.log_softmax(logits, dim=-1)
             teacher_softmax = F.softmax(teacher_logits, dim=-1)
 
-            kl_divergence = F.kl_div(student_log_softmax, teacher_softmax)
+            kl_divergence = F.kl_div(student_log_softmax, teacher_softmax, reduction="batchmean")
 
-        return lm_loss, kl_divergence
+        loss = lm_loss + kl_divergence
+
+        return loss, lm_loss, kl_divergence
 
     def _setup_config(self) -> None:
         super()._setup_config()
@@ -162,6 +164,13 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         self.teacher_model = self.teacher_model_class.from_pretrained(
             self.teacher_model_name, torch_dtype=string_to_torch_dtype(self.teacher_model_dtype)
         )
+        self.teacher_model.eval()
 
     def has_teacher_model(self) -> bool:
         return True
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        # teacher model should always be in eval mode
+        self.teacher_model.eval()
+        return self
