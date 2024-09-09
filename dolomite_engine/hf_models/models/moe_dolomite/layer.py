@@ -67,6 +67,7 @@ class SparseMoEBlock(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool = False,
+        output_aux_loss: bool = True,
     ) -> tuple[torch.Tensor]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
@@ -106,5 +107,8 @@ class SparseMoEBlock(nn.Module):
 
         if output_router_logits:
             outputs += (router_logits,)
+
+        if output_aux_loss:
+            outputs += (aux_loss,)
 
         return outputs
