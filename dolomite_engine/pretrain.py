@@ -323,6 +323,7 @@ def main(mode: Mode = Mode.training, train_func: Callable = train) -> None:
             optimizer_class_args=args.optimizer_args.class_args,
             model=model,
             params_group_method=args.optimizer_args.params_group_method,
+            torch_compile=args.distributed_args.torch_compile,
         )
 
         lr_scheduler = get_scheduler(

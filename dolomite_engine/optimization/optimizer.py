@@ -1,5 +1,6 @@
 import logging
 
+import torch
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -142,6 +143,7 @@ def get_optimizer(
     optimizer_class_args: dict,
     model: ModelWrapper,
     params_group_method: ParamsGroupMethod,
+    torch_compile: bool,
 ) -> Optimizer:
     """setup optimizer for the model
 
@@ -165,4 +167,8 @@ def get_optimizer(
     optimizer = optimizer_class(
         _get_param_groups(model, optimizer_class_args, params_group_method), **optimizer_class_args
     )
+
+    if torch_compile:
+        optimizer.step = torch.compile(optimizer.step)
+
     return optimizer
