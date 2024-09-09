@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
+from .utils import compute_switchloss
 
 
 class ParameterizedExperts(nn.Module):
@@ -126,7 +127,11 @@ class SparseMoE(nn.Module):
 
         hidden_states = self.dropout(hidden_states)
 
-        return hidden_states, router_logits
+        aux_loss = compute_switchloss(
+            logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+        )
+
+        return hidden_states, router_logits, aux_loss
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)

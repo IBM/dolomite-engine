@@ -89,7 +89,7 @@ class SparseMoEBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states, router_logits = self.moe(hidden_states)
+        feed_forward_hidden_states, router_logits, aux_loss = self.moe(hidden_states)
         if self.mlp is not None:
             feed_forward_hidden_states = feed_forward_hidden_states + self.mlp(hidden_states)
 
