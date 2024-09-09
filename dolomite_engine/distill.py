@@ -1,8 +1,7 @@
 import logging
 import time
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from functools import partial
-from typing import Callable
 
 import torch
 from torch.distributed import ReduceOp
@@ -10,25 +9,16 @@ from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
-from transformers import set_seed
 
-from .arguments import TrainingArgs, get_args
-from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .arguments import TrainingArgs
+from .checkpointing import save_checkpoint
 from .communication import Communication
-from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .optimization import get_optimizer, get_scheduler
+from .data import ResumableDataLoader, get_next_batch
+from .enums import DistributedBackend, FP8Backend, Mode
+from .model_wrapper import ModelWrapperForFinetuning, ModelWrapperForPretraining
+from .pretrain import main
 from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
-from .utils import (
-    ExperimentsTracker,
-    ProcessGroupManager,
-    init_distributed,
-    is_transformer_engine_available,
-    log_rank_0,
-    setup_tf32,
-)
+from .utils import ExperimentsTracker, ProcessGroupManager, is_transformer_engine_available, log_rank_0
 
 
 if is_transformer_engine_available():
@@ -37,7 +27,12 @@ if is_transformer_engine_available():
 
 
 def track_val_metrics(
-    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str | None = None
+    global_step: int,
+    val_loss: float,
+    val_lm_loss: float,
+    val_kl_divergence: float,
+    experiments_tracker: ExperimentsTracker,
+    group_name: str | None = None,
 ) -> None:
     """tracks metrics like validation loss
 
@@ -48,14 +43,139 @@ def track_val_metrics(
         group_name (str | None): group name for the validation / test set
     """
 
-    message = f"step = {global_step}, val_loss = {val_loss:.4f}"
+    message = (
+        f"step = {global_step}, val_loss = {val_loss:.4f}, val_lm_loss = {val_lm_loss:.4f}, "
+        f"val_KL = {val_kl_divergence:.4f}"
+    )
     if group_name is not None:
         message += f", group_name = {group_name}"
 
     log_rank_0(logging.INFO, message)
     experiments_tracker.track(
-        {"loss" if group_name is None else f"loss-{group_name}": val_loss}, step=global_step, context="val"
+        {
+            "loss" if group_name is None else f"loss-{group_name}": val_loss,
+            "lm_loss" if group_name is None else f"lm_loss-{group_name}": val_lm_loss,
+            "KL" if group_name is None else f"KL-{group_name}": val_kl_divergence,
+        },
+        step=global_step,
+        context="val",
     )
+
+
+def train_step(
+    model: ModelWrapperForFinetuning,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
+    distributed_backend: DistributedBackend,
+    train_dataloader: ResumableDataLoader,
+    gradient_accumulation_steps: int,
+    gradient_clipping: float,
+    forward_context: AbstractContextManager,
+    backward_context: AbstractContextManager,
+) -> tuple[float, float]:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model (ModelWrapperForFinetuning): model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LamdaLR): learning rate scheduler
+        distributed_backend (DistributedBackend): distributed backend
+        train_dataloader (ResumableDataLoader): training dataloader
+        gradient_accumulation_steps (int): gradient accumulation steps
+        gradient_clipping (float): gradient clipping value
+        forward_context (AbstractContextManager): a context that is used for every model forward call
+        backward_context (AbstractContextManager): a context that is used for every model backward call
+
+    Returns:
+        tuple[float, float]: loss at the current step, grad norm at the current step
+    """
+
+    no_sync = nullcontext
+    if distributed_backend == DistributedBackend.torch:
+        fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+        if fsdp_algorithm == 1:
+            no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
+
+    loss = 0
+    lm_loss = 0
+    kl_divergence = 0
+    grad_norm = None
+    if distributed_backend == DistributedBackend.torch:
+        optimizer.zero_grad()
+
+    with no_sync():
+        for _ in range(gradient_accumulation_steps - 1):
+            batch = get_next_batch(train_dataloader)
+            with forward_context():
+                loss_micro_step, lm_loss_step, kl_divergence_step = model(batch)
+            loss += loss_micro_step
+            lm_loss += lm_loss_step
+            kl_divergence += kl_divergence_step
+
+            # compute gradients
+            if distributed_backend == DistributedBackend.deepspeed:
+                with backward_context():
+                    model.backward(loss_micro_step)
+                model.step()
+            elif distributed_backend == DistributedBackend.torch:
+                with backward_context():
+                    loss_micro_step.backward()
+            else:
+                raise ValueError(f"unexpected distributed backend ({distributed_backend})")
+
+    if distributed_backend == DistributedBackend.torch and fsdp_algorithm == 2:
+        model.set_requires_gradient_sync(True)
+
+    batch = get_next_batch(train_dataloader)
+    with forward_context():
+        loss_micro_step, lm_loss_step, kl_divergence_step = model(batch)
+    loss += loss_micro_step
+    lm_loss += lm_loss_step
+    kl_divergence += kl_divergence_step
+
+    # compute gradients
+    if distributed_backend == DistributedBackend.deepspeed:
+        with backward_context():
+            model.backward(loss_micro_step)
+
+        if gradient_clipping is not None:
+            grad_norm = model.get_global_grad_norm()
+
+        model.step()
+    elif distributed_backend == DistributedBackend.torch:
+        with backward_context():
+            loss_micro_step.backward()
+
+        if gradient_clipping is not None:
+            if fsdp_algorithm == 1:
+                grad_norm = model.clip_grad_norm_(gradient_clipping)
+            else:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+
+        optimizer.step()
+        lr_scheduler.step()
+    else:
+        raise ValueError(f"unexpected distributed backend ({distributed_backend})")
+
+    loss /= gradient_accumulation_steps
+    lm_loss /= gradient_accumulation_steps
+    kl_divergence /= gradient_accumulation_steps
+
+    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+        loss = loss.to_local()
+        raise NotImplementedError()
+
+    tensor = torch.stack([loss, lm_loss, kl_divergence])
+    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+
+    tensor = tensor.tolist()
+    loss, lm_loss, kl_divergence = tensor
+    grad_norm = 0 if grad_norm is None else grad_norm.item()
+
+    return loss, lm_loss, kl_divergence, grad_norm
 
 
 def train(
@@ -82,6 +202,8 @@ def train(
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
+
+    assert args.distributed_args.fsdp_algorithm == 2, "Distillation is only supported with FSDP-2"
 
     num_training_steps = args.training_parameters.num_training_steps
     gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
@@ -146,13 +268,15 @@ def train(
     start_time = time.perf_counter()
     steps_since_start_time = 0
     loss_running_sum = 0
+    lm_loss_running_sum = 0
+    kl_divergence_running_sum = 0
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
 
-        loss_step, grad_norm_step = train_step(
+        loss_step, lm_loss_step, kl_divergence_step, grad_norm_step = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -165,6 +289,8 @@ def train(
         )
 
         loss_running_sum += loss_step
+        lm_loss_running_sum += lm_loss_step
+        kl_divergence_running_sum += kl_divergence_step
 
         if torch_profiler is not None:
             torch_profiler.step()
@@ -187,10 +313,16 @@ def train(
                 flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
                 billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
                 step_time=step_time,
+                extras={
+                    "train_lm_loss (running_mean)": lm_loss_running_sum / log_interval,
+                    "train_KL (running_mean)": kl_divergence_running_sum / log_interval,
+                },
             )
             start_time = time.perf_counter()
             steps_since_start_time = 0
             loss_running_sum = 0
+            lm_loss_running_sum = 0
+            kl_divergence_running_sum = 0
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
@@ -264,123 +396,35 @@ def evaluate(
 
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
         loss_sum = 0
+        lm_loss_sum = 0
+        kl_divergence_sum = 0
+
         for _ in range(eval_steps):
             batch = get_next_batch(val_dataloader)
-            loss = model(batch)
+            loss, lm_loss, kl_divergence = model(batch)
+
             loss_sum += loss
+            lm_loss_sum += lm_loss
+            kl_divergence_sum += kl_divergence
 
         loss_mean = loss_sum / eval_steps
+        lm_loss_mean = lm_loss_sum / eval_steps
+        kl_divergence_mean = kl_divergence_sum / eval_steps
 
         if tp_world_size > 1:
             loss_mean = loss_mean.to_local()
 
-        torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
-        loss_mean = loss_mean.item()
+        tensor = torch.stack([loss_mean, lm_loss_mean, kl_divergence_mean])
+        torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+        tensor = tensor.tolist()
+        loss_mean, lm_loss_mean, kl_divergence_mean = tensor
 
-        track_val_metrics(global_step, loss_mean, experiments_tracker, group_name)
+        track_val_metrics(global_step, loss_mean, lm_loss_mean, kl_divergence_mean, experiments_tracker, group_name)
 
     model.train()
 
     return loss_mean
 
 
-def main(mode: Mode = Mode.training, train_func: Callable = train) -> None:
-    """main program"""
-
-    setup_tf32()
-
-    args: TrainingArgs = get_args(mode)
-
-    if mode == Mode.training:
-        assert (
-            args.tuning_args.tuning_method == TuningMethod.pretraining
-        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
-    elif mode == Mode.distillation:
-        assert (
-            args.tuning_args.tuning_method == TuningMethod.distillation
-        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
-
-    # initialize distributed with nccl for multi-node communications
-    init_distributed(
-        tensor_parallel_size=args.distributed_args.tensor_parallel_size,
-        data_parallel_size=args.distributed_args.data_parallel_size,
-        data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
-        data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
-        zero_stage=args.distributed_args.stage,
-        timeout_minutes=args.distributed_args.timeout_minutes,
-    )
-    set_seed(args.random_args.seed)
-
-    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
-        set_deepspeed_config(args)
-
-    model = get_model(args, mode)
-    model = wrap_model_for_distributed_training(args, model)
-
-    if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer = get_optimizer(
-            optimizer_class_name=args.optimizer_args.class_name,
-            optimizer_class_args=args.optimizer_args.class_args,
-            model=model,
-            params_group_method=args.optimizer_args.params_group_method,
-        )
-
-        lr_scheduler = get_scheduler(
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
-            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
-            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
-            num_training_steps=args.training_parameters.num_training_steps,
-            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
-            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
-            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
-        )
-    else:
-        optimizer = None
-        lr_scheduler = None
-
-    log_model(model)
-
-    starting_iteration = 0
-    metadata = None
-    experiments_tracker_state_dict = None
-    if args.load_args is not None:
-        starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
-            args, model, optimizer, lr_scheduler, None
-        )
-
-        # metadata field contains the dataloader state so we need to reset it here
-        if not args.load_args.load_dataloader_state and metadata is not None:
-            metadata["consumed_samples"] = 0
-
-    train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
-        args, model.tokenizer, 0 if metadata is None else metadata["consumed_samples"]
-    )
-
-    experiments_tracker = ExperimentsTracker(
-        args.logging_args.experiments_tracker_name,
-        args.logging_args.aim_args,
-        args.logging_args.wandb_args,
-        checkpoint_metadata=experiments_tracker_state_dict,
-    )
-    # track all hyperparams in args
-    experiments_tracker.log_args(args)
-
-    # main training loop
-    train_func(
-        args,
-        model=model,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        train_dataloader=train_dataloader,
-        val_dataloaders=val_dataloaders,
-        test_dataloaders=test_dataloaders,
-        experiments_tracker=experiments_tracker,
-        starting_iteration=starting_iteration,
-    )
-
-    ProcessGroupManager.destroy_process_groups()
-
-
 if __name__ == "__main__":
-    main()
+    main(Mode.distillation, train_func=train)

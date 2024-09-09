@@ -13,7 +13,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode
+from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .optimization import get_optimizer, get_scheduler
 from .train_utils import get_torch_profiler, track_train_metrics, train_step
@@ -221,6 +221,12 @@ def main() -> None:
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
+
+    assert args.tuning_args.tuning_method in [
+        TuningMethod.full_finetuning,
+        TuningMethod.lora,
+        TuningMethod.prompt_tuning,
+    ], f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(

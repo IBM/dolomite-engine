@@ -1,9 +1,10 @@
 import logging
 
-from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
+from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode, TuningMethod
 from ..utils import log_rank_0, run_rank_n
 from .base import ModelWrapper
+from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
 from .peft import ModelWrapperForPEFT
 from .pretraining import ModelWrapperForPretraining
@@ -14,10 +15,11 @@ _MODEL_CLASS_MAPPING = {
     TuningMethod.full_finetuning: ModelWrapperForFinetuning,
     TuningMethod.lora: ModelWrapperForPEFT,
     TuningMethod.prompt_tuning: ModelWrapperForPEFT,
+    TuningMethod.distillation: ModelWrapperForDistillation,
 }
 
 
-def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode) -> ModelWrapper:
+def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode) -> ModelWrapper:
     tuning_method = args.tuning_args.tuning_method
 
     kwargs = {
@@ -39,11 +41,18 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs, mode: Mode) -
     }
 
     # pretraining model wrapper needs some extra arguments for initialization
-    if tuning_method == TuningMethod.pretraining:
+    if tuning_method in [TuningMethod.pretraining, TuningMethod.distillation]:
         kwargs["micro_batch_size"] = args.training_parameters.micro_batch_size
         kwargs["sequence_length"] = args.datasets[0].class_args.get("sequence_length")
         kwargs["reset_attention_mask"] = args.model_args.reset_attention_mask
         kwargs["reset_position_ids"] = args.model_args.reset_position_ids
+
+    if tuning_method == TuningMethod.distillation:
+        kwargs["teacher_model_name"] = args.teacher_args.model_name
+        kwargs["teacher_model_class"] = args.teacher_args.model_class
+        kwargs["teacher_model_dtype"] = args.teacher_args.dtype
+        kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
+        kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
     if tuning_method in _MODEL_CLASS_MAPPING:
         return _MODEL_CLASS_MAPPING[tuning_method](**kwargs)
