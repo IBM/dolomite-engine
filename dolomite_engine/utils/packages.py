@@ -170,3 +170,17 @@ except ImportError:
 
 def is_scattermoe_available() -> bool:
     return _IS_SCATTERMOE_AVAILABLE
+
+
+try:
+    import khd
+
+    _IS_KERNEL_HYPERDRIVE_AVAILABLE = True
+except ImportError:
+    _IS_KERNEL_HYPERDRIVE_AVAILABLE = False
+
+    warn_rank_0("kernel-hyperdrive is not installed, install from https://github.com/mayank31398/kernel-hyperdrive")
+
+
+def is_kernel_hyperdrive_available() -> bool:
+    return _IS_KERNEL_HYPERDRIVE_AVAILABLE

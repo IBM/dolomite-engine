@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
 
+from ....utils import is_kernel_hyperdrive_available
 from .base import get_base_activation
+
+
+if is_kernel_hyperdrive_available():
+    from khd import swiglu_triton
 
 
 _GLU_BASE_MAPPING = {
@@ -28,9 +33,21 @@ class GLUActivation(nn.Module):
         return x[0] * self.base_activation(x[1])
 
 
+class KHDSwiGLU(nn.Module):
+    def __init__(self, base_activation: nn.Module) -> None:
+        super().__init__()
+        self.base_activation = base_activation
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.chunk(2, dim=-1)
+        return swiglu_triton(x[1], x[0], memory_efficient=True)
+
+
 def get_glu_activation(name: str) -> nn.Module:
     # for glu and sigmoid_glu, we directly return the pytorch's GLU
-    if name in ["glu", "sigmoid_glu"]:
+    if name == "khd:swiglu":
+        activation_function = KHDSwiGLU()
+    elif name in ["glu", "sigmoid_glu"]:
         activation_function = nn.modules.GLU()
     else:
         if name in _GLU_BASE_MAPPING:

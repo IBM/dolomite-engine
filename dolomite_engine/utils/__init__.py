@@ -12,6 +12,7 @@ from .packages import (
     is_einops_available,
     is_fla_available,
     is_flash_attention_available,
+    is_kernel_hyperdrive_available,
     is_ms_amp_available,
     is_scattermoe_available,
     is_transformer_engine_available,
