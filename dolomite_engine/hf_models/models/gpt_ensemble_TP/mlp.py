@@ -6,7 +6,7 @@ import torch.nn as nn
 from ....utils import ProcessGroupManager
 from ...enums import InitMethod
 from ...modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP, RowParallelLinear
+from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP
 from ...utils import divide_if_divisible
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ensemble import GPTEnsembleConfig
