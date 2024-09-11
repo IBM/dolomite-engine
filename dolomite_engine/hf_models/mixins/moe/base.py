@@ -16,7 +16,7 @@ class BaseMoEModelMixin(BaseModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
+        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
@@ -24,7 +24,6 @@ class BaseMoEModelMixin(BaseModelMixin):
         (
             output_hidden_states,
             use_cache,
-            return_dict,
             hidden_states,
             attention_mask,
             position_ids,
@@ -40,7 +39,6 @@ class BaseMoEModelMixin(BaseModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
             output_router_logits=output_router_logits,
@@ -82,11 +80,6 @@ class BaseMoEModelMixin(BaseModelMixin):
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
 
-        if not return_dict:
-            return tuple(
-                v for v in [hidden_states, past_key_values, all_hidden_states, all_router_logits] if v is not None
-            )
-
         return MoeModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
@@ -104,7 +97,6 @@ class BaseMoEModelMixin(BaseModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool = False,
@@ -134,7 +126,6 @@ class BaseMoEModelMixin(BaseModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         ) + (output_router_logits,)

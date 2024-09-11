@@ -105,12 +105,10 @@ class CausalLMModelMixin(PreTrainedModelMixin):
         use_cache: bool | None = None,
         output_attentions: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
+        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | CausalLMOutputWithPast:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -145,7 +143,6 @@ class CausalLMModelMixin(PreTrainedModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
@@ -157,10 +154,6 @@ class CausalLMModelMixin(PreTrainedModelMixin):
             lm_logits = lm_logits / self.m_width
 
         loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
-
-        if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
-            return ((loss,) + output) if loss is not None else output
 
         return CausalLMOutputWithPast(
             loss=loss,
