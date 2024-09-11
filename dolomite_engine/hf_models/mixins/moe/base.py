@@ -103,7 +103,7 @@ class BaseMoEModelMixin(BaseModelMixin):
             return tuple(
                 v for v in [hidden_states, past_key_values, all_hidden_states, all_router_logits] if v is not None
             )
-        print(total_aux_loss)
+
         return MoeModelOutputWithPastAndAuxLoss(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
