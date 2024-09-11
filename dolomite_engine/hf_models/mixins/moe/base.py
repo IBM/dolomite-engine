@@ -21,8 +21,6 @@ class BaseMoEModelMixin(BaseModelMixin):
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
     ) -> tuple | MoeModelOutputWithPast:
-        assert return_dict
-
         (
             output_hidden_states,
             use_cache,

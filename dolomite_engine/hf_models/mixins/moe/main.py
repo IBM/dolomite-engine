@@ -26,8 +26,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         if self._use_padding_free_transformer and output_router_logits:
             raise NotImplementedError("padding_free is not supported with load_balancing_loss_func currently")
 
-        assert return_dict
-
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -62,7 +60,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
             output_router_logits=output_router_logits,

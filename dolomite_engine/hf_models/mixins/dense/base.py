@@ -125,8 +125,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | BaseModelOutputWithPast:
-        assert return_dict
-
         (
             output_hidden_states,
             use_cache,
