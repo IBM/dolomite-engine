@@ -18,15 +18,13 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         use_cache: bool | None = None,
         output_attentions: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
+        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
         if self._use_padding_free_transformer and output_router_logits:
             raise NotImplementedError("padding_free is not supported with load_balancing_loss_func currently")
-
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
@@ -62,7 +60,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
             output_router_logits=output_router_logits,
@@ -78,18 +75,12 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             lm_logits=lm_logits,
             labels=labels,
             cu_seqlens=cu_seqlens,
-            router_logits=transformer_outputs.router_logits if return_dict else transformer_outputs[-1],
+            router_logits=transformer_outputs.router_logits,
             num_experts=self.num_experts,
             num_experts_per_token=self.num_experts_per_tok,
             router_aux_loss_coef=self.router_aux_loss_coef,
             output_router_logits=output_router_logits,
         )
-
-        if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
-            if output_router_logits:
-                output = (load_balancing_loss,) + output
-            return (loss,) + output if loss is not None else output
 
         return MoeCausalLMOutputWithPast(
             loss=loss,
