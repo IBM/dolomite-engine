@@ -8,13 +8,7 @@ from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import (
-    dtensor_to_tensor,
-    get_module_placements,
-    modify_state_dict_to_dtensor_dict,
-    tensor_parallel_split_safetensor_slice,
-    tensor_to_dtensor,
-)
+from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
 class ReplicatedLinear(ParameterizedLinear, DTensorModule):

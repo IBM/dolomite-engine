@@ -9,7 +9,7 @@ import torch.distributed
 from transformers import AutoModelForCausalLM
 
 from dolomite_engine.hf_models import AttentionHeadType, GPTEnsembleConfig, GPTEnsembleForCausalLM_TP
-from dolomite_engine.utils import CUDA_RNGStatesTracker, ProcessGroupManager, set_cuda_rng_tracker
+from dolomite_engine.utils import ProcessGroupManager
 
 
 parser = argparse.ArgumentParser()
@@ -28,12 +28,6 @@ args = parser.parse_args()
 
 
 ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
-
-# this is needed when combining different kinds of parallelism for training
-# leave as is if unaware of what you are doing
-cuda_rng_tracker = CUDA_RNGStatesTracker()
-cuda_rng_tracker.add("tensor-parallel-seed", 42)
-set_cuda_rng_tracker(cuda_rng_tracker)
 
 
 num_key_value_heads = None
@@ -66,24 +60,28 @@ elif args.model_scale == "70b":
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
+    kwargs["pretraining_tensor_parallel_size"] = ProcessGroupManager.get_tensor_parallel_world_size()
 elif args.model_scale == "70b-ensemble":
     kwargs["n_embd"] = 8192
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
     kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in range(kwargs["n_layer"])}
+    kwargs["pretraining_tensor_parallel_size"] = ProcessGroupManager.get_tensor_parallel_world_size()
 elif args.model_scale == "70b-ensemble-2x":
     kwargs["n_embd"] = 8192
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
     kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": i % 2 != 0} for i in range(kwargs["n_layer"])}
+    kwargs["pretraining_tensor_parallel_size"] = ProcessGroupManager.get_tensor_parallel_world_size()
 elif args.model_scale == "70b-ensemble-infinite":
     kwargs["n_embd"] = 8192
     kwargs["n_inner"] = 28672
     kwargs["n_head"] = 64
     kwargs["n_layer"] = 80
     kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": False} for i in range(kwargs["n_layer"])}
+    kwargs["pretraining_tensor_parallel_size"] = ProcessGroupManager.get_tensor_parallel_world_size()
 elif args.model_scale == "176b":
     kwargs["n_embd"] = 14336
     kwargs["n_inner"] = 57344
@@ -95,6 +93,7 @@ elif args.model_scale == "176b-ensemble":
     kwargs["n_head"] = 112
     kwargs["n_layer"] = 70
     kwargs["reduce_pattern"] = {i: {"attention": False, "mlp": True} for i in range(kwargs["n_layer"])}
+    kwargs["pretraining_tensor_parallel_size"] = ProcessGroupManager.get_tensor_parallel_world_size()
 
 config = GPTEnsembleConfig(**kwargs)
 
@@ -125,6 +124,11 @@ with torch.device("meta"):
 
 # copy to device without copying storage
 model_tp = model_tp.to_empty(device=torch.cuda.current_device())
+
+for m in model_tp.modules():
+    if hasattr(m, "_is_hf_initialized"):
+        m._is_hf_initialized = False
+
 model_tp.post_init()
 
 # set model to eval mode
