@@ -126,7 +126,6 @@ class BaseMoEModelMixin(BaseModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool = False,
-        output_aux_loss: bool = False,
     ) -> tuple[
         bool,
         bool,
