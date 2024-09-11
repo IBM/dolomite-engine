@@ -1,9 +1,6 @@
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .models import (
-    DenseMoEConfig,
-    DenseMoEForCausalLM,
-    DenseMoEModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
@@ -25,7 +22,6 @@ _CUSTOM_MODEL_REGISTRY = [
     (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
-    (DenseMoEConfig, DenseMoEModel, DenseMoEForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
