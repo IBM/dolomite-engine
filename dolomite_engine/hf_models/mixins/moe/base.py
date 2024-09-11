@@ -9,7 +9,7 @@ from ..dense import BaseModelMixin
 
 @dataclass
 class MoeModelOutputWithPastAndAuxLoss(MoeModelOutputWithPast):
-    aux_loss: torch.FloatTensor = None
+    aux_loss: torch.Tensor = None
 
 
 class BaseMoEModelMixin(BaseModelMixin):
@@ -66,7 +66,7 @@ class BaseMoEModelMixin(BaseModelMixin):
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
-        total_aux_loss = 0.0
+        total_aux_loss = 0
 
         for block in self.h:
             if output_hidden_states:
@@ -90,7 +90,7 @@ class BaseMoEModelMixin(BaseModelMixin):
                 outputs = outputs[1:]
 
             if output_aux_loss:
-                total_aux_loss += outputs[0]
+                total_aux_loss = total_aux_loss + outputs[0]
                 outputs = outputs[1:]
 
         hidden_states = self.ln_f(hidden_states)
