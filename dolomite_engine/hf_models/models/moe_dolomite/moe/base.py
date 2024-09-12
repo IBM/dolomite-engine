@@ -126,7 +126,11 @@ class SparseMoE(nn.Module):
 
         hidden_states = self.dropout(hidden_states)
 
-        return hidden_states, router_logits
+        aux_loss = self._compute_switch_loss(
+            logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+        )
+
+        return hidden_states, router_logits, aux_loss
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
@@ -186,3 +190,18 @@ class SparseMoE(nn.Module):
             x, indices = x.topk(self.top_k, dim=-1)
 
         return x, indices
+
+    def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
+        logits = logits.view(-1, logits.size(-1))
+        probs = probs.view(-1, probs.size(-1))
+
+        num_experts = logits.size(1)
+        acc_probs = probs.sum(0)
+        freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+
+        switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
+        z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
+
+        loss = switch_loss + 0.1 * z_loss
+
+        return loss

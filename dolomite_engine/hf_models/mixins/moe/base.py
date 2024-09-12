@@ -1,8 +1,15 @@
+from dataclasses import dataclass
+
 import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ..dense import BaseModelMixin
+
+
+@dataclass
+class MoeModelOutputWithPastAndAuxLoss(MoeModelOutputWithPast):
+    aux_loss: torch.Tensor | None = None
 
 
 class BaseMoEModelMixin(BaseModelMixin):
@@ -20,7 +27,8 @@ class BaseMoEModelMixin(BaseModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
-    ) -> tuple | MoeModelOutputWithPast:
+        output_aux_loss: bool = True,
+    ) -> tuple | MoeModelOutputWithPastAndAuxLoss:
         (
             output_hidden_states,
             use_cache,
@@ -56,6 +64,8 @@ class BaseMoEModelMixin(BaseModelMixin):
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
+        total_aux_loss = 0
+
         for block in self.h:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
@@ -68,11 +78,19 @@ class BaseMoEModelMixin(BaseModelMixin):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
                 output_router_logits=output_router_logits,
+                output_aux_loss=output_aux_loss,
             )
 
             hidden_states = outputs[0]
+            outputs = outputs[1:]
+
             if output_router_logits:
-                all_router_logits += (outputs[1],)
+                all_router_logits += (outputs[0],)
+                outputs = outputs[1:]
+
+            if output_aux_loss:
+                aux_loss = outputs[0]
+                total_aux_loss = total_aux_loss + aux_loss
 
         hidden_states = self.ln_f(hidden_states)
 
@@ -80,11 +98,12 @@ class BaseMoEModelMixin(BaseModelMixin):
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
 
-        return MoeModelOutputWithPast(
+        return MoeModelOutputWithPastAndAuxLoss(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
             hidden_states=all_hidden_states,
             router_logits=all_router_logits,
+            aux_loss=total_aux_loss,
         )
 
     def _prepare_a_bunch_of_stuff(
