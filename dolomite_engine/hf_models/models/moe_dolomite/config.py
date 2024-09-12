@@ -22,5 +22,3 @@ class MoEDolomiteConfig(CommonConfig):
 
         self.output_router_logits = output_router_logits
         self.router_aux_loss_coef = router_aux_loss_coef
-
-        assert self.init_method == "normal"
