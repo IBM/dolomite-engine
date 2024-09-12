@@ -83,13 +83,14 @@ class BaseMoEModelMixin(BaseModelMixin):
 
             hidden_states = outputs[0]
             outputs = outputs[1:]
+
             if output_router_logits:
                 all_router_logits += (outputs[0],)
                 outputs = outputs[1:]
 
             if output_aux_loss:
-                total_aux_loss = total_aux_loss + outputs[0]
-                outputs = outputs[1:]
+                aux_loss = outputs[0]
+                total_aux_loss = total_aux_loss + aux_loss
 
         hidden_states = self.ln_f(hidden_states)
 
