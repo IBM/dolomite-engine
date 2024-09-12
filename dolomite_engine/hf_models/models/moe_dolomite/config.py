@@ -19,7 +19,7 @@ class MoEDolomiteConfig(CommonConfig):
         embd_pdrop: float = 0.1,
         attn_pdrop: float = 0.1,
         normalization_function: str = "layernorm",
-        layer_norm_epsilon: float = 0.00001,
+        layer_norm_epsilon: float = 1e-5,
         initializer_range: float = 0.02,
         scale_attn_weights: bool = True,
         attention_multiplier: float | None = None,
@@ -35,6 +35,7 @@ class MoEDolomiteConfig(CommonConfig):
         m_emb: float | None = None,
         m_width: float | None = None,
         m_residual: float | None = None,
+        init_method: str = "normal",
         num_experts: int = 8,
         num_experts_per_tok: int = 2,
         output_router_logits: bool = False,
@@ -72,6 +73,7 @@ class MoEDolomiteConfig(CommonConfig):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
+            init_method=init_method,
             **kwargs,
         )
 
