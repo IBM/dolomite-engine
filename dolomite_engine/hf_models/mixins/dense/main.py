@@ -146,9 +146,8 @@ class CausalLMModelMixin(PreTrainedModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
-        hidden_states = transformer_outputs[0]
 
-        lm_logits = self.get_lm_logits(hidden_states)
+        lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
