@@ -163,18 +163,6 @@ class ProcessGroupManager:
 
     @contextmanager
     @staticmethod
-    def set_dummy_tensor_parallel_mesh(mesh: DeviceMesh):
-        global _TENSOR_PARALLEL_MESH
-
-        original_mesh = _TENSOR_PARALLEL_MESH
-        _TENSOR_PARALLEL_MESH = mesh
-
-        yield
-
-        _TENSOR_PARALLEL_MESH = original_mesh
-
-    @contextmanager
-    @staticmethod
     def set_dummy_tensor_parallel_world_size(world_size: int):
         global _TENSOR_PARALLEL_WORLD_SIZE
 
