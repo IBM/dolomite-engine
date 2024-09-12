@@ -39,5 +39,5 @@ class MuPTest(TestCommons):
 
         _, names = _get_param_groups(model, args.optimizer_args.class_args, params_group_method=ParamsGroupMethod.mup)
 
-        expected_group = json.load(open(os.path.join(os.path.dirname(__file__), "gpt_dolomite.json"), "r"))
+        expected_group = json.load(open(os.path.join(os.path.dirname(__file__), "moe_dolomite.json"), "r"))
         assert expected_group == names

@@ -16,14 +16,14 @@ from torch.optim.sgd import SGD as TorchSGD
 
 from ..enums import ParamsGroupMethod
 from ..hf_models import (
-    GPTDolomiteConfig,
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
-    RNNDolomiteConfig,
+    MoEDolomiteForCausalLM,
     RNNDolomiteForCausalLM,
 )
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
+from ..hf_models.models.moe_dolomite.moe import SparseMoE
 from ..model_wrapper import ModelWrapper
 from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
 
@@ -100,10 +100,8 @@ def _get_param_groups(
         names = {"normal": [key for key, _ in model.named_parameters()]}
     elif params_group_method == ParamsGroupMethod.mup:
         assert isinstance(
-            model.config, (GPTDolomiteConfig, RNNDolomiteConfig)
-        ), "mup is not supported with this model architecture"
-        assert isinstance(
-            model.model, (GPTDolomiteForCausalLM, GPTDolomiteForCausalLM_TP, RNNDolomiteForCausalLM)
+            model.model,
+            (GPTDolomiteForCausalLM, MoEDolomiteForCausalLM, GPTDolomiteForCausalLM_TP, RNNDolomiteForCausalLM),
         ), "mup is not supported with this model architecture"
         assert (
             model.config.init_method == "mup"
@@ -117,7 +115,7 @@ def _get_param_groups(
         # collect parameters with mup learning rate
         mup_group = {}
         for module_name, module in model.named_modules():
-            if isinstance(module, (Attention, MLP)):
+            if isinstance(module, (Attention, MLP, SparseMoE)):
                 for param_name, param in module.named_parameters():
                     # we don't add bias to mup group
                     if not param_name.endswith("bias"):
