@@ -13,7 +13,7 @@ from ..test_commons import TestCommons
 
 class MuPTest(TestCommons):
     def test_gpt_dolomite_mup(self) -> None:
-        args = TestCommons.load_training_args_for_unit_tests("mup/gpt_dolomite.yml")
+        args = TestCommons.load_training_args_for_unit_tests("mup/gpt_dolomite_config.yml")
 
         with (
             torch.device("meta"),
@@ -24,11 +24,11 @@ class MuPTest(TestCommons):
 
         _, names = _get_param_groups(model, args.optimizer_args.class_args, params_group_method=ParamsGroupMethod.mup)
 
-        expected_group = json.load(open(os.path.join(os.path.dirname(__file__), "gpt_dolomite.json"), "r"))
+        expected_group = json.load(open(os.path.join(os.path.dirname(__file__), "gpt_dolomite_groups.json"), "r"))
         assert expected_group == names
 
     def test_moe_dolomite_mup(self) -> None:
-        args = TestCommons.load_training_args_for_unit_tests("mup/moe_dolomite.yml")
+        args = TestCommons.load_training_args_for_unit_tests("mup/moe_dolomite_config.yml")
 
         with (
             torch.device("meta"),
@@ -39,5 +39,5 @@ class MuPTest(TestCommons):
 
         _, names = _get_param_groups(model, args.optimizer_args.class_args, params_group_method=ParamsGroupMethod.mup)
 
-        expected_group = json.load(open(os.path.join(os.path.dirname(__file__), "moe_dolomite.json"), "r"))
+        expected_group = json.load(open(os.path.join(os.path.dirname(__file__), "moe_dolomite_groups.json"), "r"))
         assert expected_group == names
