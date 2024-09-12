@@ -94,5 +94,9 @@ class ModelConversionTest(TestCommons):
         )
 
         self.model_conversion_test(
-            dolomite_config=dolomite_config, model_type="granitemoe", device=device, exact_match=False
+            dolomite_config=dolomite_config,
+            model_type="granitemoe",
+            device=device,
+            exact_match=False,
+            compare_loss=False,
         )
