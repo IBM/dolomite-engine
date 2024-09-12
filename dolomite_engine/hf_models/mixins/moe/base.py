@@ -9,7 +9,7 @@ from ..dense import BaseModelMixin
 
 @dataclass
 class MoeModelOutputWithPastAndAuxLoss(MoeModelOutputWithPast):
-    aux_loss: torch.Tensor = None
+    aux_loss: torch.Tensor | None = None
 
 
 class BaseMoEModelMixin(BaseModelMixin):
