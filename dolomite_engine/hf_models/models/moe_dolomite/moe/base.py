@@ -79,16 +79,16 @@ class SparseMoE(nn.Module):
         init_method = InitMethod(config.init_method)
         residual_dropout = config.resid_pdrop
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
-            std=config.initializer_range,
+            std=std,
         )
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_fc = ParameterizedExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
