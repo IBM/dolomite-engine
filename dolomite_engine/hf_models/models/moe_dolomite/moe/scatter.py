@@ -45,16 +45,16 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         grouped_out=False,
     ):
         results = scattered_experts(
-            inputs,
-            self.weight.permute(0, 2, 1),
-            k,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-            gates,
-            grouped_in,
-            grouped_out,
+            inputs=inputs,
+            expert_weights=self.weight.permute(0, 2, 1),
+            k=k,
+            sorted_expert_idxs=sorted_expert_idxs,
+            sorted_scattered_idxs=sorted_scattered_idxs,
+            padded_block_idxs=padded_block_idxs,
+            expert_offsets=expert_offsets,
+            gates=gates,
+            grouped_in=grouped_in,
+            grouped_out=grouped_out,
         )
 
         return results

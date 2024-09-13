@@ -31,6 +31,7 @@ _BASE_ACTIVATIONS = {
     "soft_sign": nn.modules.Softsign,
     "tanh": nn.modules.Tanh,
     "tanh_shrink": nn.modules.Tanhshrink,
+    "identity": nn.modules.Identity,
 }
 # instantiates the module when __getitem__ is called
 _BASE_ACTIVATIONS = ClassInstantier(_BASE_ACTIVATIONS)
