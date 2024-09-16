@@ -1,4 +1,3 @@
-import logging
 from contextlib import nullcontext
 from functools import partial
 
@@ -16,7 +15,7 @@ from .distributed import set_deepspeed_config, wrap_model_for_distributed_traini
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .optimization import get_optimizer, get_scheduler
-from .train_utils import get_torch_profiler, track_train_metrics, train_step
+from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     MetricsTrackingDict,
@@ -31,19 +30,6 @@ from .utils import (
 if is_transformer_engine_available():
     import transformer_engine.pytorch as te
     from transformer_engine.common.recipe import DelayedScaling, Format
-
-
-def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker) -> None:
-    """tracks metrics like validation loss
-
-    Args:
-        global_step (int): global step during training
-        val_loss (float): validation loss for the validation data
-        experiments_tracker (ExperimentsTracker): metrics tracker
-    """
-
-    log_rank_0(logging.INFO, f"step = {global_step}, val_loss = {val_loss:.4f}")
-    experiments_tracker.track({"loss": val_loss}, step=global_step, context="val")
 
 
 def train(
@@ -136,10 +122,11 @@ def train(
                 else lr_scheduler.get_lr()[0]
             )
 
-            track_train_metrics(
+            track_metrics(
                 global_step=global_step,
                 experiments_tracker=experiments_tracker,
                 metrics_tracker=metrics_tracker,
+                context="train",
             )
 
             metrics_tracker = MetricsTrackingDict()
@@ -192,27 +179,26 @@ def evaluate(
 
     model.eval()
 
-    loss_sum = 0
+    metrics_tracker = MetricsTrackingDict()
     val_dataloader = custom_iterator(val_dataloader, infinite=False)
 
     for _ in range(num_steps):
         batch = get_next_batch(val_dataloader)
-        loss = model(batch)
-        loss_sum += loss
+        loss_step_dict = model(batch)
+        metrics_tracker = metrics_tracker + loss_step_dict
 
-    loss_mean = loss_sum / num_steps
+    metrics_tracker = metrics_tracker / num_steps
 
     if tp_world_size > 1:
-        loss_mean = loss_mean.to_local()
+        metrics_tracker["loss"] = metrics_tracker["loss"].to_local()
 
-    torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
-    loss_mean = loss_mean.item()
+    metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
-    track_val_metrics(global_step, loss_mean, experiments_tracker)
+    track_metrics(global_step, metrics_tracker, experiments_tracker, context="val")
 
     model.train()
 
-    return loss_mean
+    return metrics_tracker
 
 
 def main() -> None:

@@ -134,8 +134,8 @@ def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsT
     return metrics_tracker
 
 
-def track_train_metrics(
-    global_step: int, experiments_tracker: ExperimentsTracker, metrics_tracker: MetricsTrackingDict
+def track_metrics(
+    global_step: int, experiments_tracker: ExperimentsTracker, metrics_tracker: MetricsTrackingDict, context: str
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
@@ -146,7 +146,7 @@ def track_train_metrics(
     """
 
     # experiments tracker
-    experiments_tracker.track(metrics_tracker.get_dict(), step=global_step, context="train")
+    experiments_tracker.track(metrics_tracker.get_dict(), step=global_step, context=context)
 
     message = f"step = {global_step}"
     for key in metrics_tracker:
