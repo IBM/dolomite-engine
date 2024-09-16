@@ -115,13 +115,13 @@ def train_step(
     with torch.inference_mode():
         metrics_tracker = metrics_tracker / gradient_accumulation_steps
 
-        for key in metrics_tracker:
-            if isinstance(metrics_tracker[key], DTensor):
-                metrics_tracker[key] = metrics_tracker[key].to_local()
-
         metrics_tracker["grad_norm"] = (
             torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
         )
+
+        for key in metrics_tracker:
+            if isinstance(metrics_tracker[key], DTensor):
+                metrics_tracker[key] = metrics_tracker[key].to_local()
 
         metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
