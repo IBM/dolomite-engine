@@ -62,7 +62,9 @@ def train_step(
             batch = get_next_batch(train_dataloader)
             with forward_context():
                 loss_micro_step_dict = model(batch)
-            metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+            with torch.inference_mode():
+                metrics_tracker = metrics_tracker + loss_micro_step_dict
 
             # compute gradients
             if distributed_backend == DistributedBackend.deepspeed:
@@ -81,7 +83,9 @@ def train_step(
     batch = get_next_batch(train_dataloader)
     with forward_context():
         loss_micro_step_dict = model(batch)
-    metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker + loss_micro_step_dict
 
     # compute gradients
     if distributed_backend == DistributedBackend.deepspeed:
@@ -107,17 +111,18 @@ def train_step(
     else:
         raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    metrics_tracker = metrics_tracker / gradient_accumulation_steps
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker / gradient_accumulation_steps
 
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
-        metrics_tracker["loss"] = metrics_tracker["loss"].to_local()
-        metrics_tracker["lm_loss"] = metrics_tracker["lm_loss"].to_local()
+        if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+            metrics_tracker["loss"] = metrics_tracker["loss"].to_local()
+            metrics_tracker["lm_loss"] = metrics_tracker["lm_loss"].to_local()
 
-    metrics_tracker["grad_norm"] = (
-        torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
-    )
+        metrics_tracker["grad_norm"] = (
+            torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
+        )
 
-    metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
     return metrics_tracker
 
@@ -150,7 +155,10 @@ def track_metrics(
 
     message = f"step = {global_step}"
     for key in metrics_tracker:
-        message += f", {key} = {metrics_tracker[key]:.6e}"
+        if key == "learning_rate":
+            message += f", {key} = {metrics_tracker[key]:.4e}"
+        else:
+            message += f", {key} = {metrics_tracker[key]:.4f}"
 
     log_rank_0(logging.INFO, message)
 
