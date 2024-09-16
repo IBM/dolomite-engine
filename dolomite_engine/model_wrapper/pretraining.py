@@ -83,7 +83,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             additional_special_tokens=additional_special_tokens,
         )
 
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: dict) -> dict:
         """forward function for a batch
 
         Args:
@@ -121,7 +121,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         with loss_context():
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
-        return loss
+        return {"loss": loss}
 
     def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
         batch = {}

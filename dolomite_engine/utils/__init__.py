@@ -5,6 +5,7 @@ import torch.distributed
 
 from .hf_hub import download_repo
 from .logger import log_rank_0, print_rank_0, print_ranks_all, set_logger
+from .loss_dict import MetricsTrackingDict
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
 from .packages import (
     is_apex_available,

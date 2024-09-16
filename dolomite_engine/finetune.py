@@ -19,6 +19,7 @@ from .optimization import get_optimizer, get_scheduler
 from .train_utils import get_torch_profiler, track_train_metrics, train_step
 from .utils import (
     ExperimentsTracker,
+    MetricsTrackingDict,
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
@@ -103,13 +104,13 @@ def train(
     if torch_profiler is not None:
         torch_profiler.__enter__()
 
-    loss_running_sum = 0
+    metrics_tracker = MetricsTrackingDict()
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
 
-        loss_step, grad_norm_step = train_step(
+        loss_step_dict = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -121,26 +122,27 @@ def train(
             backward_context=backward_context,
         )
 
-        loss_running_sum += loss_step
+        metrics_tracker = metrics_tracker + loss_step_dict
 
         if torch_profiler is not None:
             torch_profiler.step()
 
         if global_step % log_interval == 0:
-            track_train_metrics(
-                global_step=global_step,
-                train_loss_step=loss_step,
-                grad_norm_step=grad_norm_step,
-                current_lr=(
-                    model.lr_scheduler.get_lr()[0]
-                    if distributed_backend == DistributedBackend.deepspeed
-                    else lr_scheduler.get_lr()[0]
-                ),
-                experiments_tracker=experiments_tracker,
-                loss_running_mean=loss_running_sum / log_interval,
+            metrics_tracker = metrics_tracker / log_interval
+
+            metrics_tracker["learning_rate"] = (
+                model.lr_scheduler.get_lr()[0]
+                if distributed_backend == DistributedBackend.deepspeed
+                else lr_scheduler.get_lr()[0]
             )
 
-            loss_running_sum = 0
+            track_train_metrics(
+                global_step=global_step,
+                experiments_tracker=experiments_tracker,
+                metrics_tracker=metrics_tracker,
+            )
+
+            metrics_tracker = MetricsTrackingDict()
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloader, model, global_step, experiments_tracker)

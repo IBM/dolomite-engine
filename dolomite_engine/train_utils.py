@@ -12,7 +12,7 @@ from .enums import DistributedBackend, GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapperForFinetuning
-from .utils import ExperimentsTracker, ProcessGroupManager, log_rank_0
+from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_rank_0
 
 
 def train_step(
@@ -25,7 +25,7 @@ def train_step(
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
-) -> tuple[float, float]:
+) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
@@ -40,7 +40,7 @@ def train_step(
         backward_context (AbstractContextManager): a context that is used for every model backward call
 
     Returns:
-        tuple[float, float]: loss at the current step, grad norm at the current step
+        MetricsTrackingDict: metrics to track
     """
 
     no_sync = nullcontext
@@ -52,7 +52,7 @@ def train_step(
         else:
             model.set_requires_gradient_sync(False)
 
-    loss = 0
+    metrics_tracker = MetricsTrackingDict()
     grad_norm = None
     if distributed_backend == DistributedBackend.torch:
         optimizer.zero_grad()
@@ -61,17 +61,17 @@ def train_step(
         for _ in range(gradient_accumulation_steps - 1):
             batch = get_next_batch(train_dataloader)
             with forward_context():
-                loss_micro_step = model(batch)
-            loss += loss_micro_step
+                loss_micro_step_dict = model(batch)
+            metrics_tracker = metrics_tracker + loss_micro_step_dict
 
             # compute gradients
             if distributed_backend == DistributedBackend.deepspeed:
                 with backward_context():
-                    model.backward(loss_micro_step)
+                    model.backward(loss_micro_step_dict["loss"])
                 model.step()
             elif distributed_backend == DistributedBackend.torch:
                 with backward_context():
-                    loss_micro_step.backward()
+                    loss_micro_step_dict["loss"].backward()
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
@@ -80,13 +80,13 @@ def train_step(
 
     batch = get_next_batch(train_dataloader)
     with forward_context():
-        loss_micro_step = model(batch)
-    loss += loss_micro_step
+        loss_micro_step_dict = model(batch)
+    metrics_tracker = metrics_tracker + loss_micro_step_dict
 
     # compute gradients
     if distributed_backend == DistributedBackend.deepspeed:
         with backward_context():
-            model.backward(loss_micro_step)
+            model.backward(loss_micro_step_dict["loss"])
 
         if gradient_clipping is not None:
             grad_norm = model.get_global_grad_norm()
@@ -94,7 +94,7 @@ def train_step(
         model.step()
     elif distributed_backend == DistributedBackend.torch:
         with backward_context():
-            loss_micro_step.backward()
+            loss_micro_step_dict["loss"].backward()
 
         if gradient_clipping is not None:
             if fsdp_algorithm == 1:
@@ -107,83 +107,50 @@ def train_step(
     else:
         raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    loss /= gradient_accumulation_steps
+    metrics_tracker = metrics_tracker / gradient_accumulation_steps
 
     if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
-        loss = loss.to_local()
+        metrics_tracker["loss"] = metrics_tracker["loss"].to_local()
+        metrics_tracker["lm_loss"] = metrics_tracker["lm_loss"].to_local()
 
-    torch.distributed.all_reduce(loss, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+    metrics_tracker["grad_norm"] = (
+        torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
+    )
 
-    loss = loss.item()
-    grad_norm = 0 if grad_norm is None else grad_norm.item()
+    metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
-    return loss, grad_norm
+    return metrics_tracker
+
+
+def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsTrackingDict:
+    tensor = [metrics_tracker[key] for key in metrics_tracker]
+    tensor = torch.cat(tensor, dim=0)
+    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
+    tensor = tensor.tolist()
+
+    for i, key in enumerate(metrics_tracker):
+        metrics_tracker[key] = tensor[i]
+
+    return metrics_tracker
 
 
 def track_train_metrics(
-    global_step: int,
-    train_loss_step: float,
-    grad_norm_step: float,
-    current_lr: float,
-    experiments_tracker: ExperimentsTracker,
-    loss_running_mean: float,
-    flops: float | None = None,
-    billion_tokens_per_day: float | None = None,
-    step_time: float | None = None,
-    extras: dict = {},
+    global_step: int, experiments_tracker: ExperimentsTracker, metrics_tracker: MetricsTrackingDict
 ) -> None:
     """tracks metrics like training loss, learning rate etc
 
     Args:
         global_step (int): global step during training
-        train_loss_step (float): training loss at the current step
-        current_lr (float): learning rate at the current step
         experiments_tracker (ExperimentsTracker): metrics tracker
-        loss_running_mean (float): running mean for the loss
-        flops (float | None, optional): total model flops. Defaults to None
-        billion_tokens_per_day (float | None, optional): billions of tokens per day. Defaults to None
-        step_time (float | None, optional): time per step in seconds
+        metrics_tracker (float): metrics tracker
     """
 
     # experiments tracker
-    message = {"loss_step": train_loss_step, "loss_running_mean": loss_running_mean, "learning_rate": current_lr}
+    experiments_tracker.track(metrics_tracker.get_dict(), step=global_step, context="train")
 
-    if grad_norm_step is not None:
-        message["grad_norm"] = grad_norm_step
-
-    if flops is not None:
-        message["FLOPS"] = flops
-
-    if billion_tokens_per_day is not None:
-        message["throughput (B tokens/day)"] = billion_tokens_per_day
-
-    if step_time is not None:
-        message["step time (sec)"] = step_time
-
-    message.update(extras)
-    experiments_tracker.track(message, step=global_step, context="train")
-
-    # terminal
-    message = (
-        f"step = {global_step}, train_loss (batch) = {train_loss_step:.4f}, "
-        f"train_loss (running_mean) = {loss_running_mean:.4f}, "
-        f"learning_rate = {current_lr:.3E}"
-    )
-
-    if grad_norm_step is not None:
-        message += f", grad_norm = {grad_norm_step:.2f}"
-
-    if flops is not None:
-        message += f", FLOPS = {flops:.2f}"
-
-    if billion_tokens_per_day is not None:
-        message += f", throughput = {billion_tokens_per_day:.2f} B tokens/day"
-
-    if step_time is not None:
-        message += f", step_time = {step_time:.3f} sec"
-
-    for key, value in extras.items():
-        message += f", {key} = {value:.4f}"
+    message = f"step = {global_step}"
+    for key in metrics_tracker:
+        message += f", {key} = {metrics_tracker[key]}"
 
     log_rank_0(logging.INFO, message)
 
