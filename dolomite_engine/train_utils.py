@@ -150,7 +150,7 @@ def track_metrics(
 
     message = f"step = {global_step}"
     for key in metrics_tracker:
-        message += f", {key} = {metrics_tracker[key]:.4f}"
+        message += f", {key} = {metrics_tracker[key]:.6e}"
 
     log_rank_0(logging.INFO, message)
 
