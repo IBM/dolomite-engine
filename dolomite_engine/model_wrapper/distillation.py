@@ -93,7 +93,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         if self.tp_world_size > 1:
             raise NotImplementedError()
 
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: dict) -> dict:
         """forward function for a batch
 
         Args:
@@ -143,7 +143,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
 
         loss = lm_loss + self.kl_divergence_weight * kl_divergence
 
-        return loss, lm_loss, kl_divergence
+        return {"loss": loss, "lm_loss": lm_loss, "kl_divergence": kl_divergence}
 
     def _setup_config(self) -> None:
         super()._setup_config()

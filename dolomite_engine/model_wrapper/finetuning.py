@@ -7,7 +7,7 @@ from .base import ModelWrapper
 
 
 class ModelWrapperForFinetuning(ModelWrapper):
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: dict) -> dict:
         """forward function for a batch
 
         Args:
@@ -23,7 +23,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
         model_outputs = self.model(**batch)
         loss = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.loss
 
-        return loss
+        return {"loss": loss}
 
     def _broadcast_inputs_for_tensor_parallel(self, batch: dict) -> dict:
         device = torch.cuda.current_device()

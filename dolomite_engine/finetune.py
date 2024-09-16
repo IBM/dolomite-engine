@@ -1,9 +1,8 @@
-import logging
 from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed import ReduceOp
+from torch.distributed._tensor.api import DTensor
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -16,13 +15,13 @@ from .distributed import set_deepspeed_config, wrap_model_for_distributed_traini
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .optimization import get_optimizer, get_scheduler
-from .train_utils import get_torch_profiler, track_train_metrics, train_step
+from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
+    MetricsTrackingDict,
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
-    log_rank_0,
     setup_tf32,
 )
 
@@ -30,19 +29,6 @@ from .utils import (
 if is_transformer_engine_available():
     import transformer_engine.pytorch as te
     from transformer_engine.common.recipe import DelayedScaling, Format
-
-
-def track_val_metrics(global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker) -> None:
-    """tracks metrics like validation loss
-
-    Args:
-        global_step (int): global step during training
-        val_loss (float): validation loss for the validation data
-        experiments_tracker (ExperimentsTracker): metrics tracker
-    """
-
-    log_rank_0(logging.INFO, f"step = {global_step}, val_loss = {val_loss:.4f}")
-    experiments_tracker.track({"loss": val_loss}, step=global_step, context="val")
 
 
 def train(
@@ -103,13 +89,13 @@ def train(
     if torch_profiler is not None:
         torch_profiler.__enter__()
 
-    loss_running_sum = 0
+    metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
 
-        loss_step, grad_norm_step = train_step(
+        loss_step_dict = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -121,26 +107,28 @@ def train(
             backward_context=backward_context,
         )
 
-        loss_running_sum += loss_step
+        metrics_tracker = metrics_tracker + loss_step_dict
 
         if torch_profiler is not None:
             torch_profiler.step()
 
         if global_step % log_interval == 0:
-            track_train_metrics(
-                global_step=global_step,
-                train_loss_step=loss_step,
-                grad_norm_step=grad_norm_step,
-                current_lr=(
-                    model.lr_scheduler.get_lr()[0]
-                    if distributed_backend == DistributedBackend.deepspeed
-                    else lr_scheduler.get_lr()[0]
-                ),
-                experiments_tracker=experiments_tracker,
-                loss_running_mean=loss_running_sum / log_interval,
+            metrics_tracker = metrics_tracker / log_interval
+
+            metrics_tracker["learning_rate"] = (
+                model.lr_scheduler.get_lr()[0]
+                if distributed_backend == DistributedBackend.deepspeed
+                else lr_scheduler.get_lr()[0]
             )
 
-            loss_running_sum = 0
+            track_metrics(
+                global_step=global_step,
+                experiments_tracker=experiments_tracker,
+                metrics_tracker=metrics_tracker,
+                context="train",
+            )
+
+            metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloader, model, global_step, experiments_tracker)
@@ -158,7 +146,7 @@ def evaluate(
     model: ModelWrapperForFinetuning,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
-) -> float:
+) -> MetricsTrackingDict:
     """main validation loop for the program
 
     Args:
@@ -168,7 +156,7 @@ def evaluate(
         experiments_tracker (ExperimentsTracker): metrics tracker
 
     Returns:
-        float: loss at the current step
+        MetricsTrackingDict: metrics tracker
     """
 
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -190,27 +178,32 @@ def evaluate(
 
     model.eval()
 
-    loss_sum = 0
+    metrics_tracker = MetricsTrackingDict({})
     val_dataloader = custom_iterator(val_dataloader, infinite=False)
 
     for _ in range(num_steps):
         batch = get_next_batch(val_dataloader)
-        loss = model(batch)
-        loss_sum += loss
+        loss_step_dict = model(batch)
+        metrics_tracker = metrics_tracker + loss_step_dict
 
-    loss_mean = loss_sum / num_steps
+    metrics_tracker = metrics_tracker / num_steps
 
-    if tp_world_size > 1:
-        loss_mean = loss_mean.to_local()
+    for key in metrics_tracker:
+        if isinstance(metrics_tracker[key], DTensor):
+            metrics_tracker[key] = metrics_tracker[key].to_local()
 
-    torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
-    loss_mean = loss_mean.item()
+    metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
-    track_val_metrics(global_step, loss_mean, experiments_tracker)
+    track_metrics(
+        global_step=global_step,
+        experiments_tracker=experiments_tracker,
+        metrics_tracker=metrics_tracker,
+        context="val",
+    )
 
     model.train()
 
-    return loss_mean
+    return metrics_tracker
 
 
 def main() -> None:
