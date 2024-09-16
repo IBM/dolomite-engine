@@ -2,7 +2,6 @@ import logging
 import time
 from contextlib import nullcontext
 from functools import partial
-from typing import Callable
 
 import torch
 from torch.distributed import ReduceOp
@@ -310,7 +309,7 @@ def evaluate(
     return metrics_tracker
 
 
-def main(mode: Mode = Mode.training, train_func: Callable = train) -> None:
+def main(mode: Mode = Mode.training) -> None:
     """main program"""
 
     setup_tf32()
@@ -322,6 +321,8 @@ def main(mode: Mode = Mode.training, train_func: Callable = train) -> None:
             args.tuning_args.tuning_method == TuningMethod.pretraining
         ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
     elif mode == Mode.distillation:
+        assert args.distributed_args.fsdp_algorithm == 2, "Distillation is only supported with FSDP-2"
+
         assert (
             args.tuning_args.tuning_method == TuningMethod.distillation
         ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
@@ -393,7 +394,7 @@ def main(mode: Mode = Mode.training, train_func: Callable = train) -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    train_func(
+    train(
         args,
         model=model,
         optimizer=optimizer,
