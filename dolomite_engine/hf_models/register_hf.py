@@ -22,10 +22,10 @@ from .models import (
 
 # (AutoConfig, AutoModel, AutoModelForCausalLM)
 _CUSTOM_MODEL_REGISTRY = [
-    (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
-    (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
+    (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
+    (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
