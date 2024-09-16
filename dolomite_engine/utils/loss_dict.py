@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+
 class MetricsTrackingDict:
     def __init__(self, data: dict = {}) -> None:
         self.data = data
 
-    def __add__(self, x: "MetricsTrackingDict" | dict | float | int) -> "MetricsTrackingDict":
+    def __add__(self, x: MetricsTrackingDict | dict | float | int) -> MetricsTrackingDict:
         if isinstance(x, (MetricsTrackingDict, dict)):
             if isinstance(x, MetricsTrackingDict):
                 x = x.data
@@ -15,7 +18,7 @@ class MetricsTrackingDict:
 
         return self
 
-    def __divide__(self, x: "MetricsTrackingDict" | dict | float | int) -> "MetricsTrackingDict":
+    def __divide__(self, x: MetricsTrackingDict | dict | float | int) -> MetricsTrackingDict:
         if isinstance(x, (MetricsTrackingDict, dict)):
             if isinstance(x, MetricsTrackingDict):
                 x = x.data
