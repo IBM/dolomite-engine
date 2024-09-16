@@ -145,7 +145,7 @@ def evaluate(
     model: ModelWrapperForFinetuning,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
-) -> float:
+) -> MetricsTrackingDict:
     """main validation loop for the program
 
     Args:
@@ -155,7 +155,7 @@ def evaluate(
         experiments_tracker (ExperimentsTracker): metrics tracker
 
     Returns:
-        float: loss at the current step
+        MetricsTrackingDict: metrics tracker
     """
 
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()

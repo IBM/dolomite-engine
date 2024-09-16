@@ -148,6 +148,7 @@ def track_metrics(
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         metrics_tracker (float): metrics tracker
+        context (str): experiment context
     """
 
     # experiments tracker
@@ -158,7 +159,7 @@ def track_metrics(
         if key == "learning_rate":
             message += f", {key} = {metrics_tracker[key]:.4e}"
         else:
-            message += f", {key} = {metrics_tracker[key]:.4f}"
+            message += f", {context}-{key} = {metrics_tracker[key]:.4f}"
 
     log_rank_0(logging.INFO, message)
 
