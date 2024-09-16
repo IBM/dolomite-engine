@@ -3,6 +3,7 @@ from contextlib import AbstractContextManager, nullcontext
 
 import torch
 from torch.distributed import ReduceOp
+from torch.distributed._tensor.api import DTensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -114,9 +115,9 @@ def train_step(
     with torch.inference_mode():
         metrics_tracker = metrics_tracker / gradient_accumulation_steps
 
-        if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
-            metrics_tracker["loss"] = metrics_tracker["loss"].to_local()
-            metrics_tracker["lm_loss"] = metrics_tracker["lm_loss"].to_local()
+        for key in metrics_tracker:
+            if isinstance(metrics_tracker[key], DTensor):
+                metrics_tracker[key] = metrics_tracker[key].to_local()
 
         metrics_tracker["grad_norm"] = (
             torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm

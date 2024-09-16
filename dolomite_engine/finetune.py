@@ -2,6 +2,7 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
+from torch.distributed._tensor.api import DTensor
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -187,8 +188,9 @@ def evaluate(
 
     metrics_tracker = metrics_tracker / num_steps
 
-    if tp_world_size > 1:
-        metrics_tracker["loss"] = metrics_tracker["loss"].to_local()
+    for key in metrics_tracker:
+        if isinstance(metrics_tracker[key], DTensor):
+            metrics_tracker[key] = metrics_tracker[key].to_local()
 
     metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
