@@ -21,7 +21,6 @@ from .utils import (
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
-    log_rank_0,
     setup_tf32,
 )
 
