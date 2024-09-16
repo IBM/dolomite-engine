@@ -11,7 +11,7 @@ from dolomite_engine.utils import torch_dtype_to_string
 from ...test_common import TestCommons
 
 
-class GPTDolomiteTP_Test(TestCommons):
+class TensorParallelTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             ["gpt_dolomite"],
@@ -32,7 +32,7 @@ class GPTDolomiteTP_Test(TestCommons):
             [False],
         )
     )
-    def test_gpt_dolomite_tp(
+    def test_tensor_parallel_forward(
         self,
         model_type: str,
         attention_head_type: AttentionHeadType,
