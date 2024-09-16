@@ -18,7 +18,7 @@ class MetricsTrackingDict:
 
         return self
 
-    def __divide__(self, x: MetricsTrackingDict | dict | float | int) -> MetricsTrackingDict:
+    def __truediv__(self, x: MetricsTrackingDict | dict | float | int) -> MetricsTrackingDict:
         if isinstance(x, (MetricsTrackingDict, dict)):
             if isinstance(x, MetricsTrackingDict):
                 x = x.data
