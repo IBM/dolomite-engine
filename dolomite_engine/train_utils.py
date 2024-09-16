@@ -52,7 +52,7 @@ def train_step(
         else:
             model.set_requires_gradient_sync(False)
 
-    metrics_tracker = MetricsTrackingDict()
+    metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
     if distributed_backend == DistributedBackend.torch:
         optimizer.zero_grad()
@@ -124,7 +124,7 @@ def train_step(
 
 def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsTrackingDict:
     tensor = [metrics_tracker[key] for key in metrics_tracker]
-    tensor = torch.cat(tensor, dim=0)
+    tensor = torch.stack(tensor)
     torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
     tensor = tensor.tolist()
 

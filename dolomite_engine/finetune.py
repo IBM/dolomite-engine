@@ -2,7 +2,6 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed import ReduceOp
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -90,7 +89,7 @@ def train(
     if torch_profiler is not None:
         torch_profiler.__enter__()
 
-    metrics_tracker = MetricsTrackingDict()
+    metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
     while global_step < num_training_steps:
@@ -129,7 +128,7 @@ def train(
                 context="train",
             )
 
-            metrics_tracker = MetricsTrackingDict()
+            metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloader, model, global_step, experiments_tracker)
@@ -179,7 +178,7 @@ def evaluate(
 
     model.eval()
 
-    metrics_tracker = MetricsTrackingDict()
+    metrics_tracker = MetricsTrackingDict({})
     val_dataloader = custom_iterator(val_dataloader, infinite=False)
 
     for _ in range(num_steps):
@@ -194,7 +193,12 @@ def evaluate(
 
     metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
-    track_metrics(global_step, metrics_tracker, experiments_tracker, context="val")
+    track_metrics(
+        global_step=global_step,
+        experiments_tracker=experiments_tracker,
+        metrics_tracker=metrics_tracker,
+        context="val",
+    )
 
     model.train()
 
