@@ -5,6 +5,7 @@ from functools import partial
 
 import torch
 from torch.distributed import ReduceOp
+from torch.distributed._tensor.api import DTensor
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -16,12 +17,13 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DistributedBackend, FP8Backend, Mode
+from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .optimization import get_optimizer, get_scheduler
-from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
+from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
+    MetricsTrackingDict,
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
@@ -36,25 +38,39 @@ if is_transformer_engine_available():
 
 
 def track_val_metrics(
-    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str | None = None
+    global_step: int,
+    experiments_tracker: ExperimentsTracker,
+    metrics_tracker: MetricsTrackingDict,
+    group_name: str | None = None,
 ) -> None:
     """tracks metrics like validation loss
 
     Args:
         global_step (int): global step during training
-        val_loss (float): validation loss for the validation data
-        experiments_tracker (ExperimentsTracker): metrics tracker
+        experiments_tracker (ExperimentsTracker): experiments tracker
+        metrics_tracker (MetricsTrackingDict): metrics tracker
         group_name (str | None): group name for the validation / test set
     """
 
-    message = f"step = {global_step}, val_loss = {val_loss:.4f}"
+    context = "val"
+
+    message = f"step = {global_step}"
     if group_name is not None:
         message += f", group_name = {group_name}"
 
+    for key in metrics_tracker:
+        message += f", {context}-{key} = {metrics_tracker[key]:.4f}"
+
     log_rank_0(logging.INFO, message)
-    experiments_tracker.track(
-        {"loss" if group_name is None else f"loss-{group_name}": val_loss}, step=global_step, context="val"
-    )
+
+    if group_name is None:
+        message = metrics_tracker.get_dict()
+    else:
+        message = {}
+        for key in metrics_tracker:
+            message[f"{group_name}-{key}"] = metrics_tracker[key]
+
+    experiments_tracker.track(message, step=global_step, context=context)
 
 
 def train(
@@ -144,14 +160,14 @@ def train(
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
-    loss_running_sum = 0
+    metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
 
-        loss_step, grad_norm_step = train_step(
+        loss_step_dict = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -163,33 +179,39 @@ def train(
             backward_context=backward_context,
         )
 
-        loss_running_sum += loss_step
+        metrics_tracker = metrics_tracker + loss_step_dict
 
         if torch_profiler is not None:
             torch_profiler.step()
 
         if global_step % log_interval == 0:
+            metrics_tracker = metrics_tracker / log_interval
+
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            track_train_metrics(
-                global_step=global_step,
-                train_loss_step=loss_step,
-                grad_norm_step=grad_norm_step,
-                current_lr=(
-                    model.lr_scheduler.get_lr()[0]
-                    if distributed_backend == DistributedBackend.deepspeed
-                    else lr_scheduler.get_lr()[0]
-                ),
-                experiments_tracker=experiments_tracker,
-                loss_running_mean=loss_running_sum / log_interval,
-                flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
-                billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
-                step_time=step_time,
+            metrics_tracker["learning_rate"] = (
+                model.lr_scheduler.get_lr()[0]
+                if distributed_backend == DistributedBackend.deepspeed
+                else lr_scheduler.get_lr()[0]
             )
+
+            if model_flops is not None:
+                metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed
+
+            metrics_tracker["billion_tokens_per_day"] = tokens_per_batch * 86400 / step_time / 1e9
+            metrics_tracker["step_time (sec)"] = step_time
+
+            track_metrics(
+                global_step=global_step,
+                experiments_tracker=experiments_tracker,
+                metrics_tracker=metrics_tracker,
+                context="train",
+            )
+
             start_time = time.perf_counter()
             steps_since_start_time = 0
-            loss_running_sum = 0
+            metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
@@ -236,7 +258,7 @@ def evaluate(
         group_names (list[str]): names of the datasets in validation/test group
 
     Returns:
-        float: loss at the current step
+        MetricsTrackingDict: metrics tracker
     """
 
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -262,35 +284,50 @@ def evaluate(
     model.eval()
 
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
-        loss_sum = 0
+        metrics_tracker = MetricsTrackingDict({})
+
         for _ in range(eval_steps):
             batch = get_next_batch(val_dataloader)
-            loss = model(batch)
-            loss_sum += loss
+            loss_step_dict = model(batch)
+            metrics_tracker = metrics_tracker + loss_step_dict
 
-        loss_mean = loss_sum / eval_steps
+        metrics_tracker = metrics_tracker / eval_steps
 
-        if tp_world_size > 1:
-            loss_mean = loss_mean.to_local()
+        for key in metrics_tracker:
+            if isinstance(metrics_tracker[key], DTensor):
+                metrics_tracker[key] = metrics_tracker[key].to_local()
 
-        torch.distributed.all_reduce(loss_mean, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
-        loss_mean = loss_mean.item()
+        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
-        track_val_metrics(global_step, loss_mean, experiments_tracker, group_name)
+        track_val_metrics(
+            global_step=global_step,
+            experiments_tracker=experiments_tracker,
+            metrics_tracker=metrics_tracker,
+            group_name=group_name,
+        )
 
     model.train()
 
-    return loss_mean
+    return metrics_tracker
 
 
-def main() -> None:
+def main(mode: Mode = Mode.training) -> None:
     """main program"""
-
-    mode = Mode.training
 
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
+
+    if mode == Mode.training:
+        assert (
+            args.tuning_args.tuning_method == TuningMethod.pretraining
+        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
+    elif mode == Mode.distillation:
+        assert args.distributed_args.fsdp_algorithm == 2, "Distillation is only supported with FSDP-2"
+
+        assert (
+            args.tuning_args.tuning_method == TuningMethod.distillation
+        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(

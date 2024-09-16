@@ -10,7 +10,7 @@ from .test_commons import TestCommons
 
 class BlendedDatasetsTest(TestCommons):
     def test_dataloader(self) -> None:
-        args = TestCommons.load_training_args_for_unit_tests()
+        args = TestCommons.load_training_args_for_unit_tests("data_config.yml")
         split = DatasetSplit.train
         mode = Mode.training
 

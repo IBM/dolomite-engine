@@ -83,7 +83,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             additional_special_tokens=additional_special_tokens,
         )
 
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: dict) -> dict:
         """forward function for a batch
 
         Args:
@@ -101,8 +101,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids)
 
-        model_outputs = self.model(**batch)
-        logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
+        model_outputs = self.model(**batch, return_dict=True)
+        logits: torch.Tensor = model_outputs.logits
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
@@ -119,9 +119,15 @@ class ModelWrapperForPretraining(ModelWrapper):
                 loss_context = loss_parallel
 
         with loss_context():
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
-        return loss
+        if hasattr(model_outputs, "aux_loss"):
+            aux_loss = model_outputs.aux_loss
+            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+        else:
+            loss = lm_loss
+
+        return {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
 
     def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
         batch = {}

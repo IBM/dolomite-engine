@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ...utils import ProcessGroupManager
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule

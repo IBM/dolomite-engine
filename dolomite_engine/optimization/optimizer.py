@@ -1,3 +1,5 @@
+import logging
+
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -12,12 +14,18 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
-from ..enums import LRDecaySchedule, ParamsGroupMethod
-from ..hf_models import GPTDolomiteConfig, GPTDolomiteForCausalLM, RNNDolomiteConfig, RNNDolomiteForCausalLM
+from ..enums import ParamsGroupMethod
+from ..hf_models import (
+    GPTDolomiteForCausalLM,
+    GPTDolomiteForCausalLM_TP,
+    MoEDolomiteForCausalLM,
+    RNNDolomiteForCausalLM,
+)
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
+from ..hf_models.models.moe_dolomite.moe import SparseMoE
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
 
 
 if is_apex_available():
@@ -79,24 +87,35 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None):
+def _get_param_groups(
+    model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
+) -> list[dict]:
     if params_group_method is None:
+        if model.has_teacher_model():
+            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+            # this is the student model
+            model = model.model
+
         trainable_parameters_or_param_groups = model.parameters()
+        names = {"normal": [key for key, _ in model.named_parameters()]}
     elif params_group_method == ParamsGroupMethod.mup:
         assert isinstance(
-            model.config, (GPTDolomiteConfig, RNNDolomiteConfig)
-        ), "mup is not supported with this model architecture"
-        assert isinstance(
-            model.model, (GPTDolomiteForCausalLM, RNNDolomiteForCausalLM)
+            model.model,
+            (GPTDolomiteForCausalLM, MoEDolomiteForCausalLM, GPTDolomiteForCausalLM_TP, RNNDolomiteForCausalLM),
         ), "mup is not supported with this model architecture"
         assert (
             model.config.init_method == "mup"
         ), "both init method for model and params group method for optimizer should be set to mup"
 
+        if model.has_teacher_model():
+            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+            # this is the student model
+            model = model.model
+
         # collect parameters with mup learning rate
         mup_group = {}
         for module_name, module in model.named_modules():
-            if isinstance(module, (Attention, MLP)):
+            if isinstance(module, (Attention, MLP, SparseMoE)):
                 for param_name, param in module.named_parameters():
                     # we don't add bias to mup group
                     if not param_name.endswith("bias"):
@@ -104,23 +123,25 @@ def _get_param_groups(model: ModelWrapper, optimizer_class_args: dict, params_gr
                         mup_group[f"{module_name}.{param_name}"] = param
 
         # collect parameters without mup learning rate
-        normal_group = []
+        normal_group = {}
         for param_name, param in model.named_parameters():
             if param_name not in mup_group:
-                normal_group.append(param)
+                normal_group[param_name] = param
 
         assert len(normal_group) + len(mup_group) == len(
             list(model.parameters())
         ), "params in groups don't sum up to total parameters"
 
         trainable_parameters_or_param_groups = [
-            {"params": normal_group},
+            {"params": list(normal_group.values()), "lr": optimizer_class_args["lr"]},
             {"params": list(mup_group.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
         ]
+
+        names = {"normal": list(normal_group.keys()), "mup": list(mup_group.keys())}
     else:
         raise ValueError(f"unexpected params_group_method ({params_group_method})")
 
-    return trainable_parameters_or_param_groups
+    return trainable_parameters_or_param_groups, names
 
 
 def get_optimizer(
@@ -148,7 +169,7 @@ def get_optimizer(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    optimizer = optimizer_class(
-        _get_param_groups(model, optimizer_class_args, params_group_method), **optimizer_class_args
-    )
+    params_group, _ = _get_param_groups(model, optimizer_class_args, params_group_method)
+    optimizer = optimizer_class(params_group, **optimizer_class_args)
+
     return optimizer

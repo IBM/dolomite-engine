@@ -33,7 +33,7 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 
-def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) -> ModelWrapper:
+def wrap_model_for_distributed_training(args: TrainingArgs, model: ModelWrapper) -> ModelWrapper:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -65,6 +65,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
         dtype = "bf16"
 
     block_names = model.model._no_split_modules
+    teacher_block_names = model.teacher_model._no_split_modules if model.has_teacher_model() else []
 
     dtype = None if dtype is None else string_to_torch_dtype(dtype)
     communication_dtype = None if communication_dtype is None else string_to_torch_dtype(communication_dtype)
@@ -116,6 +117,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
         assert stage in [0, 2, 3]
 
         dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
+        block_classes = [get_module_class_from_name(model, name) for name in block_names + teacher_block_names]
 
         if args.distributed_args.gradient_checkpointing_method is not None:
             assert len(block_names) == 1
@@ -144,6 +146,8 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                 )
 
             def _param_init(module: nn.Module) -> None:
+                assert len(teacher_block_names) == 0, "efficient initialization doesn't support distillation"
+
                 if args.model_args.model_name is None:
                     module = module.to_empty(device=torch.cuda.current_device())
 
@@ -163,10 +167,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                     communication_dtype=communication_dtype,
                     fsdp_algorithm=1,
                 ),
-                auto_wrap_policy=partial(
-                    transformer_auto_wrap_policy,
-                    transformer_layer_cls=[get_module_class_from_name(model, name) for name in block_names],
-                ),
+                auto_wrap_policy=partial(transformer_auto_wrap_policy, transformer_layer_cls=block_classes),
                 device_id=torch.cuda.current_device(),
                 limit_all_gathers=True,
                 use_orig_params=True,
@@ -204,19 +205,17 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model: nn.Module) ->
                     fsdp_algorithm=2,
                 )
 
-                block_classes = [get_module_class_from_name(model, name) for name in block_names]
                 zero3 = stage == 3
 
                 for module in model.modules():
-                    for block_class in block_classes:
-                        if isinstance(module, block_class):
-                            fully_shard(
-                                module,
-                                mesh=dp_mesh,
-                                reshard_after_forward=zero3,
-                                mp_policy=mixed_precision_policy,
-                                offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
-                            )
+                    if isinstance(module, tuple(block_classes)):
+                        fully_shard(
+                            module,
+                            mesh=dp_mesh,
+                            reshard_after_forward=zero3,
+                            mp_policy=mixed_precision_policy,
+                            offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+                        )
 
                 fully_shard(
                     model,

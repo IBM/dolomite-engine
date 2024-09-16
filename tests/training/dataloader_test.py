@@ -16,7 +16,7 @@ from .test_commons import TestCommons
 
 class DataLoaderTest(TestCommons):
     def test_dataloader_has_correct_order(self) -> None:
-        args = TestCommons.load_training_args_for_unit_tests()
+        args = TestCommons.load_training_args_for_unit_tests("data_config.yml")
         split = DatasetSplit.train
         mode = Mode.training
 

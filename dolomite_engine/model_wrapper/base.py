@@ -141,7 +141,7 @@ class ModelWrapper(nn.Module):
         else:
             for key in list(state_dict.keys()):
                 assert key.startswith("model.")
-                state_dict[key.lstrip("model.")] = state_dict.pop(key)
+                state_dict[_remove_first_occurance(key, "model.")] = state_dict.pop(key)
 
             self.config.save_pretrained(save_path)
             SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -156,6 +156,7 @@ class ModelWrapper(nn.Module):
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
         self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
+        self.router_aux_loss_coef = getattr(self.config, "router_aux_loss_coef", None)
 
         log_rank_0(logging.INFO, self.config)
         log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
@@ -262,3 +263,13 @@ class ModelWrapper(nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
+
+    def has_teacher_model(self) -> bool:
+        return False
+
+
+def _remove_first_occurance(string: str, substring: str) -> str:
+    if string.startswith(substring):
+        string = string[len(substring) :]
+
+    return string

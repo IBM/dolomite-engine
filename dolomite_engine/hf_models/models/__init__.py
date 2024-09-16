@@ -1,4 +1,3 @@
-from .dense_moe import DenseMoEConfig, DenseMoEForCausalLM, DenseMoEModel
 from .gpt_crosslayer import (
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,

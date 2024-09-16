@@ -64,6 +64,7 @@ class SparseMoEBlock(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool = False,
+        output_aux_loss: bool = True,
     ) -> tuple[torch.Tensor]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
@@ -86,12 +87,7 @@ class SparseMoEBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states, router_logits = self.moe(hidden_states)
-        if self.mlp is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states + self.mlp(hidden_states)
-
-        hidden_states = feed_forward_hidden_states
-        del feed_forward_hidden_states
+        hidden_states, router_logits, aux_loss = self._compute_moe_and_mlp(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
@@ -104,4 +100,16 @@ class SparseMoEBlock(nn.Module):
         if output_router_logits:
             outputs += (router_logits,)
 
+        if output_aux_loss:
+            outputs += (aux_loss,)
+
         return outputs
+
+    def _compute_moe_and_mlp(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+        moe_output, router_logits, aux_loss = self.moe(hidden_states)
+
+        if self.mlp is not None:
+            mlp_output = self.mlp(hidden_states)
+            moe_output = mlp_output + moe_output
+
+        return moe_output, router_logits, aux_loss
