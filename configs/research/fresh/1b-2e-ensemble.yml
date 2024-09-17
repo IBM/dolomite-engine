@@ -91,6 +91,38 @@ model_args:
         mlp: true
       - attention: false
         mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: true
   efficient_initialization: false
   attention_implementation: sdpa
   use_padding_free_transformer: false
