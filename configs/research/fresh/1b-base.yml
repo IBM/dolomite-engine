@@ -23,7 +23,7 @@ model_args:
     attn_pdrop: 0
     embd_pdrop: 0
     resid_pdrop: 0
-    initializer_range: 0.1
+    initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
     n_embd: 1536
@@ -36,9 +36,7 @@ model_args:
     rope_theta: 10000
     attention_head_type: mha
     scale_attn_weights: true
-    attention_multiplier: 0.015625
     vocab_size: 49152
-    tie_word_embeddings: true
     upcast_logits_for_loss: true
     bos_token_id: 0
     eos_token_id: 0
