@@ -124,10 +124,13 @@ class ModelWrapperForPretraining(ModelWrapper):
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss
             loss = lm_loss + self.router_aux_loss_coef * aux_loss
+
+            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
         else:
             loss = lm_loss
+            output = {"loss": loss}
 
-        return {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
+        return output
 
     def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
         batch = {}
