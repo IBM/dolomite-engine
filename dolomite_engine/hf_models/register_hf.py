@@ -14,6 +14,9 @@ from .models import (
     GPTLadderConfig,
     GPTLadderForCausalLM,
     GPTLadderModel,
+    GPTParallelConfig,
+    GPTParallelForCausalLM,
+    GPTParallelModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
     MoEDolomiteModel,
@@ -31,6 +34,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
     (GPTLadderConfig, GPTLadderModel, GPTLadderForCausalLM),
+    (GPTParallelConfig, GPTParallelModel, GPTParallelForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
