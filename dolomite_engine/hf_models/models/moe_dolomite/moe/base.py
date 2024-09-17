@@ -89,6 +89,9 @@ class SparseMoE(nn.Module):
             std=std,
         )
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.c_fc = ParameterizedExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
