@@ -27,6 +27,15 @@ class AttentionImplementation(Enum):
     flash_attention_2 = "flash_attention_2"
 
 
+class MoEImplementation(Enum):
+    """
+    Enum class for MoE implementation
+    """
+
+    eager = "eager"
+    scattermoe = "scattermoe"
+
+
 class DatasetSplit(str, Enum):
     """dataset split"""
 

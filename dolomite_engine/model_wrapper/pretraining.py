@@ -7,7 +7,7 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
+from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
@@ -23,6 +23,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
+        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
@@ -73,6 +74,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
+            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,

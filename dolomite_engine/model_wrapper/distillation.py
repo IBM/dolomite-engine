@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, KLDivergenceMethod, Mode
+from ..enums import AttentionImplementation, DistributedBackend, KLDivergenceMethod, Mode, MoEImplementation
 from ..utils import log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
@@ -20,6 +20,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
+        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
