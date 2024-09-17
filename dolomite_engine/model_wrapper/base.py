@@ -5,7 +5,7 @@ import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
+from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
 from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
@@ -22,6 +22,7 @@ class ModelWrapper(nn.Module):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
+        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
@@ -60,6 +61,7 @@ class ModelWrapper(nn.Module):
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
         self.attention_implementation = attention_implementation
+        self.moe_implementation = moe_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
@@ -175,6 +177,8 @@ class ModelWrapper(nn.Module):
 
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if self.moe_implementation is not None:
+            model_kwargs["moe_implementation"] = self.moe_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
         if self.tensor_parallel_word_embeddings:

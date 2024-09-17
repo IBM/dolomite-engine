@@ -19,6 +19,7 @@ from .enums import (
     LossMask,
     LRDecaySchedule,
     Mode,
+    MoEImplementation,
     ParamsGroupMethod,
     TuningMethod,
 )
@@ -51,8 +52,10 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
-    # attention implementation (only works with GPTDolomiteForCausalLM)
+    # attention implementation
     attention_implementation: AttentionImplementation | None = None
+    # moe implementation (only works with MoEDolomiteForCausalLM)
+    moe_implementation: MoEImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
