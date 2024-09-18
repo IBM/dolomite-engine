@@ -8,7 +8,7 @@ from .checkpointing import load_checkpoint_for_inference, save_args
 from .data import BaseDataset, collate_fn, get_datasets_list
 from .enums import DatasetSplit, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, ModelWrapperForFinetuning
-from .utils import ProcessGroupManager, ProgressBar, log_environment, setup_tf32
+from .utils import ProcessGroupManager, ProgressBar, setup_tf32
 
 
 def generate(args: InferenceArgs, model: ModelWrapper, datasets_list: list[BaseDataset], mode: Mode) -> None:
@@ -68,8 +68,6 @@ def generate(args: InferenceArgs, model: ModelWrapper, datasets_list: list[BaseD
 
 def main() -> None:
     """main program"""
-
-    log_environment()
 
     mode = Mode.inference
 

@@ -1,13 +1,11 @@
 from .arguments import get_args
 from .checkpointing import load_checkpoint_for_inference
 from .enums import Mode
-from .utils import ProcessGroupManager, log_environment, run_rank_n
+from .utils import ProcessGroupManager, run_rank_n
 
 
 def main() -> None:
     """main program"""
-
-    log_environment()
 
     mode = Mode.unsharding
 
