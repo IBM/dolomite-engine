@@ -22,6 +22,7 @@ from .utils import (
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
+    log_environment,
     setup_tf32,
 )
 
@@ -208,6 +209,8 @@ def evaluate(
 
 def main() -> None:
     """main program"""
+
+    log_environment()
 
     mode = Mode.training
 

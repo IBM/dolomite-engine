@@ -17,6 +17,7 @@ from .packages import (
     is_scattermoe_available,
     is_transformer_engine_available,
     is_triton_available,
+    log_environment,
 )
 from .parallel import ProcessGroupManager, run_rank_n
 from .pydantic import BaseArgs
