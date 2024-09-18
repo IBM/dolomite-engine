@@ -180,7 +180,7 @@ def is_scattermoe_available() -> bool:
 def log_environment() -> None:
     packages = sorted(["{}=={}".format(d.metadata["Name"], d.version) for d in distributions()])
 
-    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
+    log_rank_0(logging.INFO, "------------------------ packages ------------------------")
     for package in packages:
         log_rank_0(logging.INFO, package)
-    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")
+    log_rank_0(logging.INFO, "-------------------- end of packages ---------------------")
