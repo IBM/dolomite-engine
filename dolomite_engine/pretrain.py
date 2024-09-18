@@ -4,7 +4,6 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed import ReduceOp
 from torch.distributed._tensor.api import DTensor
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
@@ -19,7 +18,7 @@ from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .optimization import get_optimizer, get_scheduler
+from .optimization import get_optimizer, get_scheduler, log_optimizer
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -369,6 +368,7 @@ def main(mode: Mode = Mode.training) -> None:
         lr_scheduler = None
 
     log_model(model)
+    log_optimizer(optimizer)
 
     starting_iteration = 0
     metadata = None

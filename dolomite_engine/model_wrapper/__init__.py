@@ -30,6 +30,7 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         "dtype": args.mixed_precision_args.dtype,
         "efficient_initialization": args.model_args.efficient_initialization,
         "attention_implementation": args.model_args.attention_implementation,
+        "moe_implementation": args.model_args.moe_implementation,
         "use_padding_free_transformer": args.model_args.use_padding_free_transformer,
         "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,

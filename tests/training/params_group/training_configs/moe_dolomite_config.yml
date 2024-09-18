@@ -17,17 +17,18 @@ model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
     activation_function: swiglu
-    add_bias: false
+    add_bias: true
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     embd_pdrop: 0
     resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
-    model_type: gpt_dolomite
+    model_type: moe_dolomite
     n_embd: 512
     n_head: 16
-    n_layer: 24
+    n_layer: 4
+    shared_n_inner: 512
     n_positions: 512
     normalization_function: rmsnorm
     position_embedding_type: rope

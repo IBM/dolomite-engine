@@ -19,10 +19,11 @@ from .enums import (
     LossMask,
     LRDecaySchedule,
     Mode,
+    MoEImplementation,
     ParamsGroupMethod,
     TuningMethod,
 )
-from .utils import BaseArgs, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
+from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
 def _check_not_None(object_name_list: list[tuple[Any, str]]) -> None:
@@ -51,8 +52,10 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
-    # attention implementation (only works with GPTDolomiteForCausalLM)
+    # attention implementation
     attention_implementation: AttentionImplementation | None = None
+    # moe implementation (only works with MoEDolomiteForCausalLM)
+    moe_implementation: MoEImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
@@ -601,6 +604,7 @@ def get_args(mode: Mode) -> TrainingArgs | InferenceArgs | UnshardingArgs:
 
     set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
     log_args(args)
+    log_environment()
 
     return args
 

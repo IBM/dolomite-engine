@@ -25,7 +25,8 @@ from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
 from ..hf_models.models.moe_dolomite.moe import SparseMoE
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, run_rank_n
+from .params_group import get_param_groups
 
 
 if is_apex_available():
@@ -87,63 +88,6 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def _get_param_groups(
-    model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
-) -> list[dict]:
-    if params_group_method is None:
-        if model.has_teacher_model():
-            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
-            # this is the student model
-            model = model.model
-
-        trainable_parameters_or_param_groups = model.parameters()
-        names = {"normal": [key for key, _ in model.named_parameters()]}
-    elif params_group_method == ParamsGroupMethod.mup:
-        assert isinstance(
-            model.model,
-            (GPTDolomiteForCausalLM, MoEDolomiteForCausalLM, GPTDolomiteForCausalLM_TP, RNNDolomiteForCausalLM),
-        ), "mup is not supported with this model architecture"
-        assert (
-            model.config.init_method == "mup"
-        ), "both init method for model and params group method for optimizer should be set to mup"
-
-        if model.has_teacher_model():
-            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
-            # this is the student model
-            model = model.model
-
-        # collect parameters with mup learning rate
-        mup_group = {}
-        for module_name, module in model.named_modules():
-            if isinstance(module, (Attention, MLP, SparseMoE)):
-                for param_name, param in module.named_parameters():
-                    # we don't add bias to mup group
-                    if not param_name.endswith("bias"):
-                        # add name of module to name of subparam
-                        mup_group[f"{module_name}.{param_name}"] = param
-
-        # collect parameters without mup learning rate
-        normal_group = {}
-        for param_name, param in model.named_parameters():
-            if param_name not in mup_group:
-                normal_group[param_name] = param
-
-        assert len(normal_group) + len(mup_group) == len(
-            list(model.parameters())
-        ), "params in groups don't sum up to total parameters"
-
-        trainable_parameters_or_param_groups = [
-            {"params": list(normal_group.values()), "lr": optimizer_class_args["lr"]},
-            {"params": list(mup_group.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
-        ]
-
-        names = {"normal": list(normal_group.keys()), "mup": list(mup_group.keys())}
-    else:
-        raise ValueError(f"unexpected params_group_method ({params_group_method})")
-
-    return trainable_parameters_or_param_groups, names
-
-
 def get_optimizer(
     optimizer_class_name: str,
     optimizer_class_args: dict,
@@ -169,7 +113,20 @@ def get_optimizer(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    params_group, _ = _get_param_groups(model, optimizer_class_args, params_group_method)
+    params_group = get_param_groups(model, optimizer_class_args, params_group_method)
     optimizer = optimizer_class(params_group, **optimizer_class_args)
 
     return optimizer
+
+
+@run_rank_n
+def log_optimizer(optimizer: Optimizer) -> None:
+    """print optimizer
+
+    Args:
+        optimizer (Optimizer): optimizer to print
+    """
+
+    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
+    log_rank_0(logging.INFO, optimizer)
+    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")
