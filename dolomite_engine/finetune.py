@@ -14,7 +14,7 @@ from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
-from .optimization import get_optimizer, get_scheduler
+from .optimization import get_optimizer, get_scheduler, log_optimizer
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -280,6 +280,7 @@ def main() -> None:
         lr_scheduler = None
 
     log_model(model)
+    log_optimizer(optimizer)
 
     starting_iteration = 0
     experiments_tracker_state_dict = None
