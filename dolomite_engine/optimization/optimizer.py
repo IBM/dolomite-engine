@@ -127,6 +127,6 @@ def log_optimizer(optimizer: Optimizer) -> None:
         optimizer (Optimizer): optimizer to print
     """
 
-    log_rank_0(logging.INFO, "------------------------ model ------------------------")
+    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
     log_rank_0(logging.INFO, optimizer)
-    log_rank_0(logging.INFO, "-------------------- end of model ---------------------")
+    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")

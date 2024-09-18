@@ -1,4 +1,8 @@
-from .logger import warn_rank_0
+import logging
+from importlib.metadata import distributions
+
+from .logger import log_rank_0, warn_rank_0
+from .parallel import run_rank_n
 
 
 try:
@@ -170,3 +174,13 @@ except ImportError:
 
 def is_scattermoe_available() -> bool:
     return _IS_SCATTERMOE_AVAILABLE
+
+
+@run_rank_n
+def log_environment() -> None:
+    packages = sorted(["{}=={}".format(d.metadata["Name"], d.version) for d in distributions()])
+
+    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
+    for package in packages:
+        log_rank_0(logging.INFO, package)
+    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")
