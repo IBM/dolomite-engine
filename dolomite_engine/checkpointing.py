@@ -157,6 +157,10 @@ def save_checkpoint(
         indent=4,
     )
 
+    if os.path.exists(os.path.join(args.save_args.save_path, "KILLSWITCH")):
+        ProcessGroupManager.destroy_process_groups()
+        exit()
+
 
 def load_checkpoint_for_training(
     args: TrainingArgs,
