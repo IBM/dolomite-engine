@@ -1,0 +1,32 @@
+{
+    "normal": [
+        "model.transformer.wte.weight",
+        "model.transformer.h.0.attn.c_attn.weight",
+        "model.transformer.h.0.attn.c_proj.weight",
+        "model.transformer.h.0.mlp.c_fc.weight",
+        "model.transformer.h.0.mlp.c_proj.weight",
+        "model.transformer.h.1.attn.c_attn.weight",
+        "model.transformer.h.1.attn.c_proj.weight",
+        "model.transformer.h.1.mlp.c_fc.weight",
+        "model.transformer.h.1.mlp.c_proj.weight",
+        "model.transformer.h.2.attn.c_attn.weight",
+        "model.transformer.h.2.attn.c_proj.weight",
+        "model.transformer.h.2.mlp.c_fc.weight",
+        "model.transformer.h.2.mlp.c_proj.weight",
+        "model.transformer.h.3.attn.c_attn.weight",
+        "model.transformer.h.3.attn.c_proj.weight",
+        "model.transformer.h.3.mlp.c_fc.weight",
+        "model.transformer.h.3.mlp.c_proj.weight"
+    ],
+    "no_weight_decay": [
+        "model.transformer.h.0.ln_1.weight",
+        "model.transformer.h.0.ln_2.weight",
+        "model.transformer.h.1.ln_1.weight",
+        "model.transformer.h.1.ln_2.weight",
+        "model.transformer.h.2.ln_1.weight",
+        "model.transformer.h.2.ln_2.weight",
+        "model.transformer.h.3.ln_1.weight",
+        "model.transformer.h.3.ln_2.weight",
+        "model.transformer.ln_f.weight"
+    ]
+}

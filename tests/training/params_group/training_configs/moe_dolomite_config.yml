@@ -27,7 +27,8 @@ model_args:
     model_type: moe_dolomite
     n_embd: 512
     n_head: 16
-    n_layer: 24
+    n_layer: 4
+    shared_n_inner: 512
     n_positions: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
