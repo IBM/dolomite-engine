@@ -1,3 +1,5 @@
+import logging
+
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -23,7 +25,7 @@ from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
 from ..hf_models.models.moe_dolomite.moe import SparseMoE
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, run_rank_n
 from .params_group import get_param_groups
 
 
@@ -115,3 +117,16 @@ def get_optimizer(
     optimizer = optimizer_class(params_group, **optimizer_class_args)
 
     return optimizer
+
+
+@run_rank_n
+def log_optimizer(optimizer: Optimizer) -> None:
+    """print optimizer
+
+    Args:
+        optimizer (Optimizer): optimizer to print
+    """
+
+    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
+    log_rank_0(logging.INFO, optimizer)
+    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")

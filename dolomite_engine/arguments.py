@@ -23,7 +23,7 @@ from .enums import (
     ParamsGroupMethod,
     TuningMethod,
 )
-from .utils import BaseArgs, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
+from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
 def _check_not_None(object_name_list: list[tuple[Any, str]]) -> None:
@@ -604,6 +604,7 @@ def get_args(mode: Mode) -> TrainingArgs | InferenceArgs | UnshardingArgs:
 
     set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
     log_args(args)
+    log_environment()
 
     return args
 
