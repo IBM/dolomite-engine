@@ -17,7 +17,7 @@ model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
     activation_function: swiglu
-    add_bias: false
+    add_bias: true
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     embd_pdrop: 0

@@ -15,7 +15,7 @@ from ..test_commons import TestCommons
 class ParamsGroupTest(TestCommons):
     @parameterized.expand(
         [
-            # ("gpt_dolomite_config.yml", "gpt_dolomite_mup.json"),
+            ("gpt_dolomite_config.yml", "gpt_dolomite_mup.json"),
             ("moe_dolomite_config.yml", "moe_dolomite_mup.json"),
         ]
     )
