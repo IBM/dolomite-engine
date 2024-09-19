@@ -46,16 +46,15 @@ def train_step(
         MetricsTrackingDict: metrics to track
     """
 
+    if distributed_backend == DistributedBackend.torch:
+        fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
     no_sync = nullcontext
-
     if not sync_every_gradient_accumulation_step:
-        if distributed_backend == DistributedBackend.torch:
-            fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
-
-            if fsdp_algorithm == 1:
-                no_sync = model.no_sync
-            else:
-                model.set_requires_gradient_sync(False)
+        if fsdp_algorithm == 1:
+            no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
 
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
@@ -82,11 +81,7 @@ def train_step(
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    if (
-        not sync_every_gradient_accumulation_step
-        and distributed_backend == DistributedBackend.torch
-        and fsdp_algorithm == 2
-    ):
+    if distributed_backend == DistributedBackend.torch and fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
