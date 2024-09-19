@@ -82,7 +82,11 @@ def train_step(
             else:
                 raise ValueError(f"unexpected distributed backend ({distributed_backend})")
 
-    if distributed_backend == DistributedBackend.torch and fsdp_algorithm == 2:
+    if (
+        not sync_every_gradient_accumulation_step
+        and distributed_backend == DistributedBackend.torch
+        and fsdp_algorithm == 2
+    ):
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
