@@ -105,6 +105,7 @@ def train(
             gradient_clipping=gradient_clipping,
             forward_context=forward_context,
             backward_context=backward_context,
+            sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
         )
 
         metrics_tracker = metrics_tracker + loss_step_dict

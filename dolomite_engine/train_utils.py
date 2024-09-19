@@ -26,6 +26,7 @@ def train_step(
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
+    sync_every_gradient_accumulation_step: bool,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -39,19 +40,22 @@ def train_step(
         gradient_clipping (float): gradient clipping value
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
+        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
 
     Returns:
         MetricsTrackingDict: metrics to track
     """
 
     no_sync = nullcontext
-    if distributed_backend == DistributedBackend.torch:
-        fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
 
-        if fsdp_algorithm == 1:
-            no_sync = model.no_sync
-        else:
-            model.set_requires_gradient_sync(False)
+    if not sync_every_gradient_accumulation_step:
+        if distributed_backend == DistributedBackend.torch:
+            fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+            if fsdp_algorithm == 1:
+                no_sync = model.no_sync
+            else:
+                model.set_requires_gradient_sync(False)
 
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
