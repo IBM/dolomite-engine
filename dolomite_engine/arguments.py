@@ -342,6 +342,8 @@ class DistributedArgs(BaseArgs):
     timeout_minutes: int | None = None
     # fsdp algorithm
     fsdp_algorithm: int = 1
+    # whether to sync every gradient accumulation step
+    sync_every_gradient_accumulation_step: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         if self.zero_quantized_weights or self.zero_quantized_gradients:
