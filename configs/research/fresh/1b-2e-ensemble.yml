@@ -131,7 +131,7 @@ tuning_args:
   tuning_method: pretraining
 
 save_args:
-  save_path: /proj/checkpoints/mayank/ensemble-experiments/1b-2e-ensemble
+  save_path: /proj/checkpoints/mayank/ensemble-experiments-mayank/1b-2e-ensemble
   save_interval: 2500
 
 logging_args:

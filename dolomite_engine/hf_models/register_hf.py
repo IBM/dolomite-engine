@@ -33,6 +33,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
+    (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
     (GPTLadderConfig, GPTLadderModel, GPTLadderForCausalLM),
     (GPTParallelConfig, GPTParallelModel, GPTParallelForCausalLM),
 ]

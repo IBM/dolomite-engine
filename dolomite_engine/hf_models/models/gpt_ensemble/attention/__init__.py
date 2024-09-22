@@ -2,9 +2,7 @@ from ..config import GPTEnsembleConfig
 from .sdpa import EnsembleSDPA
 
 
-_ATTENTION_MODULES = {
-    "sdpa": EnsembleSDPA,
-}
+_ATTENTION_MODULES = {"sdpa": EnsembleSDPA}
 
 
 def get_attention_module(

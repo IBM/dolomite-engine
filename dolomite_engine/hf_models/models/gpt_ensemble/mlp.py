@@ -6,14 +6,13 @@ import torch.nn as nn
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
 from ...utils import divide_if_divisible
-from ..gpt_dolomite.mlp import MLP
 from .config import GPTEnsembleConfig
 from .linear import EnsembleLinear
 
 
-class EnsembleMLP(MLP):
+class EnsembleMLP(nn.Module):
     def __init__(self, config: GPTEnsembleConfig, layer_idx: int = None) -> None:
-        nn.Module.__init__(self)
+        super().__init__()
 
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual

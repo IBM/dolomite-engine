@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from .....utils import ProcessGroupManager, is_scattermoe_available
+from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import get_activation_function, is_glu
 from ....modeling_utils_TP import (
@@ -22,9 +22,8 @@ from ...moe_dolomite.moe import ScatterMoE
 from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
 
 
-if is_scattermoe_available():
-    import scattermoe
-    from scattermoe.parallel_experts import parallel_linear as scattered_experts
+if is_kernel_hyperdrive_available():
+    from khd.scattermoe.triton_implementation import padded_block_indices, scattered_experts
 
 
 class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):

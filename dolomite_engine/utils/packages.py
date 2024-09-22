@@ -163,17 +163,17 @@ def is_einops_available() -> bool:
 
 
 try:
-    import scattermoe
+    import khd
 
-    _IS_SCATTERMOE_AVAILABLE = True
+    _IS_KHD_AVAILABLE = True
 except ImportError:
-    _IS_SCATTERMOE_AVAILABLE = False
+    _IS_KHD_AVAILABLE = False
 
-    warn_rank_0("scattermoe is not installed, install from https://github.com/shawntan/scattermoe")
+    warn_rank_0("kernel-hyperdrive is not installed, install from https://github.com/mayank31398/kernel-hyperdrive")
 
 
-def is_scattermoe_available() -> bool:
-    return _IS_SCATTERMOE_AVAILABLE
+def is_kernel_hyperdrive_available() -> bool:
+    return _IS_KHD_AVAILABLE
 
 
 @run_rank_n
