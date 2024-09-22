@@ -10,12 +10,14 @@ from .models import (
     GPTDolomiteModel,
     GPTEnsembleConfig,
     GPTEnsembleForCausalLM,
+    GPTEnsembleForCausalLM_TP,
     GPTEnsembleModel,
     GPTLadderConfig,
     GPTLadderForCausalLM,
     GPTLadderModel,
     GPTParallelConfig,
     GPTParallelForCausalLM,
+    GPTParallelForCausalLM_TP,
     GPTParallelModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
@@ -56,15 +58,13 @@ def is_custom_model(model_class: type[AutoModelForCausalLM] | type[AutoModelForS
     return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
 
 
-def is_tensor_parallel_compatible_model(
-    model_class: type[AutoModelForCausalLM] | type[AutoModelForSeq2SeqLM], model_type: str
-) -> bool:
-    return model_class.__name__ == "GPTDolomiteForCausalLM" or model_type == "gpt_dolomite"
-
-
-_TENSOR_PARALLEL_CLASS_MAPPING = {"gpt_dolomite": GPTDolomiteForCausalLM_TP}
+_TENSOR_PARALLEL_CLASS_MAPPING = {
+    "gpt_dolomite": (GPTDolomiteForCausalLM, GPTDolomiteForCausalLM_TP),
+    "gpt_ensemble": (GPTEnsembleForCausalLM, GPTEnsembleForCausalLM_TP),
+    "gpt_parallel": (GPTParallelForCausalLM, GPTParallelForCausalLM_TP),
+}
 
 
 def get_tensor_parallel_class(model_type: str) -> AutoModelForCausalLM:
-    assert is_tensor_parallel_compatible_model(AutoModelForCausalLM, model_type)
-    return _TENSOR_PARALLEL_CLASS_MAPPING[model_type]
+    assert model_type in _TENSOR_PARALLEL_CLASS_MAPPING, "tensor parallel is not supported with this model"
+    return _TENSOR_PARALLEL_CLASS_MAPPING[model_type][1]
