@@ -118,7 +118,7 @@ def _import_state_dict_from_huggingface(
                 )
                 for expert_idx in range(num_experts)
             ]
-        )
+        ).view(-1, num_heads * head_dim)
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = torch.stack(
             [
@@ -127,7 +127,7 @@ def _import_state_dict_from_huggingface(
                 )
                 for expert_idx in range(num_experts)
             ]
-        )
+        ).view(num_experts * num_heads * head_dim, -1)
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
             safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
@@ -241,7 +241,11 @@ def _export_state_dict_to_huggingface(
         )
 
         c_fc_experts = safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
+        c_fc_experts = c_fc_experts.view(num_experts, -1, num_heads * head_dim)
+
         c_proj_experts = safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
+        c_proj_experts = c_proj_experts.view(num_experts, num_heads * head_dim, -1)
+
         for expert_idx in range(num_experts):
             up_weight, gate_weight = split_up_gate_tensor_for_mlp(c_fc_experts[expert_idx])
 
