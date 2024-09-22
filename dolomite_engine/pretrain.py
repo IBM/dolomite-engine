@@ -120,12 +120,9 @@ def train(
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-    global_batch_size = (
-        micro_batch_size * gradient_accumulation_steps * ProcessGroupManager.get_data_parallel_world_size()
-    )
-    tokens_per_batch = global_batch_size * sequence_length
-
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
+    global_batch_size = micro_batch_size * gradient_accumulation_steps * dp_world_size
+    tokens_per_batch = global_batch_size * sequence_length
 
     # model flops per GPU
     model_flops = (
@@ -137,7 +134,7 @@ def train(
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
             gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
         )
-        / dp_world_size
+        / ProcessGroupManager.get_world_size()
     )
 
     forward_context = (
