@@ -20,9 +20,7 @@ from .base import PreTrainedModelMixin_TP
 class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
     tensor_parallel_state_dict_function = None
 
-    def __init__(self, config: CommonConfig, **kwargs) -> None:
-        PreTrainedModelMixin_TP.__init__(self, config, **kwargs)
-
+    def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.vocab_size = config.vocab_size
         self.transformer = self.base_model_class(config, **kwargs)
 

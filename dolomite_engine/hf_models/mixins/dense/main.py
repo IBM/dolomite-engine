@@ -14,6 +14,9 @@ class CausalLMModelMixin(PreTrainedModelMixin):
 
     def __init__(self, config: CommonConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
+        self._init_model(config, **kwargs)
+
+    def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.transformer = self.base_model_class(config, **kwargs)
 
         if not self._tied_word_embeddings:
