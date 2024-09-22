@@ -30,7 +30,6 @@ from .models import (
 _CUSTOM_MODEL_REGISTRY = [
     (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
-    (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
     (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
