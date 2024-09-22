@@ -3,16 +3,15 @@ import math
 import torch
 import torch.nn as nn
 
-from .....utils import is_scattermoe_available
+from .....utils import is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 from .base import ParameterizedExperts, SparseMoE
 
 
-if is_scattermoe_available():
-    import scattermoe
-    from scattermoe.parallel_experts import parallel_linear as scattered_experts
+if is_kernel_hyperdrive_available():
+    from khd.scattermoe.triton_implementation import padded_block_indices, scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -46,7 +45,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
     ):
         results = scattered_experts(
             inputs,
-            self.weight.permute(0, 2, 1),
+            self.weight.view(self.num_experts, self.out_features, -1).permute(0, 2, 1),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
@@ -122,10 +121,8 @@ class ScatterMoE(SparseMoE):
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
         with torch.no_grad():
-            sorted_expert_idxs, sorted_scattered_idxs = scattermoe.kernels.ops.flatten_and_sort(selected_experts)
-            padded_block_idxs, expert_offsets = scattermoe.kernels.ops.padded_block_indices(
-                sorted_expert_idxs, self.num_experts
-            )
+            sorted_expert_idxs, sorted_scattered_idxs = torch.sort(selected_experts.flatten())
+            padded_block_idxs, expert_offsets = padded_block_indices(sorted_expert_idxs, self.num_experts)
 
         hidden_states = self.c_fc(
             hidden_states,
