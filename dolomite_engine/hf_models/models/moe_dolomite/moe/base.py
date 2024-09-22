@@ -40,7 +40,7 @@ class ParameterizedExperts(nn.Module):
         weight = self.weight.view(self.num_experts, self.out_features, -1)
 
         if self.bias is not None:
-            bias = self.weight.view(self.num_experts, self.out_features, -1)
+            bias = self.bias.view(self.num_experts, self.out_features)
 
         input = input.split(num_experts_per_token.tolist(), dim=0)
         input = [
