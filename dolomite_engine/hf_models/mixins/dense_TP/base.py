@@ -10,10 +10,10 @@ from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
     def __init__(self, config: CommonConfig, *args, **kwargs):
-        super().__init__(self, config, *args, **kwargs)
-
         self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
+
+        super().__init__(config, *args, **kwargs)
 
 
 class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
