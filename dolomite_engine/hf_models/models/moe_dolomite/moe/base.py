@@ -38,7 +38,9 @@ class ParameterizedExperts(nn.Module):
 
     def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
         weight = self.weight.view(self.num_experts, self.out_features, -1)
-        bias = self.weight.view(self.num_experts, self.out_features, -1)
+
+        if self.bias is not None:
+            bias = self.weight.view(self.num_experts, self.out_features, -1)
 
         input = input.split(num_experts_per_token.tolist(), dim=0)
         input = [
