@@ -21,9 +21,7 @@ class GPTDolomitePreTrainedModel_TP(PreTrainedModelMixin_TP):
 
 
 class GPTDolomiteModel_TP(GPTDolomitePreTrainedModel_TP, BaseModelMixin_TP):
-    def __init__(self, config: GPTDolomiteConfig, **kwargs) -> None:
-        super().__init__(config, **kwargs)
-
+    def _init_model(self, config: GPTDolomiteConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
