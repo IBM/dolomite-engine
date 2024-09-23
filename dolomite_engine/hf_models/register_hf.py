@@ -14,6 +14,7 @@ from .models import (
     GPTEnsembleModel,
     GPTLadderConfig,
     GPTLadderForCausalLM,
+    GPTLadderForCausalLM_TP,
     GPTLadderModel,
     GPTParallelConfig,
     GPTParallelForCausalLM,
@@ -62,6 +63,7 @@ _TENSOR_PARALLEL_CLASS_MAPPING = {
     "gpt_dolomite": (GPTDolomiteForCausalLM, GPTDolomiteForCausalLM_TP),
     "gpt_ensemble": (GPTEnsembleForCausalLM, GPTEnsembleForCausalLM_TP),
     "gpt_parallel": (GPTParallelForCausalLM, GPTParallelForCausalLM_TP),
+    "gpt_ladder": (GPTLadderForCausalLM, GPTLadderForCausalLM_TP),
 }
 
 
