@@ -14,7 +14,6 @@ from ...modeling_utils_TP import (
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ladder import GPTLadderConfig
 from ..gpt_parallel_TP.layer import GPTParallelBlock_TP
-from ..gpt_parallel_TP.linear import ParallelRowParallelLinear
 from .linear import LadderColumnParallelLinear
 
 
@@ -82,7 +81,7 @@ class GPTLadderBlock_TP(nn.Module):
 
         current_attention_out = self.ln_1(residual)
 
-        # all gather with sequence paralle and no-op without sequence parallel
+        # all gather with sequence parallel and no-op without sequence parallel
         current_attention_out = tensor_to_dtensor(
             current_attention_out, current_placement=self.placement, desired_placement=Replicate()
         )
@@ -107,14 +106,12 @@ class GPTLadderBlock_TP(nn.Module):
 
         current_mlp_out = self.ln_2(residual)
 
-        # all gather with sequence paralle and no-op without sequence parallel
+        # all gather with sequence parallel and no-op without sequence parallel
         current_mlp_out = tensor_to_dtensor(
             current_mlp_out, current_placement=self.placement, desired_placement=Replicate()
         )
 
-        current_attention_out = dtensor_to_tensor(
-            current_attention_out, desired_placement=self.placement, tensor_input_allowed=True
-        )
+        current_attention_out = dtensor_to_tensor(current_attention_out, desired_placement=self.placement)
 
         current_mlp_out = self.mlp(current_mlp_out)
 

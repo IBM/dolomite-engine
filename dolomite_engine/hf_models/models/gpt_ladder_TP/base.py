@@ -3,6 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
+from ...modeling_utils_TP import dtensor_to_tensor, get_module_placements
 from ..gpt_ladder import GPTLadderConfig
 from .layer import GPTLadderBlock_TP
 
@@ -69,6 +70,10 @@ class GPTLadderModel_TP(GPTLadderPreTrainedModel_TP, BaseModelMixin_TP):
                 max_seqlen=max_seqlen,
             )
 
+        previous_mlp_out = dtensor_to_tensor(
+            previous_mlp_out,
+            desired_placement=get_module_placements(self._use_padding_free_transformer, self.sequence_parallel),
+        )
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
 
         hidden_states = self.ln_f(hidden_states)
