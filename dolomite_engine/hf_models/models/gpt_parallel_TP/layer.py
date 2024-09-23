@@ -5,12 +5,13 @@ from transformers import DynamicCache
 from dolomite_engine.hf_models.models.gpt_dolomite.config import GPTDolomiteConfig
 
 from ....utils import ProcessGroupManager
-from ...modeling_utils_TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
-from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
+from ...modeling_utils_TP import dtensor_to_tensor, get_attention_module_TP, get_module_placements
+from ..gpt_dolomite_TP.mlp import MLP_TP
 from .linear import ParallelRowParallelLinear
+from .normalization import get_normalization_function_TP
 
 
-class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
+class GPTParallelBlock_TP(nn.Module):
     def __init__(
         self,
         config: GPTDolomiteConfig,
@@ -20,13 +21,30 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
-        super().__init__(
+        super().__init__()
+
+        hidden_size = config.hidden_size
+        self.layer_idx = layer_idx
+        self.m_residual = config.m_residual
+
+        self.ln = get_normalization_function_TP(
+            config.normalization_function,
+            hidden_size,
+            eps=config.layer_norm_epsilon,
+            normalization_implementation=normalization_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
+        )
+        self.attn = get_attention_module_TP(
             config,
-            normalization_implementation,
-            attention_implementation,
-            use_padding_free_transformer,
-            layer_idx,
-            sequence_parallel,
+            True,
+            attention_implementation=attention_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            layer_idx=layer_idx,
+            sequence_parallel=sequence_parallel,
+        )
+        self.mlp = MLP_TP(
+            config, use_padding_free_transformer=use_padding_free_transformer, sequence_parallel=sequence_parallel
         )
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
@@ -76,9 +94,12 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
     ) -> tuple[torch.Tensor]:
         residual = hidden_states
 
-        hidden_states = tensor_to_dtensor(hidden_states, current_placement=self.placement)
+        hidden_states = self.ln(hidden_states)
+        attention_out, mlp_out = hidden_states.chunk(2)
 
-        attention_out = self.ln_1(hidden_states)
+        attention_out = attention_out.squeeze(0)
+        mlp_out = mlp_out.squeeze(0)
+
         attention_out = self.attn(
             attention_out,
             past_key_values=past_key_values,
@@ -88,7 +109,6 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
             max_seqlen=max_seqlen,
         )
 
-        mlp_out = self.ln_2(hidden_states)
         mlp_out = self.mlp(mlp_out)
 
         hidden_states = attention_out + mlp_out
