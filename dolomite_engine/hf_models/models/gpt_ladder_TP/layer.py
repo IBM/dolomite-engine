@@ -1,12 +1,20 @@
 import torch
 import torch.nn as nn
+from torch.distributed._tensor.placement_types import Replicate
 from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager
-from ...modeling_utils_TP import get_attention_module_TP, get_module_placements, get_normalization_function_TP
+from ...modeling_utils_TP import (
+    dtensor_to_tensor,
+    get_attention_module_TP,
+    get_module_placements,
+    get_normalization_function_TP,
+    tensor_to_dtensor,
+)
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ladder import GPTLadderConfig
-from ..gpt_ladder.layer import GPTLadderBlock
+from ..gpt_parallel_TP.layer import GPTParallelBlock_TP
+from ..gpt_parallel_TP.linear import ParallelRowParallelLinear
 from .linear import LadderColumnParallelLinear
 
 
@@ -56,6 +64,60 @@ class GPTLadderBlock_TP(nn.Module):
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        self._patch_column_parallel(use_padding_free_transformer, sequence_parallel)
+        GPTParallelBlock_TP._patch_row_parallel(self, use_padding_free_transformer, sequence_parallel)
+
+    def forward(
+        self,
+        previous_attention_out: torch.Tensor,
+        previous_mlp_out: torch.Tensor,
+        residual: torch.Tensor,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor]:
+        residual = residual + previous_attention_out
+
+        current_attention_out = self.ln_1(residual)
+
+        # all gather with sequence paralle and no-op without sequence parallel
+        current_attention_out = tensor_to_dtensor(current_attention_out, current_placement=self.placement)
+        current_attention_out = dtensor_to_tensor(current_attention_out, desired_placement=Replicate())
+
+        previous_mlp_out = dtensor_to_tensor(previous_mlp_out, desired_placement=self.placement)
+
+        current_attention_out = self.attn(
+            current_attention_out,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            rope_cos_sin=rope_cos_sin,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+        )
+
+        if self.m_residual is not None:
+            current_attention_out = current_attention_out * self.m_residual
+
+        residual = residual + previous_mlp_out
+
+        current_mlp_out = self.ln_2(residual)
+
+        # all gather with sequence paralle and no-op without sequence parallel
+        current_mlp_out = tensor_to_dtensor(current_mlp_out, current_placement=self.placement)
+        current_mlp_out = dtensor_to_tensor(current_mlp_out, desired_placement=Replicate())
+
+        current_attention_out = dtensor_to_tensor(current_attention_out, desired_placement=self.placement)
+
+        current_mlp_out = self.mlp(current_mlp_out)
+
+        if self.m_residual is not None:
+            current_mlp_out = current_mlp_out * self.m_residual
+
+        return current_attention_out, current_mlp_out, residual
+
+    def _patch_column_parallel(self, use_padding_free_transformer: bool, sequence_parallel: bool) -> None:
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
         # patch to avoid multiple communication
@@ -89,26 +151,3 @@ class GPTLadderBlock_TP(nn.Module):
 
         self.mlp.c_fc.weight = mlp_c_fc.weight
         self.mlp.c_fc.bias = mlp_c_fc.bias
-
-    def forward(
-        self,
-        previous_attention_out: torch.Tensor,
-        previous_mlp_out: torch.Tensor,
-        residual: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor]:
-        return GPTLadderBlock.forward(
-            self,
-            previous_attention_out=previous_attention_out,
-            previous_mlp_out=previous_mlp_out,
-            residual=residual,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )

@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from dolomite_engine.hf_models.models.gpt_dolomite.config import GPTDolomiteConfig
-
 from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import dtensor_to_tensor, get_attention_module_TP, get_module_placements
 from ..gpt_dolomite_TP.mlp import MLP_TP
+from ..gpt_parallel import GPTParallelConfig
 from .linear import ParallelRowParallelLinear
 from .normalization import get_normalization_function_TP
 
@@ -14,7 +13,7 @@ from .normalization import get_normalization_function_TP
 class GPTParallelBlock_TP(nn.Module):
     def __init__(
         self,
-        config: GPTDolomiteConfig,
+        config: GPTParallelConfig,
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
@@ -49,39 +48,7 @@ class GPTParallelBlock_TP(nn.Module):
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
-        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-        # patch to avoid multiple communication
-        attn_c_proj = self.attn.c_proj
-        mlp_c_proj = self.mlp.c_proj
-
-        def _has_bias(l: nn.Linear) -> bool:
-            if hasattr(l, "bias"):
-                return l.bias is not None
-            return False
-
-        with torch.device("meta"):
-            self.attn.c_proj = ParallelRowParallelLinear(
-                in_features=attn_c_proj.in_features_per_device * tp_world_size,
-                out_features=attn_c_proj.out_features,
-                bias=_has_bias(attn_c_proj),
-                use_padding_free_transformer=use_padding_free_transformer,
-                sequence_parallel=sequence_parallel,
-            )
-
-            self.mlp.c_proj = ParallelRowParallelLinear(
-                in_features=mlp_c_proj.in_features_per_device * tp_world_size,
-                out_features=mlp_c_proj.out_features,
-                bias=_has_bias(mlp_c_proj),
-                use_padding_free_transformer=use_padding_free_transformer,
-                sequence_parallel=sequence_parallel,
-            )
-
-        self.attn.c_proj.weight = attn_c_proj.weight
-        self.attn.c_proj.bias = attn_c_proj.bias
-
-        self.mlp.c_proj.weight = mlp_c_proj.weight
-        self.mlp.c_proj.bias = mlp_c_proj.bias
+        self._patch_row_parallel(use_padding_free_transformer, sequence_parallel)
 
     def forward(
         self,
@@ -121,3 +88,38 @@ class GPTParallelBlock_TP(nn.Module):
         hidden_states = hidden_states + residual
 
         return hidden_states
+
+    def _patch_row_parallel(self, use_padding_free_transformer: bool, sequence_parallel: bool) -> None:
+        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+
+        # patch to avoid multiple communication
+        attn_c_proj = self.attn.c_proj
+        mlp_c_proj = self.mlp.c_proj
+
+        def _has_bias(l: nn.Linear) -> bool:
+            if hasattr(l, "bias"):
+                return l.bias is not None
+            return False
+
+        with torch.device("meta"):
+            self.attn.c_proj = ParallelRowParallelLinear(
+                in_features=attn_c_proj.in_features_per_device * tp_world_size,
+                out_features=attn_c_proj.out_features,
+                bias=_has_bias(attn_c_proj),
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+
+            self.mlp.c_proj = ParallelRowParallelLinear(
+                in_features=mlp_c_proj.in_features_per_device * tp_world_size,
+                out_features=mlp_c_proj.out_features,
+                bias=_has_bias(mlp_c_proj),
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+
+        self.attn.c_proj.weight = attn_c_proj.weight
+        self.attn.c_proj.bias = attn_c_proj.bias
+
+        self.mlp.c_proj.weight = mlp_c_proj.weight
+        self.mlp.c_proj.bias = mlp_c_proj.bias
