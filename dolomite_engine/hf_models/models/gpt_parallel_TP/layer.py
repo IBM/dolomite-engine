@@ -5,7 +5,7 @@ from transformers import DynamicCache
 from dolomite_engine.hf_models.models.gpt_dolomite.config import GPTDolomiteConfig
 
 from ....utils import ProcessGroupManager
-from ...modeling_utils_TP import get_module_placements, tensor_to_dtensor
+from ...modeling_utils_TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from .linear import ParallelRowParallelLinear
 
@@ -93,7 +93,7 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
 
         hidden_states = attention_out + mlp_out
 
-        hidden_states = tensor_to_dtensor(hidden_states, desired_placement=self.placement)
+        hidden_states = dtensor_to_tensor(hidden_states, desired_placement=self.placement)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
