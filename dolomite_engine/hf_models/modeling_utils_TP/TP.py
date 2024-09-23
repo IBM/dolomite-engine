@@ -50,7 +50,7 @@ def tensor_to_dtensor(
 
     dtensor = DTensor.from_local(tensor, device_mesh=tp_mesh, run_check=False, placements=[current_placement])
     if desired_placement is not None:
-        dtensor = dtensor.redistribute(device_mesh=tp_mesh, placements=[desired_placement])
+        dtensor = dtensor.redistribute(device_mesh=tp_mesh, placements=[desired_placement], async_op=True)
 
     return dtensor
 
@@ -60,7 +60,7 @@ def dtensor_to_tensor(
 ) -> torch.Tensor:
     if desired_placement is not None:
         dtensor = dtensor.redistribute(
-            device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[desired_placement]
+            device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[desired_placement], async_op=True
         )
 
     tensor = dtensor.to_local(grad_placements=None if grad_placement is None else [grad_placement])
