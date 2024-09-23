@@ -83,8 +83,9 @@ class GPTLadderBlock_TP(nn.Module):
         current_attention_out = self.ln_1(residual)
 
         # all gather with sequence paralle and no-op without sequence parallel
-        current_attention_out = tensor_to_dtensor(current_attention_out, current_placement=self.placement)
-        current_attention_out = dtensor_to_tensor(current_attention_out, desired_placement=Replicate())
+        current_attention_out = tensor_to_dtensor(
+            current_attention_out, current_placement=self.placement, desired_placement=Replicate()
+        )
 
         previous_mlp_out = dtensor_to_tensor(
             previous_mlp_out, desired_placement=self.placement, tensor_input_allowed=True
@@ -107,8 +108,9 @@ class GPTLadderBlock_TP(nn.Module):
         current_mlp_out = self.ln_2(residual)
 
         # all gather with sequence paralle and no-op without sequence parallel
-        current_mlp_out = tensor_to_dtensor(current_mlp_out, current_placement=self.placement)
-        current_mlp_out = dtensor_to_tensor(current_mlp_out, desired_placement=Replicate())
+        current_mlp_out = tensor_to_dtensor(
+            current_mlp_out, current_placement=self.placement, desired_placement=Replicate()
+        )
 
         current_attention_out = dtensor_to_tensor(
             current_attention_out, desired_placement=self.placement, tensor_input_allowed=True
