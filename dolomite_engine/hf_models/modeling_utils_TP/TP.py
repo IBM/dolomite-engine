@@ -61,7 +61,7 @@ def tensor_to_dtensor(
 def dtensor_to_tensor(
     dtensor: DTensor, desired_placement: Placement | None = None, grad_placement: Placement | None = None
 ) -> torch.Tensor:
-    if not isinstance(tensor, DTensor):
+    if not isinstance(dtensor, DTensor):
         return tensor
 
     if desired_placement is not None:
