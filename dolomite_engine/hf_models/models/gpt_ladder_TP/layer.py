@@ -26,7 +26,7 @@ class GPTLadderBlock_TP(nn.Module):
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
-        self.ln = get_normalization_function_TP(
+        self.ln_1 = get_normalization_function_TP(
             config.normalization_function,
             hidden_size,
             eps=config.layer_norm_epsilon,
@@ -40,6 +40,14 @@ class GPTLadderBlock_TP(nn.Module):
             attention_implementation=attention_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,
+            sequence_parallel=sequence_parallel,
+        )
+        self.ln_2 = get_normalization_function_TP(
+            config.normalization_function,
+            hidden_size,
+            eps=config.layer_norm_epsilon,
+            normalization_implementation=normalization_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
         self.mlp = MLP_TP(
