@@ -4,14 +4,13 @@ from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import get_attention_module_TP, get_module_placements, get_normalization_function_TP
-from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ladder import GPTLadderConfig
 from ..gpt_ladder.layer import GPTLadderBlock
 from .linear import LadderColumnParallelLinear
 
 
-class GPTLadderBlock_TP(GPTDolomiteBlock_TP):
+class GPTLadderBlock_TP(nn.Module):
     def __init__(
         self,
         config: GPTLadderConfig,
