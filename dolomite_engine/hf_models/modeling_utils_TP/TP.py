@@ -44,8 +44,18 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
 
 
 def tensor_to_dtensor(
-    tensor: torch.Tensor, current_placement: Placement, desired_placement: Placement | None = None
+    tensor: torch.Tensor,
+    current_placement: Placement,
+    desired_placement: Placement | None = None,
+    dtensor_input_allowed: bool = False,
 ) -> DTensor:
+    # if already a tensor, we return as-is
+    if isinstance(tensor, DTensor):
+        if dtensor_input_allowed:
+            return tensor
+        else:
+            raise ValueError("input is already a DTensor")
+
     tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
     dtensor = DTensor.from_local(tensor, device_mesh=tp_mesh, run_check=False, placements=[current_placement])
@@ -56,8 +66,19 @@ def tensor_to_dtensor(
 
 
 def dtensor_to_tensor(
-    dtensor: DTensor, desired_placement: Placement | None = None, grad_placement: Placement | None = None
+    dtensor: DTensor,
+    desired_placement: Placement | None = None,
+    grad_placement: Placement | None = None,
+    tensor_input_allowed: bool = False,
 ) -> torch.Tensor:
+    if not isinstance(dtensor, DTensor):
+        assert isinstance(dtensor, torch.Tensor), "invalid type found"
+
+        if tensor_input_allowed:
+            return dtensor
+        else:
+            raise ValueError("input is already a Tensor")
+
     if desired_placement is not None:
         dtensor = dtensor.redistribute(
             device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[desired_placement], async_op=True
