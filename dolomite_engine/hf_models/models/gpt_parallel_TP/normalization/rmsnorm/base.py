@@ -15,11 +15,13 @@ class ParallelRMSNorm_TP(nn.RMSNorm, DTensorModule):
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
-        super().__init__(normalized_shape, eps=eps)
+        super().__init__(2 * normalized_shape, eps=eps)
 
         self.weight = nn.Parameter(
             DTensor.from_local(
-                2, self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                self.weight.view(2, normalized_shape),
+                device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                placements=[Replicate()],
             )
         )
 
@@ -33,6 +35,8 @@ class ParallelRMSNorm_TP(nn.RMSNorm, DTensorModule):
         else:
             self.output_placement = Replicate()
 
+        self.normalized_shape = (self.normalized_shape[0] // 2,)
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input_dtype = input.dtype
         input = input.float()
@@ -41,8 +45,17 @@ class ParallelRMSNorm_TP(nn.RMSNorm, DTensorModule):
 
         variance = input.pow(2).mean(-1, keepdim=True)
         input = input * torch.rsqrt(variance + self.eps)
-        input = self.weight * input.to(input_dtype).unsqueeze(0)
+        input = input.to(input_dtype).unsqueeze(0)
+
+        weight = self.weight.unsqueeze(1).unsqueeze(1)
+        input = weight * input
 
         input = dtensor_to_tensor(input, desired_placement=self.output_placement)
 
         return input
+
+    def extra_repr(self) -> str:
+        """
+        Extra information about the module.
+        """
+        return "2 x {normalized_shape}, eps={eps}, " "elementwise_affine={elementwise_affine}".format(**self.__dict__)
