@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from transformers import DynamicCache
 
 from dolomite_engine.hf_models.models.gpt_dolomite.config import GPTDolomiteConfig
@@ -36,11 +37,16 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
         attn_c_proj = self.attn.c_proj
         mlp_c_proj = self.mlp.c_proj
 
+        def _has_bias(l: nn.Linear) -> bool:
+            if hasattr(l, "bias"):
+                return l.bias is not None
+            return False
+
         with torch.device("meta"):
             self.attn.c_proj = ParallelRowParallelLinear(
                 in_features=attn_c_proj.in_features_per_device * tp_world_size,
                 out_features=attn_c_proj.out_features,
-                bias=attn_c_proj.bias,
+                bias=_has_bias(attn_c_proj),
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
@@ -48,7 +54,7 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
             self.mlp.c_proj = ParallelRowParallelLinear(
                 in_features=mlp_c_proj.in_features_per_device * tp_world_size,
                 out_features=mlp_c_proj.out_features,
-                bias=mlp_c_proj.bias,
+                bias=_has_bias(mlp_c_proj),
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
