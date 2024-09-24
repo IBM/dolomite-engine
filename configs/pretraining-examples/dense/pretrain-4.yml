@@ -99,7 +99,6 @@ model_args:
     attention_softmax_in_fp32: true
     add_bias: true
     position_embedding_type: learned_absolute
-    rope_theta: 10000
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
