@@ -133,7 +133,7 @@ def train_step(
 
 def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsTrackingDict:
     tensor = [metrics_tracker[key] for key in metrics_tracker]
-    tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
+    tensor = torch.stack(tensor)
     torch.distributed.all_reduce(tensor.cpu(), group=ProcessGroupManager.get_data_parallel_group())
     tensor = tensor.tolist()
 
