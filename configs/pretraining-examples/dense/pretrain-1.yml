@@ -6,28 +6,10 @@ datasets:
     class_args:
       eval_steps: 2
       data_cache_path: cache
-      # Option 3: data loading using --(train|val|test)-data-path with multiple weighted files
-      train_data_path:
-        - 0.2
-        - data/train/lang=Matlab
-        - 0.5
-        - data/train/lang=Verilog
-        - 0.3
-        - data/train/lang=Zig
-      val_data_path:
-        - 0.2
-        - data/val/lang=Matlab
-        - 0.5
-        - data/val/lang=Verilog
-        - 0.3
-        - data/val/lang=Zig
-      test_data_path:
-        - 0.2
-        - data/test/lang=Matlab
-        - 0.5
-        - data/test/lang=Verilog
-        - 0.3
-        - data/test/lang=Zig
+      # Option 1: data loading using --data-path with single file
+      data_path:
+        - data/lang=Matlab
+      split: 98,1,1
       sequence_length: 2048
 
 tokenizer_args:
@@ -60,7 +42,6 @@ model_args:
     attention_softmax_in_fp32: true
     add_bias: true
     position_embedding_type: learned_absolute
-    rope_theta: 10000
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
