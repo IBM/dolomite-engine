@@ -1,9 +1,7 @@
-from typing import List, Type
-
 import torch.nn as nn
 
 
-def get_module_class_from_name(model: nn.Module, name: str) -> List[Type[nn.Module]]:
+def get_module_class_from_name(model: nn.Module, name: str) -> list[type[nn.Module]]:
     modules_children = list(model.children())
 
     if model.__class__.__name__ == name:

@@ -14,7 +14,19 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
-from ..utils import is_apex_available, is_deepspeed_available, log_rank_0
+from ..enums import ParamsGroupMethod
+from ..hf_models import (
+    GPTDolomiteForCausalLM,
+    GPTDolomiteForCausalLM_TP,
+    MoEDolomiteForCausalLM,
+    RNNDolomiteForCausalLM,
+)
+from ..hf_models.modeling_utils import Attention
+from ..hf_models.models.gpt_dolomite.layer import MLP
+from ..hf_models.models.moe_dolomite.moe import SparseMoE
+from ..model_wrapper import ModelWrapper
+from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, run_rank_n
+from .params_group import get_param_groups
 
 
 if is_apex_available():
@@ -77,14 +89,18 @@ _OPTIMIZER_CLASSES = {
 
 
 def get_optimizer(
-    optimizer_class_name: str, optimizer_class_args: dict, cpu_offload: bool, parameters: list
+    optimizer_class_name: str,
+    optimizer_class_args: dict,
+    model: ModelWrapper,
+    params_group_method: ParamsGroupMethod,
 ) -> Optimizer:
     """setup optimizer for the model
 
     Args:
         optimizer_class_name (str): optimizer class name
         optimizer_class_args (dict): args for the optimizer class
-        parameters (list): list of model parameters
+        model (ModelWrapper): model
+        params_group_method (ParamsGroupMethod): the params grouping to use
 
     Returns:
         Optimizer: an optimizer
@@ -97,11 +113,20 @@ def get_optimizer(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    if cpu_offload and optimizer_class not in [DeepSpeedCPUAdam, DeepSpeedCPUAdagrad]:
-        log_rank_0(
-            logging.WARN,
-            "cpu offloading enabled with an unsupported optimizer, weird behaviour or performance drop might be observed",
-        )
+    params_group = get_param_groups(model, optimizer_class_args, params_group_method)
+    optimizer = optimizer_class(params_group, **optimizer_class_args)
 
-    optimizer = optimizer_class(parameters, **optimizer_class_args)
     return optimizer
+
+
+@run_rank_n
+def log_optimizer(optimizer: Optimizer) -> None:
+    """print optimizer
+
+    Args:
+        optimizer (Optimizer): optimizer to print
+    """
+
+    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
+    log_rank_0(logging.INFO, optimizer)
+    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")

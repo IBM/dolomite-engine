@@ -39,7 +39,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    apply_residual_connection_post_layernorm: false
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     bos_token_id: 0
@@ -59,7 +58,6 @@ model_args:
     position_embedding_type: rope
     resid_pdrop: 0
     rope_theta: 10000
-    scale_attention_softmax_in_fp32: true
     scale_attn_weights: true
     sharing_pattern:
       - 0
@@ -96,7 +94,6 @@ model_args:
       - 30
     vocab_size: 50304
   efficient_initialization: false
-  dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
@@ -121,7 +118,7 @@ training_parameters:
   gradient_accumulation_steps: 4
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 3e-4
     weight_decay: 0.1
@@ -134,6 +131,9 @@ lr_scheduler_args:
   lr_decay_style: cosine
   num_warmup_steps: 2000
   num_decay_steps: 23000
+
+mixed_precision_args:
+  dtype: bf16
 
 distributed_args:
   distributed_backend: torch

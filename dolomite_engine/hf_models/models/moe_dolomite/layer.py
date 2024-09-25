@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from copy import deepcopy
 
 import torch
 import torch.nn as nn
@@ -6,8 +6,9 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
+from ..gpt_dolomite.mlp import MLP
 from .config import MoEDolomiteConfig
-from .moe import SparseMoE
+from .moe import get_moe
 
 
 class SparseMoEBlock(nn.Module):
@@ -17,7 +18,8 @@ class SparseMoEBlock(nn.Module):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_idx: int = None,
+        moe_implementation: str,
+        layer_idx: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -42,24 +44,35 @@ class SparseMoEBlock(nn.Module):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
-        self.mlp = SparseMoE(config, use_padding_free_transformer=use_padding_free_transformer)
+        self.moe = get_moe(
+            config,
+            moe_implementation=moe_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            layer_idx=layer_idx,
+        )
+
+        self.mlp = None
+        if config.shared_n_inner is not None:
+            shared_config = deepcopy(config)
+            shared_config.n_inner = config.shared_n_inner
+            self.mlp = MLP(shared_config)
+            del shared_config
 
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool = False,
-    ) -> Union[
-        Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ]:
+        output_aux_loss: bool = True,
+    ) -> tuple[torch.Tensor]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        attn_output = self.attn(
+        hidden_states = self.attn(
             hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -69,25 +82,37 @@ class SparseMoEBlock(nn.Module):
         )
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = attn_output + residual
+        hidden_states = hidden_states + residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states, router_logits = self.mlp(hidden_states)
+        hidden_states, router_logits, aux_loss = self._compute_moe_and_mlp(hidden_states)
 
         if self.m_residual is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = residual + feed_forward_hidden_states
+        hidden_states = hidden_states + residual
 
         outputs = (hidden_states,)
 
         if output_router_logits:
             outputs += (router_logits,)
 
+        if output_aux_loss:
+            outputs += (aux_loss,)
+
         return outputs
+
+    def _compute_moe_and_mlp(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+        moe_output, router_logits, aux_loss = self.moe(hidden_states)
+
+        if self.mlp is not None:
+            mlp_output = self.mlp(hidden_states)
+            moe_output = mlp_output + moe_output
+
+        return moe_output, router_logits, aux_loss

@@ -32,7 +32,6 @@ model_args:
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000
-    scale_attention_softmax_in_fp32: true
     attention_head_type: mha
     scale_attn_weights: true
     vocab_size: 50304
@@ -77,5 +76,6 @@ mixed_precision_args:
 
 distributed_args:
   distributed_backend: torch
+  fsdp_algorithm: 2
   stage: 3
   tensor_parallel_size: 2

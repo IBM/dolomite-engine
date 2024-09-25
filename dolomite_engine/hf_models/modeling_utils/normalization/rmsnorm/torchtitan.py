@@ -12,12 +12,11 @@
 
 
 import math
-from typing import Tuple
 
 import torch
+import torch.nn as nn
 
 from .....utils import is_triton_available
-from .base import RMSNorm
 
 
 if is_triton_available():
@@ -164,7 +163,7 @@ class _TorchTitanRMSNorm(torch.autograd.Function):
         return y
 
     @staticmethod
-    def backward(ctx, dy: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, None]:
+    def backward(ctx, dy: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, None]:
         x, weight, rstd = ctx.saved_tensors
         eps = ctx.eps
         x_shape_start = ctx.x_shape_start
@@ -201,6 +200,6 @@ def torchtitan_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float) ->
     return _TorchTitanRMSNorm.apply(input, weight, eps)
 
 
-class TorchTitanRMSNorm(RMSNorm):
+class TorchTitanRMSNorm(nn.RMSNorm):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torchtitan_rmsnorm(x, self.weight, self.eps)

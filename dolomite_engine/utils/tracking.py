@@ -13,40 +13,10 @@ if is_wandb_available():
     import wandb
 
 
-class RunningMean:
-    """tracks running mean for loss"""
-
-    def __init__(self, window: int = 100) -> None:
-        self.loss_list = []
-        self.loss_sum = 0
-        self.window = window
-
-    def add_loss(self, loss: float) -> float:
-        """accumulates loss of the current step to the running mean
-
-        Args:
-            loss (float): loss at current step
-
-        Returns:
-            float: running mean of loss
-        """
-
-        self.loss_list.append(loss)
-        self.loss_sum += loss
-
-        if len(self.loss_list) > self.window:
-            loss_remove = self.loss_list[0]
-            self.loss_list = self.loss_list[1:]
-            self.loss_sum -= loss_remove
-
-        loss_mean = self.loss_sum / len(self.loss_list)
-        return loss_mean
-
-
 class ProgressBar:
     """progress bar for training or validation"""
 
-    def __init__(self, start: int, end: int, desc: str = None) -> None:
+    def __init__(self, start: int, end: int, desc: str | None = None) -> None:
         self.progress_bar: tqdm = run_rank_n(tqdm)(total=end, desc=desc)
         self.update(start)
 
@@ -74,7 +44,7 @@ class ExperimentsTracker:
 
     def __init__(
         self,
-        experiments_tracker_name: ExperimentsTrackerName,
+        experiments_tracker_name: ExperimentsTrackerName | None,
         aim_args: BaseArgs,
         wandb_args: BaseArgs,
         checkpoint_metadata: dict,
@@ -122,7 +92,7 @@ class ExperimentsTracker:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
     @run_rank_n
-    def track(self, values: dict, step: int = None, context: str = None) -> None:
+    def track(self, values: dict, step: int | None = None, context: str | None = None) -> None:
         """main tracking method
 
         Args:

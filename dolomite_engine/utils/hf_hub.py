@@ -1,12 +1,11 @@
 import os
-from typing import Tuple
 
 from transformers import AutoConfig, AutoTokenizer
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME, cached_file
 from transformers.utils.hub import get_checkpoint_shard_files
 
 
-def download_repo(repo_name_or_path: str) -> Tuple[AutoConfig, AutoTokenizer, str]:
+def download_repo(repo_name_or_path: str) -> tuple[AutoConfig | None, AutoTokenizer | None, str]:
     config = _download_config(repo_name_or_path)
     tokenizer = _download_tokenizer(repo_name_or_path)
     model_path = None
@@ -30,7 +29,7 @@ def download_repo(repo_name_or_path: str) -> Tuple[AutoConfig, AutoTokenizer, st
     return config, tokenizer, model_path
 
 
-def _download_config(repo_name_or_path: str) -> AutoConfig:
+def _download_config(repo_name_or_path: str) -> AutoConfig | None:
     try:
         config = AutoConfig.from_pretrained(repo_name_or_path)
     except:
@@ -39,7 +38,7 @@ def _download_config(repo_name_or_path: str) -> AutoConfig:
     return config
 
 
-def _download_tokenizer(repo_name_or_path: str) -> AutoTokenizer:
+def _download_tokenizer(repo_name_or_path: str) -> AutoTokenizer | None:
     try:
         tokenizer = AutoTokenizer.from_pretrained(repo_name_or_path)
     except:

@@ -12,10 +12,16 @@ from ...test_common import TestCommons
 
 class DCPTest(TestCommons):
     @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True])
+        TestCommons.make_args_matrix(
+            TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True], [(3, 2, 2), (3, 1, 4), (0, 4, 1)]
+        )
     )
     def test_dcp(
-        self, attention_head_type: AttentionHeadType, activation_function: str, tensor_parallel_word_embeddings: bool
+        self,
+        attention_head_type: AttentionHeadType,
+        activation_function: str,
+        tensor_parallel_word_embeddings: bool,
+        zero_stage_ddp_sizes: tuple[int, int, int],
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
 
@@ -38,6 +44,12 @@ class DCPTest(TestCommons):
                 activation_function,
                 "--tmp-path",
                 tmp_path,
+                "--zero-stage",
+                str(zero_stage_ddp_sizes[0]),
+                "--data-parallel-replication-world-size",
+                str(zero_stage_ddp_sizes[1]),
+                "--data-parallel-sharding-world-size",
+                str(zero_stage_ddp_sizes[2]),
             ]
 
             if tensor_parallel_word_embeddings:

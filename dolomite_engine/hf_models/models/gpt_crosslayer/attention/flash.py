@@ -1,14 +1,9 @@
 import torch
+from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
-from .....utils import is_flash_attention_available
 from ....enums import PositionEmbeddingType
-from ....modeling_utils import apply_rotary_pos_emb, get_unpad_data
+from ....modeling_utils import apply_rotary_pos_emb
 from .base import CrossLayerAttention
-
-
-if is_flash_attention_available():
-    from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
-    from flash_attn.flash_attn_interface import flash_attn_func, flash_attn_varlen_func
 
 
 class CrossLayerFlashAttention2(CrossLayerAttention):
@@ -17,10 +12,10 @@ class CrossLayerFlashAttention2(CrossLayerAttention):
         hidden_states: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         batch_size, query_length = hidden_states.shape[:2]
 
@@ -38,55 +33,16 @@ class CrossLayerFlashAttention2(CrossLayerAttention):
 
         batch_size, query_length = query.shape[:2]
 
-        if attention_mask is None:
-            attn_output = flash_attn_func(
-                query, key, value, dropout_p=dropout_p, softmax_scale=softmax_scale, causal=self.causal
-            )
-        else:
-            key_length = key.shape[1]
-
-            indices_k, cu_seqlens_k, max_seqlen_k = get_unpad_data(attention_mask)
-
-            # TODO: figure out a way to move this outside
-            key = index_first_axis(
-                key.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
-            )
-            value = index_first_axis(
-                value.reshape(batch_size * key_length, self.num_key_value_heads, self.head_dim), indices_k
-            )
-
-            if query_length == key_length:
-                query = index_first_axis(
-                    query.reshape(batch_size * key_length, self.num_heads, self.head_dim), indices_k
-                )
-                cu_seqlens_q = cu_seqlens_k
-                max_seqlen_q = max_seqlen_k
-                indices_q = indices_k
-            elif query_length == 1:
-                max_seqlen_q = 1
-                cu_seqlens_q = torch.arange(
-                    batch_size + 1, dtype=torch.int32, device=query.device
-                )  # There is a memcpy here, that is very bad.
-                indices_q = cu_seqlens_q[:-1]
-                query = query.squeeze(1)
-            else:
-                # The -q_len: slice assumes left padding.
-                attention_mask = attention_mask[:, -query_length:]
-                query, indices_q, cu_seqlens_q, max_seqlen_q = unpad_input(query, attention_mask)
-
-            attn_output = flash_attn_varlen_func(
-                query,
-                key,
-                value,
-                cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k,
-                max_seqlen_q=max_seqlen_q,
-                max_seqlen_k=max_seqlen_k,
-                dropout_p=dropout_p,
-                softmax_scale=softmax_scale,
-                causal=self.causal,
-            )
-            attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
+        attn_output = _flash_attention_forward(
+            query_states=query,
+            key_states=key,
+            value_states=value,
+            attention_mask=attention_mask,
+            query_length=query_length,
+            is_causal=self.causal,
+            dropout=dropout_p,
+            softmax_scale=softmax_scale,
+        )
 
         attn_output = attn_output.view(batch_size, query_length, -1)
 

@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-
-# Sect4.2 of Linear Transformers Are Secretly Fast Weight Programmers https://arxiv.org/abs/2102.11174
-
 import math
-from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -22,50 +17,31 @@ if is_einops_available():
 if is_fla_available():
     from fla.models.utils import Cache as FLACache
     from fla.modules import ShortConvolution
-    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
+    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_delta_rule
 
 
-def simple_norm(x):
-    return (F.normalize(x, dim=-1) * x.shape[-1] ** 0.5).to(x)
+if is_fla_available():
 
+    class ParameterizedShortConvolution(ShortConvolution):
+        def __init__(
+            self,
+            hidden_size: int,
+            kernel_size: int,
+            bias: bool = False,
+            activation: str = "silu",
+            use_causal_conv: bool = True,
+            std: float | None = None,
+        ) -> None:
+            self.std = std
+            super().__init__(hidden_size, kernel_size, bias, activation, use_causal_conv)
 
-# @torch.jit.script
-def elu_p1(x):
-    return (F.elu(x, 1.0, False) + 1.0).to(x)
-
-
-# @torch.jit.script
-def sum_norm(x):
-    return (x / x.sum(-1, keepdim=True)).to(x)
-
-
-# @torch.jit.script
-def elu_norm(x):
-    dtype = x.dtype
-    x = F.elu(x, 1.0, False) + 1.0
-    return (x / x.sum(-1, keepdim=True)).to(dtype)
-
-
-class ParameterizedShortConvolution(ShortConvolution):
-    def __init__(
-        self,
-        hidden_size: int,
-        kernel_size: int,
-        bias: bool = False,
-        activation: Optional[str] = "silu",
-        use_causal_conv: Optional[bool] = True,
-        std: Optional[float] = None,
-    ):
-        self.std = std
-        super().__init__(hidden_size, kernel_size, bias, activation, use_causal_conv)
-
-    def reset_parameters(self) -> None:
-        if self.std is None:
-            super().reset_parameters()
-        else:
-            nn.init.normal_(self.weight, mean=0, std=self.std)
-            if self.bias is not None:
-                self.bias.zero_()
+        def reset_parameters(self) -> None:
+            if self.std is None:
+                super().reset_parameters()
+            else:
+                nn.init.normal_(self.weight, mean=0, std=self.std)
+                if self.bias is not None:
+                    self.bias.zero_()
 
 
 # https://github.com/IDSIA/recurrent-fwp/blob/master/algorithmic/layers.py#L86C1-L146C1
@@ -73,7 +49,7 @@ class DeltaNet(nn.Module):
     def __init__(
         self,
         config: CommonConfig,
-        layer_idx: int = None,
+        layer_idx: int | None = None,
         mode: str = "chunk",
         chunk_size: int = 64,
         use_beta: bool = True,
@@ -161,11 +137,11 @@ class DeltaNet(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Cache] = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        attention_mask: torch.Tensor | None = None,
+        past_key_values: Cache | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if past_key_values is not None:
             assert isinstance(past_key_values, FLACache)
@@ -216,7 +192,8 @@ class DeltaNet(nn.Module):
             if self.qk_activation == "relu":
                 q, k = q.relu(), k.relu()
             elif self.qk_activation == "elu":
-                q, k = elu_p1(q), elu_p1(k)
+                q = F.elu(q) + 1
+                k = F.elu(k) + 1
             elif self.qk_activation == "identity":
                 pass
             else:
@@ -224,11 +201,11 @@ class DeltaNet(nn.Module):
 
         if self.qk_norm is not None:
             if self.qk_norm == "l2":
-                k = nn.functional.normalize(k, dim=-1, p=2).to(v)  # auto mixed precision type transfer is annoying.
-                q = nn.functional.normalize(q, dim=-1, p=2).to(v)
+                k = F.normalize(k, dim=-1, p=2)
+                q = F.normalize(q, dim=-1, p=2)
             elif self.qk_norm == "sum":
-                q = sum_norm(q).to(v)
-                k = sum_norm(k).to(v)
+                q = q / q.sum(-1, keepdim=True)
+                k = k / k.sum(-1, keepdim=True)
 
         if self.use_beta:
             beta = rearrange(self.b_proj(hidden_states), "b l h -> b h l").sigmoid()
@@ -236,9 +213,7 @@ class DeltaNet(nn.Module):
             beta = q.new_ones(q.shape[0], q.shape[1], q.shape[2])
         state = past_key_values[self.layer_idx][-1] if use_cache else None
         if mode == "fused_recurrent":
-            o, recurrent_state = fused_recurrent_linear_attn_delta_rule(
-                q, k, v, beta, state, output_final_state=use_cache
-            )
+            o, recurrent_state = fused_recurrent_delta_rule(q, k, v, beta, state, output_final_state=use_cache)
         elif mode == "fused_chunk":
             assert self.chunk_size in [16, 32, 64]
             o, recurrent_state = fused_chunk_delta_rule(
@@ -268,7 +243,7 @@ class DeltaNet(nn.Module):
 
         return o
 
-    def init_state(self, batch_size: int) -> Tuple[torch.Tensor]:
+    def init_state(self, batch_size: int) -> tuple[torch.Tensor]:
         param = next(self.parameters())
         state = tuple()
         if self.use_short_conv:

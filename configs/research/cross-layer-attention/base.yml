@@ -39,7 +39,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    apply_residual_connection_post_layernorm: false
     attention_softmax_in_fp32: true
     attn_pdrop: 0
     bos_token_id: 0
@@ -47,7 +46,7 @@ model_args:
     eos_token_id: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
-    model_type: gpt_megatron
+    model_type: gpt_dolomite
     n_embd: 3072
     n_head: 12
     n_inner: 8192
@@ -59,11 +58,9 @@ model_args:
     position_embedding_type: rope
     resid_pdrop: 0
     rope_theta: 10000
-    scale_attention_softmax_in_fp32: true
     scale_attn_weights: true
     vocab_size: 50304
   efficient_initialization: false
-  dtype: bfloat16
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
@@ -88,7 +85,7 @@ training_parameters:
   gradient_accumulation_steps: 4
 
 optimizer_args:
-  class_name: ApexFusedAdam
+  class_name: TorchAdamW
   class_args:
     lr: 3e-4
     weight_decay: 0.1
@@ -101,6 +98,9 @@ lr_scheduler_args:
   lr_decay_style: cosine
   num_warmup_steps: 2000
   num_decay_steps: 23000
+
+mixed_precision_args:
+  dtype: bf16
 
 distributed_args:
   distributed_backend: torch

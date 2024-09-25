@@ -3,7 +3,6 @@
 import logging
 import os
 from enum import Enum
-from typing import List
 
 import numpy
 import torch
@@ -23,11 +22,16 @@ def compile_helpers() -> None:
 
     log_rank_0(logging.INFO, "compiling helpers.cpp")
 
+    build_directory = os.path.join(os.path.dirname(__file__), "build")
+    os.makedirs(build_directory, exist_ok=True)
+
     if torch.cuda.current_device() == 0:
         load_cpp_extension(
             "helpers",
             sources=os.path.join(os.path.dirname(__file__), "helpers.cpp"),
             extra_cflags=["-O3", "-Wall", "-shared", "-std=c++11", "-fPIC", "-fdiagnostics-color"],
+            build_directory=build_directory,
+            verbose=True,
         )
 
     torch.distributed.barrier()
@@ -36,7 +40,7 @@ def compile_helpers() -> None:
 def build_blending_indices(
     dataset_index: numpy.ndarray,
     dataset_sample_index: numpy.ndarray,
-    weights: List[float],
+    weights: list[float],
     num_datasets: int,
     size: int,
     verbose: bool,
@@ -63,14 +67,14 @@ def build_sample_idx(
     return sample_idx
 
 
-def normalize(weights: List[float]) -> List[float]:
+def normalize(weights: list[float]) -> list[float]:
     """Do non-exponentiated normalization
 
     Args:
-        weights (List[float]): The weights
+        weights (list[float]): The weights
 
     Returns:
-        List[float]: The normalized weights
+        list[float]: The normalized weights
     """
     w = numpy.array(weights, dtype=numpy.float64)
     w_sum = numpy.sum(w)

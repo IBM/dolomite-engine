@@ -67,7 +67,7 @@ def convert_model_from_transformer_engine(
             convert_model_from_transformer_engine(module, _convert_linear=_convert_linear, _convert_ln=_convert_ln)
 
 
-def has_transformer_engine_layers(model: nn.Module):
+def has_transformer_engine_layers(model: nn.Module) -> bool:
     for m in model.modules():
         if isinstance(m, (te.LayerNorm, te.Linear, te.TransformerLayer)):
             return True

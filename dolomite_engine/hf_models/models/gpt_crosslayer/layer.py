@@ -1,5 +1,3 @@
-from typing import List, Tuple
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
@@ -18,7 +16,7 @@ class CrossLayer(nn.Module):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_idx: int = None,
+        layer_idx: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -56,16 +54,16 @@ class CrossLayer(nn.Module):
         hidden_states: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        joint_residual: torch.Tensor = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        joint_residual: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        attn_output = self.attn(
+        hidden_states = self.attn(
             hidden_states,
             key=key,
             value=value,
@@ -76,22 +74,22 @@ class CrossLayer(nn.Module):
         )
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
-        hidden_states = attn_output + residual
+        hidden_states = hidden_states + residual
         if joint_residual is not None:
             hidden_states = hidden_states + joint_residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states)
 
         if self.m_residual is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = residual + feed_forward_hidden_states
+        hidden_states = hidden_states + residual
         return hidden_states
 
 
@@ -102,8 +100,8 @@ class GPTCrossLayerBlock(nn.Module):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_indices: List[int],
-        layer_idx: int = None,
+        layer_indices: list[int],
+        layer_idx: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -141,12 +139,12 @@ class GPTCrossLayerBlock(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor]:
         joint_residual = hidden_states if self.joint_residual_stream else None
         key, value = self.kv_proj(hidden_states)
 
