@@ -1,23 +1,58 @@
-from typing import Any, Mapping
-
 import torch
 import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
-from torch.distributed._tensor.placement_types import Replicate, Shard
+from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ...utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ...utils import ProcessGroupManager
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
-from .TP import (
-    dtensor_to_tensor,
-    modify_state_dict_to_dtensor_dict,
-    tensor_parallel_split_safetensor_slice,
-    tensor_to_dtensor,
-)
+from .dtensor_module import DTensorModule
+from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
-class ColumnParallelLinear(ParameterizedLinear):
+class ReplicatedLinear(ParameterizedLinear, DTensorModule):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
+        use_padding_free_transformer: bool = False,
+        sequence_parallel: bool = False,
+    ) -> None:
+        super().__init__(in_features, out_features, bias, device, dtype, std)
+
+        self.weight = nn.Parameter(
+            DTensor.from_local(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            )
+        )
+        if bias:
+            self.bias = nn.Parameter(
+                DTensor.from_local(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                )
+            )
+
+        if sequence_parallel:
+            if use_padding_free_transformer:
+                self.input_placement = Shard(0)
+            else:
+                self.input_placement = Shard(1)
+        else:
+            self.input_placement = Replicate()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        input = tensor_to_dtensor(input, current_placement=self.input_placement)
+        input = super().forward(input)
+        input = dtensor_to_tensor(input, desired_placement=Replicate(), grad_placement=Partial())
+        return input
+
+
+class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -58,13 +93,7 @@ class ColumnParallelLinear(ParameterizedLinear):
                 )
             )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.input_placement = Shard(0)
-            else:
-                self.input_placement = Shard(1)
-        else:
-            self.input_placement = Replicate()
+        self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=self.input_placement)
@@ -72,31 +101,13 @@ class ColumnParallelLinear(ParameterizedLinear):
         input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         return input
 
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        weight = safetensors_weight_manager.get_slice(prefix + "weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
-        state_dict = {"weight": weight}
-
-        if self.bias is not None:
-            bias = safetensors_weight_manager.get_slice(prefix + "bias")
-            bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
-            state_dict["bias"] = bias
-
-        self.load_state_dict(state_dict)
-
     def extra_repr(self) -> str:
         return "in_features={}, out_features_per_device={}, bias={}".format(
             self.in_features, self.out_features_per_device, self.bias is not None
         )
 
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)
 
-
-class RowParallelLinear(ParameterizedLinear):
+class RowParallelLinear(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -139,13 +150,7 @@ class RowParallelLinear(ParameterizedLinear):
                 )
             )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.output_placement = Shard(0)
-            else:
-                self.output_placement = Shard(1)
-        else:
-            self.output_placement = Replicate()
+        self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=Shard(-1))
@@ -153,23 +158,7 @@ class RowParallelLinear(ParameterizedLinear):
         input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         return input
 
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        weight = safetensors_weight_manager.get_slice(prefix + "weight")
-        weight = tensor_parallel_split_safetensor_slice(weight, dim=1)
-        state_dict = {"weight": weight}
-
-        if self.bias is not None:
-            state_dict["bias"] = safetensors_weight_manager.get_tensor(prefix + "bias")
-
-        self.load_state_dict(state_dict)
-
     def extra_repr(self) -> str:
         return "in_features_per_device={}, out_features={}, bias={}".format(
             self.in_features_per_device, self.out_features, self.bias is not None
         )
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False) -> None:
-        state_dict = modify_state_dict_to_dtensor_dict(self, state_dict)
-        return super().load_state_dict(state_dict, strict, assign)

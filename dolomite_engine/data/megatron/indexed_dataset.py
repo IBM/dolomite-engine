@@ -5,6 +5,8 @@
 
 # Essentially re-written in entirety
 
+from __future__ import annotations
+
 import logging
 import os
 import shutil
@@ -109,7 +111,7 @@ class _IndexWriter:
         self.idx_path = idx_path
         self.dtype = dtype
 
-    def __enter__(self) -> "_IndexWriter":
+    def __enter__(self) -> _IndexWriter:
         """Enter the context introduced by the 'with' keyword
 
         Returns:
@@ -453,6 +455,9 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
 
         get(idx) is the same as [idx] but get() does not support slicing.
         """
+
+        offset = int(offset)
+
         sequence_pointer, sequence_length, sequence_mode = self.index[idx]
         if length is None:
             length = sequence_length - offset

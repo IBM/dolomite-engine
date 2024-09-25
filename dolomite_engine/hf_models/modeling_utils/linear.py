@@ -21,5 +21,5 @@ class ParameterizedLinear(nn.Linear):
             super().reset_parameters()
         else:
             nn.init.normal_(self.weight, mean=0, std=self.std)
-            if self.bias is not None:
+            if hasattr(self, "bias") and self.bias is not None:
                 self.bias.zero_()

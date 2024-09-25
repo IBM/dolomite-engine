@@ -27,6 +27,15 @@ class AttentionImplementation(Enum):
     flash_attention_2 = "flash_attention_2"
 
 
+class MoEImplementation(Enum):
+    """
+    Enum class for MoE implementation
+    """
+
+    eager = "eager"
+    scattermoe = "scattermoe"
+
+
 class DatasetSplit(str, Enum):
     """dataset split"""
 
@@ -41,15 +50,7 @@ class Mode(str, Enum):
     training = "training"
     inference = "inference"
     unsharding = "unsharding"
-
-
-class DatasetKeys(str, Enum):
-    """standard keys in the dataset"""
-
-    input = "input"
-    output = "output"
-    generated_text = "generated_text"
-    num_generated_tokens = "num_generated_tokens"
+    distillation = "distillation"
 
 
 class TuningMethod(str, Enum):
@@ -59,6 +60,7 @@ class TuningMethod(str, Enum):
     full_finetuning = "full_finetuning"
     prompt_tuning = "prompt_tuning"
     lora = "lora"
+    distillation = "distillation"
 
 
 class DistributedBackend(str, Enum):
@@ -76,6 +78,13 @@ class LossMask(str, Enum):
 
     output_only = "output_only"
     no_mask = "no_mask"
+
+
+class KLDivergenceMethod(str, Enum):
+    """Type of KL divergence"""
+
+    forward = "forward"
+    backward = "backward"
 
 
 class ExperimentsTrackerName(str, Enum):

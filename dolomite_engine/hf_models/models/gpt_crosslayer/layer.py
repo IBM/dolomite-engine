@@ -63,7 +63,7 @@ class CrossLayer(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        attn_output = self.attn(
+        hidden_states = self.attn(
             hidden_states,
             key=key,
             value=value,
@@ -74,22 +74,22 @@ class CrossLayer(nn.Module):
         )
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
-        hidden_states = attn_output + residual
+        hidden_states = hidden_states + residual
         if joint_residual is not None:
             hidden_states = hidden_states + joint_residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states)
 
         if self.m_residual is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = residual + feed_forward_hidden_states
+        hidden_states = hidden_states + residual
         return hidden_states
 
 

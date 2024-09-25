@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
+from torch.distributed._tensor.api import DTensor
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -13,15 +14,16 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
-from .data import get_megatron_gpt_dataloaders
+from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DistributedBackend, FP8Backend, Mode
+from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .train_utils import get_model_tflops, get_torch_profiler, track_train_metrics, train_step
+from .optimization import get_optimizer, get_scheduler, log_optimizer
+from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
+    MetricsTrackingDict,
     ProcessGroupManager,
-    RunningMean,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -35,25 +37,39 @@ if is_transformer_engine_available():
 
 
 def track_val_metrics(
-    global_step: int, val_loss: float, experiments_tracker: ExperimentsTracker, group_name: str | None = None
+    global_step: int,
+    experiments_tracker: ExperimentsTracker,
+    metrics_tracker: MetricsTrackingDict,
+    group_name: str | None = None,
 ) -> None:
     """tracks metrics like validation loss
 
     Args:
         global_step (int): global step during training
-        val_loss (float): validation loss for the validation data
-        experiments_tracker (ExperimentsTracker): metrics tracker
+        experiments_tracker (ExperimentsTracker): experiments tracker
+        metrics_tracker (MetricsTrackingDict): metrics tracker
         group_name (str | None): group name for the validation / test set
     """
 
-    message = f"step = {global_step}, val_loss = {val_loss:.4f}"
+    context = "val"
+
+    message = f"step = {global_step}"
     if group_name is not None:
         message += f", group_name = {group_name}"
 
+    for key in metrics_tracker:
+        message += f", {context}-{key} = {metrics_tracker[key]:.4f}"
+
     log_rank_0(logging.INFO, message)
-    experiments_tracker.track(
-        {"loss" if group_name is None else f"loss-{group_name}": val_loss}, step=global_step, context="val"
-    )
+
+    if group_name is None:
+        message = metrics_tracker.get_dict()
+    else:
+        message = {}
+        for key in metrics_tracker:
+            message[f"{group_name}-{key}"] = metrics_tracker[key]
+
+    experiments_tracker.track(message, step=global_step, context=context)
 
 
 def train(
@@ -96,8 +112,6 @@ def train(
     if val_weighted_split_paths is not None:
         group_names = [key for key in val_weighted_split_paths.keys()[0]]
 
-    loss_running_mean_tracker = RunningMean(window=args.logging_args.running_mean_window)
-
     model.train()
 
     if eval_during_training:
@@ -111,6 +125,8 @@ def train(
     )
     tokens_per_batch = global_batch_size * sequence_length
 
+    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
+
     # model flops per GPU
     model_flops = (
         get_model_tflops(
@@ -121,7 +137,7 @@ def train(
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
             gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
         )
-        / ProcessGroupManager.get_world_size()
+        / dp_world_size
     )
 
     forward_context = (
@@ -143,13 +159,14 @@ def train(
 
     start_time = time.perf_counter()
     steps_since_start_time = 0
+    metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
 
-        loss_step, grad_norm_step = train_step(
+        loss_step_dict = train_step(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
@@ -159,32 +176,42 @@ def train(
             gradient_clipping=gradient_clipping,
             forward_context=forward_context,
             backward_context=backward_context,
+            sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
         )
+
+        metrics_tracker = metrics_tracker + loss_step_dict
 
         if torch_profiler is not None:
             torch_profiler.step()
 
         if global_step % log_interval == 0:
+            metrics_tracker = metrics_tracker / log_interval
+
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            track_train_metrics(
-                global_step=global_step,
-                train_loss_step=loss_step,
-                grad_norm_step=grad_norm_step,
-                current_lr=(
-                    model.lr_scheduler.get_lr()[0]
-                    if distributed_backend == DistributedBackend.deepspeed
-                    else lr_scheduler.get_lr()[0]
-                ),
-                experiments_tracker=experiments_tracker,
-                loss_running_mean_tracker=loss_running_mean_tracker,
-                flops=None if model_flops is None else model_flops * steps_since_start_time / time_elapsed,
-                billion_tokens_per_day=tokens_per_batch * 86400 / step_time / 1e9,
-                step_time=step_time,
+            metrics_tracker["learning_rate"] = (
+                model.lr_scheduler.get_lr()[0]
+                if distributed_backend == DistributedBackend.deepspeed
+                else lr_scheduler.get_lr()[0]
             )
+
+            if model_flops is not None:
+                metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed
+
+            metrics_tracker["billion_tokens_per_day"] = tokens_per_batch * 86400 / step_time / 1e9
+            metrics_tracker["step_time (sec)"] = step_time
+
+            track_metrics(
+                global_step=global_step,
+                experiments_tracker=experiments_tracker,
+                metrics_tracker=metrics_tracker,
+                context="train",
+            )
+
             start_time = time.perf_counter()
             steps_since_start_time = 0
+            metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
             evaluate(val_dataloaders, model, global_step, experiments_tracker, eval_steps, group_names)
@@ -198,12 +225,7 @@ def train(
                 None,
                 experiments_tracker,
                 global_step,
-                {
-                    "consumed_samples": global_step
-                    * micro_batch_size
-                    * gradient_accumulation_steps
-                    * ProcessGroupManager.get_data_parallel_world_size()
-                },
+                {"consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size},
             )
 
             start_time = time.perf_counter()
@@ -236,10 +258,12 @@ def evaluate(
         group_names (list[str]): names of the datasets in validation/test group
 
     Returns:
-        float: loss at the current step
+        MetricsTrackingDict: metrics tracker
     """
 
-    if ProcessGroupManager.get_tensor_parallel_world_size() > 1:
+    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+
+    if tp_world_size > 1:
         # other tensor parallel ranks need to be told if val dataloader is None or not
         is_val_dataloader_none = (
             val_dataloaders is None or len(val_dataloaders) == 0
@@ -260,28 +284,50 @@ def evaluate(
     model.eval()
 
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
-        loss_sum = 0
-        for _ in range(eval_steps):
-            batch = next(val_dataloader)
-            loss_value = model(batch).item()
-            loss_sum += loss_value
+        metrics_tracker = MetricsTrackingDict({})
 
-        loss_mean = loss_sum / eval_steps
-        track_val_metrics(global_step, loss_mean, experiments_tracker, group_name)
+        for _ in range(eval_steps):
+            batch = get_next_batch(val_dataloader)
+            loss_step_dict = model(batch)
+            metrics_tracker = metrics_tracker + loss_step_dict
+
+        metrics_tracker = metrics_tracker / eval_steps
+
+        for key in metrics_tracker:
+            if isinstance(metrics_tracker[key], DTensor):
+                metrics_tracker[key] = metrics_tracker[key].to_local()
+
+        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+
+        track_val_metrics(
+            global_step=global_step,
+            experiments_tracker=experiments_tracker,
+            metrics_tracker=metrics_tracker,
+            group_name=group_name,
+        )
 
     model.train()
 
-    return loss_mean
+    return metrics_tracker
 
 
-def main() -> None:
+def main(mode: Mode = Mode.training) -> None:
     """main program"""
-
-    mode = Mode.training
 
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
+
+    if mode == Mode.training:
+        assert (
+            args.tuning_args.tuning_method == TuningMethod.pretraining
+        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
+    elif mode == Mode.distillation:
+        assert args.distributed_args.fsdp_algorithm == 2, "Distillation is only supported with FSDP-2"
+
+        assert (
+            args.tuning_args.tuning_method == TuningMethod.distillation
+        ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(
@@ -289,6 +335,7 @@ def main() -> None:
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
+        zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
@@ -297,9 +344,32 @@ def main() -> None:
         set_deepspeed_config(args)
 
     model = get_model(args, mode)
-    model, optimizer, lr_scheduler = wrap_model_for_distributed_training(args, model)
+    model = wrap_model_for_distributed_training(args, model)
+
+    if args.distributed_args.distributed_backend == DistributedBackend.torch:
+        optimizer = get_optimizer(
+            optimizer_class_name=args.optimizer_args.class_name,
+            optimizer_class_args=args.optimizer_args.class_args,
+            model=model,
+            params_group_method=args.optimizer_args.params_group_method,
+        )
+
+        lr_scheduler = get_scheduler(
+            optimizer=optimizer,
+            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+            num_training_steps=args.training_parameters.num_training_steps,
+            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        )
+    else:
+        optimizer = None
+        lr_scheduler = None
 
     log_model(model)
+    log_optimizer(optimizer)
 
     starting_iteration = 0
     metadata = None

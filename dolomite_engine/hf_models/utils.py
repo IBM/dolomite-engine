@@ -18,13 +18,13 @@ def divide_if_divisible(dividend: int, divisor: int, msg: str) -> int:
 
 
 def convert_padding_free_lists_to_tensors(
-    input_ids: list[list[int]] | None,
-    inputs_embeds: list[list[float]] | None,
-    position_ids: list[list[int]] | None,
-    token_type_ids: list[list[int]] | None,
-    labels: list[list[int]] | None,
+    input_ids: list[list[int]] | None = None,
+    inputs_embeds: list[list[float]] | None = None,
+    position_ids: list[list[int]] | None = None,
+    token_type_ids: list[list[int]] | None = None,
+    labels: list[list[int]] | None = None,
+    device: torch.device = None,
 ) -> tuple[torch.Tensor]:
-    device = torch.cuda.current_device()
 
     # check input types are correct
     error_message = "{variable} should be of type List[List[{dtype}]]"
@@ -35,8 +35,8 @@ def convert_padding_free_lists_to_tensors(
     _check_list_type(labels, error_message.format(variable="labels", dtype="int"))
 
     # prepare inputs for the model
-    seqlens = torch.tensor([0] + [len(x) for x in input_ids])
-    cu_seqlens = seqlens.cumsum(dim=-1).to(device, torch.int32)
+    seqlens = torch.tensor([0] + [len(x) for x in input_ids], device=device)
+    cu_seqlens = seqlens.cumsum(dim=-1).to(torch.int32)
     max_seqlen = seqlens.max().to(device)
 
     if position_ids is None:

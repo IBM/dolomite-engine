@@ -76,5 +76,6 @@ mixed_precision_args:
 
 distributed_args:
   distributed_backend: torch
+  fsdp_algorithm: 2
   stage: 3
   tensor_parallel_size: 2

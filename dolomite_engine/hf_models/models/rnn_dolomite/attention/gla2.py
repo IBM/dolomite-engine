@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Tuple
 import math
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, repeat
-
 from fla.modules import FusedRMSNormSwishGate, RMSNorm, ShortConvolution
-from fla.modules.activations import ACT2FN
-from fla.modules.activations import swish
+from fla.modules.activations import ACT2FN, swish
 from fla.ops.gla import chunk_gla, fused_chunk_gla, fused_recurrent_gla
 
 from .....utils import is_einops_available, is_fla_available
@@ -74,12 +72,12 @@ class GatedLinearAttention2(nn.Module):
     def __init__(
         self,
         config: CommonConfig,
-        mode: str = 'chunk',
+        mode: str = "chunk",
         chunk_size: int = 64,
         conv_size: int = 4,
         conv_bias: bool = False,
         use_output_gate: bool = True,
-        gate_fn: str = 'swish',
+        gate_fn: str = "swish",
         elementwise_affine: Optional[bool] = True,
         norm_eps: float = 1e-5,
         gate_logit_normalizer: int = 16,
@@ -96,13 +94,15 @@ class GatedLinearAttention2(nn.Module):
         self.use_short_conv = config.use_short_conv
         self.use_output_gate = use_output_gate
 
-        assert self.hidden_size % self.num_heads == 0, f"Hidden size {self.hidden_size} is not divisible by the number of heads {self.num_heads}."
+        assert (
+            self.hidden_size % self.num_heads == 0
+        ), f"Hidden size {self.hidden_size} is not divisible by the number of heads {self.num_heads}."
 
         self.num_slot = int(self.hidden_size // self.num_heads)
         self.value_dim = self.hidden_size
         self.layer_idx = layer_idx
 
-        assert mode in ['chunk', 'fused_recurrent', 'fused_chunk'], f"Not suppoerted mode `{mode}`."
+        assert mode in ["chunk", "fused_recurrent", "fused_chunk"], f"Not suppoerted mode `{mode}`."
 
         initializer_range = config.initializer_range
         std_in = initializer_range
@@ -128,7 +128,7 @@ class GatedLinearAttention2(nn.Module):
             std_out /= math.sqrt(config.m_width)
         self.o_proj = ParameterizedLinear(self.value_dim, self.hidden_size, bias=False, std=std_out)
 
-        if gate_fn == 'swish' and fuse_norm and use_output_gate:
+        if gate_fn == "swish" and fuse_norm and use_output_gate:
             self.g_norm_swish_gate = FusedRMSNormSwishGate(self.value_dim, elementwise_affine, norm_eps)
             self.fuse_norm_and_gate = True
         else:
@@ -145,10 +145,10 @@ class GatedLinearAttention2(nn.Module):
         past_key_values: Optional[Cache] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-        **kwargs
+        **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Cache]]:
         # launching the triton kernel for just one token will actually be slower
-        mode = 'fused_recurrent' if hidden_states.shape[1] == 1 else self.mode
+        mode = "fused_recurrent" if hidden_states.shape[1] == 1 else self.mode
 
         last_state = past_key_values[self.layer_idx] if use_cache else None
         if self.use_short_conv:
@@ -173,7 +173,7 @@ class GatedLinearAttention2(nn.Module):
         # dealing with left-padding
         if attention_mask is not None:
             v = v.mul_(attention_mask.unsqueeze(-1))
-            
+
         # improve precision
         k = k.float()
 
@@ -182,12 +182,18 @@ class GatedLinearAttention2(nn.Module):
         gf = F.logsigmoid(-k)
 
         recurrent_state = last_state[-1] if use_cache else None
-        if mode == 'fused_recurrent':
-            o, recurrent_state = fused_recurrent_gla(q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache)
-        elif mode == 'fused_chunk':
-            o, recurrent_state = fused_chunk_gla(q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache)
-        elif mode == 'chunk':
-            o, recurrent_state = chunk_gla(q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache, scale=1)
+        if mode == "fused_recurrent":
+            o, recurrent_state = fused_recurrent_gla(
+                q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache
+            )
+        elif mode == "fused_chunk":
+            o, recurrent_state = fused_chunk_gla(
+                q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache
+            )
+        elif mode == "chunk":
+            o, recurrent_state = chunk_gla(
+                q, k, v, gf, initial_state=recurrent_state, output_final_state=use_cache, scale=1
+            )
         else:
             raise NotImplementedError(f"Not supported mode `{mode}`.")
 
@@ -198,7 +204,7 @@ class GatedLinearAttention2(nn.Module):
                 last_state = (recurrent_state,)
             past_key_values.update(last_state, self.layer_idx, q.shape[2])
 
-        o = rearrange(o, 'b h l d -> b l (h d)')
+        o = rearrange(o, "b h l d -> b l (h d)")
         if self.use_output_gate:
             go = self.og_proj(o) + self.ig_proj(hidden_states)
             if self.fuse_norm_and_gate:
@@ -216,9 +222,11 @@ class GatedLinearAttention2(nn.Module):
         param = next(self.parameters())
         state = tuple()
         if self.use_short_conv:
-            state += (param.new_zeros(batch_size, self.num_slot, self.conv_size),
-                        param.new_zeros(batch_size, self.num_slot, self.conv_size),
-                        param.new_zeros(batch_size, self.value_dim, self.conv_size))
+            state += (
+                param.new_zeros(batch_size, self.num_slot, self.conv_size),
+                param.new_zeros(batch_size, self.num_slot, self.conv_size),
+                param.new_zeros(batch_size, self.value_dim, self.conv_size),
+            )
         state += (param.new_zeros(batch_size, self.num_heads, self.head_qk_dim, self.head_v_dim),)
         return state
 

@@ -14,9 +14,9 @@
 import math
 
 import torch
+import torch.nn as nn
 
 from .....utils import is_triton_available
-from .base import RMSNorm
 
 
 if is_triton_available():
@@ -200,6 +200,6 @@ def torchtitan_rmsnorm(input: torch.Tensor, weight: torch.Tensor, eps: float) ->
     return _TorchTitanRMSNorm.apply(input, weight, eps)
 
 
-class TorchTitanRMSNorm(RMSNorm):
+class TorchTitanRMSNorm(nn.RMSNorm):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torchtitan_rmsnorm(x, self.weight, self.eps)

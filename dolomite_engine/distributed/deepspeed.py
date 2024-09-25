@@ -35,7 +35,7 @@ def set_deepspeed_config(args: TrainingArgs) -> None:
         "gradient_clipping": args.training_parameters.gradient_clipping,
     }
 
-    if args.distributed_args.zero_topology is not None:
+    if args.distributed_args.zero_topology.data_parallel_sharding_world_size is not None:
         config["zero_optimization"][
             "zero_hpz_partition_size"
         ] = args.distributed_args.zero_topology.data_parallel_sharding_world_size

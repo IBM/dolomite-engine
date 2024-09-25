@@ -4,7 +4,7 @@ from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_dolomite.mlp import MLP
-from .attention import DeltaNet, RNNFlashAttention2, GatedLinearAttention2
+from .attention import DeltaNet, GatedLinearAttention2, RNNFlashAttention2
 from .config import RNNDolomiteConfig
 
 
@@ -22,6 +22,8 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
         layer_idx: int | None = None,
     ) -> None:
         nn.Module.__init__(self)
+
+        assert not use_padding_free_transformer
 
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner

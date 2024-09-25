@@ -19,15 +19,15 @@ _Mayank Mishra_
 1. [Reducing Transformer Key-Value Cache Size with Cross-Layer Attention](https://arxiv.org/abs/2405.12981)  
 _William Brandon, Mayank Mishra, Aniruddha Nrusimha, Rameswar Panda, Jonathan Ragan Kelly_  
 ![image][Efficient Inference] ![image][Model Architecture]
-1. [Dense Training, Sparse Inference: Rethinking Training of Mixture-of-Experts Language Models](https://arxiv.org/abs/2404.05567)  
-_Bowen Pan, Yikang Shen, Haokun Liu, Mayank Mishra, Gaoyuan Zhang, Aude Oliva, Colin Raffel, Rameswar Panda_  
-![image][Mixture of Experts] ![image][Efficient Inference] ![image][Model Architecture]
 1. [NEFTune: Noisy Embeddings Improve Instruction Finetuning](https://arxiv.org/abs/2310.05914)  
 _Neel Jain, Ping-yeh Chiang, Yuxin Wen, John Kirchenbauer, Hong-Min Chu, Gowthami Somepalli, Brian R. Bartoldson, Bhavya Kailkhura, Avi Schwarzschild, Aniruddha Saha, Micah Goldblum, Jonas Geiping, Tom Goldstein_  
 ![image][Instruction Finetuning]
 1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
 _Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
 ![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
+1. [Scattered Mixture-of-Experts Implementation](https://arxiv.org/abs/2403.08245)  
+_Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_  
+![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
 
 # Getting Started
 Run `make install` to install the requirements for this repository. You might need to install `flash-attn`.
@@ -118,6 +118,11 @@ sh scripts/generate.sh configs/sst2/inference.yml
 ```shell
 sh scripts/unshard.sh configs/sst2/unshard.yml
 ```
+
+## Running basic inference
+
+For a simple HuggingFace inference example, refer to [tools/inference.py](tools/inference.py).
+For an example running tensor parallel inference, refer to [tools/tensor_parallel_inference.py](tools/tensor_parallel_inference.py).
 
 ## Using custom datasets
 The data directory should obey the following structure:
@@ -218,7 +223,7 @@ If you find this repository useful, please consider citing it in your research:
     author = {Mishra, Mayank},
     month = jun,
     title = {{Dolomite Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},
-    url = {https://github.com/ibm-granite/dolomite-engine},
+    url = {https://github.com/ibm/dolomite-engine},
     year = {2024}
 }
 ```

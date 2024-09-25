@@ -69,6 +69,10 @@ class TestCommons(TestCase):
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
+        m_emb: float = None,
+        m_width: float = None,
+        m_residual: float = None,
+        attention_multiplier: float = None,
     ) -> GPTDolomiteConfig:
         return GPTDolomiteConfig(
             vocab_size=2048,
@@ -86,6 +90,10 @@ class TestCommons(TestCase):
             bos_token_id=0,
             eos_token_id=1,
             pad_token_id=2,
+            m_emb=m_emb,
+            m_width=m_width,
+            m_residual=m_residual,
+            attention_multiplier=attention_multiplier,
         )
 
     @staticmethod
@@ -98,6 +106,10 @@ class TestCommons(TestCase):
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
+        m_emb: float = None,
+        m_width: float = None,
+        m_residual: float = None,
+        attention_multiplier: float = None,
     ) -> MoEDolomiteConfig:
         return MoEDolomiteConfig(
             vocab_size=2048,
@@ -117,6 +129,10 @@ class TestCommons(TestCase):
             bos_token_id=0,
             eos_token_id=1,
             pad_token_id=2,
+            m_emb=m_emb,
+            m_width=m_width,
+            m_residual=m_residual,
+            attention_multiplier=attention_multiplier,
         )
 
     def get_dummy_inputs(self, device: torch.device, return_list: bool = False) -> tuple[torch.Tensor | list[int]]:
@@ -133,7 +149,12 @@ class TestCommons(TestCase):
         return input_ids, attention_mask, labels
 
     def model_conversion_test(
-        self, dolomite_config: CommonConfig, model_type: str, device: torch.device, exact_match: bool = True
+        self,
+        dolomite_config: CommonConfig,
+        model_type: str,
+        device: torch.device,
+        exact_match: bool = True,
+        compare_loss: bool = True,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
@@ -182,17 +203,19 @@ class TestCommons(TestCase):
             rtol_bfloat16=0,
             atol_bfloat16=3e-7,
         )
-        self.assert_equal_tensors(
-            dolomite_loss,
-            hf_loss,
-            exact_match,
-            rtol_float32=0,
-            atol_float32=1e-5,
-            rtol_float16=0,
-            atol_float16=1e-5,
-            rtol_bfloat16=0,
-            atol_bfloat16=1e-5,
-        )
+
+        if compare_loss:
+            self.assert_equal_tensors(
+                dolomite_loss,
+                hf_loss,
+                exact_match,
+                rtol_float32=0,
+                atol_float32=1e-5,
+                rtol_float16=0,
+                atol_float16=1e-5,
+                rtol_bfloat16=0,
+                atol_bfloat16=1e-5,
+            )
 
     @staticmethod
     def compare_saved_models(path1: str, path2: str) -> bool:
@@ -216,6 +239,8 @@ class TestCommons(TestCase):
 
         attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
+        moe_implementation = kwargs.pop("moe_implementation", None)
+
         if use_padding_free_transformer:
             assert model._use_padding_free_transformer
 
@@ -230,6 +255,11 @@ class TestCommons(TestCase):
                 assert "PaddingFreeAttention" in str(model)
             else:
                 assert "FlashAttention2" in str(model)
+
+        if moe_implementation == "eager":
+            assert "SparseMoE" in str(model)
+        elif moe_implementation == "scattermoe":
+            assert "ScatterMoE" in str(model)
 
         kwargs.pop("torch_dtype", None)
         assert len(kwargs) == 0

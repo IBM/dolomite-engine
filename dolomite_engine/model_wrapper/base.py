@@ -5,16 +5,9 @@ import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
+from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
 from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
-from ..utils import (
-    CUDA_RNGStatesTracker,
-    ProcessGroupManager,
-    SafeTensorsWeightsManager,
-    log_rank_0,
-    set_cuda_rng_tracker,
-    string_to_torch_dtype,
-)
+from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
 class ModelWrapper(nn.Module):
@@ -29,11 +22,11 @@ class ModelWrapper(nn.Module):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
+        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         distributed_backend: DistributedBackend,
-        random_seed: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -53,7 +46,6 @@ class ModelWrapper(nn.Module):
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
-            random_seed (int): random seed to use for tensor parallel seed management
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
@@ -69,10 +61,11 @@ class ModelWrapper(nn.Module):
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
         self.attention_implementation = attention_implementation
+        self.moe_implementation = moe_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
-        self.tokenizer_name = tokenizer_name if self.model_name is None else self.model_name
+        self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
@@ -88,10 +81,6 @@ class ModelWrapper(nn.Module):
             assert is_tensor_parallel_compatible_model(
                 self.model_class, self.config.model_type
             ), "tensor parallel is not supported with this model"
-
-            rng_tracker = CUDA_RNGStatesTracker()
-            rng_tracker.add(seed=random_seed)
-            set_cuda_rng_tracker(rng_tracker)
 
         if self.use_padding_free_transformer:
             assert is_custom_model(
@@ -154,7 +143,7 @@ class ModelWrapper(nn.Module):
         else:
             for key in list(state_dict.keys()):
                 assert key.startswith("model.")
-                state_dict[key.lstrip("model.")] = state_dict.pop(key)
+                state_dict[_remove_first_occurance(key, "model.")] = state_dict.pop(key)
 
             self.config.save_pretrained(save_path)
             SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -168,8 +157,11 @@ class ModelWrapper(nn.Module):
 
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
+        self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
+        self.router_aux_loss_coef = getattr(self.config, "router_aux_loss_coef", None)
 
         log_rank_0(logging.INFO, self.config)
+        log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
 
     def _setup_tokenizer(self) -> None:
         assert self.tokenizer_name is not None, "pass a tokenizer"
@@ -185,6 +177,8 @@ class ModelWrapper(nn.Module):
 
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if self.moe_implementation is not None:
+            model_kwargs["moe_implementation"] = self.moe_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
         if self.tensor_parallel_word_embeddings:
@@ -193,6 +187,16 @@ class ModelWrapper(nn.Module):
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
+
+        if self.model_name is None:
+            if self.tokenizer.bos_token_id is not None:
+                assert self.tokenizer.bos_token_id == self.config.bos_token_id
+
+            if self.tokenizer.eos_token_id is not None:
+                assert self.tokenizer.eos_token_id == self.config.eos_token_id
+
+            if self.tokenizer.pad_token_id is not None:
+                assert self.tokenizer.pad_token_id == self.config.pad_token_id
 
         def _get_model(**extras):
             if self.model_name is None:
@@ -263,3 +267,13 @@ class ModelWrapper(nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
+
+    def has_teacher_model(self) -> bool:
+        return False
+
+
+def _remove_first_occurance(string: str, substring: str) -> str:
+    if string.startswith(substring):
+        string = string[len(substring) :]
+
+    return string
