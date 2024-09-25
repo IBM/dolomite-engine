@@ -93,12 +93,18 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
                 )
             )
 
-        self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+        self.input_placement = Shard(0) if sequence_parallel else Replicate()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        batch_size, sequence_length, _ = input.size()
+        input = input.view(-1, self.in_features)
+
         input = tensor_to_dtensor(input, current_placement=self.input_placement)
         input = super().forward(input)
         input = dtensor_to_tensor(input, desired_placement=Shard(-1))
+
+        input = input.view(batch_size, sequence_length, -1)
+
         return input
 
     def extra_repr(self) -> str:
