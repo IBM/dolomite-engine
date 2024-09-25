@@ -37,16 +37,19 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
+
         if attention_implementation == "DeltaNet":
             self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         elif attention_implementation == "flash_attention_2":
             self.attn = RNNFlashAttention2(config, True, layer_idx)
         else:
             raise ValueError(f"Attention implementation {attention_implementation} not supported.")
+
         self.ln_2 = get_normalization_function(
             config.normalization_function,
             hidden_size,
             eps=config.layer_norm_epsilon,
             normalization_implementation=normalization_implementation,
         )
+
         self.mlp = MLP(config)
