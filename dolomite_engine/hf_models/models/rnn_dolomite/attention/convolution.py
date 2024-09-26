@@ -4,15 +4,17 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 from fla.modules.activations import ACT2FN
 
+from .....utils import is_causal_conv1d_available, is_einops_available
 
-try:
+
+if is_einops_available():
+    from einops import rearrange
+
+
+if is_causal_conv1d_available():
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
-except ImportError:
-    causal_conv1d_fn = None
-    causal_conv1d_update = None
 
 
 class ParameterizedShortConvolution(nn.Conv1d):
@@ -42,7 +44,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
             assert activation in ["silu", "swish"], f"Activation `{activation}` not supported yet."
             self.activation = activation
 
-        if causal_conv1d_fn is None:
+        if not is_causal_conv1d_available():
             if use_fast_conv1d:
                 raise RuntimeError(
                     "Please either install `causal-conv1d>=1.4.0` to enable fast causal short convolution CUDA kernel "

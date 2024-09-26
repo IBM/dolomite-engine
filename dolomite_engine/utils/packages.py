@@ -176,6 +176,20 @@ def is_kernel_hyperdrive_available() -> bool:
     return _IS_KHD_AVAILABLE
 
 
+try:
+    import causal_conv1d
+
+    _IS_CAUSAL_CONV1D_AVAILABLE = True
+except ImportError:
+    _IS_CAUSAL_CONV1D_AVAILABLE = False
+
+    warn_rank_0("causal-conv1d is not installed")
+
+
+def is_causal_conv1d_available() -> bool:
+    return _IS_CAUSAL_CONV1D_AVAILABLE
+
+
 @run_rank_n
 def log_environment() -> None:
     packages = sorted(["{}=={}".format(d.metadata["Name"], d.version) for d in distributions()])
