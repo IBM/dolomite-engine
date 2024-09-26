@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from .layernorm import get_layernorm
-from .rmsnorm import get_rmsnorm
+from .rmsnorm import RMSNorm, get_rmsnorm
 
 
 _NORMALIZATION_FUNCTIONS = {

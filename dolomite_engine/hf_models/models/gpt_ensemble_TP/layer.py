@@ -3,12 +3,12 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager
-from ...modeling_utils import get_normalization_function
 from ...modeling_utils_TP import get_normalization_function_TP
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_ensemble import GPTEnsembleConfig
 from .attention import get_attention_module
 from .mlp import EnsembleMLP_TP
+from .normalization import get_ensemble_normalization_function_TP
 
 
 class GPTEnsembleBlock_TP(GPTDolomiteBlock):
@@ -45,7 +45,7 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
                 sequence_parallel=sequence_parallel,
             )
         else:
-            self.ln_1 = get_normalization_function(
+            self.ln_1 = get_ensemble_normalization_function_TP(
                 config.normalization_function,
                 hidden_size,
                 eps=config.layer_norm_epsilon,
@@ -66,7 +66,7 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
                 sequence_parallel=sequence_parallel,
             )
         else:
-            self.ln_2 = get_normalization_function(
+            self.ln_2 = get_ensemble_normalization_function_TP(
                 config.normalization_function,
                 hidden_size,
                 eps=config.layer_norm_epsilon,
