@@ -7,11 +7,11 @@ from transformers import DynamicCache
 
 from .....utils import ProcessGroupManager
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ....modeling_utils import SDPA, ParameterizedLinear, apply_rotary_pos_emb, repeat_key_value
+from ....modeling_utils import SDPA, apply_rotary_pos_emb, repeat_key_value
 from ....modeling_utils_TP import Attention_TP, ColumnParallelLinear
 from ....utils import divide_if_divisible
 from ...gpt_ensemble import GPTEnsembleConfig
-from ..linear import EnsembleRowParallelLinear
+from ..linear import EnsembleLinear_TP, EnsembleRowParallelLinear
 
 
 class EnsembleSDPA_TP(Attention_TP, SDPA):
@@ -107,7 +107,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
                 std=std,
             )
         else:
-            self.c_attn = ParameterizedLinear(
+            self.c_attn = EnsembleLinear_TP(
                 self.global_hidden_size,
                 self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
@@ -123,7 +123,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
                 self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
             )
         else:
-            self.c_proj = ParameterizedLinear(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
+            self.c_proj = EnsembleLinear_TP(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop

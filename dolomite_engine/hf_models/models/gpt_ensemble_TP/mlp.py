@@ -5,12 +5,12 @@ import torch.nn as nn
 
 from ....utils import ProcessGroupManager
 from ...enums import InitMethod
-from ...modeling_utils import ParameterizedLinear, get_activation_function, is_glu
+from ...modeling_utils import get_activation_function, is_glu
 from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP
 from ...utils import divide_if_divisible
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ensemble import GPTEnsembleConfig
-from .linear import EnsembleRowParallelLinear
+from .linear import EnsembleLinear_TP, EnsembleRowParallelLinear
 
 
 class EnsembleMLP_TP(MLP_TP):
@@ -48,7 +48,7 @@ class EnsembleMLP_TP(MLP_TP):
                 std=std,
             )
         else:
-            self.c_fc = ParameterizedLinear(
+            self.c_fc = EnsembleLinear_TP(
                 hidden_size,
                 divide_if_divisible(
                     2 * intermediate_size if self.is_glu_activation else intermediate_size,
@@ -68,7 +68,7 @@ class EnsembleMLP_TP(MLP_TP):
         if self.current_mlp_all_reduce:
             self.c_proj = EnsembleRowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
         else:
-            self.c_proj = ParameterizedLinear(
+            self.c_proj = EnsembleLinear_TP(
                 divide_if_divisible(intermediate_size, tp_world_size, ""), hidden_size, bias=self.add_bias, std=std
             )
 
