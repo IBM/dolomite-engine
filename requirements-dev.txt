@@ -1,4 +1,4 @@
 pytest
 parameterized
 pre-commit
-https://github.com/sustcsonglin/flash-linear-attention
+git+https://github.com/sustcsonglin/flash-linear-attention.git
