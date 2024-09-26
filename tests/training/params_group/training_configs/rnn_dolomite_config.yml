@@ -50,6 +50,7 @@ model_args:
     init_method: mup
     tie_word_embeddings: true
     upcast_logits_for_loss: true
+  attention_implementation: flash_attention_2
 
 tuning_args:
   tuning_method: pretraining
