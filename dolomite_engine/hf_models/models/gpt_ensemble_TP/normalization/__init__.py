@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from .rmsnorm import EnsembleRMSNorm_TP, get_rmsnorm
+from .rmsnorm import get_rmsnorm
 
 
 _NORMALIZATION_FUNCTIONS = {"rmsnorm": get_rmsnorm}

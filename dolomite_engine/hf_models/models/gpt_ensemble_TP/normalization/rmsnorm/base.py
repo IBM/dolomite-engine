@@ -13,7 +13,7 @@ class EnsembleRMSNorm_TP(RMSNorm):
 
         self.weight = nn.Parameter(
             DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(1)]
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
             )
         )
 
