@@ -32,7 +32,7 @@ model_args:
     num_shared_experts: 2
     n_layer: 4
     n_positions: 8192
-    attention_patterns: ddda
+    attention_pattern: ddda
     use_short_conv: true
     use_gate: false
     normalization_function: rmsnorm
