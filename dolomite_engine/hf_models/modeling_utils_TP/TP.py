@@ -164,13 +164,9 @@ class _ReduceFromTensorParallelRegion(torch.autograd.Function):
         return x, None
 
 
-def copy_to_tensor_parallel_region(
-    x: torch.Tensor, op: torch.distributed.ReduceOp, async_op: bool = False
-) -> torch.Tensor:
-    return _CopyToTensorParallelRegion.apply(x, op, async_op)
+def copy_to_tensor_parallel_region(x: torch.Tensor, op: torch.distributed.ReduceOp) -> torch.Tensor:
+    return _CopyToTensorParallelRegion.apply(x, op)
 
 
-def reduce_from_tensor_parallel_region(
-    x: torch.Tensor, op: torch.distributed.ReduceOp, async_op: bool = False
-) -> torch.Tensor:
-    return _ReduceFromTensorParallelRegion.apply(x, op, async_op)
+def reduce_from_tensor_parallel_region(x: torch.Tensor, op: torch.distributed.ReduceOp) -> torch.Tensor:
+    return _ReduceFromTensorParallelRegion.apply(x, op)
