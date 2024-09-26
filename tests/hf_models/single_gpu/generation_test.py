@@ -5,7 +5,7 @@ import torch
 from parameterized import parameterized
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import AttentionHeadType, DenseMoEConfig, PositionEmbeddingType, export_to_huggingface
+from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType, export_to_huggingface
 
 from ..test_common import TestCommons
 
@@ -107,31 +107,3 @@ class GenerationTest(TestCommons):
             input_ids, attention_mask, _ = self.get_dummy_inputs(device)
 
             model.generate(input_ids=input_ids, attention_mask=attention_mask)
-
-    @parameterized.expand(TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_dtypes()))
-    def test_generation_works_dense_moe(self, device: torch.device, torch_dtype: torch.dtype) -> None:
-        self.skip_test_if_device_unavailable(device)
-        self.skip_test_if_layernorm_kernel_unavailable(device, torch_dtype)
-
-        original_config = self.get_dense_test_config(AttentionHeadType.gqa, PositionEmbeddingType.learned_absolute)
-
-        config = DenseMoEConfig(
-            vocab_size=original_config.vocab_size,
-            n_positions=original_config.n_positions,
-            n_embd=original_config.n_embd,
-            n_layer=original_config.n_layer,
-            n_head=original_config.n_head,
-            num_experts=original_config.num_key_value_heads,
-            attention_head_type=original_config.attention_head_type,
-            position_embedding_type=original_config.position_embedding_type,
-            add_bias=original_config.add_bias,
-            activation_function=original_config.activation_function,
-            normalization_function=original_config.normalization_function,
-            tie_word_embeddings=original_config.tie_word_embeddings,
-        )
-        model = self.from_config(config, torch_dtype=torch_dtype).to(device)
-        model.eval()
-
-        input_ids, attention_mask, _ = self.get_dummy_inputs(device)
-
-        model.generate(input_ids=input_ids, attention_mask=attention_mask)

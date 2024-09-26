@@ -15,13 +15,15 @@ from .enums import (
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,
+    KLDivergenceMethod,
     LossMask,
     LRDecaySchedule,
     Mode,
+    MoEImplementation,
     ParamsGroupMethod,
     TuningMethod,
 )
-from .utils import BaseArgs, load_yaml, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
+from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
 def _check_not_None(object_name_list: list[tuple[Any, str]]) -> None:
@@ -50,8 +52,10 @@ class ModelArgs(BaseArgs):
     model_class: str = None
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
-    # attention implementation (only works with GPTDolomiteForCausalLM)
+    # attention implementation
     attention_implementation: AttentionImplementation | None = None
+    # moe implementation (only works with MoEDolomiteForCausalLM)
+    moe_implementation: MoEImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
@@ -338,6 +342,8 @@ class DistributedArgs(BaseArgs):
     timeout_minutes: int | None = None
     # fsdp algorithm
     fsdp_algorithm: int = 1
+    # whether to sync every gradient accumulation step
+    sync_every_gradient_accumulation_step: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         if self.zero_quantized_weights or self.zero_quantized_gradients:
@@ -421,6 +427,32 @@ class ResearchArgs(BaseArgs):
     # Scalar of noise to inject into input embeddings
     # https://arxiv.org/abs/2310.05914
     neft_alpha: float | None = None
+
+
+class TeacherArgs(BaseArgs):
+    # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
+    model_class: str = None
+    # model name on huggingface hub
+    model_name: str | None = None
+    # teacher dtype
+    dtype: str = "fp32"
+    # KL divergence method
+    kl_divergence_method: KLDivergenceMethod = None
+    # KL divergence weight
+    kl_divergence_weight: float = 1
+
+    def model_post_init(self, __context: Any) -> None:
+        # dtype
+        self.dtype = normalize_dtype_string(self.dtype)
+
+        assert self.model_class in [
+            AutoModelForCausalLM.__name__,
+            AutoModelForSeq2SeqLM.__name__,
+        ], f"unexpected model_class ({self.model_class})"
+
+        self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
+
+        _check_not_None([(self.kl_divergence_method, "kl_divergence_method")])
 
 
 class TrainingArgs(BaseArgs):
@@ -537,10 +569,21 @@ class UnshardingArgs(BaseArgs):
         _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
 
 
+class DistillationArgs(TrainingArgs):
+    # teacher model arguments
+    teacher_args: TeacherArgs = None
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_not_None([(self.teacher_args, "teacher_args")])
+
+        super().model_post_init(__context)
+
+
 _MODE_ARGS_MAP = {
     Mode.training: TrainingArgs,
     Mode.inference: InferenceArgs,
     Mode.unsharding: UnshardingArgs,
+    Mode.distillation: DistillationArgs,
 }
 
 
@@ -563,6 +606,7 @@ def get_args(mode: Mode) -> TrainingArgs | InferenceArgs | UnshardingArgs:
 
     set_logger(args.logging_args.logging_level, colored_log=args.logging_args.use_colored_logs)
     log_args(args)
+    log_environment()
 
     return args
 

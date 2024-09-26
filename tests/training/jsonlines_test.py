@@ -14,7 +14,7 @@ from .test_commons import TestCommons
 class JSONLinesTest(TestCommons):
     @parameterized.expand([DatasetSplit.train, DatasetSplit.val, DatasetSplit.test])
     def test_jsonlines_loads(self, split: DatasetSplit) -> None:
-        args = TestCommons.load_training_args_for_unit_tests()
+        args = TestCommons.load_training_args_for_unit_tests("data_config.yml")
         mode = Mode.training
 
         with tempfile.TemporaryDirectory() as tmpdir:

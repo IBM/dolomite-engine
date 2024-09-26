@@ -1,9 +1,6 @@
 from .enums import AttentionHeadType, PositionEmbeddingType
 from .model_conversion import export_to_huggingface, import_from_huggingface
 from .models import (
-    DenseMoEConfig,
-    DenseMoEForCausalLM,
-    DenseMoEModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,

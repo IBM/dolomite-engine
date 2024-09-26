@@ -1,8 +1,8 @@
 install:
-	pip install .
+	pip install --extra-index-url https://download.pytorch.org/whl/nightly/cpu .
 
 install-dev:
-	pip install -e .
+	pip install --extra-index-url https://download.pytorch.org/whl/nightly/cpu -e .
 	pip install -r requirements-dev.txt
 
 test:

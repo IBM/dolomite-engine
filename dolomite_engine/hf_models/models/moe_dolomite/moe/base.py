@@ -11,15 +11,22 @@ from ..config import MoEDolomiteConfig
 
 class ParameterizedExperts(nn.Module):
     def __init__(
-        self, num_experts: int, in_features: int, out_features: int, add_bias: bool = True, std: float | None = None
+        self,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        add_bias: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
     ) -> None:
         super().__init__()
 
-        self.weight = nn.Parameter(torch.empty(num_experts, out_features, in_features))
+        self.weight = nn.Parameter(torch.empty(num_experts * out_features, in_features, device=device, dtype=dtype))
 
         self.bias = None
         if add_bias:
-            self.bias = nn.Parameter(torch.empty(num_experts, out_features))
+            self.bias = nn.Parameter(torch.empty(num_experts * out_features, device=device, dtype=dtype))
 
         self.std = std
 
@@ -30,10 +37,14 @@ class ParameterizedExperts(nn.Module):
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
+        weight = self.weight.view(self.num_experts, self.out_features, -1)
+
+        if self.bias is not None:
+            bias = self.bias.view(self.num_experts, self.out_features)
+
         input = input.split(num_experts_per_token.tolist(), dim=0)
         input = [
-            F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
-            for i in range(self.num_experts)
+            F.linear(input[i], weight[i], None if self.bias is None else bias[i]) for i in range(self.num_experts)
         ]
         input = torch.cat(input, dim=0)
         return input
@@ -72,11 +83,14 @@ class SparseMoE(nn.Module):
         init_method = InitMethod(config.init_method)
         residual_dropout = config.resid_pdrop
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
-            std=config.initializer_range,
+            std=std,
         )
 
         std = initializer_range
@@ -119,7 +133,11 @@ class SparseMoE(nn.Module):
 
         hidden_states = self.dropout(hidden_states)
 
-        return hidden_states, router_logits
+        aux_loss = self._compute_switch_loss(
+            logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+        )
+
+        return hidden_states, router_logits, aux_loss
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
@@ -179,3 +197,18 @@ class SparseMoE(nn.Module):
             x, indices = x.topk(self.top_k, dim=-1)
 
         return x, indices
+
+    def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
+        logits = logits.view(-1, logits.size(-1))
+        probs = probs.view(-1, probs.size(-1))
+
+        num_experts = logits.size(1)
+        acc_probs = probs.sum(0)
+        freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+
+        switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
+        z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
+
+        loss = switch_loss + 0.1 * z_loss
+
+        return loss

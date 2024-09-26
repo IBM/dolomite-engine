@@ -7,9 +7,9 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...config import CommonConfig
 from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
-from ...enums import PositionEmbeddingType
-from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE
-from ...utils import convert_padding_free_lists_to_tensors
+from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...utils import convert_padding_free_lists_to_tensors, divide_if_divisible
 
 
 class PreTrainedModelMixin(PreTrainedModel):
@@ -48,7 +48,7 @@ class PreTrainedModelMixin(PreTrainedModel):
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
     def _init_weights(self, module: nn.Module) -> None:
-        if isinstance(module, (nn.Embedding, nn.Linear, nn.LayerNorm, nn.RMSNorm, Alibi, RoPE)):
+        if hasattr(module, "reset_parameters"):
             module.reset_parameters()
 
     def prepare_inputs_for_model(
@@ -105,6 +105,57 @@ class PreTrainedModelMixin(PreTrainedModel):
 class BaseModelMixin(PreTrainedModelMixin):
     mask_value = None
 
+    def __init__(self, config: CommonConfig, **kwargs) -> None:
+        super().__init__(config, **kwargs)
+        self._init_model(config, **kwargs)
+
+    def _init_model(self, config: CommonConfig, **kwargs) -> None:
+        """this function purely exists because I have no clue how multiple inheritance works
+
+        Args:
+            config (CommonConfig): a config object
+        """
+
+        self.attention_head_type = AttentionHeadType(config.attention_head_type)
+        self.embed_dim = config.n_embd
+        self.num_heads = config.n_head
+        self.m_emb = config.m_emb
+        self.initializer_range = config.initializer_range
+
+        self.head_dim = divide_if_divisible(
+            self.embed_dim,
+            self.num_heads,
+            f"`embed_dim` ({self.embed_dim}) must be divisible by `num_heads` ({self.num_heads})",
+        )
+
+        self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
+
+        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
+        self.h = nn.ModuleList(
+            [
+                self.layer_class(
+                    config,
+                    normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_implementation,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    layer_idx=i,
+                )
+                for i in range(config.n_layer)
+            ]
+        )
+        self.ln_f = get_normalization_function(
+            config.normalization_function,
+            self.embed_dim,
+            eps=config.layer_norm_epsilon,
+            normalization_implementation=self.normalization_implementation,
+        )
+
+        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
+        self._setup_positional_encoding()
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
     def get_input_embeddings(self) -> ParameterizedEmbedding:
         return self.wte
 
@@ -121,14 +172,13 @@ class BaseModelMixin(PreTrainedModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
+        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,
-            return_dict,
             hidden_states,
             attention_mask,
             position_ids,
@@ -143,7 +193,6 @@ class BaseModelMixin(PreTrainedModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
@@ -177,9 +226,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
-
-        if not return_dict:
-            return tuple(v for v in [hidden_states, past_key_values, all_hidden_states] if v is not None)
 
         return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
@@ -325,7 +371,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[
@@ -347,8 +392,6 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if use_cache is None:
             use_cache = False if self._use_padding_free_transformer else self.config.use_cache
-
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
@@ -457,7 +500,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         return (
             output_hidden_states,
             use_cache,
-            return_dict,
             hidden_states,
             attention_mask,
             position_ids,

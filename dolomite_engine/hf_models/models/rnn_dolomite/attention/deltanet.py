@@ -17,7 +17,7 @@ if is_einops_available():
 if is_fla_available():
     from fla.models.utils import Cache as FLACache
     from fla.modules import ShortConvolution
-    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_linear_attn_delta_rule
+    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_delta_rule
 
 
 def simple_norm(x: torch.Tensor) -> torch.Tensor:
@@ -230,9 +230,7 @@ class DeltaNet(nn.Module):
             beta = q.new_ones(q.shape[0], q.shape[1], q.shape[2])
         state = past_key_values[self.layer_idx][-1] if use_cache else None
         if mode == "fused_recurrent":
-            o, recurrent_state = fused_recurrent_linear_attn_delta_rule(
-                q, k, v, beta, state, output_final_state=use_cache
-            )
+            o, recurrent_state = fused_recurrent_delta_rule(q, k, v, beta, state, output_final_state=use_cache)
         elif mode == "fused_chunk":
             assert self.chunk_size in [16, 32, 64]
             o, recurrent_state = fused_chunk_delta_rule(

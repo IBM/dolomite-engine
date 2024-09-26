@@ -1,9 +1,9 @@
 import torch
 from tqdm import trange
 
-from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import is_glu
-from ..gpt_dolomite import GPTDolomiteConfig
+from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....modeling_utils import is_glu
+from ...gpt_dolomite import GPTDolomiteConfig
 
 
 def unshard_tensor_parallel_state_dicts(

@@ -1,8 +1,8 @@
 import torch
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
-from transformers.models.mixtral.modeling_mixtral import load_balancing_loss_func
 
 from ..dense import CausalLMModelMixin
+from .base import MoeModelOutputWithPastAndAuxLoss
 
 
 class CausalLMMoEModelMixin(CausalLMModelMixin):
@@ -18,15 +18,13 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         use_cache: bool | None = None,
         output_attentions: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
+        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
         if self._use_padding_free_transformer and output_router_logits:
             raise NotImplementedError("padding_free is not supported with load_balancing_loss_func currently")
-
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
@@ -53,7 +51,7 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         #     position_ids -> None or (batch_size, key_length)
         # ==========================================================================================
 
-        transformer_outputs = self.transformer(
+        transformer_outputs: MoeModelOutputWithPastAndAuxLoss = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -62,62 +60,30 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
             output_router_logits=output_router_logits,
         )
-        hidden_states = transformer_outputs[0]
 
-        lm_logits = self.get_lm_logits(hidden_states)
+        lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
 
-        loss, load_balancing_loss = self.get_moe_loss(
-            lm_logits=lm_logits,
-            labels=labels,
-            cu_seqlens=cu_seqlens,
-            router_logits=transformer_outputs.router_logits if return_dict else transformer_outputs[-1],
-            num_experts=self.num_experts,
-            num_experts_per_token=self.num_experts_per_tok,
-            router_aux_loss_coef=self.router_aux_loss_coef,
-            output_router_logits=output_router_logits,
-        )
+        lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+        aux_loss = transformer_outputs.aux_loss
 
-        if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
-            if output_router_logits:
-                output = (load_balancing_loss,) + output
-            return (loss,) + output if loss is not None else output
+        if lm_loss is None:
+            loss = None
+        else:
+            loss = lm_loss + self.router_aux_loss_coef * aux_loss
 
         return MoeCausalLMOutputWithPast(
             loss=loss,
-            aux_loss=load_balancing_loss,
+            aux_loss=aux_loss,
             logits=lm_logits,
             past_key_values=transformer_outputs.past_key_values,
             hidden_states=transformer_outputs.hidden_states,
             attentions=transformer_outputs.attentions,
             router_logits=transformer_outputs.router_logits,
         )
-
-    def get_moe_loss(
-        self,
-        lm_logits: torch.Tensor,
-        labels: torch.Tensor,
-        cu_seqlens: torch.Tensor,
-        router_logits: torch.Tensor,
-        num_experts: int,
-        num_experts_per_token: int,
-        router_aux_loss_coef: float,
-        output_router_logits: bool,
-    ) -> torch.Tensor:
-        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
-
-        load_balancing_loss = None
-        if output_router_logits:
-            load_balancing_loss = load_balancing_loss_func(router_logits, num_experts, num_experts_per_token)
-            if loss is not None:
-                loss += router_aux_loss_coef * load_balancing_loss
-
-        return loss, load_balancing_loss

@@ -149,7 +149,12 @@ class TestCommons(TestCase):
         return input_ids, attention_mask, labels
 
     def model_conversion_test(
-        self, dolomite_config: CommonConfig, model_type: str, device: torch.device, exact_match: bool = True
+        self,
+        dolomite_config: CommonConfig,
+        model_type: str,
+        device: torch.device,
+        exact_match: bool = True,
+        compare_loss: bool = True,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
@@ -198,17 +203,19 @@ class TestCommons(TestCase):
             rtol_bfloat16=0,
             atol_bfloat16=3e-7,
         )
-        self.assert_equal_tensors(
-            dolomite_loss,
-            hf_loss,
-            exact_match,
-            rtol_float32=0,
-            atol_float32=1e-5,
-            rtol_float16=0,
-            atol_float16=1e-5,
-            rtol_bfloat16=0,
-            atol_bfloat16=1e-5,
-        )
+
+        if compare_loss:
+            self.assert_equal_tensors(
+                dolomite_loss,
+                hf_loss,
+                exact_match,
+                rtol_float32=0,
+                atol_float32=1e-5,
+                rtol_float16=0,
+                atol_float16=1e-5,
+                rtol_bfloat16=0,
+                atol_bfloat16=1e-5,
+            )
 
     @staticmethod
     def compare_saved_models(path1: str, path2: str) -> bool:

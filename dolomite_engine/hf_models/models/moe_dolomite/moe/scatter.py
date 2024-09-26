@@ -3,25 +3,33 @@ import math
 import torch
 import torch.nn as nn
 
-from .....utils import is_scattermoe_available
+from .....utils import is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 from .base import ParameterizedExperts, SparseMoE
 
 
-if is_scattermoe_available():
-    import scattermoe
-    from scattermoe.parallel_experts import parallel_linear as scattered_experts
+if is_kernel_hyperdrive_available():
+    from khd.kernels.scattermoe.triton_implementation import padded_block_indices, scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
     def __init__(
-        self, num_experts: int, in_features: int, out_features: int, add_bias: bool = True, std: float | None = None
+        self,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        add_bias: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        std: float | None = None,
     ) -> None:
         assert not add_bias, "scattermoe doesn't support bias"
 
-        super().__init__(num_experts, in_features, out_features, add_bias=add_bias, std=std)
+        super().__init__(
+            num_experts, in_features, out_features, add_bias=add_bias, device=device, dtype=dtype, std=std
+        )
 
     def forward(
         self,
@@ -37,7 +45,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
     ):
         results = scattered_experts(
             inputs,
-            self.weight.permute(0, 2, 1),
+            self.weight.view(self.num_experts, self.out_features, -1).permute(0, 2, 1),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
@@ -73,11 +81,14 @@ class ScatterMoE(SparseMoE):
         init_method = InitMethod(config.init_method)
         residual_dropout = config.resid_pdrop
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
-            std=config.initializer_range,
+            std=std,
         )
 
         std = initializer_range
@@ -110,10 +121,8 @@ class ScatterMoE(SparseMoE):
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
         with torch.no_grad():
-            sorted_expert_idxs, sorted_scattered_idxs = scattermoe.kernels.ops.flatten_and_sort(selected_experts)
-            padded_block_idxs, expert_offsets = scattermoe.kernels.ops.padded_block_indices(
-                sorted_expert_idxs, self.num_experts
-            )
+            sorted_expert_idxs, sorted_scattered_idxs = torch.sort(selected_experts.flatten())
+            padded_block_idxs, expert_offsets = padded_block_indices(sorted_expert_idxs, self.num_experts)
 
         hidden_states = self.c_fc(
             hidden_states,

@@ -85,6 +85,9 @@ def save_checkpoint(
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
             ):
                 model_state_dict = model.state_dict()
+                if model.has_teacher_model():
+                    model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
                 if dp_rank == 0:
                     torch.save(model_state_dict, f"{_get_model_path(save_path)}.pt")
 
@@ -93,7 +96,11 @@ def save_checkpoint(
                     if dp_rank == 0:
                         torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
         else:
-            dcp.save(get_model_state_dict(model), checkpoint_id=_get_model_path(save_path))
+            model_state_dict = get_model_state_dict(model)
+            if model.has_teacher_model():
+                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
+            dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
 
             if save_optimizer:
                 if optimizer is None:
@@ -150,6 +157,10 @@ def save_checkpoint(
         indent=4,
     )
 
+    if os.path.exists(os.path.join(args.save_args.save_path, "KILLSWITCH")):
+        ProcessGroupManager.destroy_process_groups()
+        exit()
+
 
 def load_checkpoint_for_training(
     args: TrainingArgs,
@@ -203,6 +214,13 @@ def load_checkpoint_for_training(
             load_lr_scheduler_states=load_lr_scheduler,
         )
     elif distributed_backend == DistributedBackend.torch:
+        has_teacher_model = model.has_teacher_model()
+        if has_teacher_model:
+            log_rank_0(
+                logging.WARN,
+                "the model will use non-strict loading of state dict during distillation, this has potential of incorrect behavior",
+            )
+
         if args.distributed_args.fsdp_algorithm == 1:
             # TODO add support for local state dict
             with FSDP.state_dict_type(
@@ -211,7 +229,9 @@ def load_checkpoint_for_training(
                 state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
                 optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
             ):
-                model.load_state_dict(torch.load(f"{_get_model_path(load_path)}.pt", map_location="cpu"))
+                model.load_state_dict(
+                    torch.load(f"{_get_model_path(load_path)}.pt", map_location="cpu"), strict=not has_teacher_model
+                )
 
                 if load_optimizer:
                     optimizer.load_state_dict(
@@ -224,7 +244,7 @@ def load_checkpoint_for_training(
         else:
             model_state_dict = get_model_state_dict(model)
             dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
-            set_model_state_dict(model, model_state_dict)
+            set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
             del model_state_dict
 
             if load_optimizer:
@@ -297,6 +317,10 @@ def load_checkpoint_for_inference(
     args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yml")
     args_from_checkpoint = load_yaml(args_file)
 
+    if "teacher_args" in args_from_checkpoint:
+        args_from_checkpoint["tuning_args"]["tuning_method"] = "pretraining"
+        args_from_checkpoint.pop("teacher_args")
+
     args_from_checkpoint = TrainingArgs(**args_from_checkpoint)
 
     if args.mixed_precision_args is not None:
@@ -335,7 +359,7 @@ def load_checkpoint_for_inference(
         model.load_state_dict(state, strict=strict)
     elif distributed_backend == DistributedBackend.torch:
         if args_from_checkpoint.distributed_args.fsdp_algorithm == 1:
-            state = torch.load(_get_model_path(_get_base_path(load_path, iteration)), map_location="cpu")
+            state = torch.load(f"{_get_model_path(_get_base_path(load_path, iteration))}.pt", map_location="cpu")
         else:
             state = {}
             _load_state_dict(
@@ -451,3 +475,12 @@ def _get_experiments_tracker_path(path: str) -> str:
 
 def _get_metadata_path(path: str) -> str:
     return os.path.join(path, "metadata.json")
+
+
+def _filter_out_teacher_state_dict(state_dict: dict) -> dict:
+    result = {}
+    for key, value in state_dict.items():
+        if not "teacher_model" in key:
+            result[key] = value
+
+    return result

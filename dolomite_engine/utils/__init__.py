@@ -5,6 +5,7 @@ import torch.distributed
 
 from .hf_hub import download_repo
 from .logger import log_rank_0, print_rank_0, print_ranks_all, set_logger
+from .loss_dict import MetricsTrackingDict
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
 from .packages import (
     is_apex_available,
@@ -12,10 +13,11 @@ from .packages import (
     is_einops_available,
     is_fla_available,
     is_flash_attention_available,
+    is_kernel_hyperdrive_available,
     is_ms_amp_available,
-    is_scattermoe_available,
     is_transformer_engine_available,
     is_triton_available,
+    log_environment,
 )
 from .parallel import ProcessGroupManager, run_rank_n
 from .pydantic import BaseArgs

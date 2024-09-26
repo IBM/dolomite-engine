@@ -11,15 +11,16 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...config import CommonConfig
+from ...enums import PositionEmbeddingType
 from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
 from ..dense import CausalLMModelMixin
 from .base import PreTrainedModelMixin_TP
 
 
 class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
-    def __init__(self, config: CommonConfig, **kwargs) -> None:
-        PreTrainedModelMixin_TP.__init__(self, config, **kwargs)
+    tensor_parallel_state_dict_function = None
 
+    def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.vocab_size = config.vocab_size
         self.transformer = self.base_model_class(config, **kwargs)
 
@@ -52,14 +53,11 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         use_cache: bool | None = None,
         output_attentions: bool | None = None,
         output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
+        return_dict: bool = True,
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | CausalLMOutputWithPast:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        assert not output_attentions
-
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -83,7 +81,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
@@ -103,10 +100,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 # all gather
                 lm_logits = tensor_to_dtensor(lm_logits, current_placement=Shard(-1))
                 lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
-
-        if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
-            return ((loss,) + output) if loss is not None else output
 
         return CausalLMOutputWithPast(
             loss=loss,
@@ -161,18 +154,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         return loss
 
-    def load_from_safetensors_weights_manager(
-        self, safetensors_weight_manager: SafeTensorsWeightsManager, prefix: str = ""
-    ) -> None:
-        self.transformer.load_from_safetensors_weights_manager(safetensors_weight_manager, prefix + "transformer.")
-
-        if not self._tied_word_embeddings:
-            if self.tensor_parallel_word_embeddings:
-                self.lm_head.load_from_safetensors_weights_manager(safetensors_weight_manager, "lm_head.")
-            else:
-                state_dict = {"weight": safetensors_weight_manager.get_tensor(prefix + "transformer.wte.weight")}
-                self.lm_head.load_state_dict(state_dict)
-
     @classmethod
     def from_pretrained(
         cls,
@@ -181,7 +162,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         tensor_parallel_word_embeddings: bool = False,
         **kwargs,
     ) -> CausalLMModelMixin_TP:
-        config = cls.config_class.from_pretrained(pretrained_model_name_or_path)
+        config: CommonConfig = cls.config_class.from_pretrained(pretrained_model_name_or_path)
 
         # use dummy tensors to avoid initializing model here
         with torch.device("meta"):
@@ -191,10 +172,23 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         # copy to device without copying storage
         model = model.to_empty(device=torch.cuda.current_device())
-
-        # load weights into tensor parallel model using SafeTensorsWeightsManager class
-        # this avoids loading multiple copies of the parameters in CPU memory
-        safetensors_weight_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
-        model.load_from_safetensors_weights_manager(safetensors_weight_manager)
+        model.load_from_safetensors_weights_manager(SafeTensorsWeightsManager(pretrained_model_name_or_path))
 
         return model
+
+    def load_from_safetensors_weights_manager(self, safetensors_weights_manager: SafeTensorsWeightsManager) -> None:
+        with torch.device(torch.cuda.current_device()):
+            position_embedding_type = PositionEmbeddingType(self.config.position_embedding_type)
+
+            if position_embedding_type == PositionEmbeddingType.alibi:
+                self.transformer.alibi.reset_parameters()
+            elif position_embedding_type == PositionEmbeddingType.rope:
+                self.transformer.rope.reset_parameters()
+
+        state_dict = self.__class__.tensor_parallel_state_dict_function(
+            config=self.config,
+            safetensors_weights_manager=safetensors_weights_manager,
+            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+        )
+
+        self.load_state_dict(state_dict)

@@ -1,7 +1,7 @@
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from ..enums import DatasetKeys, DatasetSplit, Mode
+from ..enums import DatasetSplit, Mode
 from .base import BaseDataset
 
 
@@ -42,8 +42,8 @@ class HuggingFaceDataset(BaseDataset):
         assert "data_path" in self.class_args, "`data_path` is not specified"
 
         data_path: str = self.class_args.get("data_path")
-        input_key: str = self.class_args.get("input_key", DatasetKeys.input.value)
-        output_key: str = self.class_args.get("output_key", DatasetKeys.output.value)
+        input_key: str = self.class_args.get("input_key", "input")
+        output_key: str = self.class_args.get("output_key", "output")
 
         split = "validation" if self.split == DatasetSplit.val else self.split.value
         dataset = load_dataset(data_path)[split]

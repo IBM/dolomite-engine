@@ -15,14 +15,12 @@ class GPTCrossLayerPreTrainedModel(PreTrainedModelMixin):
     _no_split_modules = ["GPTCrossLayerBlock"]
 
     def __init__(self, config: GPTCrossLayerConfig, *args, **kwargs):
-        super().__init__(config, *args, **kwargs)
         self.sharing_pattern = config.sharing_pattern
+        super().__init__(config, *args, **kwargs)
 
 
 class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
-    def __init__(self, config: GPTCrossLayerConfig, **kwargs) -> None:
-        super().__init__(config, **kwargs)
-
+    def _init_model(self, config: GPTCrossLayerConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads

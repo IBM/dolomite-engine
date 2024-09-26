@@ -13,16 +13,14 @@ class MoEDolomitePreTrainedModel(PreTrainedModelMixin):
     _no_split_modules = ["SparseMoEBlock"]
 
     def __init__(self, config: MoEDolomiteConfig, *args, **kwargs) -> None:
-        super().__init__(config, *args, **kwargs)
-
         self.moe_implementation = kwargs.get("moe_implementation", "eager")
         assert self.moe_implementation in ["eager", "scattermoe"]
 
+        super().__init__(config, *args, **kwargs)
+
 
 class MoEDolomiteModel(MoEDolomitePreTrainedModel, BaseMoEModelMixin):
-    def __init__(self, config: MoEDolomiteConfig, **kwargs) -> None:
-        super().__init__(config, **kwargs)
-
+    def _init_model(self, config: MoEDolomiteConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.n_embd
         self.num_heads = config.n_head

@@ -73,8 +73,7 @@ model_tp = model_tp.to_empty(device=torch.cuda.current_device())
 
 # load weights into tensor parallel model using SafeTensorsWeightsManager class
 # this avoids loading multiple copies of the parameters in CPU memory
-safetensors_weight_manager = SafeTensorsWeightsManager(args.tmp_path)
-model_tp.load_from_safetensors_weights_manager(safetensors_weight_manager)
+model_tp.load_from_safetensors_weights_manager(SafeTensorsWeightsManager(args.tmp_path))
 
 # set model to eval mode
 model_tp = model_tp.to(torch_dtype)
