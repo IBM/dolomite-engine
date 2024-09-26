@@ -2,8 +2,13 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ....utils import ProcessGroupManager
-from ...modeling_utils_TP import dtensor_to_tensor, get_attention_module_TP, get_module_placements
+from ....utils import ProcessGroupManager, is_dtensors_enabled
+from ...modeling_utils_TP import (
+    dtensor_to_tensor,
+    get_attention_module_TP,
+    get_module_placements,
+    reduce_from_tensor_parallel_region,
+)
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_parallel import GPTParallelConfig
 from .linear import ParallelRowParallelLinear
@@ -80,7 +85,10 @@ class GPTParallelBlock_TP(nn.Module):
 
         hidden_states = attention_out + mlp_out
 
-        hidden_states = dtensor_to_tensor(hidden_states, desired_placement=self.placement)
+        if is_dtensors_enabled():
+            hidden_states = dtensor_to_tensor(hidden_states, desired_placement=self.placement)
+        else:
+            hidden_states = reduce_from_tensor_parallel_region(hidden_states, desired_placement=self.placement)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
