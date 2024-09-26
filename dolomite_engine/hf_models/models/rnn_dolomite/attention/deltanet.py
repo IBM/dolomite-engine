@@ -9,6 +9,7 @@ from .....utils import is_einops_available, is_fla_available
 from ....config import CommonConfig
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_normalization_function
+from .convolution import ParameterizedShortConvolution
 
 
 if is_einops_available():
@@ -16,49 +17,7 @@ if is_einops_available():
 
 if is_fla_available():
     from fla.models.utils import Cache as FLACache
-    from fla.modules import ShortConvolution
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_delta_rule
-
-
-def simple_norm(x: torch.Tensor) -> torch.Tensor:
-    return F.normalize(x, dim=-1) * x.shape[-1] ** 0.5
-
-
-def elu_p1(x: torch.Tensor) -> torch.Tensor:
-    return F.elu(x) + 1
-
-
-def sum_norm(x: torch.Tensor) -> torch.Tensor:
-    return x / x.sum(-1, keepdim=True)
-
-
-def elu_norm(x: torch.Tensor) -> torch.Tensor:
-    x = elu_p1(x)
-    return x / x.sum(-1, keepdim=True)
-
-
-if is_fla_available():
-
-    class ParameterizedShortConvolution(ShortConvolution):
-        def __init__(
-            self,
-            hidden_size: int,
-            kernel_size: int,
-            bias: bool = False,
-            activation: str = "silu",
-            use_causal_conv: bool = True,
-            std: float | None = None,
-        ) -> None:
-            self.std = std
-            super().__init__(hidden_size, kernel_size, bias, activation, use_causal_conv)
-
-        def reset_parameters(self) -> None:
-            if self.std is None:
-                super().reset_parameters()
-            else:
-                nn.init.normal_(self.weight, mean=0, std=self.std)
-                if self.bias is not None:
-                    self.bias.zero_()
 
 
 # https://github.com/IDSIA/recurrent-fwp/blob/master/algorithmic/layers.py#L86C1-L146C1
@@ -102,8 +61,6 @@ class DeltaNet(nn.Module):
         self.head_v_dim = self.value_dim // self.num_heads
         self.layer_idx = layer_idx
 
-        self.silu = nn.SiLU()
-
         assert mode in ["chunk", "fused_chunk", "fused_recurrent"], f"Not suppoerted mode `{mode}`."
         assert self.key_dim % self.num_heads == 0, f"key dim must be divisible by num_heads of {self.num_heads}"
         assert self.value_dim % self.num_heads == 0, f"value dim must be divisible by num_heads of {self.num_heads}"
@@ -113,26 +70,28 @@ class DeltaNet(nn.Module):
         init_method = InitMethod(config.init_method)
         if init_method == InitMethod.mup:
             std_in /= math.sqrt(config.m_width)
-        self.q_proj = ParameterizedLinear(self.hidden_size, self.key_dim, bias=False, std=std_in)
-        self.k_proj = ParameterizedLinear(self.hidden_size, self.key_dim, bias=False, std=std_in)
-        self.v_proj = ParameterizedLinear(self.hidden_size, self.value_dim, bias=False, std=std_in)
+        self.c_attn = ParameterizedLinear(self.hidden_size, 2 * self.key_dim + self.value_dim, bias=False, std=std_in)
 
         if use_short_conv:
             std_conv = initializer_range
             self.conv_size = conv_size
             if share_conv_kernel:
-                self.h_conv1d = ParameterizedShortConvolution(
-                    self.hidden_size, conv_size, activation=None, std=std_conv
-                )
+                self.h_conv1d = ParameterizedShortConvolution(self.hidden_size, conv_size, std=std_conv)
             else:
                 self.q_conv1d = ParameterizedShortConvolution(
-                    self.key_dim, conv_size, activation="silu" if qk_activation == "silu" else None, std=std_conv
+                    self.key_dim,
+                    conv_size,
+                    activation=nn.SiLU() if qk_activation == "silu" else nn.Identity(),
+                    std=std_conv,
                 )
                 self.k_conv1d = ParameterizedShortConvolution(
-                    self.key_dim, conv_size, activation="silu" if qk_activation == "silu" else None, std=std_conv
+                    self.key_dim,
+                    conv_size,
+                    activation=nn.SiLU() if qk_activation == "silu" else nn.Identity(),
+                    std=std_conv,
                 )
                 self.v_conv1d = ParameterizedShortConvolution(
-                    self.value_dim, conv_size, activation="silu", std=std_conv
+                    self.value_dim, conv_size, activation=nn.SiLU(), std=std_conv
                 )
 
         self.use_beta = use_beta
@@ -173,31 +132,24 @@ class DeltaNet(nn.Module):
             if attention_mask.shape[-1] != hidden_states.shape[-2]:
                 attention_mask = attention_mask[:, -1:]
 
+        c_attn = self.c_attn(hidden_states)
+        q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
+
         if self.use_short_conv:
             conv_state = last_state[0] if use_cache else None
             if self.share_conv_kernel:
                 # conv state is updated inplace
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
-
-                q = self.q_proj(hidden_states)
-                k = self.k_proj(hidden_states)
-                v = self.v_proj(hidden_states)
             else:
                 conv_state_q = last_state[0] if use_cache else None
                 conv_state_k = last_state[1] if use_cache else None
                 conv_state_v = last_state[2] if use_cache else None
 
-                q = self.q_proj(hidden_states)
-                k = self.k_proj(hidden_states)
-                v = self.v_proj(hidden_states)
-
                 q = self.q_conv1d(q, attention_mask, conv_state_q)
                 k = self.k_conv1d(k, attention_mask, conv_state_k)
                 v = self.v_conv1d(v, attention_mask, conv_state_v)
         else:
-            q = self.q_proj(hidden_states)
-            k = self.k_proj(hidden_states)
-            v = self.silu(self.v_proj(hidden_states))
+            v = F.silu(v)
 
         # dealing with left-padding
         if attention_mask is not None:
@@ -207,10 +159,11 @@ class DeltaNet(nn.Module):
 
         if self.qk_activation != "silu":
             if self.qk_activation == "relu":
-                q, k = q.relu(), k.relu()
+                q = F.relu(q)
+                k = F.relu(k)
             elif self.qk_activation == "elu":
-                q = elu_p1(q)
-                k = elu_p1(k)
+                q = F.elu(q) + 1
+                k = F.elu(k) + 1
             elif self.qk_activation == "identity":
                 pass
             else:
@@ -218,11 +171,11 @@ class DeltaNet(nn.Module):
 
         if self.qk_norm is not None:
             if self.qk_norm == "l2":
-                k = F.normalize(k, dim=-1, p=2)
                 q = F.normalize(q, dim=-1, p=2)
+                k = F.normalize(k, dim=-1, p=2)
             elif self.qk_norm == "sum":
-                q = sum_norm(q)
-                k = sum_norm(k)
+                q = q / q.sum(-1, keepdim=True)
+                k = k / k.sum(-1, keepdim=True)
 
         if self.use_beta:
             beta = rearrange(self.b_proj(hidden_states), "b l h -> b h l").sigmoid()
