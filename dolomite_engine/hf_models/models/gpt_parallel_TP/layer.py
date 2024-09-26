@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.distributed import ReduceOp
 from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, is_dtensors_enabled
@@ -88,7 +89,7 @@ class GPTParallelBlock_TP(nn.Module):
         if is_dtensors_enabled():
             hidden_states = dtensor_to_tensor(hidden_states, desired_placement=self.placement)
         else:
-            hidden_states = reduce_from_tensor_parallel_region(hidden_states, desired_placement=self.placement)
+            hidden_states = reduce_from_tensor_parallel_region(hidden_states, op=ReduceOp.SUM)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
