@@ -17,6 +17,7 @@ class ParamsGroupTest(TestCommons):
         [
             ("gpt_dolomite_config.yml", "gpt_dolomite_mup.json"),
             ("moe_dolomite_config.yml", "moe_dolomite_mup.json"),
+            ("rnn_dolomite_config.yml", "rnn_dolomite_mup.json"),
         ]
     )
     def test_mup_group(self, config_filename: str, expected_groups_filename: str) -> None:
@@ -24,12 +25,23 @@ class ParamsGroupTest(TestCommons):
             os.path.join("params_group/training_configs", config_filename)
         )
 
-        with (
-            torch.device("meta"),
-            ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
-            ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
-        ):
-            model = get_model(args, Mode.training)
+        if "rnn_dolomite" in config_filename:
+            try:
+                with (
+                    torch.device("meta"),
+                    ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+                    ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+                ):
+                    model = get_model(args, Mode.training)
+            except RuntimeError:
+                self.skipTest("skipping rnn_dolomite test since causal-conv1d is not installed")
+        else:
+            with (
+                torch.device("meta"),
+                ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+                ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+            ):
+                model = get_model(args, Mode.training)
 
         _, names = get_mup_group_with_names(model, args.optimizer_args.class_args)
 
@@ -42,6 +54,7 @@ class ParamsGroupTest(TestCommons):
         [
             ("gpt_dolomite_config.yml", "gpt_dolomite_normal.json"),
             ("moe_dolomite_config.yml", "moe_dolomite_normal.json"),
+            ("rnn_dolomite_config.yml", "rnn_dolomite_mup.json"),
         ]
     )
     def test_normal_group(self, config_filename: str, expected_groups_filename: str) -> None:
@@ -49,14 +62,29 @@ class ParamsGroupTest(TestCommons):
             os.path.join("params_group/training_configs", config_filename)
         )
 
-        with (
-            torch.device("meta"),
-            ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
-            ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
-        ):
-            model = get_model(args, Mode.training)
+        if "rnn_dolomite" in config_filename:
+            try:
+                with (
+                    torch.device("meta"),
+                    ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+                    ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+                ):
+                    model = get_model(args, Mode.training)
+            except RuntimeError:
+                self.skipTest("skipping rnn_dolomite test since causal-conv1d is not installed")
+        else:
+            with (
+                torch.device("meta"),
+                ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+                ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+            ):
+                model = get_model(args, Mode.training)
 
         _, names = get_normal_group_with_names(model, args.optimizer_args.class_args)
+
+        print(model)
+
+        json.dump(names, open("a.json", "w"), indent=4)
 
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
