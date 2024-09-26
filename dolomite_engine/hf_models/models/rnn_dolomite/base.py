@@ -20,7 +20,6 @@ class RNNDolomitePreTrainedModel(PreTrainedModelMixin):
     config_class = RNNDolomiteConfig
     layer_class = RNNDolomiteBlock
     _no_split_modules = ["RNNDolomiteBlock"]
-    _supports_sdpa = False
 
     def __init__(self, config: RNNDolomiteConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
@@ -52,7 +51,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
                 self.layer_class(
                     config,
                     normalization_implementation=self.normalization_implementation,
-                    attention_implementation=self.attention_pattern[i],
+                    attention_pattern=self.attention_pattern[i],
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                 )
