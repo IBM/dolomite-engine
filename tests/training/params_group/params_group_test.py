@@ -45,6 +45,10 @@ class ParamsGroupTest(TestCommons):
 
         _, names = get_mup_group_with_names(model, args.optimizer_args.class_args)
 
+        print(model)
+
+        json.dump(names, open("a.json", "w"), indent=4)
+
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
         )
@@ -81,10 +85,6 @@ class ParamsGroupTest(TestCommons):
                 model = get_model(args, Mode.training)
 
         _, names = get_normal_group_with_names(model, args.optimizer_args.class_args)
-
-        print(model)
-
-        json.dump(names, open("a.json", "w"), indent=4)
 
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
