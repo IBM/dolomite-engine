@@ -4,7 +4,6 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fla.modules.activations import ACT2FN
 
 from .....utils import is_causal_conv1d_available, is_einops_available
 
@@ -23,7 +22,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         hidden_size: int,
         kernel_size: int,
         bias: bool = False,
-        activation: str = "silu",
+        activation: nn.Module = nn.Identity(),
         use_fast_conv1d: bool = True,
         std: float | None = None,
     ) -> None:
@@ -39,10 +38,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         )
 
         self.hidden_size = hidden_size
-        self.activation = None
-        if activation is not None:
-            assert activation in ["silu", "swish"], f"Activation `{activation}` not supported yet."
-            self.activation = activation
+        self.activation = activation
 
         if not is_causal_conv1d_available():
             if use_fast_conv1d:
@@ -72,8 +68,6 @@ class ParameterizedShortConvolution(nn.Conv1d):
             s += ", bias=False"
         if self.padding_mode != "zeros":
             s += ", padding_mode={padding_mode}"
-        if self.activation is not None:
-            s += ", activation={activation}"
         if not self.use_fast_conv1d:
             s += ", use_fast_conv1d={use_fast_conv1d}"
         return s.format(**self.__dict__)
@@ -110,8 +104,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
             )
         else:
             x = self._conv_forward(x, self.weight, self.bias)[..., : x.shape[-1]]
-            if self.activation is not None:
-                x = ACT2FN[self.activation](x)
+            x = self.activation(x)
         return rearrange(x, "b d l -> b l d")
 
     def step(self, x: torch.Tensor, cache: torch.Tensor):
@@ -133,8 +126,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
             x = torch.sum(cache * rearrange(self.weight, "d 1 w -> d w"), dim=-1)
             if self.bias is not None:
                 x = x + self.bias
-            if self.activation is not None:
-                x = ACT2FN[self.activation](x).to(dtype=dtype)
+            x = self.activation(x).to(dtype)
         return x.unsqueeze(1)
 
     @property
