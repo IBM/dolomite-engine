@@ -41,8 +41,7 @@ class EnsembleLinear_TP(ParameterizedLinear):
             )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
-        return input
+        return F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
 
 
 class EnsembleRowParallelLinear(RowParallelLinear):
