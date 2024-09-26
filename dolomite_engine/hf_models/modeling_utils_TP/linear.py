@@ -1,14 +1,22 @@
 import torch
 import torch.distributed
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributed import ReduceOp
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ...utils import ProcessGroupManager
+from ...utils import ProcessGroupManager, is_dtensors_enabled
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import (
+    copy_to_tensor_parallel_region,
+    dtensor_to_tensor,
+    get_module_placements,
+    reduce_from_tensor_parallel_region,
+    tensor_to_dtensor,
+)
 
 
 class ReplicatedLinear(ParameterizedLinear, DTensorModule):
@@ -95,10 +103,21 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        self.sequence_parallel = sequence_parallel
+        self.use_padding_free_transformer = use_padding_free_transformer
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=self.input_placement)
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=Shard(-1))
+        if is_dtensors_enabled():
+            input = tensor_to_dtensor(input, current_placement=self.input_placement)
+            input = super().forward(input)
+            input = dtensor_to_tensor(input, desired_placement=Shard(-1))
+        else:
+            assert not self.use_padding_free_transformer
+            assert not self.sequence_parallel
+
+            input = copy_to_tensor_parallel_region(input, op=ReduceOp.SUM)
+            input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
+
         return input
 
     def extra_repr(self) -> str:
@@ -152,10 +171,21 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        self.sequence_parallel = sequence_parallel
+        self.use_padding_free_transformer = use_padding_free_transformer
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Shard(-1))
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+        if is_dtensors_enabled():
+            input = tensor_to_dtensor(input, current_placement=Shard(-1))
+            input = super().forward(input)
+            input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+        else:
+            assert not self.use_padding_free_transformer
+            assert not self.sequence_parallel
+
+            input = reduce_from_tensor_parallel_region(input, op=ReduceOp.SUM)
+            input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
+
         return input
 
     def extra_repr(self) -> str:

@@ -298,3 +298,23 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
         wrapped_func = func_rank_other
 
     return wrapped_func
+
+
+_IS_DTENSORS_ENABLED: bool = True
+
+
+@contextmanager
+def enable_dtensors(enable: bool):
+    global _IS_DTENSORS_ENABLED
+
+    original_value = _IS_DTENSORS_ENABLED
+    _IS_DTENSORS_ENABLED = enable
+
+    yield
+
+    _IS_DTENSORS_ENABLED = original_value
+
+
+def is_dtensors_enabled() -> bool:
+    global _IS_DTENSORS_ENABLED
+    return _IS_DTENSORS_ENABLED

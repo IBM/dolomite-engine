@@ -19,7 +19,7 @@ from .packages import (
     is_triton_available,
     log_environment,
 )
-from .parallel import ProcessGroupManager, run_rank_n
+from .parallel import ProcessGroupManager, enable_dtensors, is_dtensors_enabled, run_rank_n
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
 from .tracking import ExperimentsTracker, ProgressBar
