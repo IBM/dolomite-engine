@@ -58,7 +58,7 @@ class ParamsGroupTest(TestCommons):
         [
             ("gpt_dolomite_config.yml", "gpt_dolomite_normal.json"),
             ("moe_dolomite_config.yml", "moe_dolomite_normal.json"),
-            ("rnn_dolomite_config.yml", "rnn_dolomite_mup.json"),
+            ("rnn_dolomite_config.yml", "rnn_dolomite_normal.json"),
         ]
     )
     def test_normal_group(self, config_filename: str, expected_groups_filename: str) -> None:
