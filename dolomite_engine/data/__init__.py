@@ -12,6 +12,7 @@ from .base import BaseDataset, BlendedDatasets
 from .dataloader import DispatchingDataLoader, ResumableDataLoader
 from .debug import DebugDataset
 from .huggingface import HuggingFaceDataset
+from .huggingface_chat_dataset import HuggingFaceChatDataset
 from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
 from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
@@ -24,6 +25,7 @@ _DATASETS_LIST = {
     "DebugDataset": DebugDataset,
     "DollyDataset": DollyDataset,
     "HuggingFaceDataset": HuggingFaceDataset,
+    "HuggingFaceChatDataset": HuggingFaceChatDataset,
     "SlimOrcaDataset": SlimOrcaDataset,
     "SST2Dataset": SST2Dataset,
 }
