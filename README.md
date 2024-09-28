@@ -7,6 +7,7 @@
 <!-- Topic -->
 [Efficient Training]: https://img.shields.io/static/v1?label=&message=Efficient%20Training&color=blueviolet
 [Efficient Inference]: https://img.shields.io/static/v1?label=&message=Efficient%20Inference&color=blueviolet
+[Learning Rate Scheduler]: https://img.shields.io/static/v1?label=&message=Learning%20Rate%20Scheduler&color=blueviolet
 [Instruction Finetuning]: https://img.shields.io/static/v1?label=&message=Instruction%20Finetuning&color=blueviolet
 [Mixture of Experts]: https://img.shields.io/static/v1?label=&message=Mixture%20of%20Experts&color=blueviolet
 [Model Architecture]: https://img.shields.io/static/v1?label=&message=Model%20Architecture&color=blueviolet
@@ -25,6 +26,9 @@ _Neel Jain, Ping-yeh Chiang, Yuxin Wen, John Kirchenbauer, Hong-Min Chu, Gowtham
 1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
 _Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
 ![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
+1. [Power scheduler: a batch size and token number agnostic learning rate scheduler](https://arxiv.org/abs/2408.13359)  
+_Yikang Shen, Matthew Stallone, Mayank Mishra, Gaoyuan Zhang, Shawn Tan, Aditya Prasad, Adriana Meza Soria, David D. Cox, Rameswar Panda_  
+![image][Learning Rate Scheduler]
 1. [Scattered Mixture-of-Experts Implementation](https://arxiv.org/abs/2403.08245)  
 _Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_  
 ![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
