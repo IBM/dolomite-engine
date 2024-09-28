@@ -15,6 +15,8 @@ class MetricsTrackingDict:
         elif isinstance(x, (int, float)):
             for key in self.data:
                 self.data[key] += x
+        else:
+            raise ValueError()
 
         return self
 
@@ -28,6 +30,8 @@ class MetricsTrackingDict:
         elif isinstance(x, (int, float)):
             for key in self.data:
                 self.data[key] /= x
+        else:
+            raise ValueError()
 
         return self
 
