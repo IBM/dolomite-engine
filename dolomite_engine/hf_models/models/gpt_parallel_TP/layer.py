@@ -5,11 +5,14 @@ from transformers import DynamicCache
 from ....utils import ProcessGroupManager, is_dtensors_enabled
 from ...modeling_utils_TP import (
     dtensor_to_tensor,
+    get_attention_module_TP,
     get_module_placements,
+    get_normalization_function_TP,
     reduce_from_tensor_parallel_region,
     reduce_scatter_to_sequence_parallel_region,
 )
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
+from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_parallel import GPTParallelConfig
 from .linear import ParallelRowParallelLinear
 
@@ -24,14 +27,43 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
-        super().__init__(
-            config=config,
-            normalization_implementation=normalization_implementation,
-            attention_implementation=attention_implementation,
-            use_padding_free_transformer=use_padding_free_transformer,
-            layer_idx=layer_idx,
-            sequence_parallel=sequence_parallel,
-        )
+        self.shared_layernorm = config.shared_layernorm
+
+        if self.shared_layernorm:
+            nn.Module.__init__(self)
+
+            hidden_size = config.hidden_size
+            self.layer_idx = layer_idx
+            self.m_residual = config.m_residual
+
+            self.ln = get_normalization_function_TP(
+                config.normalization_function,
+                hidden_size,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=normalization_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
+            )
+            self.attn = get_attention_module_TP(
+                config,
+                True,
+                attention_implementation=attention_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                layer_idx=layer_idx,
+                sequence_parallel=sequence_parallel,
+            )
+            self.mlp = MLP_TP(
+                config, use_padding_free_transformer=use_padding_free_transformer, sequence_parallel=sequence_parallel
+            )
+        else:
+            super().__init__(
+                config=config,
+                normalization_implementation=normalization_implementation,
+                attention_implementation=attention_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                layer_idx=layer_idx,
+                sequence_parallel=sequence_parallel,
+            )
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
         self._patch_row_parallel(use_padding_free_transformer, sequence_parallel)
@@ -50,18 +82,30 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
     ) -> tuple[torch.Tensor]:
         residual = hidden_states
 
-        attention_out = self.ln_1(hidden_states)
-        attention_out = self.attn(
-            attention_out,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
+        if self.shared_layernorm:
+            hidden_states = self.ln(hidden_states)
+            attention_out = self.attn(
+                hidden_states,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
+            mlp_out = self.mlp(hidden_states)
+        else:
+            attention_out = self.ln_1(hidden_states)
+            attention_out = self.attn(
+                attention_out,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
 
-        mlp_out = self.ln_2(hidden_states)
-        mlp_out = self.mlp(mlp_out)
+            mlp_out = self.ln_2(hidden_states)
+            mlp_out = self.mlp(mlp_out)
 
         hidden_states = attention_out + mlp_out
 
