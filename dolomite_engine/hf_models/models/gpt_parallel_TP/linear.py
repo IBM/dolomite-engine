@@ -13,8 +13,6 @@ class ParallelRowParallelLinear(RowParallelLinear):
             input = tensor_to_dtensor(input, current_placement=Shard(-1))
             input = F.linear(input, self.weight, self.bias)
         else:
-            assert not self.use_padding_free_transformer
-            assert not self.sequence_parallel
             assert self.bias is None
 
             input = F.linear(input, self.weight.to_local(), None)

@@ -11,10 +11,12 @@ from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
 from .TP import (
+    all_gather_from_sequence_parallel_region,
     copy_to_tensor_parallel_region,
     dtensor_to_tensor,
     get_module_placements,
     reduce_from_tensor_parallel_region,
+    reduce_scatter_to_sequence_parallel_region,
     tensor_to_dtensor,
 )
 
@@ -112,10 +114,13 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
             input = super().forward(input)
             input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         else:
-            assert not self.use_padding_free_transformer
-            assert not self.sequence_parallel
+            if self.sequence_parallel:
+                input = all_gather_from_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
+            else:
+                input = copy_to_tensor_parallel_region(input)
 
-            input = copy_to_tensor_parallel_region(input)
             input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
 
         return input
@@ -180,11 +185,14 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
             input = super().forward(input)
             input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         else:
-            assert not self.use_padding_free_transformer
-            assert not self.sequence_parallel
-
             input = F.linear(input, self.weight.to_local(), None)
-            input = reduce_from_tensor_parallel_region(input)
+
+            if self.sequence_parallel:
+                input = reduce_scatter_to_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
+            else:
+                input = reduce_from_tensor_parallel_region(input)
 
             if self.bias is not None:
                 input = input + self.bias.to_local()

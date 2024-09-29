@@ -2,7 +2,6 @@ import torch
 import torch.distributed
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributed import ReduceOp
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Shard
 
@@ -12,6 +11,7 @@ from ...modeling_utils_TP import (
     RowParallelLinear,
     dtensor_to_tensor,
     reduce_from_tensor_parallel_region,
+    reduce_scatter_to_sequence_parallel_region,
     tensor_to_dtensor,
 )
 
@@ -55,12 +55,15 @@ class EnsembleRowParallelLinear(RowParallelLinear):
 
             input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         else:
-            assert not self.use_padding_free_transformer
-            assert not self.sequence_parallel
-
             input = F.linear(input, self.weight.to_local(), None)
             input = input + residual / self.tp_world_size
-            input = reduce_from_tensor_parallel_region(input)
+
+            if self.sequence_parallel:
+                input = reduce_scatter_to_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
+            else:
+                input = reduce_from_tensor_parallel_region(input)
 
             if self.bias is not None:
                 input = input + self.bias.to_local()

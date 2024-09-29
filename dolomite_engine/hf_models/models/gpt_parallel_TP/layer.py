@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
-from torch.distributed import ReduceOp
 from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, is_dtensors_enabled
-from ...modeling_utils_TP import dtensor_to_tensor, get_module_placements, reduce_from_tensor_parallel_region
+from ...modeling_utils_TP import (
+    dtensor_to_tensor,
+    get_module_placements,
+    reduce_from_tensor_parallel_region,
+    reduce_scatter_to_sequence_parallel_region,
+)
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..gpt_parallel import GPTParallelConfig
 from .linear import ParallelRowParallelLinear
@@ -31,6 +35,9 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
         self._patch_row_parallel(use_padding_free_transformer, sequence_parallel)
+
+        self.sequence_parallel = sequence_parallel
+        self.use_padding_free_transformer = use_padding_free_transformer
 
     def forward(
         self,
@@ -61,7 +68,12 @@ class GPTParallelBlock_TP(GPTDolomiteBlock_TP):
         if is_dtensors_enabled():
             hidden_states = dtensor_to_tensor(hidden_states, desired_placement=self.placement)
         else:
-            hidden_states = reduce_from_tensor_parallel_region(hidden_states)
+            if self.sequence_parallel:
+                hidden_states = reduce_scatter_to_sequence_parallel_region(
+                    hidden_states, dim=0 if self.use_padding_free_transformer else 1
+                )
+            else:
+                hidden_states = reduce_from_tensor_parallel_region(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
