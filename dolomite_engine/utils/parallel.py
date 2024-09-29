@@ -86,6 +86,7 @@ class ProcessGroupManager:
 
         if use_async_tensor_parallel:
             enable_symm_mem_for_group(ProcessGroupManager.get_tensor_parallel_group().group_name)
+            torch._inductor.config._micro_pipeline_tp = True
 
     @staticmethod
     def is_initialized() -> bool:
