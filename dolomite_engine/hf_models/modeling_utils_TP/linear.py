@@ -114,9 +114,17 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
             input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         else:
             if self.sequence_parallel:
-                input = all_gather_from_sequence_parallel_region(
-                    input, dim=0 if self.use_padding_free_transformer else 1
-                )
+                gather_dim = 0 if self.use_padding_free_transformer else 1
+
+                if torch._inductor.config._micro_pipeline_tp:
+                    _, input = torch.ops.symm_mem.fused_all_gather_matmul(
+                        input,
+                        [self.weight],
+                        gather_dim=gather_dim,
+                        group_name=ProcessGroupManager.get_tensor_parallel_group().group_name,
+                    )
+                else:
+                    input = all_gather_from_sequence_parallel_region(input, dim=gather_dim)
             else:
                 input = copy_to_tensor_parallel_region(input)
 
@@ -187,9 +195,18 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
             input = F.linear(input, self.weight.to_local(), None)
 
             if self.sequence_parallel:
-                input = reduce_scatter_to_sequence_parallel_region(
-                    input, dim=0 if self.use_padding_free_transformer else 1
-                )
+                scatter_dim = 0 if self.use_padding_free_transformer else 1
+
+                if torch._inductor.config._micro_pipeline_tp:
+                    input = torch.ops.symm_mem.fused_matmul_reduce_scatter(
+                        input,
+                        self.weight,
+                        "sum",
+                        scatter_dim=scatter_dim,
+                        group_name=ProcessGroupManager.get_tensor_parallel_group().group_name,
+                    )
+                else:
+                    input = reduce_scatter_to_sequence_parallel_region(input, dim=scatter_dim)
             else:
                 input = reduce_from_tensor_parallel_region(input)
 
