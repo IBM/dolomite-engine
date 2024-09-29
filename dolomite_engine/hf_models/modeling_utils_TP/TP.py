@@ -117,56 +117,39 @@ def get_module_placements(use_padding_free_transformer: bool, sequence_parallel:
     return placement
 
 
-_TENSOR_PARALLEL_HANDLE: torch.distributed.Work | None = None
-
-
-def set_tensor_parallel_handle(handle: torch.distributed.Work) -> None:
-    if handle is None:
-        return
-
-    global _TENSOR_PARALLEL_HANDLE
-    assert _TENSOR_PARALLEL_HANDLE is None
-    _TENSOR_PARALLEL_HANDLE = handle
-
-
-def _tensor_parallel_all_reduce(x: torch.Tensor, op: torch.distributed.ReduceOp, async_op: bool) -> None:
-    if ProcessGroupManager.get_tensor_parallel_world_size() == 1:
-        return x
-
-    handle = torch.distributed.all_reduce(
-        x, op=op, group=ProcessGroupManager.get_tensor_parallel_group(), async_op=async_op
-    )
-
-    set_tensor_parallel_handle(handle)
-
-
 class _CopyToTensorParallelRegion(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, op: torch.distributed.ReduceOp) -> torch.Tensor:
-        ctx.op = op
+    def forward(ctx, x: torch.Tensor) -> torch.Tensor:
         return x
 
     @staticmethod
-    def backward(ctx, x: torch.Tensor) -> tuple[torch.Tensor | None]:
-        _tensor_parallel_all_reduce(x, op=ctx.op, async_op=False)
-        return x, None
+    def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
+        if ProcessGroupManager.get_tensor_parallel_world_size() == 1:
+            return x_grad
+
+        torch.distributed.all_reduce(x_grad, group=ProcessGroupManager.get_tensor_parallel_group())
+
+        return x_grad
 
 
 class _ReduceFromTensorParallelRegion(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, op: torch.distributed.ReduceOp) -> torch.Tensor:
-        ctx.op = op
-        _tensor_parallel_all_reduce(x, op=op, async_op=False)
+    def forward(ctx, x: torch.Tensor) -> torch.Tensor:
+        if ProcessGroupManager.get_tensor_parallel_world_size() == 1:
+            return x
+
+        torch.distributed.all_reduce(x, group=ProcessGroupManager.get_tensor_parallel_group())
+
         return x
 
     @staticmethod
-    def backward(ctx, x: torch.Tensor) -> tuple[torch.Tensor | None]:
-        return x, None
+    def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
+        return x_grad
 
 
-def copy_to_tensor_parallel_region(x: torch.Tensor, op: torch.distributed.ReduceOp) -> torch.Tensor:
-    return _CopyToTensorParallelRegion.apply(x, op)
+def copy_to_tensor_parallel_region(x: torch.Tensor) -> torch.Tensor:
+    return _CopyToTensorParallelRegion.apply(x)
 
 
-def reduce_from_tensor_parallel_region(x: torch.Tensor, op: torch.distributed.ReduceOp) -> torch.Tensor:
-    return _ReduceFromTensorParallelRegion.apply(x, op)
+def reduce_from_tensor_parallel_region(x: torch.Tensor) -> torch.Tensor:
+    return _ReduceFromTensorParallelRegion.apply(x)

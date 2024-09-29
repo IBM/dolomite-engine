@@ -60,7 +60,7 @@ class EnsembleRowParallelLinear(RowParallelLinear):
 
             input = F.linear(input, self.weight.to_local(), None)
             input = input + residual / self.tp_world_size
-            input = reduce_from_tensor_parallel_region(input, op=ReduceOp.SUM)
+            input = reduce_from_tensor_parallel_region(input)
 
             if self.bias is not None:
                 input = input + self.bias.to_local()

@@ -115,7 +115,7 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
             assert not self.use_padding_free_transformer
             assert not self.sequence_parallel
 
-            input = copy_to_tensor_parallel_region(input, op=ReduceOp.SUM)
+            input = copy_to_tensor_parallel_region(input)
             input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
 
         return input
@@ -184,7 +184,7 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
             assert not self.sequence_parallel
 
             input = F.linear(input, self.weight.to_local(), None)
-            input = reduce_from_tensor_parallel_region(input, op=ReduceOp.SUM)
+            input = reduce_from_tensor_parallel_region(input)
 
             if self.bias is not None:
                 input = input + self.bias.to_local()
