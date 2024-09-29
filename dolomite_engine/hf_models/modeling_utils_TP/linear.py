@@ -107,24 +107,19 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         self.sequence_parallel = sequence_parallel
         self.use_padding_free_transformer = use_padding_free_transformer
 
+        if torch._inductor.config._micro_pipeline_tp:
+            self.compile()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        if is_dtensors_enabled():
+        if is_dtensors_enabled() or torch._inductor.config._micro_pipeline_tp:
             input = tensor_to_dtensor(input, current_placement=self.input_placement)
             input = super().forward(input)
             input = dtensor_to_tensor(input, desired_placement=Shard(-1))
         else:
             if self.sequence_parallel:
-                gather_dim = 0 if self.use_padding_free_transformer else 1
-
-                if torch._inductor.config._micro_pipeline_tp:
-                    _, input = torch.ops.symm_mem.fused_all_gather_matmul(
-                        input,
-                        [self.weight.to_local()],
-                        gather_dim=gather_dim,
-                        group_name=ProcessGroupManager.get_tensor_parallel_group().group_name,
-                    )
-                else:
-                    input = all_gather_from_sequence_parallel_region(input, dim=gather_dim)
+                input = all_gather_from_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
             else:
                 input = copy_to_tensor_parallel_region(input)
 
@@ -186,8 +181,11 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         self.sequence_parallel = sequence_parallel
         self.use_padding_free_transformer = use_padding_free_transformer
 
+        if torch._inductor.config._micro_pipeline_tp:
+            self.compile()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        if is_dtensors_enabled():
+        if is_dtensors_enabled() or torch._inductor.config._micro_pipeline_tp:
             input = tensor_to_dtensor(input, current_placement=Shard(-1))
             input = super().forward(input)
             input = dtensor_to_tensor(input, desired_placement=self.output_placement)
@@ -195,18 +193,9 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
             input = F.linear(input, self.weight.to_local(), None)
 
             if self.sequence_parallel:
-                scatter_dim = 0 if self.use_padding_free_transformer else 1
-
-                if torch._inductor.config._micro_pipeline_tp:
-                    input = torch.ops.symm_mem.fused_matmul_reduce_scatter(
-                        input,
-                        self.weight.to_local(),
-                        "sum",
-                        scatter_dim=scatter_dim,
-                        group_name=ProcessGroupManager.get_tensor_parallel_group().group_name,
-                    )
-                else:
-                    input = reduce_scatter_to_sequence_parallel_region(input, dim=scatter_dim)
+                input = reduce_scatter_to_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
             else:
                 input = reduce_from_tensor_parallel_region(input)
 
