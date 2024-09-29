@@ -2,7 +2,6 @@ import torch
 import torch.distributed
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributed import ReduceOp
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
