@@ -221,4 +221,4 @@ def all_gather_from_sequence_parallel_region(x: torch.Tensor, dim: int) -> torch
 
 
 def reduce_scatter_to_sequence_parallel_region(x: torch.Tensor, dim: int) -> torch.Tensor:
-    return _ReduceScatterToSequenceParallelRegion(x, dim)
+    return _ReduceScatterToSequenceParallelRegion.apply(x, dim)
