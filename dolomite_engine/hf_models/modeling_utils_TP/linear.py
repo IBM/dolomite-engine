@@ -119,7 +119,7 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
                 if torch._inductor.config._micro_pipeline_tp:
                     _, input = torch.ops.symm_mem.fused_all_gather_matmul(
                         input,
-                        [self.weight],
+                        [self.weight.to_local()],
                         gather_dim=gather_dim,
                         group_name=ProcessGroupManager.get_tensor_parallel_group().group_name,
                     )
@@ -200,7 +200,7 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
                 if torch._inductor.config._micro_pipeline_tp:
                     input = torch.ops.symm_mem.fused_matmul_reduce_scatter(
                         input,
-                        self.weight,
+                        self.weight.to_local(),
                         "sum",
                         scatter_dim=scatter_dim,
                         group_name=ProcessGroupManager.get_tensor_parallel_group().group_name,
