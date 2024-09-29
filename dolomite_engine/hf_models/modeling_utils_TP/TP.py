@@ -193,7 +193,7 @@ class _AllGatherFromSequenceParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
         dim = ctx.dim
-        return _tensor_parallel_reduce_scatter(x_grad, dim=dim)
+        return _tensor_parallel_reduce_scatter(x_grad, dim=dim), None
 
 
 class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
@@ -205,7 +205,7 @@ class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
         dim = ctx.dim
-        return _tensor_parallel_all_gather(x_grad, dim=dim)
+        return _tensor_parallel_all_gather(x_grad, dim=dim), None
 
 
 def copy_to_tensor_parallel_region(x: torch.Tensor) -> torch.Tensor:
