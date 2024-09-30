@@ -1,0 +1,175 @@
+datasets:
+  # class_name, data_name & data_sampling_ratio are not used but need to be passed to avoid errors
+  - class_name: MegatronDataset
+    data_name: Megatron
+    data_sampling_ratio: 1
+    class_args:
+      eval_steps: 2
+      data_cache_path: /proj/checkpoints/mayank/cache
+      # Option 1: data loading using --data-path with single file
+      data_path:
+        - /proj/datasets/training_data_starcoder_cleaned_0324/fineweb-edu
+      split: 98,1,1
+      sequence_length: 2048
+
+tokenizer_args:
+  tokenizer_name: bigcode/starcoder
+
+model_args:
+  model_class: AutoModelForCausalLM
+  pretrained_config:
+    activation_function: swiglu
+    add_bias: false
+    attn_pdrop: 0
+    embd_pdrop: 0
+    resid_pdrop: 0
+    initializer_range: 0.02
+    layer_norm_epsilon: 1e-05
+    model_type: gpt_ensemble
+    n_embd: 2304
+    n_head: 36
+    n_layer: 40
+    n_positions: 2048
+    normalization_function: rmsnorm
+    position_embedding_type: rope
+    rope_theta: 10000
+    attention_head_type: mha
+    scale_attn_weights: true
+    vocab_size: 49152
+    upcast_logits_for_loss: true
+    bos_token_id: 0
+    eos_token_id: 0
+    pad_token_id: 0
+    pretraining_tensor_parallel_size: 2
+    reduce_pattern:
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+      - attention: false
+        mlp: false
+      - attention: false
+        mlp: true
+  efficient_initialization: false
+  attention_implementation: sdpa
+  use_padding_free_transformer: false
+
+tuning_args:
+  tuning_method: pretraining
+
+save_args:
+  save_path: /proj/checkpoints/mayank/ensemble-experiments-mayank/3b-2e-4x-ensemble
+  save_interval: 5000
+
+logging_args:
+  log_interval: 10
+  experiments_tracker_name: wandb
+  wandb_args:
+    project: comms
+    name: 3b-2e-4x-ensemble
+
+training_parameters:
+  num_training_steps: 25000
+  eval_interval: 2500000
+  micro_batch_size: 4
+  gradient_accumulation_steps: 4
+
+optimizer_args:
+  class_name: TorchAdamW
+  class_args:
+    lr: 3e-4
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    eps: 1e-10
+
+lr_scheduler_args:
+  lr_decay_style: cosine
+  num_warmup_steps: 2000
+  num_decay_steps: 23000
+
+mixed_precision_args:
+  dtype: bf16
+
+distributed_args:
+  distributed_backend: torch
+  communication_dtype: fp32
+  stage: 3
+  fsdp_algorithm: 2
+  zero_topology:
+    data_parallel_sharding_world_size: 8
+    data_parallel_replication_world_size: 16
+  torch_compile: true
