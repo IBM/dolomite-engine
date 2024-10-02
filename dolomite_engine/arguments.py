@@ -378,6 +378,9 @@ class DistributedArgs(BaseArgs):
 
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
 
+        if self.use_async_tensor_parallel:
+            assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
+
 
 class AimArgs(BaseArgs):
     # aim repo, experiment logs are saved here
