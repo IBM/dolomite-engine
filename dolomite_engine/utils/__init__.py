@@ -35,6 +35,7 @@ def init_distributed(
     data_parallel_sharding_world_size: int,
     zero_stage: int,
     timeout_minutes: int = None,
+    use_async_tensor_parallel: bool = False,
 ) -> None:
     """intialize distributed
 
@@ -45,6 +46,7 @@ def init_distributed(
         data_parallel_sharding_world_size (int): data parallel sharding world size
         zero_stage (int): zero stage
         timeout_minutes (int, optional): distributed timeout in minutes. Defaults to None.
+        use_async_tensor_parallel (bool): whether to use async-TP. Defaults to False.
     """
 
     process_group_manager = ProcessGroupManager(
@@ -54,6 +56,7 @@ def init_distributed(
         data_parallel_sharding_world_size=data_parallel_sharding_world_size,
         zero_stage=zero_stage,
         timeout_minutes=timeout_minutes,
+        use_async_tensor_parallel=use_async_tensor_parallel,
     )
 
     log_rank_0(logging.INFO, process_group_manager)

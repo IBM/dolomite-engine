@@ -7,6 +7,27 @@ from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
 class LMHead_TP(Embedding_TP):
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        std: float | None = None,
+        tensor_parallel_word_embeddings: bool = False,
+        use_padding_free_transformer: bool = False,
+        sequence_parallel: bool = False,
+    ) -> None:
+        super().__init__(
+            num_embeddings,
+            embedding_dim,
+            std,
+            tensor_parallel_word_embeddings,
+            use_padding_free_transformer,
+            sequence_parallel,
+        )
+
+        if torch._inductor.config._micro_pipeline_tp:
+            self.compile()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return self.compute_with_weight(
             input,
