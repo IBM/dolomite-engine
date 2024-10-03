@@ -13,7 +13,16 @@ from ...test_common import TestCommons
 class UnshardingTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
-            TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True], ["gpt_dolomite", "moe_dolomite"]
+            TestCommons.get_attention_head_types(),
+            ["gelu", "geglu"],
+            [False, True],
+            ["gpt_dolomite"],
+        )
+        + TestCommons.make_args_matrix(
+            [AttentionHeadType.gqa],
+            ["gelu", "geglu"],
+            [False],
+            ["moe_dolomite"],
         )
     )
     def test_unsharding(
