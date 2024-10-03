@@ -173,4 +173,5 @@ def _fix_moe_weights(config: MoEDolomiteConfig, state_dict: dict, tensor_paralle
             w0 = torch.cat([w[0] for w in weight])
             w1 = torch.cat([w[1] for w in weight])
             state_dict[key] = torch.cat([w0, w1], dim=0)
+
     return state_dict
