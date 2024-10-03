@@ -251,7 +251,7 @@ def _export_state_dict_to_huggingface(
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"] = up_weight
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"] = gate_weight
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"] = c_proj_experts[
-                :, expert_idx, :
+                :, expert_idx
             ].contiguous()
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
