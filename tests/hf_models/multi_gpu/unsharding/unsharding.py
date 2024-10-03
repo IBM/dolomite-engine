@@ -62,7 +62,7 @@ if tp_rank == 0:
 
 torch.distributed.barrier()
 
-model_tp = get_tensor_parallel_class(args.model_dtype).from_pretrained(
+model_tp = get_tensor_parallel_class(args.model_type).from_pretrained(
     args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
 )
 
