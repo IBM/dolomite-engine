@@ -12,10 +12,16 @@ from ...test_common import TestCommons
 
 class UnshardingTest(TestCommons):
     @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True])
+        TestCommons.make_args_matrix(
+            TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True], ["gpt", "moe"]
+        )
     )
     def test_unsharding(
-        self, attention_head_type: AttentionHeadType, activation_function: str, tensor_parallel_word_embeddings: bool
+        self,
+        attention_head_type: AttentionHeadType,
+        activation_function: str,
+        tensor_parallel_word_embeddings: bool,
+        model_type: str,
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
 
@@ -34,6 +40,8 @@ class UnshardingTest(TestCommons):
                 activation_function,
                 "--tmp-path",
                 tmp_path,
+                "--model-type",
+                model_type,
             ]
 
             if tensor_parallel_word_embeddings:

@@ -4,7 +4,13 @@ import os
 import torch
 import torch.distributed
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
+from dolomite_engine.hf_models import (
+    AttentionHeadType,
+    GPTDolomiteConfig,
+    GPTDolomiteForCausalLM_TP,
+    MoEDolomiteConfig,
+    MoEDolomiteForCausalLM_TP,
+)
 from dolomite_engine.hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
 from dolomite_engine.utils import ProcessGroupManager
 
@@ -14,6 +20,7 @@ from ...test_common import TestCommons
 parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
+parser.add_argument("--model-type", type=str)
 parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
@@ -27,26 +34,42 @@ tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
+if args.model_type == "gpt":
+    config = GPTDolomiteConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=1,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+    )
+elif args.model_type == "moe":
+    config = MoEDolomiteConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=1,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+    )
 
-config = GPTDolomiteConfig(
-    attention_head_type=args.attention_head_type,
-    n_layer=1,
-    position_embedding_type="learned_absolute",
-    num_key_value_heads=num_key_value_heads,
-    add_bias=False,
-    n_embd=128,
-    n_head=16,
-)
 
 if tp_rank == 0:
     model = TestCommons.from_config(None, config)
     model.save_pretrained(args.tmp_path, safe_serialization=True)
 
 torch.distributed.barrier()
+if args.model_type == "gpt":
+    model_tp = GPTDolomiteForCausalLM_TP.from_pretrained(
+        args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
+    )
+elif args.model_type == "moe":
+    model_tp = MoEDolomiteForCausalLM_TP.from_pretrained(
+        args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
+    )
 
-model_tp = GPTDolomiteForCausalLM_TP.from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
-)
 
 tp_state_dict = model_tp.state_dict()
 tp_state_dict = {key: value.to("cpu").full_tensor() for key, value in tp_state_dict.items()}

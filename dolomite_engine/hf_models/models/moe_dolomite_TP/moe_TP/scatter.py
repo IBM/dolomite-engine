@@ -23,7 +23,7 @@ from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
 
 
 if is_kernel_hyperdrive_available():
-    from khd.scattermoe.triton_implementation import padded_block_indices, scattered_experts
+    from khd.kernels.scattermoe.triton_implementation import padded_block_indices, scattered_experts
 
 
 class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
@@ -61,7 +61,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
             DTensor.from_local(
                 self.weight,
                 device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
-                placements=[Shard(1)],
+                placements=[Shard(0)],
                 run_check=False,
             )
         )
@@ -89,7 +89,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
 
         results = scattered_experts(
             inputs,
-            weight.permute(0, 2, 1),
+            weight.permute(1, 2, 0),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
@@ -161,7 +161,7 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
 
         inputs = scattered_experts(
             inputs,
-            weight.permute(0, 2, 1),
+            weight.permute(1, 2, 0),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
