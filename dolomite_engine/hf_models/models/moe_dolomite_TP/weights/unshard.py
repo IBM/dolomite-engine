@@ -109,6 +109,7 @@ def unshard_tensor_parallel_state_dicts(
                 check_correctness=check_correctness,
             )
         )
+
     return output_state_dict
 
 
@@ -136,6 +137,8 @@ def _concatenate_tensors_from_scattermoe(
 def _get_moe(
     tensor_parallel_state_dicts: list[dict], config: MoEDolomiteConfig, prefix: str, check_correctness: bool
 ) -> dict:
+    assert not config.add_bias
+
     output = {
         prefix
         + "gate.weight": _get_once_from_state_dicts_with_check(
@@ -159,6 +162,8 @@ def _get_moe(
 
 
 def _fix_moe_weights(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+    assert not config.add_bias
+
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
             key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
