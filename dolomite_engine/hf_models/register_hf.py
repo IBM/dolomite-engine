@@ -10,6 +10,7 @@ from .models import (
     GPTDolomiteModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
+    MoEDolomiteForCausalLM_TP,
     MoEDolomiteModel,
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
@@ -50,7 +51,7 @@ def is_tensor_parallel_compatible_model(
     return model_class.__name__ == "GPTDolomiteForCausalLM" or model_type == "gpt_dolomite"
 
 
-_TENSOR_PARALLEL_CLASS_MAPPING = {"gpt_dolomite": GPTDolomiteForCausalLM_TP}
+_TENSOR_PARALLEL_CLASS_MAPPING = {"gpt_dolomite": GPTDolomiteForCausalLM_TP, "moe_dolomite": MoEDolomiteForCausalLM_TP}
 
 
 def get_tensor_parallel_class(model_type: str) -> AutoModelForCausalLM:
