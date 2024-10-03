@@ -22,11 +22,11 @@ class ParameterizedExperts(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.weight = nn.Parameter(torch.empty(num_experts * out_features, in_features, device=device, dtype=dtype))
+        self.weight = nn.Parameter(torch.empty(out_features, num_experts, in_features, device=device, dtype=dtype))
 
         self.bias = None
         if add_bias:
-            self.bias = nn.Parameter(torch.empty(num_experts * out_features, device=device, dtype=dtype))
+            self.bias = nn.Parameter(torch.empty(out_features, num_experts, device=device, dtype=dtype))
 
         self.std = std
 
@@ -37,14 +37,15 @@ class ParameterizedExperts(nn.Module):
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
-        weight = self.weight.view(self.num_experts, self.out_features, -1)
+        weight = self.weight.view(self.out_features, self.num_experts, -1)
 
         if self.bias is not None:
-            bias = self.bias.view(self.num_experts, self.out_features)
+            bias = self.bias.view(self.out_features, self.num_experts)
 
         input = input.split(num_experts_per_token.tolist(), dim=0)
         input = [
-            F.linear(input[i], weight[i], None if self.bias is None else bias[i]) for i in range(self.num_experts)
+            F.linear(input[i], weight[:, i], None if self.bias is None else bias[:, i])
+            for i in range(self.num_experts)
         ]
         input = torch.cat(input, dim=0)
         return input

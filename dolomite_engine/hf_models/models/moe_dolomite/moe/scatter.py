@@ -45,7 +45,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
     ):
         results = scattered_experts(
             inputs,
-            self.weight.view(self.num_experts, self.out_features, -1).permute(0, 2, 1),
+            self.weight.permute(1, 2, 0),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
