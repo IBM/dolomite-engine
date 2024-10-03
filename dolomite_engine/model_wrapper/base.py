@@ -6,7 +6,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from transformers.integrations import HfDeepSpeedConfig
 
 from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
-from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
+from ..hf_models import get_tensor_parallel_class, is_custom_model
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
@@ -77,10 +77,6 @@ class ModelWrapper(nn.Module):
 
         if self.tp_world_size > 1:
             self.model_class = get_tensor_parallel_class(self.config.model_type)
-
-            assert is_tensor_parallel_compatible_model(
-                self.model_class, self.config.model_type
-            ), "tensor parallel is not supported with this model"
 
         if self.use_padding_free_transformer:
             assert is_custom_model(

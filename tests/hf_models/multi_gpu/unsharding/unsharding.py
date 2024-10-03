@@ -36,7 +36,7 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-if args.model_type == "gpt_dolomite":
+if args.model_type == GPTDolomiteConfig.model_type:
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
@@ -46,7 +46,7 @@ if args.model_type == "gpt_dolomite":
         n_embd=128,
         n_head=16,
     )
-elif args.model_type == "moe_dolomite":
+elif args.model_type == MoEDolomiteConfig.model_type:
     config = MoEDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,

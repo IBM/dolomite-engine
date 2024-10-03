@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig
 
 from ...test_common import TestCommons
 
@@ -16,13 +16,13 @@ class UnshardingTest(TestCommons):
             TestCommons.get_attention_head_types(),
             ["gelu", "geglu"],
             [False, True],
-            ["gpt_dolomite"],
+            [GPTDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
             ["gelu", "geglu"],
             [False],
-            ["moe_dolomite"],
+            [MoEDolomiteConfig.model_type],
         )
     )
     def test_unsharding(
