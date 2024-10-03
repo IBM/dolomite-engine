@@ -15,6 +15,9 @@ class DCPTest(TestCommons):
         TestCommons.make_args_matrix(
             TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True], [(3, 2, 2), (3, 1, 4), (0, 4, 1)]
         )
+        + TestCommons.make_args_matrix(
+            [AttentionHeadType.gqa], ["gelu", "geglu"], [False], [(3, 2, 2), (3, 1, 4), (0, 4, 1)]
+        )
     )
     def test_dcp(
         self,
