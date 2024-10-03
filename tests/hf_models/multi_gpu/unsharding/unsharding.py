@@ -34,7 +34,8 @@ tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
-if args.model_type == "gpt":
+
+if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
@@ -44,7 +45,7 @@ if args.model_type == "gpt":
         n_embd=128,
         n_head=16,
     )
-elif args.model_type == "moe":
+elif args.model_type == "moe_dolomite":
     config = MoEDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
