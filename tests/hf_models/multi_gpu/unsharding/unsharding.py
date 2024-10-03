@@ -3,6 +3,7 @@ import os
 
 import torch
 import torch.distributed
+from torch.distributed._tensor.api import DTensor
 
 from dolomite_engine.hf_models import (
     AttentionHeadType,
@@ -10,6 +11,7 @@ from dolomite_engine.hf_models import (
     MoEDolomiteConfig,
     fix_unsharded_state_dict,
     get_tensor_parallel_class,
+    unshard_tensor_parallel_state_dicts,
 )
 from dolomite_engine.utils import ProcessGroupManager
 
@@ -67,16 +69,51 @@ model_tp = get_tensor_parallel_class(args.model_type).from_pretrained(
 )
 
 tp_state_dict = model_tp.state_dict()
-tp_state_dict = {key: value.to("cpu").full_tensor() for key, value in tp_state_dict.items()}
-tp_state_dict = fix_unsharded_state_dict(config, tp_state_dict, ProcessGroupManager.get_tensor_parallel_world_size())
 
-torch.distributed.barrier()
 
-if tp_rank == 0:
-    original_state_dict = model.state_dict()
+def run_check(fix: bool):
+    cpu_state_dict = {key: value.to("cpu") for key, value in tp_state_dict.items()}
 
-    assert tp_state_dict.keys() == original_state_dict.keys()
-    for key in original_state_dict:
-        assert original_state_dict[key].equal(tp_state_dict[key])
+    if fix:
+        tp_state_dict_unsharded = {
+            key: value.full_tensor() if isinstance(value, DTensor) else value for key, value in cpu_state_dict.items()
+        }
+        tp_state_dict_unsharded = fix_unsharded_state_dict(
+            config, tp_state_dict_unsharded, ProcessGroupManager.get_tensor_parallel_world_size()
+        )
+    else:
+        cpu_state_dict = {
+            key: value.to_local() if isinstance(value, DTensor) else value for key, value in cpu_state_dict.items()
+        }
+        torch.save(
+            cpu_state_dict, os.path.join(args.tmp_path, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt")
+        )
+        del cpu_state_dict
+
+        torch.distributed.barrier()
+
+        tensor_parallel_state_dicts = [
+            torch.load(os.path.join(args.tmp_path, f"tp-{i}.pt"))
+            for i in range(ProcessGroupManager.get_tensor_parallel_world_size())
+        ]
+
+        tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
+            config,
+            tensor_parallel_state_dicts=tensor_parallel_state_dicts,
+            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+        )
+
+    torch.distributed.barrier()
+
+    if tp_rank == 0:
+        original_state_dict = model.state_dict()
+
+        assert tp_state_dict_unsharded.keys() == original_state_dict.keys()
+        for key in original_state_dict:
+            assert original_state_dict[key].equal(tp_state_dict_unsharded[key])
+
+
+run_check(True)
+run_check(False)
 
 ProcessGroupManager.destroy_process_groups()
