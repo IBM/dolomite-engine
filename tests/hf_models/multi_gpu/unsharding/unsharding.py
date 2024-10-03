@@ -8,9 +8,9 @@ from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
     MoEDolomiteConfig,
+    fix_unsharded_state_dict,
     get_tensor_parallel_class,
 )
-from dolomite_engine.hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
 from dolomite_engine.utils import ProcessGroupManager
 
 from ...test_common import TestCommons

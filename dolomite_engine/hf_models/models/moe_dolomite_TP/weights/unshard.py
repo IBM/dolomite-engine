@@ -14,7 +14,7 @@ from ...gpt_dolomite_TP.weights.unshard import (
 from ...moe_dolomite import MoEDolomiteConfig
 
 
-def unshard_tensor_parallel_state_dicts(
+def unshard_moe_dolomite_tensor_parallel_state_dicts(
     config: MoEDolomiteConfig,
     tensor_parallel_state_dicts: list[dict],
     tensor_parallel_word_embeddings: bool,
@@ -113,7 +113,7 @@ def unshard_tensor_parallel_state_dicts(
     return output_state_dict
 
 
-def fix_unsharded_state_dict(
+def fix_moe_dolomite_unsharded_state_dict(
     config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
