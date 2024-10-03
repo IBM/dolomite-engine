@@ -14,6 +14,7 @@ class SparseMoEBlock_TP(SparseMoEBlock):
         normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
+        moe_implementation: str,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
@@ -49,6 +50,8 @@ class SparseMoEBlock_TP(SparseMoEBlock):
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
+
+        assert moe_implementation == "scattermoe", "TP for MoE is only implemented with scattermoe"
         self.moe = ScatterMoE_TP(
             config,
             use_padding_free_transformer=use_padding_free_transformer,

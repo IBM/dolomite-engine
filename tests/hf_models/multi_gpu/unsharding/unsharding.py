@@ -7,9 +7,7 @@ import torch.distributed
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
     MoEDolomiteConfig,
-    MoEDolomiteForCausalLM_TP,
     get_tensor_parallel_class,
 )
 from dolomite_engine.hf_models.models.gpt_dolomite_TP import fix_unsharded_state_dict
