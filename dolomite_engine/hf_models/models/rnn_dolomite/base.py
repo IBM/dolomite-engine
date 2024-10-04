@@ -20,6 +20,8 @@ class RNNDolomitePreTrainedModel(PreTrainedModelMixin):
     config_class = RNNDolomiteConfig
     layer_class = RNNDolomiteBlock
     _no_split_modules = ["RNNDolomiteBlock"]
+    _supports_sdpa = False
+    _supports_flash_attn_2 = True
 
     def __init__(self, config: RNNDolomiteConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
@@ -35,7 +37,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
-        self.attention_pattern = self.mapping_attention_pattern(config.attention_pattern)
+        self.attention_pattern = self.parse_attention_pattern(config.attention_pattern)
 
         self.head_dim = divide_if_divisible(
             self.embed_dim,
@@ -71,13 +73,13 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
         # Initialize weights and apply final processing
         self.post_init()
 
-    def mapping_attention_pattern(self, attention_pattern: str) -> list[str]:
+    def parse_attention_pattern(self, attention_pattern: str) -> list[str]:
         attention_implementation_list = []
         for pattern in attention_pattern:
             if pattern == "a":
-                attention_implementation_list.append(self.attention_implementation)
+                attention_implementation_list.append("flash_attention_2")
             elif pattern == "d":
-                attention_implementation_list.append("DeltaNet")
+                attention_implementation_list.append("deltanet")
             else:
                 raise ValueError(f"Attention pattern {pattern} not supported")
         return attention_implementation_list
