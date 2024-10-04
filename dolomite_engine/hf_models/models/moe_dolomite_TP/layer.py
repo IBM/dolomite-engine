@@ -58,6 +58,7 @@ class SparseMoEBlock_TP(SparseMoEBlock):
         self.moe = ScatterMoE_TP(
             config,
             use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
             layer_idx=layer_idx,
         )
 
