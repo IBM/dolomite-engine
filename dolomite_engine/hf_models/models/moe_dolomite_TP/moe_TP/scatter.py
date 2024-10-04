@@ -36,8 +36,6 @@ class ReplicatedRouter(ParameterizedLinear):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
-        use_padding_free_transformer: bool = False,
-        sequence_parallel: bool = False,
     ) -> None:
         super().__init__(in_features, out_features, bias, device, dtype, std)
 
@@ -226,8 +224,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             out_features=config.num_experts,
             bias=False,
             std=config.initializer_range,
-            use_padding_free_transformer=use_padding_free_transformer,
-            sequence_parallel=False,  # replicate even if SP
         )
 
         std = initializer_range
