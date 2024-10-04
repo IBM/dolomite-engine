@@ -140,7 +140,7 @@ shard_input_tensor_grad, shard_gate_weight_grad, shard_c_fc_weight_grad, shard_c
     torch.autograd.grad(
         outputs=(shard_out),
         inputs=(shard_input_tensor, shard_moe.gate.weight, shard_moe.c_fc.weight, shard_moe.c_proj.weight),
-        grad_outputs=(grad_tensor,),
+        grad_outputs=(grad_tensor.chunk(tp_size, dim=0)[rank],),
     )
 )
 
