@@ -46,6 +46,7 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
 def tensor_to_dtensor(
     tensor: torch.Tensor, current_placement: Placement, desired_placement: Placement | None = None
 ) -> DTensor:
+    # early exit if input is already a DTensor
     if isinstance(tensor, DTensor):
         return tensor
 
@@ -61,6 +62,8 @@ def tensor_to_dtensor(
 def dtensor_to_tensor(
     dtensor: DTensor, desired_placement: Placement | None = None, grad_placement: Placement | None = None
 ) -> torch.Tensor:
+    # early exit if input is not a DTensor
+    # NOTE can't check for Tensor here since DTensor inherits from Tensor
     if not isinstance(dtensor, DTensor):
         return dtensor
 
