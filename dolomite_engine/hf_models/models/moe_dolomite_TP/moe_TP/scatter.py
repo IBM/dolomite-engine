@@ -49,8 +49,6 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
-        use_padding_free_transformer: bool = False,
-        sequence_parallel: bool = False,
     ) -> None:
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
@@ -122,8 +120,6 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
-        use_padding_free_transformer: bool = False,
-        sequence_parallel: bool = False,
     ) -> None:
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
@@ -241,8 +237,8 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
-        self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
-        self.output_placement = self.input_placement
+
+        self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
@@ -259,7 +255,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         return router_logits, router_weights, selected_experts
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = tensor_to_dtensor(hidden_states, current_placement=self.input_placement)
+        hidden_states = tensor_to_dtensor(hidden_states, current_placement=self.placement)
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
 
@@ -269,7 +265,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         hidden_states = tensor_to_dtensor(hidden_states, current_placement=Partial())
         hidden_states = dtensor_to_tensor(
-            hidden_states, desired_placement=self.output_placement, grad_placement=self.output_placement
+            hidden_states, desired_placement=self.placement, grad_placement=self.placement
         )
 
         hidden_states = self.dropout(hidden_states)
