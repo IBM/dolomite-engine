@@ -213,7 +213,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         self.gate = ReplicatedRouter(
             in_features=self.hidden_size,
             out_features=config.num_experts,
-            bias=False,
             std=config.initializer_range,
         )
 
