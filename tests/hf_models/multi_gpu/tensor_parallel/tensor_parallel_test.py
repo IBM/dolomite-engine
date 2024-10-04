@@ -22,6 +22,7 @@ class TensorParallelTest(TestCommons):
             [False, True],
         )
     )
+    @TestCommons.slow_test
     def test_tensor_parallel_forward(
         self,
         attention_head_type: AttentionHeadType,

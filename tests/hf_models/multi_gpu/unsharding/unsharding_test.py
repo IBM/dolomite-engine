@@ -25,6 +25,7 @@ class UnshardingTest(TestCommons):
             [MoEDolomiteConfig.model_type],
         )
     )
+    @TestCommons.slow_test
     def test_unsharding(
         self,
         attention_head_type: AttentionHeadType,
