@@ -10,7 +10,13 @@ from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ....modeling_utils_TP import DTensorModule, dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from ....modeling_utils_TP import (
+    Dropout_TP,
+    DTensorModule,
+    dtensor_to_tensor,
+    get_module_placements,
+    tensor_to_dtensor,
+)
 from ....utils import divide_if_divisible
 from ...moe_dolomite import MoEDolomiteConfig
 from ...moe_dolomite.moe import ScatterMoE
@@ -236,7 +242,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             std=std,
         )
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 

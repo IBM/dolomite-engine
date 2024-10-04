@@ -144,4 +144,5 @@ class ScatterMoE(SparseMoE):
             grouped_in=True,
             gates=router_weights,
         )
+        hidden_states = self.dropout(hidden_states)
         return hidden_states
