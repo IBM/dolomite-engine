@@ -1,4 +1,4 @@
-from ...mixins import BaseModelMixin_TP, PreTrainedMoEModelMixin_TP
+from ...mixins import BaseMoEModelMixin_TP, PreTrainedMoEModelMixin_TP
 from ..moe_dolomite import MoEDolomiteConfig
 from .layer import SparseMoEBlock_TP
 
@@ -9,4 +9,4 @@ class MoEDolomitePreTrainedModel_TP(PreTrainedMoEModelMixin_TP):
     _no_split_modules = ["SparseMoEBlock_TP"]
 
 
-class MoEDolomiteModel_TP(MoEDolomitePreTrainedModel_TP, BaseModelMixin_TP): ...
+class MoEDolomiteModel_TP(MoEDolomitePreTrainedModel_TP, BaseMoEModelMixin_TP): ...
