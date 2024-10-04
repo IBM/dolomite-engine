@@ -109,9 +109,9 @@ local_out, local_logits, _ = local_moe(local_input_tensor)
 torch.distributed.barrier()
 shard_out, shard_logits = shard_moe(shard_input_tensor)
 
-local_input_tensor_grad, local_gate_weight_grad = torch.autograd.grad(
+local_input_tensor_grad, local_gate_weight_grad, local_c_fc_grad, local_c_proj_grad = torch.autograd.grad(
     outputs=(local_out),
-    inputs=(local_input_tensor, local_moe.gate.weight),
+    inputs=(local_input_tensor, local_moe.gate.weight, local_moe.c_fc.weight, local_moe.c_proj.weight),
     grad_outputs=(grad_tensor,),
 )
 
@@ -136,13 +136,22 @@ for r in range(tp_size):
     if rank == r:
         print("Rank %d:" % r, (local_out.chunk(tp_size, dim=0)[rank] - shard_out).abs().max())
     torch.distributed.barrier()
-shard_input_tensor_grad, shard_gate_weight_grad = torch.autograd.grad(
-    outputs=(shard_out),
-    inputs=(shard_input_tensor, shard_moe.gate.weight),
-    grad_outputs=(grad_tensor.chunk(tp_size, dim=0)[rank],),
+shard_input_tensor_grad, shard_gate_weight_grad, shard_c_fc_weight_grad, shard_c_proj_weight_grad = (
+    torch.autograd.grad(
+        outputs=(shard_out),
+        inputs=(shard_input_tensor, shard_moe.gate.weight, shard_moe.c_fc.weight, shard_moe.c_proj.weight),
+        grad_outputs=(grad_tensor,),
+    )
 )
-shard_gate_weight_grad = dtensor_to_tensor(shard_gate_weight_grad, desired_placement=Replicate())
 
+if rank == 0:
+    print("gate grads", shard_gate_weight_grad.placements)
+    print("c_fc grads", shard_c_fc_weight_grad.placements)
+    print("c_proj grads", shard_c_proj_weight_grad.placements)
+
+shard_gate_weight_grad = dtensor_to_tensor(shard_gate_weight_grad, desired_placement=Replicate())
+shard_c_fc_weight_grad = dtensor_to_tensor(shard_c_fc_weight_grad, desired_placement=Replicate())
+shard_c_proj_weight_grad = dtensor_to_tensor(shard_c_proj_weight_grad, desired_placement=Replicate())
 
 if rank == 0:
     print()
@@ -160,6 +169,24 @@ if rank == 0:
 for r in range(tp_size):
     if rank == r:
         print("Rank %d:" % r, (local_gate_weight_grad - shard_gate_weight_grad).abs().max())
+    torch.distributed.barrier()
+
+if rank == 0:
+    print()
+    print("c_fc grad:")
+
+for r in range(tp_size):
+    if rank == r:
+        print("Rank %d:" % r, (local_c_fc_grad - shard_c_fc_weight_grad).abs().max())
+    torch.distributed.barrier()
+
+if rank == 0:
+    print()
+    print("c_proj grad:")
+
+for r in range(tp_size):
+    if rank == r:
+        print("Rank %d:" % r, (local_c_proj_grad - shard_c_proj_weight_grad).abs().max())
     torch.distributed.barrier()
 
 ProcessGroupManager.destroy_process_groups()
