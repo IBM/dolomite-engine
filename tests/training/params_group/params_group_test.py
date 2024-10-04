@@ -26,6 +26,9 @@ class ParamsGroupTest(TestCommons):
         )
 
         if "rnn_dolomite" in config_filename:
+            if not torch.cuda.is_available():
+                self.skipTest("skipping test because CUDA is unavailable")
+
             try:
                 with (
                     torch.device("meta"),
@@ -63,6 +66,9 @@ class ParamsGroupTest(TestCommons):
         )
 
         if "rnn_dolomite" in config_filename:
+            if not torch.cuda.is_available():
+                self.skipTest("skipping test because CUDA is unavailable")
+
             try:
                 with (
                     torch.device("meta"),
