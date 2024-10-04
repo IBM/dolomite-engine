@@ -43,7 +43,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         grouped_in=False,
         grouped_out=False,
     ):
-        input = scattered_experts(
+        return scattered_experts(
             input,
             self.weight.permute(1, 2, 0),
             k,
@@ -55,8 +55,6 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
             grouped_in,
             grouped_out,
         )
-
-        return input
 
 
 class ScatterMoE(SparseMoE):
