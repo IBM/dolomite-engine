@@ -23,7 +23,7 @@ from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
 
 
 if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import padded_block_indices, scattered_experts
+    from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
 class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
