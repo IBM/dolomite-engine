@@ -10,13 +10,7 @@ from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ....modeling_utils_TP import (
-    DTensorModule,
-    ReplicatedLinear,
-    dtensor_to_tensor,
-    get_module_placements,
-    tensor_to_dtensor,
-)
+from ....modeling_utils_TP import DTensorModule, dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 from ....utils import divide_if_divisible
 from ...moe_dolomite import MoEDolomiteConfig
 from ...moe_dolomite.moe import ScatterMoE
@@ -32,12 +26,11 @@ class ReplicatedRouter(ParameterizedLinear):
         self,
         in_features: int,
         out_features: int,
-        bias: bool = False,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
     ) -> None:
-        super().__init__(in_features, out_features, bias, device, dtype, std)
+        super().__init__(in_features, out_features, False, device, dtype, std)
 
         self.weight = nn.Parameter(
             DTensor.from_local(
