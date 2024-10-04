@@ -37,13 +37,7 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
                 )
             )
 
-        if sequence_parallel:
-            if use_padding_free_transformer:
-                self.input_placement = Shard(0)
-            else:
-                self.input_placement = Shard(1)
-        else:
-            self.input_placement = Replicate()
+        self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, current_placement=self.input_placement)

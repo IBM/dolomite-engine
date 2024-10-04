@@ -70,7 +70,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
 
     def forward(
         self,
-        inputs,
+        input,
         k,
         sorted_expert_idxs,
         sorted_scattered_idxs,
@@ -82,14 +82,12 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
     ):
         # F.linear manually triggers an all gather for sequence parallel but custom kernels are not aware of the placements
         # so we manually call an all gather here
-        inputs = tensor_to_dtensor(inputs, current_placement=self.input_placement)
-        inputs = dtensor_to_tensor(inputs, desired_placement=Replicate(), grad_placement=Partial())
+        input = tensor_to_dtensor(input, current_placement=self.input_placement)
+        input = dtensor_to_tensor(input, desired_placement=Replicate(), grad_placement=Partial())
 
-        weight = self.weight.to_local()
-
-        results = scattered_experts(
-            inputs,
-            weight.permute(1, 2, 0),
+        input = scattered_experts(
+            input,
+            self.weight.to_local().permute(1, 2, 0),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
@@ -100,7 +98,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
             grouped_out,
         )
 
-        return results
+        return input
 
 
 class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
@@ -147,7 +145,7 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
 
     def forward(
         self,
-        inputs,
+        input,
         k,
         sorted_expert_idxs,
         sorted_scattered_idxs,
@@ -157,11 +155,9 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
         grouped_in=False,
         grouped_out=False,
     ):
-        weight = self.weight.to_local()
-
-        inputs = scattered_experts(
-            inputs,
-            weight.permute(1, 2, 0),
+        input = scattered_experts(
+            input,
+            self.weight.to_local().permute(1, 2, 0),
             k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
@@ -172,10 +168,10 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
             grouped_out,
         )
 
-        inputs = tensor_to_dtensor(inputs, current_placement=Partial())
-        inputs = dtensor_to_tensor(inputs, desired_placement=self.output_placement)
+        input = tensor_to_dtensor(input, current_placement=Partial())
+        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
 
-        return inputs
+        return input
 
 
 class ScatterMoE_TP(ScatterMoE, DTensorModule):
@@ -183,6 +179,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         self,
         config: MoEDolomiteConfig,
         use_padding_free_transformer: bool,
+        sequence_parallel: bool = False,
         layer_idx: int | None = None,
     ) -> None:
         nn.Module.__init__(self)
@@ -201,27 +198,30 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         m_width = config.m_width
         n_layer = config.n_layer
         init_method = InitMethod(config.init_method)
-        residual_dropout = config.resid_pdrop
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.gate = ReplicatedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
-            std=config.initializer_range,
+            std=std,
             use_padding_free_transformer=use_padding_free_transformer,
-            sequence_parallel=False,
+            sequence_parallel=sequence_parallel,
         )
 
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-
         self.c_fc = ColumnParallelScatteredExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
             add_bias=config.add_bias,
             std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
         )
 
         self.act = get_activation_function(activation_function)
@@ -235,6 +235,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             out_features=self.hidden_size,
             add_bias=config.add_bias,
             std=std,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
         )
-
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
