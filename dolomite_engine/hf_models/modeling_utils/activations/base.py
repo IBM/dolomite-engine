@@ -12,6 +12,7 @@ _BASE_ACTIVATIONS = {
     "hard_sigmoid": nn.modules.Hardsigmoid,
     "hard_swish": nn.modules.Hardswish,
     "hard_tanh": nn.modules.Hardtanh,
+    "identity": nn.modules.Identity,
     "laplace": ACT2CLS["laplace"],
     "leaky_reLU": nn.modules.LeakyReLU,
     "log_sigmoid": nn.modules.LogSigmoid,
@@ -31,7 +32,6 @@ _BASE_ACTIVATIONS = {
     "soft_sign": nn.modules.Softsign,
     "tanh": nn.modules.Tanh,
     "tanh_shrink": nn.modules.Tanhshrink,
-    "identity": nn.modules.Identity,
 }
 # instantiates the module when __getitem__ is called
 _BASE_ACTIVATIONS = ClassInstantier(_BASE_ACTIVATIONS)
