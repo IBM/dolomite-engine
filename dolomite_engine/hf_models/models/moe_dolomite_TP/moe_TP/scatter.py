@@ -85,8 +85,6 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts):
                 run_check=False,
             )
         )
-        # Put in MLP
-        # self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(
         self,
@@ -160,8 +158,6 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
                 run_check=False,
             )
         )
-
-        # self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(
         self,
