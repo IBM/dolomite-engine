@@ -167,7 +167,7 @@ for r in range(tp_size):
 
 if rank == 0:
     print()
-    print("gate grad:")
+    print("c_fc grad:")
 
 for r in range(tp_size):
     if rank == r:
@@ -176,7 +176,7 @@ for r in range(tp_size):
 
 if rank == 0:
     print()
-    print("gate grad:")
+    print("c_proj grad:")
 
 for r in range(tp_size):
     if rank == r:
