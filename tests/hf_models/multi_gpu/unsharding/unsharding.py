@@ -36,6 +36,8 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
+kwargs = {}
+
 if args.model_type == GPTDolomiteConfig.model_type:
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
@@ -56,6 +58,7 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_embd=128,
         n_head=16,
     )
+    kwargs["moe_implementation"] = "scattermoe"
 
 
 if tp_rank == 0:
@@ -65,7 +68,7 @@ if tp_rank == 0:
 torch.distributed.barrier()
 
 model_tp = get_tensor_parallel_class(args.model_type).from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings
+    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings, **kwargs
 )
 
 tp_state_dict = model_tp.state_dict()
