@@ -210,16 +210,18 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         init_method = InitMethod(config.init_method)
         residual_dropout = config.resid_pdrop
 
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
         self.gate = ReplicatedRouter(
             in_features=self.hidden_size,
             out_features=config.num_experts,
-            std=config.initializer_range,
+            std=std,
         )
 
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-
         self.c_fc = ColumnParallelScatteredExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
@@ -243,7 +245,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
 
-        self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+        self.placement = Shard(0) if sequence_parallel else Replicate()
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
@@ -259,7 +261,12 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         return router_logits, router_weights, selected_experts
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+        if not self.use_padding_free_transformer:
+            batch_size, sequence_length, _ = hidden_states.shape
+
+        hidden_states = hidden_states.view(-1, self.hidden_size)
+
         hidden_states = tensor_to_dtensor(hidden_states, current_placement=self.placement)
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
@@ -273,5 +280,13 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             hidden_states, desired_placement=self.placement, grad_placement=self.placement
         )
 
+        if not self.use_padding_free_transformer:
+            hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
+
         hidden_states = self.dropout(hidden_states)
-        return hidden_states, router_logits  # TODO include the auxiliary loss output.
+
+        aux_loss = self._compute_switch_loss(
+            logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+        )
+
+        return hidden_states, router_logits, aux_loss
