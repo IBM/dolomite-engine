@@ -1,8 +1,9 @@
 import torch
+from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
-from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
+from ...modeling_utils_TP import dtensor_to_tensor, tensor_to_dtensor
 from ..dense_TP import CausalLMModelMixin_TP
 from ..moe import CausalLMMoEModelMixin, MoeModelOutputWithPastAndAuxLoss
 
@@ -60,7 +61,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             lm_logits = lm_logits / self.m_width
 
         lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
-        aux_loss = transformer_outputs.aux_loss
+        aux_loss = tensor_to_dtensor(transformer_outputs.aux_loss, current_placement=Replicate())
 
         if lm_loss is None:
             loss = None
