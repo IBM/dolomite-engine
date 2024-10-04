@@ -286,5 +286,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         hidden_states = dtensor_to_tensor(
             hidden_states, desired_placement=self.output_placement, grad_placement=self.output_placement
         )
+
         hidden_states = self.dropout(hidden_states)
-        return hidden_states, router_logits
+        return hidden_states, router_logits  # TODO include the auxiliary loss output.
