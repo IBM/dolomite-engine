@@ -124,7 +124,7 @@ def fix_moe_dolomite_unsharded_state_dict(
     return state_dict
 
 
-def _concatenate_tensors_from_scattermoe(
+def _concatenate_tensors_from_moe(
     tensor_parallel_state_dicts: list[dict],
     key: str,
     dim: int,
@@ -155,7 +155,7 @@ def _get_moe(
             tensor_parallel_state_dicts, prefix + "c_fc.weight", dim=0
         )
 
-    output[prefix + "c_proj.weight"] = _concatenate_tensors_from_scattermoe(
+    output[prefix + "c_proj.weight"] = _concatenate_tensors_from_moe(
         tensor_parallel_state_dicts, prefix + "c_proj.weight", dim=2
     )
     return output
