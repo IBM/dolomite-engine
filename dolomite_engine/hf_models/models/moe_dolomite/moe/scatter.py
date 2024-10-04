@@ -118,7 +118,7 @@ class ScatterMoE(SparseMoE):
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
         with torch.no_grad():
-            sorted_expert_idxs, sorted_scattered_idxs = torch.sort(selected_experts.flatten())
+            sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
             padded_block_idxs, expert_offsets = padded_block_indices(sorted_expert_idxs, self.num_experts)
 
         hidden_states = self.c_fc(
