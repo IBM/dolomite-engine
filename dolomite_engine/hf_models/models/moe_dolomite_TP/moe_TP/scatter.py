@@ -204,6 +204,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         m_width = config.m_width
         n_layer = config.n_layer
         init_method = InitMethod(config.init_method)
+        residual_dropout = config.resid_pdrop
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -223,8 +224,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
             add_bias=config.add_bias,
             std=std,
-            use_padding_free_transformer=use_padding_free_transformer,
-            sequence_parallel=sequence_parallel,
         )
 
         self.act = get_activation_function(activation_function)
@@ -238,8 +237,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             out_features=self.hidden_size,
             add_bias=config.add_bias,
             std=std,
-            use_padding_free_transformer=use_padding_free_transformer,
-            sequence_parallel=sequence_parallel,
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
