@@ -75,6 +75,8 @@ class ModelWrapper(nn.Module):
 
         self._setup_config()
 
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+
         if self.tp_world_size > 1:
             self.model_class = get_tensor_parallel_class(self.config.model_type)
 

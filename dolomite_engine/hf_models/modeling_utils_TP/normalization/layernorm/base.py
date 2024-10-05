@@ -18,6 +18,8 @@ class LayerNorm_TP(nn.LayerNorm, DTensorModule):
     ) -> None:
         super().__init__(normalized_shape, eps=eps)
 
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+
         self.weight = nn.Parameter(
             DTensor.from_local(
                 self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
@@ -32,7 +34,7 @@ class LayerNorm_TP(nn.LayerNorm, DTensorModule):
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=self.placement)
+        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.placement)
         input = super().forward(input)
         input = dtensor_to_tensor(input, desired_placement=self.placement)
         return input

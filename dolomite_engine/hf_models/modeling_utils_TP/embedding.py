@@ -22,6 +22,7 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings and self.tp_world_size > 1
         self.use_padding_free_transformer = use_padding_free_transformer
@@ -49,7 +50,7 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Replicate())
+        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Replicate())
         input = super().forward(input)
         input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         return input
