@@ -132,12 +132,12 @@ class SparseMoE(nn.Module):
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
 
-        context = torch.cuda.stream(parallel_compute_stream) if self.use_parallel_streams else nullcontext()
-
         if self.use_parallel_streams:
             default_compute_stream = StreamManager.get_default_compute_stream()
             parallel_compute_stream = StreamManager.get_parallel_compute_stream()
             parallel_compute_stream.wait_stream(default_compute_stream)
+
+        context = torch.cuda.stream(parallel_compute_stream) if self.use_parallel_streams else nullcontext()
 
         with context:
             hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
