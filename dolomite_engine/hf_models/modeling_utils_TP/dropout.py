@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.placement_types import Replicate, Shard
 
 from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 

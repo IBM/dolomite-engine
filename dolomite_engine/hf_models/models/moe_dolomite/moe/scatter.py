@@ -44,16 +44,16 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         grouped_out=False,
     ):
         return scattered_experts(
-            input,
-            self.weight.permute(1, 2, 0),
-            k,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-            gates,
-            grouped_in,
-            grouped_out,
+            inputs=input,
+            expert_weights=self.weight.permute(1, 2, 0),
+            k=k,
+            sorted_expert_idxs=sorted_expert_idxs,
+            sorted_scattered_idxs=sorted_scattered_idxs,
+            padded_block_idxs=padded_block_idxs,
+            expert_offsets=expert_offsets,
+            gates=gates,
+            grouped_in=grouped_in,
+            grouped_out=grouped_out,
         )
 
 
@@ -139,4 +139,5 @@ class ScatterMoE(SparseMoE):
             grouped_in=True,
             gates=router_weights,
         )
+        hidden_states = self.dropout(hidden_states)
         return hidden_states

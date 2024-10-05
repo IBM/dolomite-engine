@@ -1,4 +1,5 @@
 import torch
+from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ...config import CommonConfig
@@ -17,7 +18,7 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
-        past_key_values: tuple[tuple[torch.Tensor]] | None = None,
+        past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | list[list[int]] | None = None,
         position_ids: torch.Tensor | list[list[int]] | None = None,
@@ -31,9 +32,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
-        if self._use_padding_free_transformer and output_router_logits:
-            raise NotImplementedError("padding_free is not supported with load_balancing_loss_func currently")
-
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
