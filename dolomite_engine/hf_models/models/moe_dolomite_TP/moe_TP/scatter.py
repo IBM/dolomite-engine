@@ -27,7 +27,7 @@ if is_kernel_hyperdrive_available():
     from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
-class ReplicatedRouter(ParameterizedLinear):
+class ReplicatedRouter(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -45,7 +45,7 @@ class ReplicatedRouter(ParameterizedLinear):
         )
 
 
-class ColumnParallelScatteredExperts(ParameterizedScatteredExperts):
+class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
     def __init__(
         self,
         num_experts: int,
