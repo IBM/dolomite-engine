@@ -75,6 +75,8 @@ def dtensor_to_tensor(
         if isinstance(desired_placement, Placement):
             desired_placement = [desired_placement]
 
+        assert device_mesh is not None
+
         dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement)
 
     if grad_placement is not None and isinstance(grad_placement, Placement):

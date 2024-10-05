@@ -22,6 +22,6 @@ class Dropout_TP(nn.Dropout):
         if self.training:
             input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.placement)
             input = super().forward(input)
-            input = dtensor_to_tensor(input, desired_placement=self.placement)
+            input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.placement)
 
         return input

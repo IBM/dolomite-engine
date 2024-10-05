@@ -211,7 +211,9 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
         router_logits = self.gate(hidden_states)
-        router_logits = dtensor_to_tensor(router_logits, desired_placement=Replicate(), grad_placement=Partial())
+        router_logits = dtensor_to_tensor(
+            router_logits, device_mesh=self.tp_mesh, desired_placement=Replicate(), grad_placement=Partial()
+        )
         # router_logits -> (total_q, num_experts)
 
         router_weights, selected_experts = self._get_topk(router_logits)
@@ -232,13 +234,15 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
 
-        hidden_states = dtensor_to_tensor(hidden_states, desired_placement=Replicate(), grad_placement=Partial())
+        hidden_states = dtensor_to_tensor(
+            hidden_states, device_mesh=self.tp_mesh, desired_placement=Replicate(), grad_placement=Partial()
+        )
 
         hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
 
         hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=Partial())
         hidden_states = dtensor_to_tensor(
-            hidden_states, desired_placement=self.placement, grad_placement=self.placement
+            hidden_states, device_mesh=self.tp_mesh, desired_placement=self.placement, grad_placement=self.placement
         )
 
         if not self.use_padding_free_transformer:

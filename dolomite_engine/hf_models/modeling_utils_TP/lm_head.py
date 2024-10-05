@@ -34,6 +34,6 @@ class LMHead_TP(Embedding_TP):
         )
         input = F.linear(input, weight)
         input = dtensor_to_tensor(
-            input, desired_placement=Shard(-1) if tensor_parallel_word_embeddings else Replicate()
+            input, device_mesh=tp_mesh, desired_placement=Shard(-1) if tensor_parallel_word_embeddings else Replicate()
         )
         return input

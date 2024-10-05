@@ -52,7 +52,7 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Replicate())
         input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.output_placement)
         return input
 
 

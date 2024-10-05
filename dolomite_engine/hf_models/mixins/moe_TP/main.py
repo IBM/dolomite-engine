@@ -76,7 +76,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             if self.tensor_parallel_word_embeddings:
                 # all gather
                 lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-                lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
+                lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
         return MoeCausalLMOutputWithPast(
             loss=loss,
