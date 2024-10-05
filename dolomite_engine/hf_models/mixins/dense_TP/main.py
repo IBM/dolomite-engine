@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
-from transformers.modeling_outputs import CausalLMOutputWithPast
+from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...config import CommonConfig
@@ -72,7 +72,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             output_attentions=output_attentions,
         )
 
-        transformer_outputs = self.transformer(
+        transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -84,9 +84,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
-        hidden_states = transformer_outputs[0]
 
-        lm_logits = self.get_lm_logits(hidden_states)
+        lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width

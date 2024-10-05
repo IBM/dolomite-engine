@@ -12,6 +12,7 @@ _BASE_ACTIVATIONS = {
     "hard_sigmoid": nn.modules.Hardsigmoid,
     "hard_swish": nn.modules.Hardswish,
     "hard_tanh": nn.modules.Hardtanh,
+    "identity": nn.modules.Identity,
     "laplace": ACT2CLS["laplace"],
     "leaky_reLU": nn.modules.LeakyReLU,
     "log_sigmoid": nn.modules.LogSigmoid,
