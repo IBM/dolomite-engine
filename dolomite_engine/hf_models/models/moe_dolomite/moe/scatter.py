@@ -33,16 +33,16 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
 
     def forward(
         self,
-        input,
-        k,
-        sorted_expert_idxs,
-        sorted_scattered_idxs,
-        padded_block_idxs,
-        expert_offsets,
-        gates=None,
-        grouped_in=False,
-        grouped_out=False,
-    ):
+        input: torch.Tensor,
+        k: int,
+        sorted_expert_idxs: torch.Tensor,
+        sorted_scattered_idxs: torch.Tensor,
+        padded_block_idxs: torch.Tensor,
+        expert_offsets: torch.Tensor,
+        gates: torch.Tensor | None = None,
+        grouped_in: bool = False,
+        grouped_out: bool = False,
+    ) -> torch.Tensor:
         return scattered_experts(
             inputs=input,
             expert_weights=self.weight.permute(1, 2, 0),

@@ -10,13 +10,7 @@ from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ....modeling_utils_TP import (
-    Dropout_TP,
-    DTensorModule,
-    dtensor_to_tensor,
-    get_module_placements,
-    tensor_to_dtensor,
-)
+from ....modeling_utils_TP import Dropout_TP, DTensorModule, dtensor_to_tensor, tensor_to_dtensor
 from ....utils import divide_if_divisible
 from ...moe_dolomite import MoEDolomiteConfig
 from ...moe_dolomite.moe import ScatterMoE
@@ -85,20 +79,17 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
 
     def forward(
         self,
-        input,
-        k,
-        sorted_expert_idxs,
-        sorted_scattered_idxs,
-        padded_block_idxs,
-        expert_offsets,
-        gates=None,
-        grouped_in=False,
-        grouped_out=False,
-    ):
-        # F.linear manually triggers an all gather for sequence parallel but custom kernels are not aware of the placements
-        # so we manually call an all gather here
-
-        input = scattered_experts(
+        input: torch.Tensor,
+        k: int,
+        sorted_expert_idxs: torch.Tensor,
+        sorted_scattered_idxs: torch.Tensor,
+        padded_block_idxs: torch.Tensor,
+        expert_offsets: torch.Tensor,
+        gates: torch.Tensor | None = None,
+        grouped_in: bool = False,
+        grouped_out: bool = False,
+    ) -> torch.Tensor:
+        return scattered_experts(
             input,
             self.weight.to_local().permute(1, 2, 0),
             k,
@@ -111,10 +102,8 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
             grouped_out,
         )
 
-        return input
 
-
-class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
+class RowParallelScatteredExperts(ColumnParallelScatteredExperts):
     def __init__(
         self,
         num_experts: int,
@@ -133,7 +122,8 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
             f"`in_features` ({in_features}) must be divisible by `tensor_parallel_world_size` ({tp_world_size})",
         )
 
-        super().__init__(
+        ParameterizedScatteredExperts.__init__(
+            self,
             num_experts=num_experts,
             in_features=self.in_features_per_device,
             out_features=out_features,
@@ -151,33 +141,6 @@ class RowParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
                 run_check=False,
             )
         )
-
-    def forward(
-        self,
-        input,
-        k,
-        sorted_expert_idxs,
-        sorted_scattered_idxs,
-        padded_block_idxs,
-        expert_offsets,
-        gates=None,
-        grouped_in=False,
-        grouped_out=False,
-    ):
-        input = scattered_experts(
-            input,
-            self.weight.to_local().permute(1, 2, 0),
-            k,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-            gates,
-            grouped_in,
-            grouped_out,
-        )
-
-        return input
 
 
 class ScatterMoE_TP(ScatterMoE, DTensorModule):
