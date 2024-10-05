@@ -33,18 +33,18 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
 
     def forward(
         self,
-        inputs,
-        k,
-        sorted_expert_idxs,
-        sorted_scattered_idxs,
-        padded_block_idxs,
-        expert_offsets,
-        gates=None,
-        grouped_in=False,
-        grouped_out=False,
-    ):
-        results = scattered_experts(
-            inputs=inputs,
+        input: torch.Tensor,
+        k: int,
+        sorted_expert_idxs: torch.Tensor,
+        sorted_scattered_idxs: torch.Tensor,
+        padded_block_idxs: torch.Tensor,
+        expert_offsets: torch.Tensor,
+        gates: torch.Tensor | None = None,
+        grouped_in: bool = False,
+        grouped_out: bool = False,
+    ) -> torch.Tensor:
+        return scattered_experts(
+            inputs=input,
             expert_weights=self.weight.permute(1, 2, 0),
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
@@ -55,8 +55,6 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
             grouped_in=grouped_in,
             grouped_out=grouped_out,
         )
-
-        return results
 
 
 class ScatterMoE(SparseMoE):
@@ -121,7 +119,7 @@ class ScatterMoE(SparseMoE):
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
         with torch.no_grad():
-            sorted_expert_idxs, sorted_scattered_idxs = torch.sort(selected_experts.flatten())
+            sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
             padded_block_idxs, expert_offsets = padded_block_indices(sorted_expert_idxs, self.num_experts)
 
         hidden_states = self.c_fc(
