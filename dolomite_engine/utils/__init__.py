@@ -23,6 +23,7 @@ from .packages import (
 from .parallel import ProcessGroupManager, run_rank_n
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
+from .streams import StreamManager
 from .tracking import ExperimentsTracker, ProgressBar
 from .wrapper import get_module_class_from_name
 from .yaml import load_yaml

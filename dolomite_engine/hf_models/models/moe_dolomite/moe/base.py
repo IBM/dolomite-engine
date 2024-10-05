@@ -1,9 +1,11 @@
 import math
+from contextlib import nullcontext
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .....utils import StreamManager
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
@@ -120,6 +122,8 @@ class SparseMoE(nn.Module):
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
+        self.use_parallel_streams = torch.cuda.is_available()
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
@@ -127,16 +131,28 @@ class SparseMoE(nn.Module):
         hidden_states = hidden_states.view(-1, self.hidden_size)
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
-        hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
 
-        if not self.use_padding_free_transformer:
-            hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
+        context = torch.cuda.stream(parallel_compute_stream) if self.use_parallel_streams else nullcontext()
 
-        hidden_states = self.dropout(hidden_states)
+        if self.use_parallel_streams:
+            default_compute_stream = StreamManager.get_default_compute_stream()
+            parallel_compute_stream = StreamManager.get_parallel_compute_stream()
+            parallel_compute_stream.wait_stream(default_compute_stream)
+
+        with context:
+            hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+            if not self.use_padding_free_transformer:
+                hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
+
+            hidden_states = self.dropout(hidden_states)
 
         aux_loss = self._compute_switch_loss(
             logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
         )
+
+        if self.use_parallel_streams:
+            parallel_compute_stream.wait_stream(default_compute_stream)
 
         return hidden_states, router_logits, aux_loss
 
