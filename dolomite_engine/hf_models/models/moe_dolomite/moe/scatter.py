@@ -115,6 +115,8 @@ class ScatterMoE(SparseMoE):
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
+        self.use_parallel_streams = torch.cuda.is_available()
+
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
