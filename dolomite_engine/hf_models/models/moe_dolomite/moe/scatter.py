@@ -77,6 +77,7 @@ class ScatterMoE(SparseMoE):
         m_width = config.m_width
         n_layer = config.n_layer
         init_method = InitMethod(config.init_method)
+        residual_dropout = config.resid_pdrop
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -111,6 +112,8 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+
+        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
