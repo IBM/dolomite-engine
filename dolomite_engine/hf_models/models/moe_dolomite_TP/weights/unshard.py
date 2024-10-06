@@ -169,7 +169,7 @@ def _fix_moe_weights(config: MoEDolomiteConfig, state_dict: dict, tensor_paralle
         state_dict[key] = state_dict[key].T
 
         if is_glu(config.activation_function):
-            key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
+            key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc.weight"
             weight = state_dict[key]
             weight = weight.chunk(tensor_parallel_size, dim=0)
             weight = [w.chunk(2, dim=0) for w in weight]
