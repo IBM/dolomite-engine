@@ -6,11 +6,12 @@ from ....modeling_utils import is_glu
 from ....modeling_utils_TP import tensor_parallel_split_safetensor_slice
 from ....utils import divide_if_divisible
 from ...gpt_dolomite_TP.weights.shard import (
-    _get_attention_weights,
-    _get_column_parallel_weights,
-    _get_mlp_weights,
-    _get_row_parallel_weights,
-    _get_word_embedding_weights,
+    _get_attention,
+    _get_column_parallel,
+    _get_embeddings_or_lm_head,
+    _get_layernorm,
+    _get_mlp,
+    _get_row_parallel,
 )
 from ...moe_dolomite import MoEDolomiteConfig
 
@@ -21,7 +22,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
     tensor_parallel_word_embeddings: bool,
 ) -> dict:
     # word embeddings
-    state_dict = _get_word_embedding_weights(
+    state_dict = _get_embeddings_or_lm_head(
         safetensors_weights_manager,
         prefix="transformer.wte.",
         vocab_size=config.vocab_size,
@@ -31,7 +32,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
     # positional embeddings
     if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
         state_dict.update(
-            _get_word_embedding_weights(
+            _get_embeddings_or_lm_head(
                 safetensors_weights_manager,
                 prefix="transformer.wpe.",
                 vocab_size=config.n_positions,
@@ -42,12 +43,10 @@ def get_moe_dolomite_tensor_parallel_state_dict(
     for layer_idx in range(config.n_layer):
         prefix = f"transformer.h.{layer_idx}."
 
-        state_dict.update({prefix + "ln_1.weight": safetensors_weights_manager.get_tensor(prefix + "ln_1.weight")})
-        if safetensors_weights_manager.has_tensor(prefix + "ln_1.bias"):
-            state_dict.update({prefix + "ln_1.bias": safetensors_weights_manager.get_tensor(prefix + "ln_1.bias")})
+        state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
 
         state_dict.update(
-            _get_attention_weights(
+            _get_attention(
                 config=config,
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix=prefix + "attn.",
@@ -56,12 +55,10 @@ def get_moe_dolomite_tensor_parallel_state_dict(
             )
         )
 
-        state_dict.update({prefix + "ln_2.weight": safetensors_weights_manager.get_tensor(prefix + "ln_2.weight")})
-        if safetensors_weights_manager.has_tensor(prefix + "ln_2.bias"):
-            state_dict.update({prefix + "ln_2.bias": safetensors_weights_manager.get_tensor(prefix + "ln_2.bias")})
+        state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
 
         state_dict.update(
-            _get_moe_weights(
+            _get_moe(
                 config=config,
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix=prefix + "moe.",
@@ -70,13 +67,11 @@ def get_moe_dolomite_tensor_parallel_state_dict(
             )
         )
 
-    state_dict.update({"transformer.ln_f.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight")})
-    if safetensors_weights_manager.has_tensor("transformer.ln_f.bias"):
-        state_dict.update({"transformer.ln_f.bias": safetensors_weights_manager.get_tensor("transformer.ln_f.bias")})
+    state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))
 
     if not config.tie_word_embeddings:
         state_dict.update(
-            _get_word_embedding_weights(
+            _get_embeddings_or_lm_head(
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix="lm_head.",
                 vocab_size=config.vocab_size,
@@ -87,7 +82,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
     return state_dict
 
 
-def _get_moe_weights(
+def _get_moe(
     config: MoEDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
@@ -99,7 +94,7 @@ def _get_moe_weights(
     assert not config.add_bias
 
     state_dict.update(
-        _get_mlp_weights(
+        _get_mlp(
             config=config,
             safetensors_weights_manager=safetensors_weights_manager,
             prefix=prefix,
