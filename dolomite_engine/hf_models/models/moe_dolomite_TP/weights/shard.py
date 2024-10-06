@@ -13,7 +13,7 @@ from ...gpt_dolomite_TP.weights.shard import (
 from ...moe_dolomite import MoEDolomiteConfig
 
 
-def get_moe_dolomite_tp_state_dict(
+def get_moe_dolomite_tensor_parallel_state_dict(
     config: MoEDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     tensor_parallel_word_embeddings: bool,

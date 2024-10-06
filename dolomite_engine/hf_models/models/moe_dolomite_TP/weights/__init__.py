@@ -1,2 +1,2 @@
-from .shard import get_moe_dolomite_tp_state_dict
+from .shard import get_moe_dolomite_tensor_parallel_state_dict
 from .unshard import fix_moe_dolomite_unsharded_state_dict, unshard_moe_dolomite_tensor_parallel_state_dicts
