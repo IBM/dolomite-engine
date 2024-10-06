@@ -49,7 +49,7 @@ def get_gpt_dolomite_tensor_parallel_state_dict(
             _get_mlp(config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp.")
         )
 
-    state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_f."))
+    state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))
 
     if not config.tie_word_embeddings:
         state_dict.update(
