@@ -82,16 +82,18 @@ class DeltaNet(nn.Module):
                     self.key_dim,
                     conv_size,
                     activation=nn.SiLU() if qk_activation == "silu" else nn.Identity(),
+                    activation_string="silu" if qk_activation == "silu" else None,
                     std=std_conv,
                 )
                 self.k_conv1d = ParameterizedShortConvolution(
                     self.key_dim,
                     conv_size,
                     activation=nn.SiLU() if qk_activation == "silu" else nn.Identity(),
+                    activation_string="silu" if qk_activation == "silu" else None,
                     std=std_conv,
                 )
                 self.v_conv1d = ParameterizedShortConvolution(
-                    self.value_dim, conv_size, activation=nn.SiLU(), std=std_conv
+                    self.value_dim, conv_size, activation=nn.SiLU(), activation_string="silu", std=std_conv
                 )
 
         self.use_beta = use_beta
