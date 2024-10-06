@@ -110,12 +110,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         self._init_model(config, **kwargs)
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
-        """this function purely exists because I have no clue how multiple inheritance works
-
-        Args:
-            config (CommonConfig): a config object
-        """
-
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.n_embd
         self.num_heads = config.n_head
@@ -175,7 +169,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple | BaseModelOutputWithPast:
+    ) -> BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,

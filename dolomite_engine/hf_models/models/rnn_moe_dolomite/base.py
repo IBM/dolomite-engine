@@ -1,37 +1,36 @@
-from dataclasses import dataclass
-
 import torch
 import torch.nn as nn
-from transformers import DynamicCache
-from transformers.modeling_outputs import MoeModelOutputWithPast
+from transformers import Cache
 
-from ...config import CommonConfig
+from ....utils import is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
-from ..dense import BaseModelMixin, PreTrainedModelMixin
+from ..rnn_dolomite.base import RNNDolomiteModel, RNNDolomitePreTrainedModel
+from .config import RNNMoEDolomiteConfig
+from .layer import RNNMoEDolomiteBlock
 
 
-@dataclass
-class MoeModelOutputWithPastAndAuxLoss(MoeModelOutputWithPast):
-    aux_loss: torch.Tensor | None = None
+if is_fla_available():
+    from fla.models.utils import Cache as FLACache
 
 
-class PreTrainedMoEModelMixin(PreTrainedModelMixin):
-    def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
-        self.moe_implementation = kwargs.get("moe_implementation", "eager")
-        assert self.moe_implementation in ["eager", "scattermoe"]
-
-        super().__init__(config, *args, **kwargs)
+class RNNMoEDolomitePreTrainedModel(PreTrainedMoEModelMixin, RNNDolomitePreTrainedModel):
+    config_class = RNNMoEDolomiteConfig
+    layer_class = RNNMoEDolomiteBlock
+    _no_split_modules = ["RNNMoEDolomiteBlock"]
 
 
-class BaseMoEModelMixin(BaseModelMixin):
-    def _init_model(self, config: CommonConfig, **kwargs) -> None:
+class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNNDolomiteModel):
+    def _init_model(self, config: RNNMoEDolomiteConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.n_embd
         self.num_heads = config.n_head
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
+
+        self.attention_pattern = self.parse_attention_pattern(config.attention_pattern)
 
         self.head_dim = divide_if_divisible(
             self.embed_dim,
@@ -47,7 +46,7 @@ class BaseMoEModelMixin(BaseModelMixin):
                 self.layer_class(
                     config,
                     normalization_implementation=self.normalization_implementation,
-                    attention_implementation=self.attention_implementation,
+                    attention_pattern=self.attention_pattern[i],
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     moe_implementation=self.moe_implementation,
                     layer_idx=i,
@@ -71,7 +70,7 @@ class BaseMoEModelMixin(BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: Cache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -107,16 +106,7 @@ class BaseMoEModelMixin(BaseModelMixin):
             output_router_logits=output_router_logits,
         )
 
-        # ==========================================================================================
-        # padding_free:
-        #     attention_mask -> None
-        # flash:
-        #     attention_mask -> (batch_size, key_length)
-        # else:
-        #     attention_mask -> (batch_size, 1, query_length, key_length)
-        # ==========================================================================================
-
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
         total_aux_loss = 0
@@ -160,46 +150,3 @@ class BaseMoEModelMixin(BaseModelMixin):
             router_logits=all_router_logits,
             aux_loss=total_aux_loss,
         )
-
-    def _prepare_a_bunch_of_stuff(
-        self,
-        input_ids: torch.Tensor | None = None,
-        past_key_values: list[torch.Tensor] | None = None,
-        attention_mask: torch.Tensor | None = None,
-        token_type_ids: torch.Tensor | None = None,
-        position_ids: torch.Tensor | None = None,
-        inputs_embeds: torch.Tensor | None = None,
-        use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-        output_router_logits: bool = False,
-    ) -> tuple[
-        bool,
-        bool,
-        bool,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        tuple[torch.Tensor],
-    ]:
-        output_router_logits = (
-            output_router_logits if output_router_logits is not None else self.config.output_router_logits
-        )
-
-        return super()._prepare_a_bunch_of_stuff(
-            input_ids=input_ids,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        ) + (output_router_logits,)

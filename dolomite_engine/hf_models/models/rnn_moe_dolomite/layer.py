@@ -1,20 +1,24 @@
+from copy import deepcopy
+
 import torch.nn as nn
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
-from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_dolomite.mlp import MLP
-from .attention import DeltaNet, RNNFlashAttention2
-from .config import RNNDolomiteConfig
+from ..moe_dolomite.layer import SparseMoEBlock
+from ..moe_dolomite.moe import get_moe
+from ..rnn_dolomite.attention import DeltaNet, RNNFlashAttention2
+from .config import RNNMoEDolomiteConfig
 
 
-class RNNDolomiteBlock(GPTDolomiteBlock):
+class RNNMoEDolomiteBlock(SparseMoEBlock):
     def __init__(
         self,
-        config: RNNDolomiteConfig,
+        config: RNNMoEDolomiteConfig,
         normalization_implementation: str,
         attention_pattern: str,
         use_padding_free_transformer: bool,
+        moe_implementation: str,
         layer_idx: int | None = None,
     ) -> None:
         nn.Module.__init__(self)
@@ -48,4 +52,16 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
             normalization_implementation=normalization_implementation,
         )
 
-        self.mlp = MLP(config)
+        self.moe = get_moe(
+            config,
+            moe_implementation=moe_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            layer_idx=layer_idx,
+        )
+
+        self.mlp = None
+        if config.shared_n_inner is not None:
+            shared_config = deepcopy(config)
+            shared_config.n_inner = config.shared_n_inner
+            self.mlp = MLP(shared_config)
+            del shared_config
