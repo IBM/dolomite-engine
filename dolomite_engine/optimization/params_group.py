@@ -8,6 +8,7 @@ from ..hf_models import (
     GPTDolomiteForCausalLM_TP,
     MoEDolomiteForCausalLM,
     RNNDolomiteForCausalLM,
+    RNNMoEDolomiteForCausalLM,
 )
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
@@ -63,7 +64,13 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[dict]:
     assert isinstance(
         model.model,
-        (GPTDolomiteForCausalLM, MoEDolomiteForCausalLM, GPTDolomiteForCausalLM_TP, RNNDolomiteForCausalLM),
+        (
+            GPTDolomiteForCausalLM,
+            MoEDolomiteForCausalLM,
+            GPTDolomiteForCausalLM_TP,
+            RNNDolomiteForCausalLM,
+            RNNMoEDolomiteForCausalLM,
+        ),
     ), "mup is not supported with this model architecture"
 
     assert (
