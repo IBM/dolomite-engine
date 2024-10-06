@@ -112,8 +112,8 @@ def fix_gpt_dolomite_unsharded_state_dict(
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
         : config.vocab_size, :
     ]
-    state_dict = _fix_attention_weights(config, state_dict, prefix)
-    state_dict = _fix_mlp_weights(config, state_dict, tensor_parallel_size, prefix)
+    state_dict = _fix_attention(config, state_dict, prefix)
+    state_dict = _fix_mlp(config, state_dict, tensor_parallel_size, prefix)
     return state_dict
 
 
@@ -253,7 +253,7 @@ def _get_once_from_state_dicts_with_check(
     return output
 
 
-def _fix_attention_weights(config: GPTDolomiteConfig, state_dict: dict, prefix: str) -> dict:
+def _fix_attention(config: GPTDolomiteConfig, state_dict: dict, prefix: str) -> dict:
     if AttentionHeadType(config.attention_head_type) == AttentionHeadType.mqa:
         for layer_idx in range(config.n_layer):
             q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.attn.c_attn.q_attn.weight")
@@ -268,7 +268,7 @@ def _fix_attention_weights(config: GPTDolomiteConfig, state_dict: dict, prefix: 
     return state_dict
 
 
-def _fix_mlp_weights(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
             key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
