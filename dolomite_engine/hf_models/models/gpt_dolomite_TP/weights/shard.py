@@ -8,7 +8,7 @@ from ....utils import divide_if_divisible
 from ...gpt_dolomite import GPTDolomiteConfig
 
 
-def get_gpt_dolomite_tp_state_dict(
+def get_gpt_dolomite_tensor_parallel_state_dict(
     config: GPTDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     tensor_parallel_word_embeddings: bool,
