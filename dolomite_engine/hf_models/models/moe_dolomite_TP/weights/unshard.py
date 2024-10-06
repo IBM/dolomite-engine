@@ -5,7 +5,7 @@ from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ...gpt_dolomite_TP.weights.unshard import (
     _concatenate_tensors_from_state_dicts,
-    _fix_attention_weights,
+    _fix_attention,
     _get_attention,
     _get_embeddings_or_lm_head,
     _get_layernorm,
@@ -119,8 +119,8 @@ def fix_moe_dolomite_unsharded_state_dict(
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
         : config.vocab_size, :
     ]
-    state_dict = _fix_attention_weights(config, state_dict, prefix)
-    state_dict = _fix_moe_weights(config, state_dict, tensor_parallel_size, prefix)
+    state_dict = _fix_attention(config, state_dict, prefix)
+    state_dict = _fix_moe(config, state_dict, tensor_parallel_size, prefix)
     return state_dict
 
 
@@ -161,7 +161,7 @@ def _get_moe(
     return output
 
 
-def _fix_moe_weights(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
     assert not config.add_bias
 
     if is_glu(config.activation_function):
