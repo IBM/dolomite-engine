@@ -28,15 +28,13 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
         start_index = start_end[0]
         end_index = start_end[1]
 
+    assert 0 <= dim <= dimensionality - 1, f"dim ({dim}) has to <= dimenstionality ({dimensionality})"
+
     if dimensionality == 1:
-        assert dim == 0, f"dim has to 0 for a bias tensor but dim ({dim}) was passed"
         output = slice[start_index:end_index]
     elif dimensionality == 2:
-        assert 0 <= dim <= 1, f"dim has to 0 or 1 for a weight tensor but dim ({dim}) was passed"
-        output = slice[start_index:end_index, :] if dim == 0 else slice[:, start_index:end_index]
+        output = slice[start_index:end_index] if dim == 0 else slice[:, start_index:end_index]
     elif dimensionality == 3:
-        assert 0 <= dim <= 2, f"dim has to between 0 and 2 for a weight tensor but dim ({dim}) was passed"
-
         if dim == 0:
             output = slice[start_index:end_index, :]
         elif dim == 1:
