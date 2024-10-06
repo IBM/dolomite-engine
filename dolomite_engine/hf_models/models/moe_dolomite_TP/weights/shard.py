@@ -1,18 +1,6 @@
-import torch
-
-from .....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from .....utils import SafeTensorsWeightsManager
 from ....enums import PositionEmbeddingType
-from ....modeling_utils import is_glu
-from ....modeling_utils_TP import tensor_parallel_split_safetensor_slice
-from ....utils import divide_if_divisible
-from ...gpt_dolomite_TP.weights.shard import (
-    _get_attention,
-    _get_column_parallel,
-    _get_embeddings_or_lm_head,
-    _get_layernorm,
-    _get_mlp,
-    _get_row_parallel,
-)
+from ...gpt_dolomite_TP.weights.shard import _get_attention, _get_embeddings_or_lm_head, _get_layernorm, _get_mlp
 from ...moe_dolomite import MoEDolomiteConfig
 
 
