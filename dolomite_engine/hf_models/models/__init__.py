@@ -19,3 +19,4 @@ from .moe_dolomite_TP import (
     unshard_moe_dolomite_tensor_parallel_state_dicts,
 )
 from .rnn_dolomite import RNNDolomiteConfig, RNNDolomiteForCausalLM, RNNDolomiteModel
+from .rnn_moe_dolomite import RNNMoEDolomiteConfig, RNNMoEDolomiteForCausalLM, RNNMoEDolomiteModel

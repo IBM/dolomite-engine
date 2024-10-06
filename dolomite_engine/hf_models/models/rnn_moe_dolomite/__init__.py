@@ -1,3 +1,3 @@
-from .base import RNNMoEDolomiteModel, RNNMoEDolomitePreTrainedModel
+from .base import RNNMoEDolomiteModel
 from .config import RNNMoEDolomiteConfig
 from .main import RNNMoEDolomiteForCausalLM
