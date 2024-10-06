@@ -95,6 +95,8 @@ def _get_layernorm(safetensors_weights_manager: SafeTensorsWeightsManager, prefi
     if safetensors_weights_manager.has_tensor(prefix + "bias"):
         state_dict.update({prefix + "bias": safetensors_weights_manager.get_tensor(prefix + "bias")})
 
+    return state_dict
+
 
 def _get_attention(
     config: GPTDolomiteConfig,
