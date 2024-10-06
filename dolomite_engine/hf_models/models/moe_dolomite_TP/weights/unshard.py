@@ -165,9 +165,8 @@ def _fix_moe_weights(config: MoEDolomiteConfig, state_dict: dict, tensor_paralle
     assert not config.add_bias
 
     for layer_idx in range(config.n_layer):
-        state_dict[f"{prefix}transformer.h.{layer_idx}.moe.gate.weight"] = state_dict[
-            f"{prefix}transformer.h.{layer_idx}.moe.gate.weight"
-        ].T
+        key = f"{prefix}transformer.h.{layer_idx}.moe.gate.weight"
+        state_dict[key] = state_dict[key].T
 
         if is_glu(config.activation_function):
             key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
