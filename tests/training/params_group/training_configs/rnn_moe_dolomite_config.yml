@@ -30,6 +30,7 @@ model_args:
     n_layer: 4
     shared_n_inner: 512
     n_positions: 512
+    attention_pattern: ddda
     normalization_function: rmsnorm
     position_embedding_type: nope
     rope_theta: 10000
