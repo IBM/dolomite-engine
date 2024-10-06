@@ -78,7 +78,7 @@ def _get_moe_weights(
     prefix: str,
 ) -> None:
     # GLU is a special case and needs to be handled explicitely
-    state_dict = {prefix + "gate.weight": safetensors_weights_manager.get_tensor(prefix + "gate.weight")}
+    state_dict = {prefix + "gate.weight": safetensors_weights_manager.get_tensor(prefix + "gate.weight").T}
     weight = safetensors_weights_manager.get_tensor(prefix + "c_fc.weight")
     tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
