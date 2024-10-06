@@ -185,15 +185,19 @@ class DeltaNet(nn.Module):
             beta = q.new_ones(q.shape[0], q.shape[1], q.shape[2])
         state = past_key_values[self.layer_idx][-1] if use_cache else None
         if mode == "fused_recurrent":
-            o, recurrent_state = fused_recurrent_delta_rule(q, k, v, beta, state, output_final_state=use_cache)
+            o, recurrent_state = fused_recurrent_delta_rule(
+                q=q, k=k, v=v, beta=beta, initial_state=state, output_final_state=use_cache
+            )
         elif mode == "fused_chunk":
             assert self.chunk_size in [16, 32, 64]
             o, recurrent_state = fused_chunk_delta_rule(
-                q, k, v, beta, self.chunk_size, state, output_final_state=use_cache
+                q=q, k=k, v=v, beta=beta, BT=self.chunk_size, initial_state=state, output_final_state=use_cache
             )
         elif mode == "chunk":
             assert self.chunk_size in [16, 32, 64]
-            o, recurrent_state = chunk_delta_rule(q, k, v, beta, self.chunk_size, state, output_final_state=use_cache)
+            o, recurrent_state = chunk_delta_rule(
+                q=q, k=k, v=v, beta=beta, BT=self.chunk_size, initial_state=state, output_final_state=use_cache
+            )
         else:
             raise NotImplementedError(f"Not supported mode `{mode}`.")
 
