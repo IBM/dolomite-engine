@@ -8,6 +8,8 @@ from ....utils import divide_if_divisible
 from ...gpt_dolomite_TP.weights.shard import (
     _get_attention_weights,
     _get_column_parallel_weights,
+    _get_mlp_weights,
+    _get_row_parallel_weights,
     _get_word_embedding_weights,
 )
 from ...moe_dolomite import MoEDolomiteConfig
@@ -46,7 +48,11 @@ def get_moe_dolomite_tensor_parallel_state_dict(
 
         state_dict.update(
             _get_attention_weights(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "attn."
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix + "attn.",
+                column_parallel_shard_dim=0,
+                row_parallel_shard_dim=1,
             )
         )
 
@@ -56,7 +62,11 @@ def get_moe_dolomite_tensor_parallel_state_dict(
 
         state_dict.update(
             _get_moe_weights(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "moe."
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix + "moe.",
+                column_parallel_shard_dim=0,
+                row_parallel_shard_dim=2,
             )
         )
 
@@ -81,73 +91,21 @@ def _get_moe_weights(
     config: MoEDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
+    column_parallel_shard_dim: int,
+    row_parallel_shard_dim: int,
 ) -> None:
     state_dict = {prefix + "gate.weight": safetensors_weights_manager.get_tensor(prefix + "gate.weight").T}
 
-    # GLU is a special case and needs to be handled explicitely
-    if is_glu(config.activation_function):
-        weight = safetensors_weights_manager.get_slice(prefix + "c_fc.weight")
-
-        tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-        shape = weight.get_shape()
-        stride = divide_if_divisible(
-            shape[0],
-            tp_world_size * 2,
-            f"split dimension ({0}) is not divisible by 2 x tensor parallel world size (2 x {tp_world_size})",
-        )
-
-        # split weight tensors into gate and non-gate
-        start_end = (tp_rank * stride, (tp_rank + 1) * stride)
-        weight_1 = tensor_parallel_split_safetensor_slice(weight, 0, start_end)
-        if config.add_bias:
-            bias = safetensors_weights_manager.get_slice(prefix + "c_fc.bias")
-            bias_1 = tensor_parallel_split_safetensor_slice(bias, 0, start_end)
-
-        start_end = (
-            (tp_world_size + tp_rank) * stride,
-            (tp_world_size + tp_rank + 1) * stride,
-        )
-        weight_2 = tensor_parallel_split_safetensor_slice(weight, 0, start_end)
-        if config.add_bias:
-            bias_2 = tensor_parallel_split_safetensor_slice(bias, 0, start_end)
-
-        state_dict[prefix + "c_fc.weight"] = torch.cat([weight_1, weight_2])
-        if config.add_bias:
-            state_dict[prefix + "c_fc.bias"] = torch.cat([bias_1, bias_2])
-    else:
-        state_dict.update(
-            _get_column_parallel_moe_weights(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_fc."
-            )
-        )
+    assert not config.add_bias
 
     state_dict.update(
-        _get_row_parallel_moe_weights(
-            config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_proj."
+        _get_mlp_weights(
+            config=config,
+            safetensors_weights_manager=safetensors_weights_manager,
+            prefix=prefix,
+            column_parallel_shard_dim=column_parallel_shard_dim,
+            row_parallel_shard_dim=row_parallel_shard_dim,
         )
     )
-
-    return state_dict
-
-
-def _get_column_parallel_moe_weights(
-    config: MoEDolomiteConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
-) -> dict:
-    assert not config.add_bias
-    return _get_column_parallel_weights(
-        config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix
-    )
-
-
-def _get_row_parallel_moe_weights(
-    config: MoEDolomiteConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
-) -> dict:
-    assert not config.add_bias
-
-    weight = safetensors_weights_manager.get_slice(prefix + "weight")
-    weight = tensor_parallel_split_safetensor_slice(weight, dim=2)
-    state_dict = {prefix + "weight": weight}
 
     return state_dict

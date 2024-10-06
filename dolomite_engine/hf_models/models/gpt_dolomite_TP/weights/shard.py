@@ -41,7 +41,11 @@ def get_gpt_dolomite_tensor_parallel_state_dict(
 
         state_dict.update(
             _get_attention_weights(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "attn."
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix + "attn.",
+                column_parallel_shard_dim=0,
+                row_parallel_shard_dim=1,
             )
         )
 
@@ -51,7 +55,11 @@ def get_gpt_dolomite_tensor_parallel_state_dict(
 
         state_dict.update(
             _get_mlp_weights(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp."
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix + "mlp.",
+                column_parallel_shard_dim=0,
+                row_parallel_shard_dim=1,
             )
         )
 
@@ -102,6 +110,8 @@ def _get_attention_weights(
     config: GPTDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
+    column_parallel_shard_dim: int,
+    row_parallel_shard_dim: int,
 ) -> None:
     state_dict = {}
 
@@ -129,13 +139,19 @@ def _get_attention_weights(
     else:
         state_dict.update(
             _get_column_parallel_weights(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_attn."
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix + "c_attn.",
+                shard_dim=column_parallel_shard_dim,
             )
         )
 
     state_dict.update(
         _get_row_parallel_weights(
-            config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_proj."
+            config=config,
+            safetensors_weights_manager=safetensors_weights_manager,
+            prefix=prefix + "c_proj.",
+            shard_dim=row_parallel_shard_dim,
         )
     )
 
@@ -146,6 +162,8 @@ def _get_mlp_weights(
     config: GPTDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
+    column_parallel_shard_dim: int,
+    row_parallel_shard_dim: int,
 ) -> None:
     # GLU is a special case and needs to be handled explicitely
     if is_glu(config.activation_function):
@@ -156,37 +174,43 @@ def _get_mlp_weights(
 
         shape = weight.get_shape()
         stride = divide_if_divisible(
-            shape[0],
+            shape[column_parallel_shard_dim],
             tp_world_size * 2,
-            f"split dimension ({0}) is not divisible by 2 x tensor parallel world size (2 x {tp_world_size})",
+            f"split dimension ({column_parallel_shard_dim}) is not divisible by 2 x tensor parallel world size (2 x {tp_world_size})",
         )
 
         # split weight tensors into gate and non-gate
         start_end = (tp_rank * stride, (tp_rank + 1) * stride)
-        weight_1 = tensor_parallel_split_safetensor_slice(weight, 0, start_end)
+        weight_1 = tensor_parallel_split_safetensor_slice(weight, column_parallel_shard_dim, start_end)
         if config.add_bias:
             bias = safetensors_weights_manager.get_slice(prefix + "c_fc.bias")
-            bias_1 = tensor_parallel_split_safetensor_slice(bias, 0, start_end)
+            bias_1 = tensor_parallel_split_safetensor_slice(bias, column_parallel_shard_dim, start_end)
 
         start_end = (
             (tp_world_size + tp_rank) * stride,
             (tp_world_size + tp_rank + 1) * stride,
         )
-        weight_2 = tensor_parallel_split_safetensor_slice(weight, 0, start_end)
+        weight_2 = tensor_parallel_split_safetensor_slice(weight, column_parallel_shard_dim, start_end)
         if config.add_bias:
-            bias_2 = tensor_parallel_split_safetensor_slice(bias, 0, start_end)
+            bias_2 = tensor_parallel_split_safetensor_slice(bias, column_parallel_shard_dim, start_end)
 
         state_dict = {prefix + "c_fc.weight": torch.cat([weight_1, weight_2])}
         if config.add_bias:
             state_dict[prefix + "c_fc.bias"] = torch.cat([bias_1, bias_2])
     else:
         state_dict = _get_column_parallel_weights(
-            config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_fc."
+            config=config,
+            safetensors_weights_manager=safetensors_weights_manager,
+            prefix=prefix + "c_fc.",
+            shard_dim=column_parallel_shard_dim,
         )
 
     state_dict.update(
         _get_row_parallel_weights(
-            config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_proj."
+            config=config,
+            safetensors_weights_manager=safetensors_weights_manager,
+            prefix=prefix + "c_proj.",
+            shard_dim=row_parallel_shard_dim,
         )
     )
 
@@ -194,25 +218,25 @@ def _get_mlp_weights(
 
 
 def _get_column_parallel_weights(
-    config: GPTDolomiteConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
+    config: GPTDolomiteConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str, shard_dim: int
 ) -> dict:
     weight = safetensors_weights_manager.get_slice(prefix + "weight")
-    weight = tensor_parallel_split_safetensor_slice(weight, dim=0)
+    weight = tensor_parallel_split_safetensor_slice(weight, dim=shard_dim)
     state_dict = {prefix + "weight": weight}
 
     if config.add_bias:
         bias = safetensors_weights_manager.get_slice(prefix + "bias")
-        bias = tensor_parallel_split_safetensor_slice(bias, dim=0)
+        bias = tensor_parallel_split_safetensor_slice(bias, dim=shard_dim)
         state_dict[prefix + "bias"] = bias
 
     return state_dict
 
 
 def _get_row_parallel_weights(
-    config: GPTDolomiteConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
+    config: GPTDolomiteConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str, shard_dim: int
 ) -> dict:
     weight = safetensors_weights_manager.get_slice(prefix + "weight")
-    weight = tensor_parallel_split_safetensor_slice(weight, dim=1)
+    weight = tensor_parallel_split_safetensor_slice(weight, dim=shard_dim)
     state_dict = {prefix + "weight": weight}
 
     if config.add_bias:
