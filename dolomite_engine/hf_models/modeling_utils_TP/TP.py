@@ -97,6 +97,7 @@ def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefi
             device_mesh = param.device_mesh
             placements = param.placements
             result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
+
     return result
 
 
