@@ -143,7 +143,7 @@ def _get_moe(
         prefix
         + "gate.weight": _get_once_from_state_dicts_with_check(
             tensor_parallel_state_dicts, prefix + "gate.weight", True
-        )
+        ).T
     }
     if is_glu(config.activation_function):
         # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
@@ -164,9 +164,12 @@ def _get_moe(
 def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
     assert not config.add_bias
 
-    if is_glu(config.activation_function):
-        for layer_idx in range(config.n_layer):
-            key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
+    for layer_idx in range(config.n_layer):
+        key = f"{prefix}transformer.h.{layer_idx}.moe.gate.weight"
+        state_dict[key] = state_dict[key].T
+
+        if is_glu(config.activation_function):
+            key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc.weight"
             weight = state_dict[key]
             weight = weight.chunk(tensor_parallel_size, dim=0)
             weight = [w.chunk(2, dim=0) for w in weight]
