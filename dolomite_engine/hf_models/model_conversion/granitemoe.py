@@ -116,7 +116,7 @@ def _import_state_dict_from_huggingface(
 
         state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
-        )
+        ).T.contiguous()
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = (
             _split_and_reorder_for_glu(
@@ -244,7 +244,7 @@ def _export_state_dict_to_huggingface(
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.gate.weight")
-        )
+        ).T.contiguous()
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight").transpose(0, 1)

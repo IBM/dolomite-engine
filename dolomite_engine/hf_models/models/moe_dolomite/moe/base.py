@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 
 
@@ -87,7 +87,7 @@ class SparseMoE(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ParameterizedLinear(
+        self.gate = ParameterizedTransposedLinear(
             in_features=self.hidden_size,
             out_features=self.num_experts,
             bias=False,

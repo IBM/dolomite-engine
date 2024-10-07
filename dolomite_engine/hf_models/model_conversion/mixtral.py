@@ -104,7 +104,7 @@ def _import_state_dict_from_huggingface(
 
         state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"
-        )
+        ).T.contiguous()
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = torch.stack(
             [
@@ -240,7 +240,7 @@ def _export_state_dict_to_huggingface(
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"transformer.h.{layer_idx}.moe.gate.weight"
-        )
+        ).T.contiguous()
 
         c_fc_experts = safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
         c_proj_experts = safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
