@@ -21,7 +21,7 @@ if is_kernel_hyperdrive_available():
     from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
-class ReplicatedParameterizedTransposedLinear_TP(ParameterizedTransposedLinear):
+class ReplicatedParameterizedTransposedLinear_TP(ParameterizedTransposedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
