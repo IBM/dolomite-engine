@@ -113,9 +113,11 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if self.tp_world_size > 1:
             logits = tensor_to_dtensor(
-                logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+                logits,
+                device_mesh=self.tp_mesh,
+                current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
             )
-            labels = tensor_to_dtensor(labels, current_placement=Replicate())
+            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             if self.tensor_parallel_word_embeddings:
                 loss_context = loss_parallel
