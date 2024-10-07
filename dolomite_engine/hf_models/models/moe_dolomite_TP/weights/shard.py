@@ -77,7 +77,7 @@ def _get_moe(
     column_parallel_shard_dim: int,
     row_parallel_shard_dim: int,
 ) -> None:
-    state_dict = {prefix + "gate.weight": safetensors_weights_manager.get_tensor(prefix + "gate.weight").T}
+    state_dict = {prefix + "gate.weight": safetensors_weights_manager.get_tensor(prefix + "gate.weight")}
 
     assert not config.add_bias
 

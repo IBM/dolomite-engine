@@ -31,22 +31,12 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
 
     assert 0 <= dim <= dimensionality - 1, f"dim ({dim}) has to <= dimenstionality ({dimensionality})"
 
-    if dimensionality == 1:
+    if dim == 0:
         output = slice[start_index:end_index]
-    elif dimensionality == 2:
-        if dim == 0:
-            output = slice[start_index:end_index]
-        else:
-            output = slice[:, start_index:end_index]
-    elif dimensionality == 3:
-        if dim == 0:
-            output = slice[start_index:end_index, :]
-        elif dim == 1:
-            output = slice[:, start_index:end_index]
-        elif dim == 2:
-            output = slice[..., start_index:end_index]
-    else:
-        raise RuntimeError("this code should not be reachable")
+    elif dim == 1:
+        output = slice[:, start_index:end_index]
+    elif dim == 2:
+        output = slice[..., start_index:end_index]
 
     return output
 
@@ -107,6 +97,7 @@ def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefi
             device_mesh = param.device_mesh
             placements = param.placements
             result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
+
     return result
 
 
