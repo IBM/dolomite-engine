@@ -7,7 +7,7 @@ from ...modeling_utils_TP import get_attention_module_TP, get_normalization_func
 from ..gpt_dolomite_TP.layer import MLP_TP
 from ..moe_dolomite import MoEDolomiteConfig
 from ..moe_dolomite.layer import SparseMoEBlock
-from .moe_TP.scatter import ScatterMoE_TP
+from .moe_TP import ScatterMoE_TP
 
 
 class SparseMoEBlock_TP(SparseMoEBlock):
@@ -20,6 +20,7 @@ class SparseMoEBlock_TP(SparseMoEBlock):
         moe_implementation: str,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
+        expert_parallel: bool = False,
     ) -> None:
         nn.Module.__init__(self)
 
@@ -59,6 +60,7 @@ class SparseMoEBlock_TP(SparseMoEBlock):
             config,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
+            expert_parallel=expert_parallel,
             layer_idx=layer_idx,
         )
 

@@ -336,6 +336,8 @@ class DistributedArgs(BaseArgs):
     tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
+    # whether to use expert parallel
+    expert_parallel: bool = False
     # data parallel world size
     data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes

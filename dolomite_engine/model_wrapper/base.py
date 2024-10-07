@@ -26,6 +26,7 @@ class ModelWrapper(nn.Module):
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
+        expert_parallel: bool,
         distributed_backend: DistributedBackend,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
@@ -45,6 +46,7 @@ class ModelWrapper(nn.Module):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
+            expert_parallel (bool): whether to use expert parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
@@ -65,6 +67,7 @@ class ModelWrapper(nn.Module):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
+        self.expert_parallel = expert_parallel
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
@@ -182,6 +185,8 @@ class ModelWrapper(nn.Module):
             model_kwargs["tensor_parallel_word_embeddings"] = True
         if self.sequence_parallel:
             model_kwargs["sequence_parallel"] = True
+        if self.expert_parallel:
+            model_kwargs["expert_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
 

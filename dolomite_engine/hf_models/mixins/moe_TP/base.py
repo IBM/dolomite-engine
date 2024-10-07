@@ -12,6 +12,7 @@ class PreTrainedMoEModelMixin_TP(PreTrainedMoEModelMixin, PreTrainedModelMixin_T
     def __init__(self, config: CommonConfig, *args, **kwargs):
         self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
+        self.expert_parallel = kwargs.get("expert_parallel", False)
 
         super().__init__(config, *args, **kwargs)
 
@@ -55,6 +56,7 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                     moe_implementation=self.moe_implementation,
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
+                    expert_parallel=self.expert_parallel,
                 )
                 for i in range(config.num_hidden_layers)
             ]
