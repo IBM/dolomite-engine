@@ -21,7 +21,7 @@ if is_kernel_hyperdrive_available():
     from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
-class ReplicatedParameterizedTransposedLinear_TP(ParameterizedTransposedLinear, DTensorModule):
+class ReplicatedTransposedLinear_TP(ParameterizedTransposedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -175,7 +175,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ReplicatedParameterizedTransposedLinear_TP(
+        self.gate = ReplicatedTransposedLinear_TP(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
