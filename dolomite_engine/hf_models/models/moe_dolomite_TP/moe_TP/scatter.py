@@ -31,7 +31,9 @@ class ReplicatedTransposedLinear_TP(ParameterizedTransposedLinear, DTensorModule
         dtype: torch.dtype | None = None,
         std: float | None = None,
     ) -> None:
-        super().__init__(in_features, out_features, False, device, dtype, std)
+        super().__init__(
+            in_features=in_features, out_features=out_features, bias=bias, device=device, dtype=dtype, std=std
+        )
 
         self.weight = nn.Parameter(
             DTensor.from_local(
