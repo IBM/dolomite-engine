@@ -12,7 +12,7 @@ from ..utils import divide_if_divisible
 def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int, int] | None = None) -> torch.Tensor:
     shape = slice.get_shape()
     dimensionality = len(shape)
-    assert dimensionality in [1, 2], f"tensor should be either 1 or 2 dimensional but {dimensionality} was found"
+    assert dimensionality <= 3, f"tensor should be <= 3 dimensional but {dimensionality} was found"
 
     tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -29,19 +29,26 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
         start_index = start_end[0]
         end_index = start_end[1]
 
+    assert 0 <= dim <= dimensionality - 1, f"dim ({dim}) has to <= dimenstionality ({dimensionality})"
+
     if dimensionality == 1:
-        # bias tensor
-        assert dim == 0, f"dim has to 0 for a bias tensor but dim ({dim}) was passed"
-        return slice[start_index:end_index]
+        output = slice[start_index:end_index]
     elif dimensionality == 2:
-        assert 0 <= dim <= 1, f"dim has to 0 or 1 for a weight tensor but dim ({dim}) was passed"
-        # weight tensor
         if dim == 0:
-            return slice[start_index:end_index, :]
+            output = slice[start_index:end_index]
         else:
-            return slice[:, start_index:end_index]
+            output = slice[:, start_index:end_index]
+    elif dimensionality == 3:
+        if dim == 0:
+            output = slice[start_index:end_index, :]
+        elif dim == 1:
+            output = slice[:, start_index:end_index]
+        elif dim == 2:
+            output = slice[..., start_index:end_index]
     else:
         raise RuntimeError("this code should not be reachable")
+
+    return output
 
 
 def tensor_to_dtensor(

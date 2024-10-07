@@ -47,6 +47,7 @@ if args.model_type == GPTDolomiteConfig.model_type:
         add_bias=False,
         n_embd=128,
         n_head=16,
+        activation_function=args.activation_function,
     )
 elif args.model_type == MoEDolomiteConfig.model_type:
     config = MoEDolomiteConfig(
@@ -57,6 +58,7 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         add_bias=False,
         n_embd=128,
         n_head=16,
+        activation_function=args.activation_function,
     )
     kwargs["moe_implementation"] = "scattermoe"
 
