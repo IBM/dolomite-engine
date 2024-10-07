@@ -20,6 +20,7 @@ class SparseMoEBlock_TP(SparseMoEBlock):
         moe_implementation: str,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
+        expert_parallel: bool = False,
     ) -> None:
         nn.Module.__init__(self)
 
@@ -59,6 +60,7 @@ class SparseMoEBlock_TP(SparseMoEBlock):
             config,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
+            expert_parallel=expert_parallel,
             layer_idx=layer_idx,
         )
 
