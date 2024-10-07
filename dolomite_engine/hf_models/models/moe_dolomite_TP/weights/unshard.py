@@ -143,8 +143,9 @@ def _get_moe(
         prefix
         + "gate.weight": _get_once_from_state_dicts_with_check(
             tensor_parallel_state_dicts, prefix + "gate.weight", True
-        ).T
+        )
     }
+
     if is_glu(config.activation_function):
         # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
         weights = [state_dict[prefix + "c_fc.weight"].chunk(2, dim=0) for state_dict in tensor_parallel_state_dicts]

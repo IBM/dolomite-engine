@@ -5,26 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
-
-
-class Router(ParameterizedLinear):
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        device: torch.device | None = None,
-        dtype: torch.dtype | None = None,
-        std: float | None = None,
-    ) -> None:
-        super().__init__(in_features, out_features, False, device, dtype, std)
-
-        # FSDP-2 shards on dim 0 so we use a transposed the matrix
-        self.weight = nn.Parameter(self.weight.T)
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return input @ self.weight
 
 
 class ParameterizedExperts(nn.Module):
@@ -105,9 +87,10 @@ class SparseMoE(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = Router(
+        self.gate = ParameterizedTransposedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
+            bias=False,
             std=std,
         )
 

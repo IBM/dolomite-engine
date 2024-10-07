@@ -9,7 +9,7 @@ from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
 from ....modeling_utils_TP import Dropout_TP, DTensorModule, dtensor_to_tensor, tensor_to_dtensor
 from ....utils import divide_if_divisible
 from ...moe_dolomite import MoEDolomiteConfig
@@ -21,11 +21,12 @@ if is_kernel_hyperdrive_available():
     from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
-class ReplicatedRouter(ParameterizedLinear, DTensorModule):
+class ReplicatedParameterizedTransposedLinear_TP(ParameterizedTransposedLinear):
     def __init__(
         self,
         in_features: int,
         out_features: int,
+        bias: bool = True,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         std: float | None = None,
@@ -34,12 +35,9 @@ class ReplicatedRouter(ParameterizedLinear, DTensorModule):
 
         self.weight = nn.Parameter(
             DTensor.from_local(
-                self.weight.T, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
             )
         )
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return input @ self.weight
 
 
 class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
@@ -175,9 +173,10 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ReplicatedRouter(
+        self.gate = ReplicatedParameterizedTransposedLinear_TP(
             in_features=self.hidden_size,
             out_features=config.num_experts,
+            bias=False,
             std=std,
         )
 
