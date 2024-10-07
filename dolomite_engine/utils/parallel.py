@@ -28,6 +28,18 @@ _DATA_PARALLEL_GROUP: ProcessGroup | None = None
 _DATA_PARALLEL_RANK: int | None = None
 _DATA_PARALLEL_WORLD_SIZE: int | None = None
 
+# data parallel sharding
+_DATA_PARALLEL_SHARDING_MESH: DeviceMesh | None = None
+_DATA_PARALLEL_SHARDING_GROUP: ProcessGroup | None = None
+_DATA_PARALLEL_SHARDING_RANK: int | None = None
+_DATA_PARALLEL_SHARDING_WORLD_SIZE: int | None = None
+
+# data parallel replication
+_DATA_PARALLEL_REPLICATION_MESH: DeviceMesh | None = None
+_DATA_PARALLEL_REPLICATION_GROUP: ProcessGroup | None = None
+_DATA_PARALLEL_REPLICATION_RANK: int | None = None
+_DATA_PARALLEL_REPLICATION_WORLD_SIZE: int | None = None
+
 
 class ProcessGroupManager:
     def __init__(
@@ -87,7 +99,7 @@ class ProcessGroupManager:
         return torch.distributed.is_initialized()
 
     @staticmethod
-    def get_mesh() -> int:
+    def get_mesh() -> DeviceMesh:
         global _MESH
         return _MESH
 
@@ -121,8 +133,7 @@ class ProcessGroupManager:
         global _TENSOR_PARALLEL_MESH
 
         if _TENSOR_PARALLEL_MESH is None:
-            global _MESH
-            _TENSOR_PARALLEL_MESH = _MESH["tp"]
+            _TENSOR_PARALLEL_MESH = ProcessGroupManager.get_mesh()["tp"]
         return _TENSOR_PARALLEL_MESH
 
     @staticmethod
@@ -201,8 +212,7 @@ class ProcessGroupManager:
         global _DATA_PARALLEL_MESH
 
         if _DATA_PARALLEL_MESH is None:
-            global _MESH
-            _DATA_PARALLEL_MESH = _MESH["ddp", "fsdp"]
+            _DATA_PARALLEL_MESH = ProcessGroupManager.get_mesh()["ddp", "fsdp"]
         return _DATA_PARALLEL_MESH
 
     @staticmethod
@@ -255,6 +265,72 @@ class ProcessGroupManager:
 
     def __str__(self) -> str:
         return str(self.get_mesh())
+
+    # data parallel sharding
+    @staticmethod
+    def get_data_parallel_sharding_mesh() -> DeviceMesh:
+        global _DATA_PARALLEL_SHARDING_MESH
+
+        if _DATA_PARALLEL_SHARDING_MESH is None:
+            _DATA_PARALLEL_SHARDING_MESH = ProcessGroupManager.get_mesh()["fsdp"]
+        return _DATA_PARALLEL_SHARDING_MESH
+
+    @staticmethod
+    def get_data_parallel_sharding_group() -> ProcessGroup:
+        global _DATA_PARALLEL_SHARDING_GROUP
+
+        if _DATA_PARALLEL_SHARDING_GROUP is None:
+            _DATA_PARALLEL_SHARDING_GROUP = ProcessGroupManager.get_data_parallel_sharding_mesh().get_group()
+        return _DATA_PARALLEL_SHARDING_GROUP
+
+    @staticmethod
+    def get_data_parallel_sharding_rank() -> int:
+        global _DATA_PARALLEL_SHARDING_RANK
+
+        if _DATA_PARALLEL_SHARDING_RANK is None:
+            _DATA_PARALLEL_SHARDING_RANK = ProcessGroupManager.get_data_parallel_sharding_mesh().get_local_rank()
+        return _DATA_PARALLEL_SHARDING_RANK
+
+    @staticmethod
+    def get_data_parallel_sharding_world_size() -> int:
+        global _DATA_PARALLEL_SHARDING_WORLD_SIZE
+
+        if _DATA_PARALLEL_SHARDING_WORLD_SIZE is None:
+            _DATA_PARALLEL_SHARDING_WORLD_SIZE = ProcessGroupManager.get_data_parallel_sharding_mesh().size()
+        return _DATA_PARALLEL_SHARDING_WORLD_SIZE
+
+    # data parallel replication
+    @staticmethod
+    def get_data_parallel_replication_mesh() -> DeviceMesh:
+        global _DATA_PARALLEL_REPLICATION_MESH
+
+        if _DATA_PARALLEL_REPLICATION_MESH is None:
+            _DATA_PARALLEL_REPLICATION_MESH = ProcessGroupManager.get_mesh()["fsdp"]
+        return _DATA_PARALLEL_REPLICATION_MESH
+
+    @staticmethod
+    def get_data_parallel_replication_group() -> ProcessGroup:
+        global _DATA_PARALLEL_REPLICATION_GROUP
+
+        if _DATA_PARALLEL_REPLICATION_GROUP is None:
+            _DATA_PARALLEL_REPLICATION_GROUP = ProcessGroupManager.get_data_parallel_replication_mesh().get_group()
+        return _DATA_PARALLEL_REPLICATION_GROUP
+
+    @staticmethod
+    def get_data_parallel_replication_rank() -> int:
+        global _DATA_PARALLEL_REPLICATION_RANK
+
+        if _DATA_PARALLEL_REPLICATION_RANK is None:
+            _DATA_PARALLEL_REPLICATION_RANK = ProcessGroupManager.get_data_parallel_replication_mesh().get_local_rank()
+        return _DATA_PARALLEL_REPLICATION_RANK
+
+    @staticmethod
+    def get_data_parallel_replication_world_size() -> int:
+        global _DATA_PARALLEL_REPLICATION_WORLD_SIZE
+
+        if _DATA_PARALLEL_REPLICATION_WORLD_SIZE is None:
+            _DATA_PARALLEL_REPLICATION_WORLD_SIZE = ProcessGroupManager.get_data_parallel_replication_mesh().size()
+        return _DATA_PARALLEL_REPLICATION_WORLD_SIZE
 
     @staticmethod
     def destroy_process_groups() -> None:

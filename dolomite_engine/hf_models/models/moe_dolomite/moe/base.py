@@ -89,7 +89,7 @@ class SparseMoE(nn.Module):
             std /= math.sqrt(m_width)
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
-            out_features=config.num_experts,
+            out_features=self.num_experts,
             bias=False,
             std=std,
         )
@@ -98,7 +98,7 @@ class SparseMoE(nn.Module):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_fc = ParameterizedExperts(
-            num_experts=config.num_experts,
+            num_experts=self.num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
             add_bias=config.add_bias,
@@ -111,7 +111,7 @@ class SparseMoE(nn.Module):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedExperts(
-            num_experts=config.num_experts,
+            num_experts=self.num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
             add_bias=config.add_bias,
