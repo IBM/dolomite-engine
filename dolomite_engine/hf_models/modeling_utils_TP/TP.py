@@ -3,6 +3,7 @@ import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
+from torch.distributed.device_mesh import DeviceMesh
 
 from ...utils import ProcessGroupManager
 from ..utils import divide_if_divisible
@@ -51,26 +52,44 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
 
 
 def tensor_to_dtensor(
-    tensor: torch.Tensor, current_placement: Placement, desired_placement: Placement | None = None
+    tensor: torch.Tensor,
+    device_mesh: DeviceMesh,
+    current_placement: Placement | list[Placement],
+    desired_placement: Placement | list[Placement] | None = None,
+    run_check: bool = False,
 ) -> DTensor:
-    tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+    if isinstance(current_placement, Placement):
+        current_placement = [current_placement]
 
-    dtensor = DTensor.from_local(tensor, device_mesh=tp_mesh, run_check=False, placements=[current_placement])
+    dtensor = DTensor.from_local(tensor, device_mesh=device_mesh, run_check=run_check, placements=current_placement)
+
     if desired_placement is not None:
-        dtensor = dtensor.redistribute(device_mesh=tp_mesh, placements=[desired_placement])
+        if isinstance(desired_placement, Placement):
+            desired_placement = [desired_placement]
+
+        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement)
 
     return dtensor
 
 
 def dtensor_to_tensor(
-    dtensor: DTensor, desired_placement: Placement | None = None, grad_placement: Placement | None = None
+    dtensor: DTensor,
+    device_mesh: DeviceMesh | None = None,
+    desired_placement: Placement | list[Placement] | None = None,
+    grad_placement: Placement | list[Placement] | None = None,
 ) -> torch.Tensor:
     if desired_placement is not None:
-        dtensor = dtensor.redistribute(
-            device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[desired_placement]
-        )
+        if isinstance(desired_placement, Placement):
+            desired_placement = [desired_placement]
 
-    tensor = dtensor.to_local(grad_placements=None if grad_placement is None else [grad_placement])
+        assert device_mesh is not None
+
+        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement)
+
+    if grad_placement is not None and isinstance(grad_placement, Placement):
+        grad_placement = [grad_placement]
+
+    tensor = dtensor.to_local(grad_placements=grad_placement)
 
     return tensor
 
