@@ -1,6 +1,5 @@
 import torch
 import torch.distributed
-from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..communication import Communication
 from ..utils import ProcessGroupManager
