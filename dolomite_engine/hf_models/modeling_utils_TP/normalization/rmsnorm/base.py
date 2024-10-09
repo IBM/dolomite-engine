@@ -4,11 +4,11 @@ from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate
 
 from .....utils import ProcessGroupManager
-from ....modeling_utils import RMSNorm
+from ...dtensor_module import DTensorModule
 from ...TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
 
 
-class RMSNorm_TP(RMSNorm):
+class RMSNorm_TP(nn.RMSNorm, DTensorModule):
     def __init__(
         self,
         normalized_shape: int,
@@ -17,6 +17,8 @@ class RMSNorm_TP(RMSNorm):
         sequence_parallel: bool = False,
     ) -> None:
         super().__init__(normalized_shape, eps=eps)
+
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.weight = nn.Parameter(
             DTensor.from_local(
@@ -30,12 +32,12 @@ class RMSNorm_TP(RMSNorm):
         input_dtype = input.dtype
         input = input.float()
 
-        input = tensor_to_dtensor(input, current_placement=self.placement)
+        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.placement)
 
         variance = input.pow(2).mean(-1, keepdim=True)
         input = input * torch.rsqrt(variance + self.eps)
         input = self.weight * input.to(input_dtype)
 
-        input = dtensor_to_tensor(input, desired_placement=self.placement)
+        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.placement)
 
         return input

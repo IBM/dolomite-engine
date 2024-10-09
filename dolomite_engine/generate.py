@@ -6,7 +6,7 @@ import torch
 from .arguments import InferenceArgs, get_args
 from .checkpointing import load_checkpoint_for_inference, save_args
 from .data import BaseDataset, collate_fn, get_datasets_list
-from .enums import DatasetKeys, DatasetSplit, Mode, TuningMethod
+from .enums import DatasetSplit, Mode, TuningMethod
 from .model_wrapper import ModelWrapper, ModelWrapperForFinetuning
 from .utils import ProcessGroupManager, ProgressBar, setup_tf32
 
@@ -54,8 +54,8 @@ def generate(args: InferenceArgs, model: ModelWrapper, datasets_list: list[BaseD
                     output_file.write(
                         json.dumps(
                             {
-                                DatasetKeys.generated_text.value: generated_text_,
-                                DatasetKeys.num_generated_tokens.value: num_generated_tokens_,
+                                "generated_text": generated_text_,
+                                "num_generated_tokens": num_generated_tokens_,
                             }
                         )
                         + "\n"

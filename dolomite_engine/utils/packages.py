@@ -1,4 +1,8 @@
-from .logger import warn_rank_0
+import logging
+from importlib.metadata import distributions
+
+from .logger import log_rank_0, warn_rank_0
+from .parallel import run_rank_n
 
 
 try:
@@ -159,14 +163,38 @@ def is_einops_available() -> bool:
 
 
 try:
-    import scattermoe
+    import khd
 
-    _IS_SCATTERMOE_AVAILABLE = True
+    _IS_KHD_AVAILABLE = True
 except ImportError:
-    _IS_SCATTERMOE_AVAILABLE = False
+    _IS_KHD_AVAILABLE = False
 
-    warn_rank_0("scattermoe is not installed, install from https://github.com/shawntan/scattermoe")
+    warn_rank_0("kernel-hyperdrive is not installed, install from https://github.com/mayank31398/kernel-hyperdrive")
 
 
-def is_scattermoe_available() -> bool:
-    return _IS_SCATTERMOE_AVAILABLE
+def is_kernel_hyperdrive_available() -> bool:
+    return _IS_KHD_AVAILABLE
+
+
+try:
+    import causal_conv1d
+
+    _IS_CAUSAL_CONV1D_AVAILABLE = True
+except ImportError:
+    _IS_CAUSAL_CONV1D_AVAILABLE = False
+
+    warn_rank_0("causal-conv1d is not installed")
+
+
+def is_causal_conv1d_available() -> bool:
+    return _IS_CAUSAL_CONV1D_AVAILABLE
+
+
+@run_rank_n
+def log_environment() -> None:
+    packages = sorted(["{}=={}".format(d.metadata["Name"], d.version) for d in distributions()])
+
+    log_rank_0(logging.INFO, "------------------------ packages ------------------------")
+    for package in packages:
+        log_rank_0(logging.INFO, package)
+    log_rank_0(logging.INFO, "-------------------- end of packages ---------------------")

@@ -8,7 +8,7 @@ from torch.distributed.pipelining import PipelineStage
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
+from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
 from ..hf_models import divide_if_divisible
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
 from ..utils import ProcessGroupManager
@@ -25,11 +25,11 @@ class ModelWrapperForPretraining(ModelWrapper):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
+        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         distributed_backend: DistributedBackend,
-        random_seed: int,
         micro_batch_size: int,
         sequence_length: int,
         neft_alpha: float | None = None,
@@ -53,7 +53,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
-            random_seed (int): random seed to use for tensor parallel seed management
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -77,18 +76,18 @@ class ModelWrapperForPretraining(ModelWrapper):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
+            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             distributed_backend=distributed_backend,
-            random_seed=random_seed,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
         )
 
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: dict) -> dict:
         """forward function for a batch
 
         Args:
@@ -106,8 +105,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids)
 
-        model_outputs = self.model(**batch)
-        logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
+        model_outputs = self.model(**batch, return_dict=True)
+        logits: torch.Tensor = model_outputs.logits
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
@@ -116,17 +115,28 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if self.tp_world_size > 1:
             logits = tensor_to_dtensor(
-                logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+                logits,
+                device_mesh=self.tp_mesh,
+                current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
             )
-            labels = tensor_to_dtensor(labels, current_placement=Replicate())
+            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             if self.tensor_parallel_word_embeddings:
                 loss_context = loss_parallel
 
         with loss_context():
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
-        return loss
+        if hasattr(model_outputs, "aux_loss"):
+            aux_loss = model_outputs.aux_loss
+            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+
+            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
+        else:
+            loss = lm_loss
+            output = {"loss": loss}
+
+        return output
 
     def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
         batch = {}

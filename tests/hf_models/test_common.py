@@ -2,8 +2,8 @@ import json
 import os
 import tempfile
 from itertools import product
-from typing import Any
-from unittest import TestCase
+from typing import Any, Callable
+from unittest import TestCase, skipUnless
 
 import torch
 from torch.testing import assert_close
@@ -19,6 +19,9 @@ from dolomite_engine.hf_models import (
     import_from_huggingface,
 )
 from dolomite_engine.hf_models.config import CommonConfig
+
+
+_RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
 
 
 class TestCommons(TestCase):
@@ -149,7 +152,12 @@ class TestCommons(TestCase):
         return input_ids, attention_mask, labels
 
     def model_conversion_test(
-        self, dolomite_config: CommonConfig, model_type: str, device: torch.device, exact_match: bool = True
+        self,
+        dolomite_config: CommonConfig,
+        model_type: str,
+        device: torch.device,
+        exact_match: bool = True,
+        compare_loss: bool = True,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
@@ -198,17 +206,19 @@ class TestCommons(TestCase):
             rtol_bfloat16=0,
             atol_bfloat16=3e-7,
         )
-        self.assert_equal_tensors(
-            dolomite_loss,
-            hf_loss,
-            exact_match,
-            rtol_float32=0,
-            atol_float32=1e-5,
-            rtol_float16=0,
-            atol_float16=1e-5,
-            rtol_bfloat16=0,
-            atol_bfloat16=1e-5,
-        )
+
+        if compare_loss:
+            self.assert_equal_tensors(
+                dolomite_loss,
+                hf_loss,
+                exact_match,
+                rtol_float32=0,
+                atol_float32=1e-5,
+                rtol_float16=0,
+                atol_float16=1e-5,
+                rtol_bfloat16=0,
+                atol_bfloat16=1e-5,
+            )
 
     @staticmethod
     def compare_saved_models(path1: str, path2: str) -> bool:
@@ -285,3 +295,7 @@ class TestCommons(TestCase):
                 assert_close(x, y, rtol=rtol_bfloat16, atol=atol_bfloat16)
             else:
                 raise ValueError(f"unexpected dtype ({dtype})")
+
+    @staticmethod
+    def slow_test(func: Callable) -> Callable:
+        return skipUnless(_RUN_SLOW, "skipping slow test since RUN_SLOW=True is not set in the environment")(func)

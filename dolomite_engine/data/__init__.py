@@ -16,7 +16,7 @@ from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
 from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
 from .sst2 import SST2Dataset
-from .utils import collate_fn, get_next_batch, infinite_iterator
+from .utils import collate_fn, custom_iterator, get_next_batch
 
 
 _DATASETS_LIST = {
@@ -203,6 +203,7 @@ def _get_dispatching_dataloader(
             eos_token_id=tokenizer.eos_token_id,
             is_encoder_decoder=is_encoder_decoder,
             use_padding_free_transformer=args.model_args.use_padding_free_transformer,
+            pad_to_multiple_of=ProcessGroupManager.get_tensor_parallel_world_size(),
         ),
         source_broadcast_mapping=source_broadcast_mapping,
         broadcast_world_size=num_ranks_per_node,
@@ -267,6 +268,7 @@ def _get_non_dispatching_dataloader(
             eos_token_id=tokenizer.eos_token_id,
             is_encoder_decoder=is_encoder_decoder,
             use_padding_free_transformer=args.model_args.use_padding_free_transformer,
+            pad_to_multiple_of=ProcessGroupManager.get_tensor_parallel_world_size(),
         ),
     )
 

@@ -3,25 +3,24 @@ from collections import defaultdict
 import torch.nn as nn
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteModel, GPTDolomitePreTrainedModel
 from .config import GPTCrossLayerConfig
 from .layer import GPTCrossLayerBlock
 
 
-class GPTCrossLayerPreTrainedModel(GPTDolomitePreTrainedModel):
+class GPTCrossLayerPreTrainedModel(PreTrainedModelMixin):
     config_class = GPTCrossLayerConfig
+    layer_class = GPTCrossLayerBlock
     _no_split_modules = ["GPTCrossLayerBlock"]
 
-    def __init__(self, config: GPTDolomiteConfig, *args, **kwargs):
-        GPTDolomitePreTrainedModel.__init__(self, config, *args, **kwargs)
+    def __init__(self, config: GPTCrossLayerConfig, *args, **kwargs):
         self.sharing_pattern = config.sharing_pattern
+        super().__init__(config, *args, **kwargs)
 
 
-class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
-    def __init__(self, config: GPTCrossLayerConfig, **kwargs) -> None:
-        GPTCrossLayerPreTrainedModel.__init__(self, config, **kwargs)
-
+class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
+    def _init_model(self, config: GPTCrossLayerConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
@@ -58,7 +57,7 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, GPTDolomiteModel):
 
         self.h = nn.ModuleList(
             [
-                GPTCrossLayerBlock(
+                self.layer_class(
                     config,
                     normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,

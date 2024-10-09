@@ -1,6 +1,6 @@
 import shutil
 
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig, GPTBigCodeForCausalLM
 
 from ..enums import AttentionHeadType, PositionEmbeddingType
 from ..models import GPTDolomiteConfig
@@ -100,6 +100,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
         pad_token_id=config.pad_token_id,
+        architectures=[GPTBigCodeForCausalLM.__name__],
     )
 
     return original_config

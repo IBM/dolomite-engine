@@ -5,8 +5,8 @@ import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode
-from ..hf_models import get_tensor_parallel_class, is_custom_model, is_tensor_parallel_compatible_model
+from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
+from ..hf_models import get_tensor_parallel_class, is_custom_model
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
@@ -22,11 +22,11 @@ class ModelWrapper(nn.Module):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
+        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         distributed_backend: DistributedBackend,
-        random_seed: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -46,7 +46,6 @@ class ModelWrapper(nn.Module):
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
-            random_seed (int): random seed to use for tensor parallel seed management
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
@@ -62,6 +61,7 @@ class ModelWrapper(nn.Module):
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
         self.attention_implementation = attention_implementation
+        self.moe_implementation = moe_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
         self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
@@ -79,11 +79,8 @@ class ModelWrapper(nn.Module):
         self._setup_config()
 
         if self.tp_world_size > 1:
+            self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_tensor_parallel_class(self.config.model_type)
-
-            assert is_tensor_parallel_compatible_model(
-                self.model_class, self.config.model_type
-            ), "tensor parallel is not supported with this model"
 
         if self.use_padding_free_transformer:
             assert is_custom_model(
@@ -146,7 +143,7 @@ class ModelWrapper(nn.Module):
         else:
             for key in list(state_dict.keys()):
                 assert key.startswith("model.")
-                state_dict[key.lstrip("model.")] = state_dict.pop(key)
+                state_dict[_remove_first_occurance(key, "model.")] = state_dict.pop(key)
 
             self.config.save_pretrained(save_path)
             SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -161,6 +158,7 @@ class ModelWrapper(nn.Module):
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
         self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
+        self.router_aux_loss_coef = getattr(self.config, "router_aux_loss_coef", None)
 
         log_rank_0(logging.INFO, self.config)
         log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
@@ -179,6 +177,8 @@ class ModelWrapper(nn.Module):
 
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if self.moe_implementation is not None:
+            model_kwargs["moe_implementation"] = self.moe_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
         if self.tensor_parallel_word_embeddings:
@@ -270,3 +270,13 @@ class ModelWrapper(nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
+
+    def has_teacher_model(self) -> bool:
+        return False
+
+
+def _remove_first_occurance(string: str, substring: str) -> str:
+    if string.startswith(substring):
+        string = string[len(substring) :]
+
+    return string

@@ -7,6 +7,7 @@
 <!-- Topic -->
 [Efficient Training]: https://img.shields.io/static/v1?label=&message=Efficient%20Training&color=blueviolet
 [Efficient Inference]: https://img.shields.io/static/v1?label=&message=Efficient%20Inference&color=blueviolet
+[Learning Rate Scheduler]: https://img.shields.io/static/v1?label=&message=Learning%20Rate%20Scheduler&color=blueviolet
 [Instruction Finetuning]: https://img.shields.io/static/v1?label=&message=Instruction%20Finetuning&color=blueviolet
 [Mixture of Experts]: https://img.shields.io/static/v1?label=&message=Mixture%20of%20Experts&color=blueviolet
 [Model Architecture]: https://img.shields.io/static/v1?label=&message=Model%20Architecture&color=blueviolet
@@ -19,15 +20,15 @@ _Mayank Mishra_
 1. [Reducing Transformer Key-Value Cache Size with Cross-Layer Attention](https://arxiv.org/abs/2405.12981)  
 _William Brandon, Mayank Mishra, Aniruddha Nrusimha, Rameswar Panda, Jonathan Ragan Kelly_  
 ![image][Efficient Inference] ![image][Model Architecture]
-1. [Dense Training, Sparse Inference: Rethinking Training of Mixture-of-Experts Language Models](https://arxiv.org/abs/2404.05567)  
-_Bowen Pan, Yikang Shen, Haokun Liu, Mayank Mishra, Gaoyuan Zhang, Aude Oliva, Colin Raffel, Rameswar Panda_  
-![image][Mixture of Experts] ![image][Efficient Inference] ![image][Model Architecture]
 1. [NEFTune: Noisy Embeddings Improve Instruction Finetuning](https://arxiv.org/abs/2310.05914)  
 _Neel Jain, Ping-yeh Chiang, Yuxin Wen, John Kirchenbauer, Hong-Min Chu, Gowthami Somepalli, Brian R. Bartoldson, Bhavya Kailkhura, Avi Schwarzschild, Aniruddha Saha, Micah Goldblum, Jonas Geiping, Tom Goldstein_  
 ![image][Instruction Finetuning]
 1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
 _Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
 ![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
+1. [Power scheduler: a batch size and token number agnostic learning rate scheduler](https://arxiv.org/abs/2408.13359)  
+_Yikang Shen, Matthew Stallone, Mayank Mishra, Gaoyuan Zhang, Shawn Tan, Aditya Prasad, Adriana Meza Soria, David D. Cox, Rameswar Panda_  
+![image][Learning Rate Scheduler]
 1. [Scattered Mixture-of-Experts Implementation](https://arxiv.org/abs/2403.08245)  
 _Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_  
 ![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
@@ -226,7 +227,7 @@ If you find this repository useful, please consider citing it in your research:
     author = {Mishra, Mayank},
     month = jun,
     title = {{Dolomite Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},
-    url = {https://github.com/ibm-granite/dolomite-engine},
+    url = {https://github.com/ibm/dolomite-engine},
     year = {2024}
 }
 ```
