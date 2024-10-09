@@ -133,8 +133,7 @@ class ProcessGroupManager:
         global _TENSOR_PARALLEL_MESH
 
         if _TENSOR_PARALLEL_MESH is None:
-            global _MESH
-            _TENSOR_PARALLEL_MESH = _MESH["tp"]
+            _TENSOR_PARALLEL_MESH = ProcessGroupManager.get_mesh()["tp"]
         return _TENSOR_PARALLEL_MESH
 
     @staticmethod
@@ -213,8 +212,7 @@ class ProcessGroupManager:
         global _PIPELINE_PARALLEL_MESH
 
         if _PIPELINE_PARALLEL_MESH is None:
-            global _MESH
-            _PIPELINE_PARALLEL_MESH = _MESH["pp"]
+            _PIPELINE_PARALLEL_MESH = ProcessGroupManager.get_mesh()["pp"]
         return _PIPELINE_PARALLEL_MESH
 
     @staticmethod
@@ -247,8 +245,7 @@ class ProcessGroupManager:
         global _DATA_PARALLEL_MESH
 
         if _DATA_PARALLEL_MESH is None:
-            global _MESH
-            _DATA_PARALLEL_MESH = _MESH["ddp", "fsdp"]
+            _DATA_PARALLEL_MESH = ProcessGroupManager.get_mesh()["ddp", "fsdp"]
         return _DATA_PARALLEL_MESH
 
     @staticmethod
