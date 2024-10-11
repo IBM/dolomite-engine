@@ -37,7 +37,7 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
     elif dim == 1:
         output = slice[:, start_index:end_index]
     elif dim == 2:
-        output = slice[..., start_index:end_index]
+        output = slice[:, :, start_index:end_index]
 
     return output
 
