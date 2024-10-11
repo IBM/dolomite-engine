@@ -5,7 +5,14 @@ import torch
 import torch.distributed
 from transformers import set_seed
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, GPTDolomiteForCausalLM_TP
+from dolomite_engine.hf_models import (
+    AttentionHeadType,
+    GPTDolomiteConfig,
+    GPTDolomiteForCausalLM_TP,
+    MoEDolomiteConfig,
+    MoEDolomiteForCausalLM_TP,
+    get_tensor_parallel_class,
+)
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
@@ -20,6 +27,7 @@ parser.add_argument("--tmp-path", type=str)
 parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--use-padding-free-transformer", action="store_true")
 parser.add_argument("--sequence-parallel", action="store_true")
+parser.add_argument("--model-type", type=str)
 args = parser.parse_args()
 
 set_seed(42)
@@ -32,15 +40,30 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-config = GPTDolomiteConfig(
-    attention_head_type=args.attention_head_type,
-    n_layer=1,
-    position_embedding_type=args.position_embedding_type,
-    num_key_value_heads=num_key_value_heads,
-    add_bias=False,
-    n_embd=128,
-    n_head=16,
-)
+kwargs = {}
+if args.model_type == GPTDolomiteConfig.model_type:
+    config = GPTDolomiteConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=1,
+        position_embedding_type=args.position_embedding_type,
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+    )
+elif args.model_type == MoEDolomiteConfig.model_type:
+    config = MoEDolomiteConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=1,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+        activation_function=args.activation_function,
+    )
+    kwargs["moe_implementation"] = "scattermoe"
+
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
@@ -60,7 +83,8 @@ torch.distributed.barrier()
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
-    model_tp = GPTDolomiteForCausalLM_TP._from_config(
+
+    model_tp = get_tensor_parallel_class(args.model_type)._from_config(
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
