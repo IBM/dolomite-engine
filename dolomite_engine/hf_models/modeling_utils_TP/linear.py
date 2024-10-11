@@ -121,8 +121,6 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
-        self.sequence_parallel = sequence_parallel
-
         self.in_features_per_device = divide_if_divisible(
             in_features,
             self.tp_world_size,

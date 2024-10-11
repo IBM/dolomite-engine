@@ -86,23 +86,21 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
         k: int,
         sorted_expert_idxs: torch.Tensor,
         sorted_scattered_idxs: torch.Tensor,
-        padded_block_idxs: torch.Tensor,
         expert_offsets: torch.Tensor,
         gates: torch.Tensor | None = None,
         grouped_in: bool = False,
         grouped_out: bool = False,
     ) -> torch.Tensor:
         return scattered_experts(
-            input,
-            self.weight.to_local().permute(1, 2, 0),
-            k,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-            gates,
-            grouped_in,
-            grouped_out,
+            inputs=input,
+            expert_weights=self.weight.to_local().permute(1, 2, 0),
+            k=k,
+            sorted_expert_idxs=sorted_expert_idxs,
+            sorted_scattered_idxs=sorted_scattered_idxs,
+            expert_offsets=expert_offsets,
+            gates=gates,
+            grouped_in=grouped_in,
+            grouped_out=grouped_out,
         )
 
 

@@ -54,4 +54,4 @@ distributed_args:
   tensor_parallel_word_embeddings: true
   gradient_checkpointing_method: block
   gradient_checkpointing_args:
-    checkpoint_every: 10
+    num_blocks: 3

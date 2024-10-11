@@ -1,5 +1,6 @@
 import torch
 import torch.distributed
+import torch.distributed._functional_collectives as funcol
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
@@ -57,7 +58,7 @@ def tensor_to_dtensor(
         if isinstance(desired_placement, Placement):
             desired_placement = [desired_placement]
 
-        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement)
+        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement, async_op=False)
 
     return dtensor
 
@@ -74,7 +75,7 @@ def dtensor_to_tensor(
 
         assert device_mesh is not None
 
-        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement)
+        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement, async_op=False)
 
     if grad_placement is not None and isinstance(grad_placement, Placement):
         grad_placement = [grad_placement]
@@ -111,3 +112,92 @@ def get_module_placements(use_padding_free_transformer: bool, sequence_parallel:
         placement = Replicate()
 
     return placement
+
+
+def _tensor_parallel_all_reduce(x: torch.Tensor) -> torch.Tensor:
+    if ProcessGroupManager.get_tensor_parallel_world_size() == 1:
+        return x
+
+    return funcol.wait_tensor(
+        funcol.all_reduce(x, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_group())
+    )
+
+
+def _tensor_parallel_all_gather(x: torch.Tensor, dim: int) -> torch.Tensor:
+    if ProcessGroupManager.get_tensor_parallel_world_size() == 1:
+        return x
+
+    return funcol.wait_tensor(
+        funcol.all_gather_tensor(x, gather_dim=dim, group=ProcessGroupManager.get_tensor_parallel_group())
+    )
+
+
+def _tensor_parallel_reduce_scatter(x: torch.Tensor, dim: int) -> torch.Tensor:
+    if ProcessGroupManager.get_tensor_parallel_world_size() == 1:
+        return x
+
+    return funcol.wait_tensor(
+        funcol.reduce_scatter_tensor(
+            x, reduceOp="sum", scatter_dim=dim, group=ProcessGroupManager.get_tensor_parallel_group()
+        )
+    )
+
+
+class _CopyToTensorParallelRegion(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor) -> torch.Tensor:
+        return x
+
+    @staticmethod
+    def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
+        return _tensor_parallel_all_reduce(x_grad)
+
+
+class _ReduceFromTensorParallelRegion(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor) -> torch.Tensor:
+        return _tensor_parallel_all_reduce(x)
+
+    @staticmethod
+    def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
+        return x_grad
+
+
+class _AllGatherFromSequenceParallelRegion(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, dim: int) -> torch.Tensor:
+        ctx.dim = dim
+        return _tensor_parallel_all_gather(x, dim=dim)
+
+    @staticmethod
+    def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
+        dim = ctx.dim
+        return _tensor_parallel_reduce_scatter(x_grad, dim=dim), None
+
+
+class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, dim: int) -> torch.Tensor:
+        ctx.dim = dim
+        return _tensor_parallel_reduce_scatter(x, dim=dim)
+
+    @staticmethod
+    def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
+        dim = ctx.dim
+        return _tensor_parallel_all_gather(x_grad, dim=dim), None
+
+
+def copy_to_tensor_parallel_region(x: torch.Tensor) -> torch.Tensor:
+    return _CopyToTensorParallelRegion.apply(x)
+
+
+def reduce_from_tensor_parallel_region(x: torch.Tensor) -> torch.Tensor:
+    return _ReduceFromTensorParallelRegion.apply(x)
+
+
+def all_gather_from_sequence_parallel_region(x: torch.Tensor, dim: int) -> torch.Tensor:
+    return _AllGatherFromSequenceParallelRegion.apply(x, dim)
+
+
+def reduce_scatter_to_sequence_parallel_region(x: torch.Tensor, dim: int) -> torch.Tensor:
+    return _ReduceScatterToSequenceParallelRegion.apply(x, dim)
