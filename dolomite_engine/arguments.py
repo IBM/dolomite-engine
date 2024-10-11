@@ -346,6 +346,10 @@ class DistributedArgs(BaseArgs):
     fsdp_algorithm: int = 1
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
+    # total number of pipeline stages
+    num_pipeline_stages: int = 1
+    # pipeline parallel shedule to use
+    pipeline_parallel_schedule: str = ""
 
     def model_post_init(self, __context: Any) -> None:
         if self.zero_quantized_weights or self.zero_quantized_gradients:

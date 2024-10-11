@@ -6,7 +6,6 @@ from .linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 from .lm_head import LMHead_TP
 from .normalization import get_normalization_function_TP
 from .position_embedding import Alibi_TP
-from .PP import get_num_stages_on_current_rank
 from .TP import (
     all_gather_from_sequence_parallel_region,
     copy_to_tensor_parallel_region,
