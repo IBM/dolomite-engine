@@ -234,6 +234,18 @@ class ProcessGroupManager:
             _PIPELINE_PARALLEL_RANK = ProcessGroupManager.get_pipeline_parallel_mesh().get_local_rank()
         return _PIPELINE_PARALLEL_RANK
 
+    @contextmanager
+    @staticmethod
+    def set_dummy_pipeline_parallel_rank(rank: int):
+        global _PIPELINE_PARALLEL_RANK
+
+        original_rank = _PIPELINE_PARALLEL_RANK
+        _PIPELINE_PARALLEL_RANK = rank
+
+        yield
+
+        _PIPELINE_PARALLEL_RANK = original_rank
+
     @staticmethod
     def get_pipeline_parallel_world_size() -> int:
         global _PIPELINE_PARALLEL_WORLD_SIZE
@@ -241,6 +253,18 @@ class ProcessGroupManager:
         if _PIPELINE_PARALLEL_WORLD_SIZE is None:
             _PIPELINE_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_pipeline_parallel_mesh().size()
         return _PIPELINE_PARALLEL_WORLD_SIZE
+
+    @contextmanager
+    @staticmethod
+    def set_dummy_pipeline_parallel_world_size(world_size: int):
+        global _PIPELINE_PARALLEL_WORLD_SIZE
+
+        original_world_size = _PIPELINE_PARALLEL_WORLD_SIZE
+        _PIPELINE_PARALLEL_WORLD_SIZE = world_size
+
+        yield
+
+        _PIPELINE_PARALLEL_WORLD_SIZE = original_world_size
 
     # data parallel
     @staticmethod
