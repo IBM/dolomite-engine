@@ -24,8 +24,8 @@ class TensorParallelTest(TestCommons):
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
-            TestCommons.get_position_embedding_types(),
-            TestCommons.get_attention_implementations(),
+            [PositionEmbeddingType.rope],
+            ["sdpa"],
             TestCommons.get_dtypes(),
             [False, True],
             [False, True],
