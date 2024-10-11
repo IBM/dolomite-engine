@@ -2,12 +2,11 @@ import logging
 
 import torch
 import torch.nn as nn
-from torch.distributed.pipelining.schedules import PipelineScheduleMulti, PipelineScheduleSingle
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.integrations import HfDeepSpeedConfig
 
 from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
-from ..hf_models import get_tensor_parallel_class, is_custom_model
+from ..hf_models import get_model_parallel_class, is_custom_model
 from ..utils import (
     ProcessGroupManager,
     SafeTensorsWeightsManager,
@@ -35,7 +34,7 @@ class ModelWrapper(nn.Module):
         sequence_parallel: bool,
         distributed_backend: DistributedBackend,
         num_pipeline_stages: int,
-        pipeline_schedule: PipelineScheduleSingle | PipelineScheduleMulti,
+        pipeline_stage_id: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -56,7 +55,7 @@ class ModelWrapper(nn.Module):
             sequence_parallel (bool): whether to use sequence parallel
             distributed_backend (DistributedBackend): distributed backend to use for model
             num_pipeline_stages (int): number of stages for the pipeline
-            pipeline_schedule (PipelineScheduleSingle | PipelineScheduleMulti): pipeline schedule to use
+            pipeline_stage_id (int): current pipeline stage id
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
@@ -85,19 +84,21 @@ class ModelWrapper(nn.Module):
         self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
         self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
 
+        use_model_parallelism = self.tp_world_size > 1 or self.pp_world_size > 1
+
         self.distributed_backend = distributed_backend if self.mode == Mode.training else None
 
         self._setup_config()
 
-        if self.tp_world_size > 1:
+        if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-            self.model_class = get_tensor_parallel_class(self.config.model_type)
+            self.model_class = get_model_parallel_class(self.config.model_type)
 
-        self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
-        self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
+        self.num_pipeline_stages = num_pipeline_stages
+        self.pipeline_stage_id = pipeline_stage_id
 
-        self.num_stages, self.stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
-            num_pipeline_stages, pipeline_schedule
+        _, self.stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
+            self.num_pipeline_stages, self.pipeline_schedule
         )
 
         if self.use_padding_free_transformer:
@@ -206,8 +207,8 @@ class ModelWrapper(nn.Module):
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
         if self.pp_world_size > 1:
-            model_kwargs["num_pp_stages"] = self.pp_world_size
-            model_kwargs["pp_stage"] = self.pp_rank
+            model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
+            model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:

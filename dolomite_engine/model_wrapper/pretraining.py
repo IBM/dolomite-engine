@@ -32,6 +32,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         distributed_backend: DistributedBackend,
         micro_batch_size: int,
         sequence_length: int,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -55,6 +57,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             distributed_backend (DistributedBackend): distributed backend to use for model
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
@@ -81,6 +85,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             distributed_backend=distributed_backend,
+            num_pipeline_stages=num_pipeline_stages,
+            pipeline_stage_id=pipeline_stage_id,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
@@ -259,19 +265,3 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
-
-    def _stage_ids_on_pipeline_parallel_rank(self, num_stages: int, style: str = "loop") -> tuple[int]:
-        stages_per_rank = divide_if_divisible(
-            num_stages,
-            self.pp_world_size,
-            f"num_stages {num_stages} must be evenly divisible by pp_size {self.pp_world_size}",
-        )
-
-        if style == "loop":
-            stage_ids = tuple(self.pp_rank + s * self.pp_world_size for s in range(stages_per_rank))
-        elif style == "v":
-            assert stages_per_rank == 2, f"v schedules assume 2 stages per rank, got {stages_per_rank}"
-            stage_v_pairs = list(zip(range(self.pp_world_size), range(num_stages - 1, self.pp_world_size - 1, -1)))
-            stage_ids = stage_v_pairs[self.pp_rank]
-
-        return stage_ids

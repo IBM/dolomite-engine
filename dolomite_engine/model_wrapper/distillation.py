@@ -27,6 +27,8 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         distributed_backend: DistributedBackend,
         micro_batch_size: int,
         sequence_length: int,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         teacher_model_name: str | None,
         teacher_model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         teacher_model_dtype: torch.dtype,
@@ -52,6 +54,8 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             distributed_backend (DistributedBackend): distributed backend to use for model
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
@@ -77,12 +81,15 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
+            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             distributed_backend=distributed_backend,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
+            num_pipeline_stages=num_pipeline_stages,
+            pipeline_stage_id=pipeline_stage_id,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
