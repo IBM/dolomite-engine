@@ -214,7 +214,7 @@ def get_model_tflops(
     forward_flops = attention_flops + mlp_flops
 
     if gradient_checkpointing_method == GradientCheckpointingMethod.block:
-        num_layers_checkpointed = l // gradient_checkpointing_args.get("checkpoint_every", 1)
+        num_layers_checkpointed = gradient_checkpointing_args.get("num_blocks", l)
         fraction_of_layers_checkpointed = num_layers_checkpointed / l
         backward_flops = (2 + fraction_of_layers_checkpointed) * forward_flops
     else:

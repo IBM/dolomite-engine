@@ -11,7 +11,7 @@ from .base import ParameterizedExperts, SparseMoE
 
 
 if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import padded_block_indices, scattered_experts
+    from khd.kernels.scattermoe.triton_implementation import expert_boundaries, scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -37,7 +37,6 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         k: int,
         sorted_expert_idxs: torch.Tensor,
         sorted_scattered_idxs: torch.Tensor,
-        padded_block_idxs: torch.Tensor,
         expert_offsets: torch.Tensor,
         gates: torch.Tensor | None = None,
         grouped_in: bool = False,
@@ -49,7 +48,6 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
             sorted_scattered_idxs=sorted_scattered_idxs,
-            padded_block_idxs=padded_block_idxs,
             expert_offsets=expert_offsets,
             gates=gates,
             grouped_in=grouped_in,
@@ -120,14 +118,13 @@ class ScatterMoE(SparseMoE):
     ) -> torch.Tensor:
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-            padded_block_idxs, expert_offsets = padded_block_indices(sorted_expert_idxs, self.num_experts)
+            expert_offsets = expert_boundaries(sorted_expert_idxs, self.num_experts)
 
         hidden_states = self.c_fc(
             hidden_states,
             self.top_k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
-            padded_block_idxs,
             expert_offsets,
             grouped_out=True,
         )
@@ -137,7 +134,6 @@ class ScatterMoE(SparseMoE):
             1,
             sorted_expert_idxs,
             sorted_scattered_idxs,
-            padded_block_idxs,
             expert_offsets,
             grouped_in=True,
             gates=router_weights,
