@@ -24,7 +24,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         self.vocab_size = config.vocab_size
         self.transformer = self.base_model_class(config, **kwargs)
 
-        if not self._tied_word_embeddings:
+        if not self._tied_word_embeddings and self.is_last_stage:
             self.lm_head = LMHead_TP(
                 self.vocab_size,
                 config.n_embd,
@@ -33,8 +33,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 sequence_parallel=self.sequence_parallel,
             )
 
-        self.m_width = config.m_width
-        self.upcast_logits_for_loss = config.upcast_logits_for_loss
+            self.m_width = config.m_width
+            self.upcast_logits_for_loss = config.upcast_logits_for_loss
 
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
@@ -57,20 +57,21 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple | CausalLMOutputWithPast:
-        input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            position_ids=position_ids,
-            token_type_ids=token_type_ids,
-            labels=labels,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-        )
+    ) -> CausalLMOutputWithPast | torch.Tensor:
+        if self.is_first_stage:
+            input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                position_ids=position_ids,
+                token_type_ids=token_type_ids,
+                labels=labels,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+            )
 
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids,
@@ -85,28 +86,33 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+        if self.is_last_stage:
+            lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
-        if self.m_width is not None:
-            lm_logits = lm_logits / self.m_width
+            if self.m_width is not None:
+                lm_logits = lm_logits / self.m_width
 
-        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+            loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
-        if output_parallel_lm_logits:
-            assert self.tensor_parallel_word_embeddings
+            if output_parallel_lm_logits:
+                assert self.tensor_parallel_word_embeddings
+            else:
+                if self.tensor_parallel_word_embeddings:
+                    # all gather
+                    lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+                    lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+
+            output = CausalLMOutputWithPast(
+                loss=loss,
+                logits=lm_logits,
+                past_key_values=transformer_outputs.past_key_values,
+                hidden_states=transformer_outputs.hidden_states,
+                attentions=transformer_outputs.attentions,
+            )
         else:
-            if self.tensor_parallel_word_embeddings:
-                # all gather
-                lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-                lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+            output = transformer_outputs.last_hidden_state
 
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=lm_logits,
-            past_key_values=transformer_outputs.past_key_values,
-            hidden_states=transformer_outputs.hidden_states,
-            attentions=transformer_outputs.attentions,
-        )
+        return output
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return (
