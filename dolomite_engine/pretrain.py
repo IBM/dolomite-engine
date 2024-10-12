@@ -18,7 +18,7 @@ from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import wrap_model_list_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model_list
-from .optimization import get_optimizer_list, get_scheduler_list, log_optimizer_list
+from .optimization import get_optimizer_list, get_scheduler_list
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,

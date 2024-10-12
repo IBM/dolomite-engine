@@ -13,8 +13,8 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
 from .distributed import wrap_model_list_for_distributed_training
 from .enums import DatasetSplit, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForFinetuning, get_model_list, log_model_list
-from .optimization import get_optimizer_list, get_scheduler_list, log_optimizer_list
+from .model_wrapper import ModelWrapperForFinetuning, get_model_list
+from .optimization import get_optimizer_list, get_scheduler_list
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
