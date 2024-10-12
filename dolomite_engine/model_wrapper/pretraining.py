@@ -68,10 +68,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         self.reset_attention_mask = reset_attention_mask
         self.reset_position_ids = reset_position_ids
 
-        if self.pp_world_size > 1:
-            assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
-            assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
-
         super().__init__(
             mode=mode,
             model_name=model_name,
@@ -92,6 +88,10 @@ class ModelWrapperForPretraining(ModelWrapper):
             additional_special_tokens=additional_special_tokens,
         )
 
+        if self.pp_world_size > 1:
+            assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
+            assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
+
     def forward(self, batch: dict) -> dict:
         """forward function for a batch
 
@@ -111,6 +111,14 @@ class ModelWrapperForPretraining(ModelWrapper):
         batch = self._prepare_model_inputs(input_ids)
 
         model_outputs = self.model(**batch, return_dict=True)
+
+        # without pipeline parallel, we compute the loss outside
+        if self.pp_world_size == 1:
+            model_outputs = self.get_loss(model_outputs, labels)
+
+        return model_outputs
+
+    def get_loss(self, model_outputs, labels: torch.Tensor) -> torch.Tensor:
         logits: torch.Tensor = model_outputs.logits
 
         if self.upcast_logits_for_loss:
@@ -231,7 +239,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         else:
             tokens = tokens.to(torch.cuda.current_device())
 
-        input_ids = tokens[:, :-1] if self.pipeline_stage_id == 0 else None
+        # for first stage we pass input_ids and for other stages its the hidden_state
+        input_ids = tokens[:, :-1] if self.pipeline_stage_id == 0 else tokens
         labels = None
 
         return input_ids, labels
