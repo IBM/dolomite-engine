@@ -212,6 +212,8 @@ class ModelWrapperForPretraining(ModelWrapper):
     def _setup_model(self) -> None:
         super()._setup_model()
 
+        assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
+
         if self.use_padding_free_transformer:
             if not self.reset_attention_mask:
                 self.register_buffer(
