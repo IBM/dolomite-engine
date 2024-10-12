@@ -47,6 +47,145 @@ def train_step(
         MetricsTrackingDict: metrics to track
     """
 
+    if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
+        metrics_tracker = _train_step_with_pipeline_parallel(
+            model=model_list[0],
+            optimizer=optimizer_list[0],
+            lr_scheduler=lr_scheduler_list[0],
+            train_dataloader=train_dataloader,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_clipping=gradient_clipping,
+            forward_context=forward_context,
+            backward_context=backward_context,
+            sync_every_gradient_accumulation_step=sync_every_gradient_accumulation_step,
+        )
+    else:
+        pass
+
+    return metrics_tracker
+
+
+def _train_step_with_pipeline_parallel(
+    model: ModelWrapper,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
+    train_dataloader: ResumableDataLoader,
+    gradient_accumulation_steps: int,
+    gradient_clipping: float,
+    forward_context: AbstractContextManager,
+    backward_context: AbstractContextManager,
+    sync_every_gradient_accumulation_step: bool,
+) -> MetricsTrackingDict:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model (ModelWrapper): model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LamdaLR): learning rate scheduler
+        train_dataloader (ResumableDataLoader): training dataloader
+        gradient_accumulation_steps (int): gradient accumulation steps
+        gradient_clipping (float): gradient clipping value
+        forward_context (AbstractContextManager): a context that is used for every model forward call
+        backward_context (AbstractContextManager): a context that is used for every model backward call
+        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+
+    Returns:
+        MetricsTrackingDict: metrics to track
+    """
+
+    fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+    no_sync = nullcontext
+    if not sync_every_gradient_accumulation_step:
+        if fsdp_algorithm == 1:
+            no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
+
+    metrics_tracker = MetricsTrackingDict({})
+    grad_norm = None
+    optimizer.zero_grad()
+
+    with no_sync():
+        for _ in range(gradient_accumulation_steps - 1):
+            batch = get_next_batch(train_dataloader)
+            with forward_context():
+                loss_micro_step_dict = model(batch)
+
+            with torch.inference_mode():
+                metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+            # compute gradients
+            with backward_context():
+                loss_micro_step_dict["loss"].backward()
+
+    if fsdp_algorithm == 2:
+        model.set_requires_gradient_sync(True)
+
+    batch = get_next_batch(train_dataloader)
+    with forward_context():
+        loss_micro_step_dict = model(batch)
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+    # compute gradients
+    with backward_context():
+        loss_micro_step_dict["loss"].backward()
+
+    if gradient_clipping is not None:
+        if fsdp_algorithm == 1:
+            grad_norm = model.clip_grad_norm_(gradient_clipping)
+        else:
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+
+    optimizer.step()
+    lr_scheduler.step()
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker / gradient_accumulation_steps
+
+        metrics_tracker["grad_norm"] = (
+            torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
+        )
+
+        for key in metrics_tracker:
+            if isinstance(metrics_tracker[key], DTensor):
+                metrics_tracker[key] = metrics_tracker[key].to_local()
+
+        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+
+    return metrics_tracker
+
+
+def _train_step_without_pipeline_parallel(
+    model: ModelWrapper,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
+    train_dataloader: ResumableDataLoader,
+    gradient_accumulation_steps: int,
+    gradient_clipping: float,
+    forward_context: AbstractContextManager,
+    backward_context: AbstractContextManager,
+    sync_every_gradient_accumulation_step: bool,
+) -> MetricsTrackingDict:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model (ModelWrapper): model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LamdaLR): learning rate scheduler
+        train_dataloader (ResumableDataLoader): training dataloader
+        gradient_accumulation_steps (int): gradient accumulation steps
+        gradient_clipping (float): gradient clipping value
+        forward_context (AbstractContextManager): a context that is used for every model forward call
+        backward_context (AbstractContextManager): a context that is used for every model backward call
+        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+
+    Returns:
+        MetricsTrackingDict: metrics to track
+    """
+
     fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
 
     no_sync = nullcontext
