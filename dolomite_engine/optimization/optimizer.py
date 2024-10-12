@@ -1,5 +1,3 @@
-import logging
-
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -16,7 +14,7 @@ from torch.optim.sgd import SGD as TorchSGD
 
 from ..enums import ParamsGroupMethod
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, log_rank_0, run_rank_n
+from ..utils import is_apex_available
 from .params_group import get_param_groups_list
 
 
@@ -83,19 +81,3 @@ def get_optimizer_list(
     optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
 
     return optimizer_list
-
-
-@run_rank_n
-def log_optimizer_list(optimizer_list: Optimizer) -> None:
-    """print optimizer
-
-    Args:
-        optimizer (Optimizer): optimizer to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ optimizer list ------------------------")
-    for optimizer in optimizer_list:
-        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
-        log_rank_0(logging.INFO, optimizer)
-        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
-    log_rank_0(logging.INFO, "-------------------- end of optimizer list ---------------------")

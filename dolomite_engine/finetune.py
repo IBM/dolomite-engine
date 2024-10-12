@@ -22,6 +22,7 @@ from .utils import (
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
+    log_model_optimizer_list,
     setup_tf32,
 )
 
@@ -266,8 +267,7 @@ def main() -> None:
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
     )
 
-    log_model_list(model_list)
-    log_optimizer_list(optimizer_list)
+    log_model_optimizer_list(model_list, optimizer_list)
 
     starting_iteration = 0
     experiments_tracker_state_dict = None

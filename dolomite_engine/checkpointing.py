@@ -29,7 +29,7 @@ from .data import ResumableDataLoader
 from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model_list
-from .optimization import get_scheduler
+from .optimization import get_scheduler_list
 from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 

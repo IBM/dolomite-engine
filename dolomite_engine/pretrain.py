@@ -17,7 +17,7 @@ from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import wrap_model_list_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForPretraining, get_model_list, log_model_list
+from .model_wrapper import ModelWrapperForPretraining, get_model_list
 from .optimization import get_optimizer_list, get_scheduler_list, log_optimizer_list
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
@@ -26,6 +26,7 @@ from .utils import (
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
+    log_model_optimizer_list,
     log_rank_0,
     setup_tf32,
 )
@@ -356,8 +357,7 @@ def main(mode: Mode = Mode.training) -> None:
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
     )
 
-    log_model_list(model_list)
-    log_optimizer_list(optimizer_list)
+    log_model_optimizer_list(model_list, optimizer_list)
 
     starting_iteration = 0
     metadata = None

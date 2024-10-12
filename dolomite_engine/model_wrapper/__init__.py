@@ -1,8 +1,6 @@
-import logging
-
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode, TuningMethod
-from ..utils import get_pipeline_num_stages_and_stage_ids_on_current_rank, log_rank_0, run_rank_n
+from ..utils import get_pipeline_num_stages_and_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
@@ -70,19 +68,3 @@ def get_model_list(
         model.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
     return model
-
-
-@run_rank_n
-def log_model_list(model_list: ModelWrapper) -> None:
-    """print model
-
-    Args:
-        model (ModelWrapper): model to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ model list ------------------------")
-    for model in model_list:
-        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
-        log_rank_0(logging.INFO, model)
-        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
-    log_rank_0(logging.INFO, "-------------------- end of model list ---------------------")
