@@ -47,7 +47,6 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
-  distributed_backend: torch
   tensor_parallel_size: 8
   fsdp_algorithm: 2
   sequence_parallel: true

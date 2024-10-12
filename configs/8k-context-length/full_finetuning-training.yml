@@ -42,5 +42,4 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
-  distributed_backend: deepspeed
   gradient_checkpointing_method: block

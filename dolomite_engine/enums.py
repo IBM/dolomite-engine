@@ -63,11 +63,6 @@ class TuningMethod(str, Enum):
     distillation = "distillation"
 
 
-class DistributedBackend(str, Enum):
-    deepspeed = "deepspeed"
-    torch = "torch"
-
-
 class FP8Backend(str, Enum):
     msamp = "msamp"
     nvte = "nvte"

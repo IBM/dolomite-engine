@@ -20,20 +20,6 @@ def is_apex_available() -> bool:
 
 
 try:
-    import deepspeed
-
-    _IS_DEEPSPEED_AVAILABLE = True
-except ImportError:
-    _IS_DEEPSPEED_AVAILABLE = False
-
-    warn_rank_0("DeepSpeed is not installed")
-
-
-def is_deepspeed_available() -> bool:
-    return _IS_DEEPSPEED_AVAILABLE
-
-
-try:
     import flash_attn
 
     _IS_FLASH_ATTENTION_AVAILABLE = True

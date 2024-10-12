@@ -37,10 +37,7 @@ _Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_
 Run `make install` to install the requirements for this repository. You might need to install `flash-attn`.
 
 # Distributed finetuning
-This repository is meant for finetuning large language models (of any scale) using multiple backends. The following backends are currently supported:
-
-1. [FSDP](https://pytorch.org/docs/stable/fsdp.html)
-1. [DeepSpeed](https://github.com/microsoft/DeepSpeed)
+This repository is meant for pretraining and finetuning large language models.
 
 The repository currently only supports generative models but can be easily extended to non-generative models if needed. 2 main class of models from [HuggingFace](https://huggingface.co/docs/transformers/index) are supported:
 
@@ -187,7 +184,7 @@ SST2Dataset
 This repository implements the dataloader from Megatron-LM for efficient pretraining. If for some reason you need to use that dataloader outside this repository, take a look at [this example](tools/megatron_dataset/megatron_dataloader.py).
 
 ## Supported optimizers
-We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [DeepSpeed](https://github.com/microsoft/DeepSpeed) or [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.
+We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.
 
 ```python
 # https://nvidia.github.io/apex/optimizers.html
@@ -195,15 +192,6 @@ from apex.optimizers import FusedAdam as ApexFusedAdam
 from apex.optimizers import FusedLAMB as ApexFusedLAMB
 from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
 from apex.optimizers import FusedSGD as ApexFusedSGD
-
-# https://deepspeed.readthedocs.io/en/latest/optimizers.html
-from deepspeed.ops.adagrad import DeepSpeedCPUAdagrad
-from deepspeed.ops.adam import DeepSpeedCPUAdam
-from deepspeed.ops.adam import FusedAdam as DeepSpeedFusedAdam
-from deepspeed.ops.lamb import FusedLamb as DeepSpeedFusedLAMB
-from deepspeed.runtime.fp16.onebit import OnebitAdam as DeepSpeedOnebitAdam
-from deepspeed.runtime.fp16.onebit import OnebitLamb as DeepSpeedOnebitLAMB
-from deepspeed.runtime.fp16.onebit import ZeroOneAdam as DeepSpeedZeroOneAdam
 
 # https://pytorch.org/docs/stable/optim.html
 from torch.optim.adadelta import Adadelta as TorchAdadelta

@@ -86,7 +86,6 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
-  distributed_backend: torch
   communication_dtype: fp32
   torch_compile: true
   stage: 0
