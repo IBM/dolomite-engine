@@ -9,7 +9,7 @@ from torch.distributed import ProcessGroup
 from torch.distributed.device_mesh import DeviceMesh, init_device_mesh
 from torch.distributed.pipelining.schedules import PipelineScheduleMulti, PipelineScheduleSingle
 
-from ..hf_models.utils import divide_if_divisible
+from .miscellaneous import divide_if_divisible
 
 
 # general

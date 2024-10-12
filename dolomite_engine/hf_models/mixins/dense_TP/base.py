@@ -3,12 +3,11 @@ import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....utils import ProcessGroupManager
+from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_normalization_function_TP
-from ...utils import divide_if_divisible
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 

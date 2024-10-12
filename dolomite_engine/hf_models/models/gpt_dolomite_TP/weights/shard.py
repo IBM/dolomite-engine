@@ -1,10 +1,9 @@
 import torch
 
-from .....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from .....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ....modeling_utils_TP import get_tensor_parallel_vocab_info, tensor_parallel_split_safetensor_slice
-from ....utils import divide_if_divisible
 from ...gpt_dolomite import GPTDolomiteConfig
 
 

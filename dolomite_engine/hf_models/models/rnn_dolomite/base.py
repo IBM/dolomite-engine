@@ -3,11 +3,10 @@ import torch.nn as nn
 from transformers import Cache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....utils import is_fla_available
+from ....utils import divide_if_divisible, is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ...utils import divide_if_divisible
 from .config import RNNDolomiteConfig
 from .layer import RNNDolomiteBlock
 

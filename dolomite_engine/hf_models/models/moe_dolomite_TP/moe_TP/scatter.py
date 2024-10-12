@@ -7,11 +7,10 @@ import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
+from .....utils import ProcessGroupManager, divide_if_divisible, is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
 from ....modeling_utils_TP import Dropout_TP, DTensorModule, dtensor_to_tensor, tensor_to_dtensor
-from ....utils import divide_if_divisible
 from ...moe_dolomite import MoEDolomiteConfig
 from ...moe_dolomite.moe import ScatterMoE
 from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
