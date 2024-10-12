@@ -13,8 +13,8 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_list_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
-from .optimization import get_optimizer, get_scheduler, log_optimizer
+from .model_wrapper import ModelWrapperForFinetuning, get_model_list, log_model_list
+from .optimization import get_optimizer_list, get_scheduler, log_optimizer
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -236,14 +236,14 @@ def main() -> None:
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
         set_deepspeed_config(args)
 
-    model = get_model(args, mode)
+    model_list = get_model_list(args, mode)
 
     train_dataloader = get_dataloader(
         args,
         split=DatasetSplit.train,
         mode=mode,
-        tokenizer=model.tokenizer,
-        is_encoder_decoder=model.is_encoder_decoder,
+        tokenizer=model_list[0].tokenizer,
+        is_encoder_decoder=model_list[0].is_encoder_decoder,
     )
 
     val_dataloader = None
@@ -252,17 +252,17 @@ def main() -> None:
             args,
             split=DatasetSplit.val,
             mode=mode,
-            tokenizer=model.tokenizer,
-            is_encoder_decoder=model.is_encoder_decoder,
+            tokenizer=model_list[0].tokenizer,
+            is_encoder_decoder=model_list[0].is_encoder_decoder,
         )
 
-    model = wrap_model_list_for_distributed_training(args, model)
+    model_list = wrap_model_list_for_distributed_training(args, model_list)
 
     if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer = get_optimizer(
+        optimizer = get_optimizer_list(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
-            model=model,
+            model_list=model_list,
             params_group_method=args.optimizer_args.params_group_method,
         )
 
@@ -280,7 +280,7 @@ def main() -> None:
         optimizer = None
         lr_scheduler = None
 
-    log_model(model)
+    log_model_list(model_list)
     log_optimizer(optimizer)
 
     starting_iteration = 0

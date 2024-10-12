@@ -19,7 +19,7 @@ _MODEL_CLASS_MAPPING = {
 }
 
 
-def get_model(
+def get_model_list(
     args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
 ) -> list[ModelWrapper]:
     tuning_method = args.tuning_args.tuning_method
@@ -74,13 +74,16 @@ def get_model(
 
 
 @run_rank_n
-def log_model(model: ModelWrapper) -> None:
+def log_model_list(model_list: ModelWrapper) -> None:
     """print model
 
     Args:
         model (ModelWrapper): model to print
     """
 
-    log_rank_0(logging.INFO, "------------------------ model ------------------------")
-    log_rank_0(logging.INFO, model)
-    log_rank_0(logging.INFO, "-------------------- end of model ---------------------")
+    log_rank_0(logging.INFO, "------------------------ model list ------------------------")
+    for model in model_list:
+        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
+        log_rank_0(logging.INFO, model)
+        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
+    log_rank_0(logging.INFO, "-------------------- end of model list ---------------------")

@@ -15,18 +15,9 @@ from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
 from ..enums import ParamsGroupMethod
-from ..hf_models import (
-    GPTDolomiteForCausalLM,
-    GPTDolomiteForCausalLM_TP,
-    MoEDolomiteForCausalLM,
-    RNNDolomiteForCausalLM,
-)
-from ..hf_models.modeling_utils import Attention
-from ..hf_models.models.gpt_dolomite.layer import MLP
-from ..hf_models.models.moe_dolomite.moe import SparseMoE
 from ..model_wrapper import ModelWrapper
 from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, run_rank_n
-from .params_group import get_param_groups
+from .params_group import get_param_groups_list
 
 
 if is_apex_available():
@@ -88,22 +79,22 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def get_optimizer(
+def get_optimizer_list(
     optimizer_class_name: str,
     optimizer_class_args: dict,
-    model: ModelWrapper,
+    model_list: list[ModelWrapper],
     params_group_method: ParamsGroupMethod,
-) -> Optimizer:
-    """setup optimizer for the model
+) -> list[Optimizer]:
+    """setup list of optimizers for the model
 
     Args:
         optimizer_class_name (str): optimizer class name
         optimizer_class_args (dict): args for the optimizer class
-        model (ModelWrapper): model
+        model_list (list[ModelWrapper]): list of models
         params_group_method (ParamsGroupMethod): the params grouping to use
 
     Returns:
-        Optimizer: an optimizer
+        list[Optimizer]: list of optimizers
     """
 
     if optimizer_class_name not in _OPTIMIZER_CLASSES:
@@ -113,10 +104,10 @@ def get_optimizer(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    params_group = get_param_groups(model, optimizer_class_args, params_group_method)
-    optimizer = optimizer_class(params_group, **optimizer_class_args)
+    params_groups_list = get_param_groups_list(model_list, optimizer_class_args, params_group_method)
+    optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
 
-    return optimizer
+    return optimizer_list
 
 
 @run_rank_n

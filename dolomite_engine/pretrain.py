@@ -17,8 +17,8 @@ from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_list_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
-from .optimization import get_optimizer, get_scheduler, log_optimizer
+from .model_wrapper import ModelWrapperForPretraining, get_model_list, log_model_list
+from .optimization import get_optimizer_list, get_scheduler, log_optimizer
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -344,14 +344,14 @@ def main(mode: Mode = Mode.training) -> None:
     if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
         set_deepspeed_config(args)
 
-    model = get_model(args, mode)
-    model = wrap_model_list_for_distributed_training(args, model)
+    model_list = get_model_list(args, mode)
+    model_list = wrap_model_list_for_distributed_training(args, model_list)
 
     if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer = get_optimizer(
+        optimizer = get_optimizer_list(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
-            model=model,
+            model_list=model_list,
             params_group_method=args.optimizer_args.params_group_method,
         )
 
@@ -369,7 +369,7 @@ def main(mode: Mode = Mode.training) -> None:
         optimizer = None
         lr_scheduler = None
 
-    log_model(model)
+    log_model_list(model_list)
     log_optimizer(optimizer)
 
     starting_iteration = 0
@@ -377,7 +377,7 @@ def main(mode: Mode = Mode.training) -> None:
     experiments_tracker_state_dict = None
     if args.load_args is not None:
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
-            args, model, optimizer, lr_scheduler, None
+            args, model_list, optimizer, lr_scheduler, None
         )
 
         # metadata field contains the dataloader state so we need to reset it here
@@ -385,7 +385,7 @@ def main(mode: Mode = Mode.training) -> None:
             metadata["consumed_samples"] = 0
 
     train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
-        args, model.tokenizer, 0 if metadata is None else metadata["consumed_samples"]
+        args, model_list[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
     experiments_tracker = ExperimentsTracker(
@@ -400,7 +400,7 @@ def main(mode: Mode = Mode.training) -> None:
     # main training loop
     train(
         args,
-        model=model,
+        model_list=model_list,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         train_dataloader=train_dataloader,

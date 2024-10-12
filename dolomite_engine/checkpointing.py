@@ -29,7 +29,7 @@ from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from .data import ResumableDataLoader
 from .enums import DistributedBackend, Mode, TuningMethod
 from .hf_models import fix_unsharded_state_dict
-from .model_wrapper import ModelWrapper, get_model
+from .model_wrapper import ModelWrapper, get_model_list
 from .optimization import get_scheduler
 from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
@@ -335,7 +335,7 @@ def load_checkpoint_for_inference(
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
     ):
-        model = get_model(args_from_checkpoint, mode)
+        model = get_model_list(args_from_checkpoint, mode)
 
     if use_meta:
         model = model.to_empty(device="cpu")

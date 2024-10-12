@@ -16,7 +16,7 @@ from ..arguments import TrainingArgs
 from ..enums import DistributedBackend, FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..model_wrapper import ModelWrapper
-from ..optimization import get_optimizer, get_scheduler
+from ..optimization import get_optimizer_list, get_scheduler
 from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
 from .deepspeed import get_deepspeed_config, set_deepspeed_config
 from .fp8 import convert_model_to_transformer_engine
@@ -78,7 +78,7 @@ def wrap_model_list_for_distributed_training(args: TrainingArgs, model_list: lis
         assert not torch_compile
         assert ProcessGroupManager.get_tensor_parallel_world_size() == 1
 
-        optimizer = get_optimizer(
+        optimizer = get_optimizer_list(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
             model=model,
