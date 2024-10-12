@@ -126,18 +126,15 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             if self.upcast_logits_for_loss:
                 teacher_logits = teacher_logits.float()
 
+        teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1).view(-1, teacher_logits.size(-1))
+        student_log_softmax = F.log_softmax(logits, dim=-1).view(-1, logits.size(-1))
+
         if self.kl_divergence_method == KLDivergenceMethod.forward:
             # sum [student * ln(student / teacher)]
-            teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1)
-            student_softmax = F.softmax(logits, dim=-1)
-
-            kl_divergence = F.kl_div(teacher_log_softmax, student_softmax, reduction="batchmean")
+            kl_divergence = F.kl_div(teacher_log_softmax, student_log_softmax, reduction="batchmean", log_target=True)
         elif self.kl_divergence_method == KLDivergenceMethod.backward:
             # sum [teacher * ln(teacher / student)]
-            student_log_softmax = F.log_softmax(logits, dim=-1)
-            teacher_softmax = F.softmax(teacher_logits, dim=-1)
-
-            kl_divergence = F.kl_div(student_log_softmax, teacher_softmax, reduction="batchmean")
+            kl_divergence = F.kl_div(student_log_softmax, teacher_log_softmax, reduction="batchmean", log_target=True)
 
         loss = lm_loss + self.kl_divergence_weight * kl_divergence
 
