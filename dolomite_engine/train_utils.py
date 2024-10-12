@@ -1,5 +1,5 @@
 import logging
-from contextlib import AbstractContextManager, nullcontext
+from contextlib import AbstractContextManager, ExitStack, nullcontext
 
 import torch
 import torch.nn as nn
@@ -66,9 +66,10 @@ def train_step(
 
 
 def _train_step_with_pipeline_parallel(
-    model: ModelWrapper,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_list: list[ModelWrapper],
+    pipeline_schedule: _PipelineSchedule,
+    optimizer_list: list[Optimizer],
+    lr_scheduler_list: list[LambdaLR],
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
@@ -79,9 +80,10 @@ def _train_step_with_pipeline_parallel(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (ModelWrapper): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
+        model_list (list[ModelWrapper]): list of models
+        pipeline_schedule (_PipelineSchedule): pipeline schedule
+        optimizer_list (list[Optimizer]): list of optimizers
+        lr_scheduler_list (list[LamdaLR]): list of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
@@ -93,21 +95,29 @@ def _train_step_with_pipeline_parallel(
         MetricsTrackingDict: metrics to track
     """
 
-    fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+    fsdp_algorithm = 2 if hasattr(model_list[0], "set_requires_gradient_sync") else 1
 
-    no_sync = nullcontext
+    no_sync_list = [nullcontext]
     if not sync_every_gradient_accumulation_step:
         if fsdp_algorithm == 1:
-            no_sync = model.no_sync
+            no_sync_list = [model.no_sync for model in model_list]
         else:
-            model.set_requires_gradient_sync(False)
+            for model in model_list:
+                model.set_requires_gradient_sync(False)
 
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
-    optimizer.zero_grad()
 
-    with no_sync():
+    for optimizer in optimizer_list:
+        optimizer.zero_grad()
+
+    with ExitStack() as exit_stack:
+        no_sync_list = [exit_stack.enter_context(no_sync) for no_sync in no_sync_list]
+
         for _ in range(gradient_accumulation_steps - 1):
+            if ProcessGroupManager.get_pipeline_parallel_rank() == 0:
+                pipeline_schedule.step()
+
             batch = get_next_batch(train_dataloader)
             with forward_context():
                 loss_micro_step_dict = model(batch)

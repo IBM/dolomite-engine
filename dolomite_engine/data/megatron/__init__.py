@@ -26,6 +26,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
     assert args.datasets[0].output_format == OUTPUT_FORMAT
 
     micro_batch_size = args.training_parameters.micro_batch_size
+    gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
     sequence_length = class_args.get("sequence_length")
 
     compile_helpers()
@@ -64,7 +65,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
         sizes=_get_train_val_test_samples(
             args.training_parameters.num_training_steps,
             micro_batch_size,
-            args.training_parameters.gradient_accumulation_steps,
+            gradient_accumulation_steps,
             args.training_parameters.eval_interval,
             class_args.get("eval_steps"),
         ),
@@ -166,7 +167,11 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                 batch_sampler = MegatronBatchSampler(
                     total_samples=len(dataset),
                     consumed_samples=consumed_samples,
-                    micro_batch_size=micro_batch_size * num_ranks_per_node,
+                    micro_batch_size=(
+                        micro_batch_size * num_ranks_per_node
+                        if ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+                        else micro_batch_size * gradient_accumulation_steps * num_ranks_per_node
+                    ),
                     num_replicas=num_nodes,
                     rank=node_rank,
                 )
@@ -182,7 +187,14 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                 pin_memory=True,
                 source_broadcast_mapping=source_broadcast_mapping,
                 broadcast_world_size=num_ranks_per_node,
-                static_shape_per_rank=(micro_batch_size, sequence_length + 1),
+                static_shape_per_rank=(
+                    (
+                        micro_batch_size
+                        if ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+                        else micro_batch_size * gradient_accumulation_steps
+                    ),
+                    sequence_length + 1,
+                ),
                 keys=["text"],
             )
         else:
@@ -192,7 +204,11 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
             batch_sampler = MegatronBatchSampler(
                 total_samples=len(dataset),
                 consumed_samples=consumed_samples,
-                micro_batch_size=micro_batch_size,
+                micro_batch_size=(
+                    micro_batch_size
+                    if ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+                    else micro_batch_size * gradient_accumulation_steps
+                ),
                 num_replicas=ProcessGroupManager.get_data_parallel_world_size(),
                 rank=ProcessGroupManager.get_data_parallel_rank(),
             )
