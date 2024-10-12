@@ -1,9 +1,10 @@
 import logging
-from contextlib import AbstractContextManager, ExitStack, nullcontext
+from contextlib import AbstractContextManager, nullcontext
 
 import torch
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
+from torch.distributed.pipelining import PipelineStage
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -28,6 +29,8 @@ def train_step(
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
+    batch_size: int,
+    sequence_length: int,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -48,7 +51,17 @@ def train_step(
     """
 
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
-        pass
+        metrics_tracker = _train_step_with_pipeline_parallel(
+            model_list=model_list,
+            pipeline_schedule=pipeline_schedule,
+            optimizer_list=optimizer_list,
+            lr_scheduler_list=lr_scheduler_list,
+            train_dataloader=train_dataloader,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_clipping=gradient_clipping,
+            batch_size=batch_size,
+            sequence_length=sequence_length,
+        )
     else:
         metrics_tracker = _train_step_without_pipeline_parallel(
             model=model_list[0],
@@ -73,9 +86,8 @@ def _train_step_with_pipeline_parallel(
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
-    forward_context: AbstractContextManager,
-    backward_context: AbstractContextManager,
-    sync_every_gradient_accumulation_step: bool,
+    batch_size: int,
+    sequence_length: int,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -87,9 +99,6 @@ def _train_step_with_pipeline_parallel(
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
-        forward_context (AbstractContextManager): a context that is used for every model forward call
-        backward_context (AbstractContextManager): a context that is used for every model backward call
-        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
 
     Returns:
         MetricsTrackingDict: metrics to track
@@ -97,60 +106,44 @@ def _train_step_with_pipeline_parallel(
 
     fsdp_algorithm = 2 if hasattr(model_list[0], "set_requires_gradient_sync") else 1
 
-    no_sync_list = [nullcontext]
-    if not sync_every_gradient_accumulation_step:
-        if fsdp_algorithm == 1:
-            no_sync_list = [model.no_sync for model in model_list]
-        else:
-            for model in model_list:
-                model.set_requires_gradient_sync(False)
-
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
 
     for optimizer in optimizer_list:
         optimizer.zero_grad()
 
-    with ExitStack() as exit_stack:
-        no_sync_list = [exit_stack.enter_context(no_sync) for no_sync in no_sync_list]
-
-        for _ in range(gradient_accumulation_steps - 1):
-            if ProcessGroupManager.get_pipeline_parallel_rank() == 0:
-                pipeline_schedule.step()
-
-            batch = get_next_batch(train_dataloader)
-            with forward_context():
-                loss_micro_step_dict = model(batch)
-
-            with torch.inference_mode():
-                metrics_tracker = metrics_tracker + loss_micro_step_dict
-
-            # compute gradients
-            with backward_context():
-                loss_micro_step_dict["loss"].backward()
-
-    if fsdp_algorithm == 2:
-        model.set_requires_gradient_sync(True)
-
     batch = get_next_batch(train_dataloader)
-    with forward_context():
-        loss_micro_step_dict = model(batch)
+
+    if ProcessGroupManager.get_tensor_parallel_rank() == 0:
+        batch = batch["text"]
+    else:
+        batch = torch.zeros(batch_size, sequence_length + 1, dtype=torch.long, device=torch.cuda.current_device())
+
+    if ProcessGroupManager.get_pipeline_parallel_rank() == 0:
+        pipeline_schedule.step(batch)
+    elif (
+        ProcessGroupManager.get_pipeline_parallel_rank() == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
+    ):
+        losses = []
+        labels = batch[:, 1:]
+        pipeline_schedule.step(target=labels, losses=losses)
+    else:
+        pipeline_schedule.step()
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
 
-    # compute gradients
-    with backward_context():
-        loss_micro_step_dict["loss"].backward()
-
     if gradient_clipping is not None:
-        if fsdp_algorithm == 1:
-            grad_norm = model.clip_grad_norm_(gradient_clipping)
-        else:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+        grad_norm = []
+        for model in model_list:
+            if fsdp_algorithm == 1:
+                grad_norm.append(model.clip_grad_norm_(gradient_clipping))
+            else:
+                grad_norm.append(torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping))
 
-    optimizer.step()
-    lr_scheduler.step()
+    for optimizer, lr_scheduler in zip(optimizer_list, lr_scheduler_list):
+        optimizer.step()
+        lr_scheduler.step()
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker / gradient_accumulation_steps

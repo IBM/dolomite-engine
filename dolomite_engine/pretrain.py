@@ -130,9 +130,8 @@ def train(
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-    global_batch_size = (
-        micro_batch_size * gradient_accumulation_steps * ProcessGroupManager.get_data_parallel_world_size()
-    )
+    local_batch_size = micro_batch_size * gradient_accumulation_steps
+    global_batch_size = local_batch_size * ProcessGroupManager.get_data_parallel_world_size()
     tokens_per_batch = global_batch_size * sequence_length
 
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
@@ -187,6 +186,8 @@ def train(
             forward_context=forward_context,
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
+            batch_size=local_batch_size,
+            sequence_length=sequence_length,
         )
 
         metrics_tracker = metrics_tracker + loss_step_dict
