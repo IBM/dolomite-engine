@@ -181,37 +181,50 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return batch
 
-    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> torch.Tensor:
+    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> tuple[torch.Tensor]:
+        if self.pp_world_size == 1:
+            input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward_without_pipeline_parallel(batch)
+        else:
+            input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward_with_pipeline_parallel(batch)
+
+        return input_ids, labels
+
+    def _prepare_inputs_ids_and_labels_for_forward_without_pipeline_parallel(self, batch: dict) -> tuple[torch.Tensor]:
         if self.tp_world_size > 1:
             tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
             tp_group = ProcessGroupManager.get_tensor_parallel_group()
 
             if self.tp_rank == 0:
-                if self.pp_world_size > 1:
-                    tokens = batch
-                else:
-                    tokens = batch["text"]
-
+                tokens = batch["text"]
                 tokens = tokens.to(torch.cuda.current_device())
             else:
-                if self.pp_world_size > 1:
-                    tokens = batch
-                else:
-                    tokens = torch.empty(
-                        (self.micro_batch_size, self.sequence_length + 1),
-                        dtype=torch.long,
-                        device=torch.cuda.current_device(),
-                    )
+                tokens = torch.empty(
+                    (self.micro_batch_size, self.sequence_length + 1),
+                    dtype=torch.long,
+                    device=torch.cuda.current_device(),
+                )
 
-            # if not using pipeline parallel, always broadcast otherwise broadcast only on first stage
-            if (self.pp_world_size > 1 and self.pipeline_stage_id == 0) or self.pp_world_size == 1:
+            torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
+        else:
+            tokens = batch["text"]
+            tokens = tokens.to(torch.cuda.current_device())
+
+        input_ids = tokens[:, :-1]
+        labels = tokens[:, 1:]
+
+        return input_ids, labels
+
+    def _prepare_inputs_ids_and_labels_for_forward_with_pipeline_parallel(self, tokens: torch.Tensor) -> torch.Tensor:
+        if self.tp_world_size > 1:
+            tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
+            tp_group = ProcessGroupManager.get_tensor_parallel_group()
+
+            if self.tp_rank == 0:
+                tokens = tokens.to(torch.cuda.current_device())
+
+            if self.pipeline_stage_id == 0:
                 torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
         else:
-            if self.pp_world_size > 1:
-                tokens = batch
-            else:
-                tokens = batch["text"]
-
             tokens = tokens.to(torch.cuda.current_device())
 
         input_ids = tokens[:, :-1]
