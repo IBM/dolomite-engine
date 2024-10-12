@@ -63,10 +63,10 @@ def get_model(
         kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
         kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
-    num_pipeline_stages_per_rank, _ = get_pipeline_num_stages_and_stage_ids_on_current_rank(num_pipeline_stages)
+    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(num_pipeline_stages)
 
     model = []
-    for pipeline_stage_id in range(num_pipeline_stages_per_rank):
+    for pipeline_stage_id in pipeline_stage_ids_on_current_rank:
         kwargs["pipeline_stage_id"] = pipeline_stage_id
         model.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 

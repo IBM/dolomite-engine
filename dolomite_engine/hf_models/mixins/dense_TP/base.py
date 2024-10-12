@@ -1,9 +1,11 @@
+import logging
+
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....utils import ProcessGroupManager, divide_if_divisible
+from ....utils import ProcessGroupManager, divide_if_divisible, log_rank_0
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
@@ -19,7 +21,15 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
         self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
         self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
 
+        if "num_pipeline_stages" not in kwargs:
+            log_rank_0(
+                logging.WARN,
+                f"num_pipeline_stages not passed to the model, setting to PP world size ({self.pp_world_size})",
+            )
         self.num_stages = kwargs.get("num_pipeline_stages", self.pp_world_size)
+
+        if "pipeline_stage_id" not in kwargs:
+            log_rank_0(logging.WARN, f"pipeline_stage_id not passed to the model, setting to PP rank ({self.pp_rank})")
         self.stage_id = kwargs.get("pipeline_stage_id", self.pp_rank)
 
         self.is_first_stage = self.stage_id == 0
