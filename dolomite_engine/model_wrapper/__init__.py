@@ -19,8 +19,15 @@ _MODEL_CLASS_MAPPING = {
 }
 
 
-def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode) -> ModelWrapper:
+def get_model(
+    args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
+) -> list[ModelWrapper]:
     tuning_method = args.tuning_args.tuning_method
+
+    if tuning_method not in _MODEL_CLASS_MAPPING:
+        raise ValueError(f"unexpected tuning_method ({tuning_method})")
+
+    num_pipeline_stages = args.distributed_args.num_pipeline_stages
 
     kwargs = {
         "mode": mode,
@@ -35,6 +42,7 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,
         "distributed_backend": args.distributed_args.distributed_backend,
+        "num_pipeline_stages": num_pipeline_stages,
         "neft_alpha": args.research_args.neft_alpha,
         "trust_remote_code": args.model_args.trust_remote_code,
         "tokenizer_name": args.tokenizer_args.tokenizer_name,
@@ -55,10 +63,12 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
         kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
-    if tuning_method in _MODEL_CLASS_MAPPING:
-        return _MODEL_CLASS_MAPPING[tuning_method](**kwargs)
+    model = []
+    for pipeline_stage_id in range(num_pipeline_stages):
+        kwargs["pipeline_stage_id"] = pipeline_stage_id
+        model.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
-    raise ValueError(f"unexpected tuning_method ({tuning_method})")
+    return model
 
 
 @run_rank_n

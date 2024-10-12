@@ -347,7 +347,7 @@ class DistributedArgs(BaseArgs):
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
     # total number of pipeline stages
-    num_pipeline_stages: int = 1
+    num_pipeline_stages: int | None = None
     # pipeline parallel shedule to use
     pipeline_parallel_schedule: str = ""
 
@@ -381,6 +381,13 @@ class DistributedArgs(BaseArgs):
             )
 
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
+
+        if self.pipeline_parallel_size > 1:
+            _check_not_None([(self.num_pipeline_stages, "num_pipeline_stages")])
+
+            assert (
+                self.num_pipeline_stages % self.pipeline_parallel_size == 0
+            ), "num_pipeline_stages should be a multiple of pipeline_parallel_size"
 
 
 class AimArgs(BaseArgs):
