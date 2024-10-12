@@ -56,33 +56,38 @@ class ExperimentsTracker:
         wandb_args: BaseArgs,
         checkpoint_metadata: dict,
     ) -> None:
+        if not is_tracking_rank():
+            return
+
         self.experiments_tracker_name = experiments_tracker_name
         self.tracking_enabled = experiments_tracker_name is not None
 
         if experiments_tracker_name == ExperimentsTrackerName.aim:
             kwargs = aim_args.to_dict() if checkpoint_metadata is None else checkpoint_metadata
-            self.run: AimRun = run_rank_n(AimRun)(**kwargs)
+            self.run = AimRun(**kwargs)
         elif experiments_tracker_name == ExperimentsTrackerName.wandb:
             kwargs = wandb_args.to_dict() if checkpoint_metadata is None else checkpoint_metadata
             resume = None if checkpoint_metadata is None else "auto"
 
-            run_rank_n(wandb.init)(resume=resume, **kwargs)
+            wandb.init(resume=resume, **kwargs)
 
             # this is for a custom step, we can't use the wandb step
             # since it doesn't allow time travel to the past
-            run_rank_n(wandb.define_metric)("iteration", hidden=True)
-            run_rank_n(wandb.define_metric)("train/*", step_metric="iteration", step_sync=True)
-            run_rank_n(wandb.define_metric)("val/*", step_metric="iteration", step_sync=True)
+            wandb.define_metric("iteration", hidden=True)
+            wandb.define_metric("train/*", step_metric="iteration", step_sync=True)
+            wandb.define_metric("val/*", step_metric="iteration", step_sync=True)
         elif experiments_tracker_name is not None:
             raise ValueError(f"unexpected experiments_tracker ({experiments_tracker_name})")
 
-    @run_rank_n
     def log_args(self, args: BaseArgs) -> None:
         """log args
 
         Args:
             args (BaseArgs): pydantic object
         """
+
+        if not is_tracking_rank():
+            return
 
         if self.tracking_enabled:
             args: dict = args.to_dict()
@@ -98,7 +103,6 @@ class ExperimentsTracker:
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
-    @run_rank_n
     def track(self, values: dict, step: int | None = None, context: str | None = None) -> None:
         """main tracking method
 
@@ -107,6 +111,9 @@ class ExperimentsTracker:
             step (int, optional): current step, auto-incremented if None. Defaults to None.
             context (str, optional): context for tracking. Defaults to None.
         """
+
+        if not is_tracking_rank():
+            return
 
         if self.tracking_enabled:
             if self.experiments_tracker_name == ExperimentsTrackerName.aim:
@@ -126,8 +133,10 @@ class ExperimentsTracker:
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
-    @run_rank_n
     def finish(self) -> None:
+        if not is_tracking_rank():
+            return
+
         if self.tracking_enabled:
             if self.experiments_tracker_name == ExperimentsTrackerName.aim:
                 self.run.close()
@@ -136,8 +145,10 @@ class ExperimentsTracker:
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
-    @run_rank_n
     def state_dict(self) -> dict:
+        if not is_tracking_rank():
+            return
+
         state_dict = {}
         if self.tracking_enabled:
             if self.experiments_tracker_name == ExperimentsTrackerName.aim:
