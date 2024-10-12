@@ -229,7 +229,7 @@ def wrap_model_list_for_distributed_training(
             if pipeline_stage_idx == 0:
                 dummy_input = torch.empty(micro_batch_size, sequence_length + 1, dtype=torch.long, device="meta")
             else:
-                tokens = (
+                sharded_sequence_length = (
                     divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
                     if args.distributed_args.sequence_parallel
                     else sequence_length
@@ -237,7 +237,7 @@ def wrap_model_list_for_distributed_training(
 
                 if args.model_args.use_padding_free_transformer:
                     dummy_input = torch.empty(
-                        micro_batch_size * tokens,
+                        micro_batch_size * sharded_sequence_length,
                         hidden_size,
                         dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
                         device="meta",
@@ -245,7 +245,7 @@ def wrap_model_list_for_distributed_training(
                 else:
                     dummy_input = torch.empty(
                         micro_batch_size,
-                        tokens,
+                        sharded_sequence_length,
                         hidden_size,
                         dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
                         device="meta",
