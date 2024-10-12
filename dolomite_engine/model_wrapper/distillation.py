@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, KLDivergenceMethod, Mode, MoEImplementation
+from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
 from ..utils import log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 

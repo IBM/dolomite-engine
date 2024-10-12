@@ -11,7 +11,6 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import (
     AttentionImplementation,
-    DistributedBackend,
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,

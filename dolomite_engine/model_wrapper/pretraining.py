@@ -7,7 +7,7 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
+from ..enums import AttentionImplementation, Mode, MoEImplementation
 from ..hf_models.modeling_utils_TP import tensor_to_dtensor
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
