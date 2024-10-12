@@ -11,7 +11,6 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import (
     AttentionImplementation,
-    DistributedBackend,
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,
@@ -306,8 +305,6 @@ class ZeroTopologyArgs(BaseArgs):
 class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
-    # distributed backend to use
-    distributed_backend: DistributedBackend = DistributedBackend.torch
     # overlap communication with computation
     overlap_comm: bool = False
     # use contiguous buffers for gradients, requires more memory if enabled
@@ -320,10 +317,6 @@ class DistributedArgs(BaseArgs):
     gradient_checkpointing_args: dict = {}
     # zero topology
     zero_topology: ZeroTopologyArgs = ZeroTopologyArgs()
-    # whether to use quantized weights (ZeRO++)
-    zero_quantized_weights: bool = False
-    # whether to use quantized gradients (ZeRO++)
-    zero_quantized_gradients: bool = False
     # communication dtype
     communication_dtype: str | None = None
     # whether to use torch.compile
@@ -352,11 +345,6 @@ class DistributedArgs(BaseArgs):
     pipeline_parallel_schedule: str = ""
 
     def model_post_init(self, __context: Any) -> None:
-        if self.zero_quantized_weights or self.zero_quantized_gradients:
-            assert (
-                self.distributed_backend == DistributedBackend.deepspeed
-            ), "parameter or gradient quantization is only supported with DeepSpeed backend"
-
         # communication dtype
         if self.communication_dtype is not None:
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)

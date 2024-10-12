@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, KLDivergenceMethod, Mode, MoEImplementation
+from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
 from ..utils import log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
@@ -24,7 +24,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
-        distributed_backend: DistributedBackend,
         micro_batch_size: int,
         sequence_length: int,
         num_pipeline_stages: int,
@@ -56,7 +55,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             sequence_parallel (bool): whether to use sequence parallel
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
-            distributed_backend (DistributedBackend): distributed backend to use for model
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -85,7 +83,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
-            distributed_backend=distributed_backend,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
             num_pipeline_stages=num_pipeline_stages,
@@ -136,18 +133,15 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             if self.upcast_logits_for_loss:
                 teacher_logits = teacher_logits.float()
 
+        teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1).view(-1, teacher_logits.size(-1))
+        student_log_softmax = F.log_softmax(logits, dim=-1).view(-1, logits.size(-1))
+
         if self.kl_divergence_method == KLDivergenceMethod.forward:
             # sum [student * ln(student / teacher)]
-            teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1)
-            student_softmax = F.softmax(logits, dim=-1)
-
-            kl_divergence = F.kl_div(teacher_log_softmax, student_softmax, reduction="batchmean")
+            kl_divergence = F.kl_div(teacher_log_softmax, student_log_softmax, reduction="batchmean", log_target=True)
         elif self.kl_divergence_method == KLDivergenceMethod.backward:
             # sum [teacher * ln(teacher / student)]
-            student_log_softmax = F.log_softmax(logits, dim=-1)
-            teacher_softmax = F.softmax(teacher_logits, dim=-1)
-
-            kl_divergence = F.kl_div(student_log_softmax, teacher_softmax, reduction="batchmean")
+            kl_divergence = F.kl_div(student_log_softmax, teacher_log_softmax, reduction="batchmean", log_target=True)
 
         loss = lm_loss + self.kl_divergence_weight * kl_divergence
 

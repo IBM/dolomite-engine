@@ -25,7 +25,6 @@ jobs:
       - name: Installation
         run: |
           make install-dev
-          git clone https://github.com/huggingface/transformers && cd transformers && pip install . && cd ..
 
       - name: Unit Tests
         run: make test

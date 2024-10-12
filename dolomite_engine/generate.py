@@ -100,7 +100,6 @@ def main() -> None:
                 use_padding_free_transformer=False,
                 tensor_parallel_word_embeddings=False,
                 sequence_parallel=False,
-                distributed_backend=None,
                 random_seed=args.random_args.seed,
                 neft_alpha=None,
                 trust_remote_code=args.model_args.trust_remote_code,

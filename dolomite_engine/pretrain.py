@@ -15,8 +15,8 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_list_for_distributed_training
-from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
+from .distributed import wrap_model_list_for_distributed_training
+from .enums import FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model_list, log_model_list
 from .optimization import get_optimizer_list, get_scheduler_list, log_optimizer_list
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
@@ -103,7 +103,6 @@ def train(
 
     eval_during_training = args.training_parameters.eval_during_training
     eval_interval = args.training_parameters.eval_interval
-    distributed_backend = args.distributed_args.distributed_backend
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
@@ -170,7 +169,6 @@ def train(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            distributed_backend=distributed_backend,
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
@@ -190,11 +188,7 @@ def train(
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            metrics_tracker["learning_rate"] = (
-                model.lr_scheduler.get_lr()[0]
-                if distributed_backend == DistributedBackend.deepspeed
-                else lr_scheduler.get_lr()[0]
-            )
+            metrics_tracker["learning_rate"] = lr_scheduler.get_lr()[0]
 
             if model_flops is not None:
                 metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed
@@ -341,36 +335,29 @@ def main(mode: Mode = Mode.training) -> None:
     )
     set_seed(args.random_args.seed)
 
-    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
-        set_deepspeed_config(args)
-
     model_list = get_model_list(args, mode)
     model_list = wrap_model_list_for_distributed_training(args, model_list)
 
-    if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer_list = get_optimizer_list(
-            optimizer_class_name=args.optimizer_args.class_name,
-            optimizer_class_args=args.optimizer_args.class_args,
-            model_list=model_list,
-            params_group_method=args.optimizer_args.params_group_method,
-        )
+    optimizer_list = get_optimizer_list(
+        optimizer_class_name=args.optimizer_args.class_name,
+        optimizer_class_args=args.optimizer_args.class_args,
+        model_list=model_list,
+        params_group_method=args.optimizer_args.params_group_method,
+    )
 
-        lr_scheduler_list = get_scheduler_list(
-            optimizer_list=optimizer_list,
-            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
-            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
-            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
-            num_training_steps=args.training_parameters.num_training_steps,
-            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
-            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
-            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
-        )
-    else:
-        optimizer = None
-        lr_scheduler = None
+    lr_scheduler_list = get_scheduler_list(
+        optimizer_list=optimizer_list,
+        num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+        num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+        num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+        num_training_steps=args.training_parameters.num_training_steps,
+        lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+        lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+        extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+    )
 
     log_model_list(model_list)
-    log_optimizer(optimizer)
+    log_optimizer_list(optimizer_list)
 
     starting_iteration = 0
     metadata = None

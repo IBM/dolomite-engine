@@ -41,7 +41,6 @@ def get_model_list(
         "use_padding_free_transformer": args.model_args.use_padding_free_transformer,
         "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,
-        "distributed_backend": args.distributed_args.distributed_backend,
         "num_pipeline_stages": num_pipeline_stages,
         "neft_alpha": args.research_args.neft_alpha,
         "trust_remote_code": args.model_args.trust_remote_code,

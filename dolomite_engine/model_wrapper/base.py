@@ -3,9 +3,8 @@ import logging
 import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
-from transformers.integrations import HfDeepSpeedConfig
 
-from ..enums import AttentionImplementation, DistributedBackend, Mode, MoEImplementation
+from ..enums import AttentionImplementation, Mode, MoEImplementation
 from ..hf_models import get_model_parallel_class, is_custom_model
 from ..utils import (
     ProcessGroupManager,
@@ -32,7 +31,6 @@ class ModelWrapper(nn.Module):
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
-        distributed_backend: DistributedBackend,
         num_pipeline_stages: int,
         pipeline_stage_id: int,
         neft_alpha: float | None = None,
@@ -53,7 +51,6 @@ class ModelWrapper(nn.Module):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
-            distributed_backend (DistributedBackend): distributed backend to use for model
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -85,8 +82,6 @@ class ModelWrapper(nn.Module):
         self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
 
         use_model_parallelism = self.tp_world_size > 1 or self.pp_world_size > 1
-
-        self.distributed_backend = distributed_backend if self.mode == Mode.training else None
 
         self._setup_config()
 
@@ -233,26 +228,18 @@ class ModelWrapper(nn.Module):
             return model
 
         if self.mode == Mode.training:
-            if self.distributed_backend == DistributedBackend.deepspeed:
-                if self.efficient_initialization:
-                    from ..distributed import get_deepspeed_config
-
-                    self.deepspeed_config = HfDeepSpeedConfig(get_deepspeed_config())
-
-                self.model = _get_model()
-            elif self.distributed_backend == DistributedBackend.torch:
-                if self.efficient_initialization:
-                    if self.model_name is None:
-                        with torch.device("meta"):
-                            self.model = _get_model()
-                    else:
-                        assert (
-                            self.tp_world_size == 1
-                        ), "tensor parallel models don't support efficient init with model name"
-
-                        self.model = _get_model(low_cpu_mem_usage=True)
+            if self.efficient_initialization:
+                if self.model_name is None:
+                    with torch.device("meta"):
+                        self.model = _get_model()
                 else:
-                    self.model = _get_model()
+                    assert (
+                        self.tp_world_size == 1
+                    ), "tensor parallel models don't support efficient init with model name"
+
+                    self.model = _get_model(low_cpu_mem_usage=True)
+            else:
+                self.model = _get_model()
         else:
             if self.dtype == "fp8":
                 log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")

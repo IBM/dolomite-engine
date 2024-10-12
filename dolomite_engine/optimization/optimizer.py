@@ -16,7 +16,7 @@ from torch.optim.sgd import SGD as TorchSGD
 
 from ..enums import ParamsGroupMethod
 from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, is_deepspeed_available, log_rank_0, run_rank_n
+from ..utils import is_apex_available, log_rank_0, run_rank_n
 from .params_group import get_param_groups_list
 
 
@@ -31,23 +31,6 @@ else:
     ApexFusedNovoGrad = None
     ApexFusedSGD = None
 
-if is_deepspeed_available():
-    from deepspeed.ops.adagrad import DeepSpeedCPUAdagrad
-    from deepspeed.ops.adam import DeepSpeedCPUAdam
-    from deepspeed.ops.adam import FusedAdam as DeepSpeedFusedAdam
-    from deepspeed.ops.lamb import FusedLamb as DeepSpeedFusedLAMB
-    from deepspeed.runtime.fp16.onebit import OnebitAdam as DeepSpeedOnebitAdam
-    from deepspeed.runtime.fp16.onebit import OnebitLamb as DeepSpeedOnebitLAMB
-    from deepspeed.runtime.fp16.onebit import ZeroOneAdam as DeepSpeedZeroOneAdam
-else:
-    DeepSpeedCPUAdagrad = None
-    DeepSpeedCPUAdam = None
-    DeepSpeedFusedAdam = None
-    DeepSpeedFusedLAMB = None
-    DeepSpeedOnebitAdam = None
-    DeepSpeedOnebitLAMB = None
-    DeepSpeedZeroOneAdam = None
-
 
 _OPTIMIZER_CLASSES = {
     # https://nvidia.github.io/apex/optimizers.html
@@ -55,14 +38,6 @@ _OPTIMIZER_CLASSES = {
     "ApexFusedLAMB": ApexFusedLAMB,
     "ApexFusedNovoGrad": ApexFusedNovoGrad,
     "ApexFusedSGD": ApexFusedSGD,
-    # https://deepspeed.readthedocs.io/en/latest/optimizers.html
-    "DeepSpeedCPUAdagrad": DeepSpeedCPUAdagrad,
-    "DeepSpeedCPUAdam": DeepSpeedCPUAdam,
-    "DeepSpeedFusedAdam": DeepSpeedFusedAdam,
-    "DeepSpeedFusedLAMB": DeepSpeedFusedLAMB,
-    "DeepSpeedOnebitAdam": DeepSpeedOnebitAdam,
-    "DeepSpeedOnebitLAMB": DeepSpeedOnebitLAMB,
-    "DeepSpeedZeroOneAdam": DeepSpeedZeroOneAdam,
     # https://pytorch.org/docs/stable/optim.html
     "TorchAdadelta": TorchAdadelta,
     "TorchAdagrad": TorchAdagrad,
