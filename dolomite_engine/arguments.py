@@ -320,10 +320,6 @@ class DistributedArgs(BaseArgs):
     gradient_checkpointing_args: dict = {}
     # zero topology
     zero_topology: ZeroTopologyArgs = ZeroTopologyArgs()
-    # whether to use quantized weights (ZeRO++)
-    zero_quantized_weights: bool = False
-    # whether to use quantized gradients (ZeRO++)
-    zero_quantized_gradients: bool = False
     # communication dtype
     communication_dtype: str | None = None
     # whether to use torch.compile
@@ -346,11 +342,6 @@ class DistributedArgs(BaseArgs):
     sync_every_gradient_accumulation_step: bool = False
 
     def model_post_init(self, __context: Any) -> None:
-        if self.zero_quantized_weights or self.zero_quantized_gradients:
-            assert (
-                self.distributed_backend == DistributedBackend.deepspeed
-            ), "parameter or gradient quantization is only supported with DeepSpeed backend"
-
         # communication dtype
         if self.communication_dtype is not None:
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)

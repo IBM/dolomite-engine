@@ -11,8 +11,8 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
+from .distributed import wrap_model_for_distributed_training
+from .enums import DatasetSplit, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .optimization import get_optimizer, get_scheduler, log_optimizer
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
@@ -115,12 +115,7 @@ def train(
 
         if global_step % log_interval == 0:
             metrics_tracker = metrics_tracker / log_interval
-
-            metrics_tracker["learning_rate"] = (
-                model.lr_scheduler.get_lr()[0]
-                if distributed_backend == DistributedBackend.deepspeed
-                else lr_scheduler.get_lr()[0]
-            )
+            metrics_tracker["learning_rate"] = lr_scheduler.get_lr()[0]
 
             track_metrics(
                 global_step=global_step,
@@ -232,9 +227,6 @@ def main() -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
-
-    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
-        set_deepspeed_config(args)
 
     model = get_model(args, mode)
 

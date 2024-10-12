@@ -15,8 +15,8 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
+from .distributed import wrap_model_for_distributed_training
+from .enums import FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .optimization import get_optimizer, get_scheduler, log_optimizer
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
@@ -190,11 +190,7 @@ def train(
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            metrics_tracker["learning_rate"] = (
-                model.lr_scheduler.get_lr()[0]
-                if distributed_backend == DistributedBackend.deepspeed
-                else lr_scheduler.get_lr()[0]
-            )
+            metrics_tracker["learning_rate"] = lr_scheduler.get_lr()[0]
 
             if model_flops is not None:
                 metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed
@@ -339,9 +335,6 @@ def main(mode: Mode = Mode.training) -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
     )
     set_seed(args.random_args.seed)
-
-    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
-        set_deepspeed_config(args)
 
     model = get_model(args, mode)
     model = wrap_model_for_distributed_training(args, model)
