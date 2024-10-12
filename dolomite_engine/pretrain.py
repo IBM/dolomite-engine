@@ -138,7 +138,7 @@ def train(
     model_flops = (
         get_model_tflops(
             model_class=args.model_args.model_class,
-            config=model.config,
+            config=model_list[0].config,
             batch_size=global_batch_size,
             sequence_length=sequence_length,
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
