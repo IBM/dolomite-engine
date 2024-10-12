@@ -68,6 +68,10 @@ class ModelWrapperForPretraining(ModelWrapper):
         self.reset_attention_mask = reset_attention_mask
         self.reset_position_ids = reset_position_ids
 
+        if self.pp_world_size > 1:
+            assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
+            assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
+
         super().__init__(
             mode=mode,
             model_name=model_name,
@@ -227,8 +231,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         else:
             tokens = tokens.to(torch.cuda.current_device())
 
-        input_ids = tokens[:, :-1]
-        labels = tokens[:, 1:]
+        input_ids = tokens[:, :-1] if self.pipeline_stage_id == 0 else None
+        labels = None
 
         return input_ids, labels
 
