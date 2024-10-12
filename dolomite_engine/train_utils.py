@@ -48,7 +48,9 @@ def train_step(
     """
 
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
-        metrics_tracker = _train_step_with_pipeline_parallel(
+        pass
+    else:
+        metrics_tracker = _train_step_without_pipeline_parallel(
             model=model_list[0],
             optimizer=optimizer_list[0],
             lr_scheduler=lr_scheduler_list[0],
@@ -59,8 +61,6 @@ def train_step(
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=sync_every_gradient_accumulation_step,
         )
-    else:
-        pass
 
     return metrics_tracker
 
