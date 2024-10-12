@@ -220,12 +220,36 @@ def wrap_model_list_for_distributed_training(
             num_pipeline_stages
         )
 
+        micro_batch_size = args.training_parameters.micro_batch_size
+        sequence_length = args.datasets[0].class_args.get("sequence_length")
+        hidden_size = args.model_args.pretrained_config.get("n_embd")
+
         for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_list):
+            if pipeline_stage_idx == 0:
+                dummy_input = torch.empty(micro_batch_size, sequence_length + 1, dtype=torch.long, device="meta")
+            else:
+                if args.model_args.use_padding_free_transformer:
+                    dummy_input = torch.empty(
+                        micro_batch_size * sequence_length,
+                        hidden_size,
+                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
+                        device="meta",
+                    )
+                else:
+                    dummy_input = torch.empty(
+                        micro_batch_size,
+                        sequence_length,
+                        hidden_size,
+                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
+                        device="meta",
+                    )
+
             stage = PipelineStage(
                 model,
                 stage_index=pipeline_stage_idx,
                 num_stages=num_pipeline_stages,
                 device=torch.cuda.current_device(),
+                input_args=dummy_input,
                 group=ProcessGroupManager.get_pipeline_parallel_group(),
             )
             pipeline_stages.append(stage)

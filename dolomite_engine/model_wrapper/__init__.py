@@ -1,6 +1,6 @@
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode, TuningMethod
-from ..utils import get_pipeline_num_stages_and_stage_ids_on_current_rank
+from ..utils import ProcessGroupManager, get_pipeline_num_stages_and_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
@@ -21,6 +21,11 @@ def get_model_list(
     args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
 ) -> list[ModelWrapper]:
     tuning_method = args.tuning_args.tuning_method
+
+    if tuning_method != TuningMethod.pretraining:
+        assert (
+            ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+        ), "pipeline parallelism is only supported with pretraining"
 
     if tuning_method not in _MODEL_CLASS_MAPPING:
         raise ValueError(f"unexpected tuning_method ({tuning_method})")
