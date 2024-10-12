@@ -187,18 +187,31 @@ class ModelWrapperForPretraining(ModelWrapper):
             tp_group = ProcessGroupManager.get_tensor_parallel_group()
 
             if self.tp_rank == 0:
-                tokens: torch.Tensor = batch["text"]
+                if self.pp_world_size > 1:
+                    tokens = batch
+                else:
+                    tokens = batch["text"]
+
                 tokens = tokens.to(torch.cuda.current_device())
             else:
-                tokens = torch.empty(
-                    (self.micro_batch_size, self.sequence_length + 1),
-                    dtype=torch.long,
-                    device=torch.cuda.current_device(),
-                )
+                if self.pp_world_size > 1:
+                    tokens = batch
+                else:
+                    tokens = torch.empty(
+                        (self.micro_batch_size, self.sequence_length + 1),
+                        dtype=torch.long,
+                        device=torch.cuda.current_device(),
+                    )
 
-            torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
+            # if not using pipeline parallel, always broadcast otherwise broadcast only on first stage
+            if (self.pp_world_size > 1 and self.pipeline_stage_id == 0) or self.pp_world_size == 1:
+                torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
         else:
-            tokens: torch.Tensor = batch["text"]
+            if self.pp_world_size > 1:
+                tokens = batch
+            else:
+                tokens = batch["text"]
+
             tokens = tokens.to(torch.cuda.current_device())
 
         input_ids = tokens[:, :-1]
