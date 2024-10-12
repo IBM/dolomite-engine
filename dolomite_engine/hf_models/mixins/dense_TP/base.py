@@ -122,31 +122,26 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple | BaseModelOutputWithPast:
-        if self.is_first_stage:
-            (
-                output_hidden_states,
-                use_cache,
-                hidden_states,
-                attention_mask,
-                position_ids,
-                rope_cos_sin,
-                past_key_values,
-            ) = self._prepare_a_bunch_of_stuff(
-                input_ids=input_ids,
-                past_key_values=past_key_values,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-                position_ids=position_ids,
-                inputs_embeds=inputs_embeds,
-                use_cache=use_cache,
-                output_hidden_states=output_hidden_states,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-            )
-        else:
-            assert past_key_values is None
-
-            hidden_states = input_ids
+        (
+            output_hidden_states,
+            use_cache,
+            hidden_states,
+            attention_mask,
+            position_ids,
+            rope_cos_sin,
+            past_key_values,
+        ) = self._prepare_a_bunch_of_stuff(
+            input_ids=input_ids,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            output_hidden_states=output_hidden_states,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+        )
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
