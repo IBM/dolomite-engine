@@ -15,7 +15,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
+from .distributed import set_deepspeed_config, wrap_model_list_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model, log_model
 from .optimization import get_optimizer, get_scheduler, log_optimizer
@@ -345,7 +345,7 @@ def main(mode: Mode = Mode.training) -> None:
         set_deepspeed_config(args)
 
     model = get_model(args, mode)
-    model = wrap_model_for_distributed_training(args, model)
+    model = wrap_model_list_for_distributed_training(args, model)
 
     if args.distributed_args.distributed_backend == DistributedBackend.torch:
         optimizer = get_optimizer(

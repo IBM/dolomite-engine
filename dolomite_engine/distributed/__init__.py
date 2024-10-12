@@ -33,7 +33,7 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 
-def wrap_model_for_distributed_training(args: TrainingArgs, model_list: list[ModelWrapper]) -> list[ModelWrapper]:
+def wrap_model_list_for_distributed_training(args: TrainingArgs, model_list: list[ModelWrapper]) -> list[ModelWrapper]:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -128,7 +128,7 @@ def wrap_model_for_distributed_training(args: TrainingArgs, model_list: list[Mod
         assert stage in [0, 2, 3]
 
         dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
-        block_classes = [get_module_class_from_name(model[0], name) for name in block_names + teacher_block_names]
+        block_classes = [get_module_class_from_name(model_list[0], name) for name in block_names + teacher_block_names]
 
         if args.distributed_args.gradient_checkpointing_method is not None:
             assert len(block_names) == 1

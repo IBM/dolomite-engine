@@ -11,7 +11,7 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
+from .distributed import set_deepspeed_config, wrap_model_list_for_distributed_training
 from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
 from .optimization import get_optimizer, get_scheduler, log_optimizer
@@ -256,7 +256,7 @@ def main() -> None:
             is_encoder_decoder=model.is_encoder_decoder,
         )
 
-    model = wrap_model_for_distributed_training(args, model)
+    model = wrap_model_list_for_distributed_training(args, model)
 
     if args.distributed_args.distributed_backend == DistributedBackend.torch:
         optimizer = get_optimizer(
