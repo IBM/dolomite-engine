@@ -119,11 +119,11 @@ def _train_step_with_pipeline_parallel(
     else:
         batch = torch.zeros(batch_size, sequence_length + 1, dtype=torch.long, device=torch.cuda.current_device())
 
-    if ProcessGroupManager.get_pipeline_parallel_rank() == 0:
+    pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
+
+    if pp_rank == 0:
         pipeline_schedule.step(batch)
-    elif (
-        ProcessGroupManager.get_pipeline_parallel_rank() == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
-    ):
+    elif pp_rank == ProcessGroupManager.get_pipeline_parallel_world_size() - 1:
         losses = []
         labels = batch[:, 1:]
         pipeline_schedule.step(target=labels, losses=losses)
