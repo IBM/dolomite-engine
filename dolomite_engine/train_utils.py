@@ -4,6 +4,7 @@ from contextlib import AbstractContextManager, nullcontext
 import torch
 import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
+from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -12,14 +13,15 @@ from .data import ResumableDataLoader, get_next_batch
 from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
-from .model_wrapper import ModelWrapperForFinetuning
+from .model_wrapper import ModelWrapper
 from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_rank_0
 
 
 def train_step(
-    model: ModelWrapperForFinetuning,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_list: list[ModelWrapper],
+    pipeline_schedule: _PipelineSchedule,
+    optimizer_list: list[Optimizer],
+    lr_scheduler_list: list[LambdaLR],
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
@@ -30,9 +32,10 @@ def train_step(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (ModelWrapperForFinetuning): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
+        model_list (list[ModelWrapper]): list of models
+        pipeline_schedule (_PipelineSchedule): pipeline schedule
+        optimizer_list (list[Optimizer]): list of optimizers
+        lr_scheduler_list (list[LamdaLR]): list of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value

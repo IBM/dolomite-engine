@@ -177,9 +177,10 @@ def train(
         steps_since_start_time += 1
 
         loss_step_dict = train_step(
-            model=model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
+            model_list=model_list,
+            pipeline_schedule=pipeline_schedule,
+            optimizer_list=optimizer_list,
+            lr_scheduler_list=lr_scheduler_list,
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
