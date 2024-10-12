@@ -4,7 +4,7 @@ from warnings import warn
 import torch.nn as nn
 from torch.optim import Optimizer
 
-from .parallel import ProcessGroupManager, run_rank_n
+from .parallel import ProcessGroupManager, is_tracking_rank, run_rank_n
 
 
 _LOGGER: logging.Logger = None
@@ -34,6 +34,15 @@ def get_logger() -> logging.Logger:
 
 @run_rank_n
 def log_rank_0(level: int, msg: str) -> None:
+    logger = get_logger()
+    if logger is not None:
+        logger.log(level=level, msg=msg, stacklevel=3)
+
+
+def log_metrics(level: int, msg: str) -> None:
+    if not is_tracking_rank():
+        return
+
     logger = get_logger()
     if logger is not None:
         logger.log(level=level, msg=msg, stacklevel=3)

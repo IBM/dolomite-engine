@@ -201,7 +201,7 @@ def train(
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            metrics_tracker["learning_rate"] = lr_scheduler.get_lr()[0]
+            metrics_tracker["learning_rate"] = lr_scheduler_list[0].get_lr()[0]
 
             if model_flops is not None:
                 metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed

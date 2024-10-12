@@ -7,7 +7,6 @@ import torch
 import torch.distributed
 from torch.distributed import ProcessGroup
 from torch.distributed.device_mesh import DeviceMesh, init_device_mesh
-from torch.distributed.pipelining.schedules import PipelineScheduleMulti, PipelineScheduleSingle
 
 from .miscellaneous import divide_if_divisible
 
@@ -368,6 +367,15 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
         wrapped_func = func_rank_other
 
     return wrapped_func
+
+
+def is_tracking_rank() -> bool:
+    return (
+        ProcessGroupManager.get_data_parallel_rank() == 0
+        and ProcessGroupManager.get_tensor_parallel_rank() == 0
+        and ProcessGroupManager.get_pipeline_parallel_rank()
+        == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
+    )
 
 
 def get_pipeline_num_stages_and_stage_ids_on_current_rank(num_stages: int) -> tuple[int, tuple[int]]:

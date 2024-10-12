@@ -105,9 +105,7 @@ def _train_step_with_pipeline_parallel(
     """
 
     fsdp_algorithm = 2 if hasattr(model_list[0], "set_requires_gradient_sync") else 1
-
-    metrics_tracker = MetricsTrackingDict({})
-    grad_norm = None
+    grad_norm = []
 
     for optimizer in optimizer_list:
         optimizer.zero_grad()
@@ -116,25 +114,24 @@ def _train_step_with_pipeline_parallel(
 
     if ProcessGroupManager.get_tensor_parallel_rank() == 0:
         batch = batch["text"]
-    else:
-        batch = torch.zeros(batch_size, sequence_length + 1, dtype=torch.long, device=torch.cuda.current_device())
 
-    pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
+    batch = model_list[0].broadcast_tensor_parallel_input(batch, (batch_size, sequence_length + 1))
 
-    if pp_rank == 0:
+    is_first_pipeline_stage = ProcessGroupManager.get_pipeline_parallel_rank() == 0
+    is_last_pipeline_stage = (
+        ProcessGroupManager.get_pipeline_parallel_rank() == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
+    )
+
+    if is_first_pipeline_stage:
         pipeline_schedule.step(batch)
-    elif pp_rank == ProcessGroupManager.get_pipeline_parallel_world_size() - 1:
+    elif is_last_pipeline_stage:
         losses = []
         labels = batch[:, 1:]
         pipeline_schedule.step(target=labels, losses=losses)
     else:
         pipeline_schedule.step()
 
-    with torch.inference_mode():
-        metrics_tracker = metrics_tracker + loss_micro_step_dict
-
     if gradient_clipping is not None:
-        grad_norm = []
         for model in model_list:
             if fsdp_algorithm == 1:
                 grad_norm.append(model.clip_grad_norm_(gradient_clipping))
@@ -145,18 +142,30 @@ def _train_step_with_pipeline_parallel(
         optimizer.step()
         lr_scheduler.step()
 
+    metrics_tracker = MetricsTrackingDict({})
+
     with torch.inference_mode():
-        metrics_tracker = metrics_tracker / gradient_accumulation_steps
+        grad_norm = sum(grad_norm)
+        if not isinstance(grad_norm, torch.Tensor):
+            grad_norm = torch.tensor(grad_norm, device=torch.cuda.current_device())
+        elif isinstance(grad_norm, DTensor):
+            grad_norm = grad_norm.to_local()
 
-        metrics_tracker["grad_norm"] = (
-            torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
-        )
+        torch.distributed.all_reduce(grad_norm, group=ProcessGroupManager.get_pipeline_parallel_group())
 
-        for key in metrics_tracker:
-            if isinstance(metrics_tracker[key], DTensor):
-                metrics_tracker[key] = metrics_tracker[key].to_local()
+        if is_last_pipeline_stage:
+            losses = sum(losses)
 
-        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+            metrics_tracker = metrics_tracker + {"loss": losses, "grad_norm": grad_norm}
+            metrics_tracker = metrics_tracker / gradient_accumulation_steps
+
+            metrics_tracker["grad_norm"] = grad_norm
+
+            for key in metrics_tracker:
+                if isinstance(metrics_tracker[key], DTensor):
+                    metrics_tracker[key] = metrics_tracker[key].to_local()
+
+            metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
     return metrics_tracker
 
@@ -208,12 +217,12 @@ def _train_step_without_pipeline_parallel(
             with forward_context():
                 loss_micro_step_dict = model(batch)
 
-            with torch.inference_mode():
-                metrics_tracker = metrics_tracker + loss_micro_step_dict
-
             # compute gradients
             with backward_context():
                 loss_micro_step_dict["loss"].backward()
+
+            with torch.inference_mode():
+                metrics_tracker = metrics_tracker + loss_micro_step_dict
 
     if fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
@@ -222,12 +231,12 @@ def _train_step_without_pipeline_parallel(
     with forward_context():
         loss_micro_step_dict = model(batch)
 
-    with torch.inference_mode():
-        metrics_tracker = metrics_tracker + loss_micro_step_dict
-
     # compute gradients
     with backward_context():
         loss_micro_step_dict["loss"].backward()
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker + loss_micro_step_dict
 
     if gradient_clipping is not None:
         if fsdp_algorithm == 1:
