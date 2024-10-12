@@ -5,6 +5,7 @@ from functools import partial
 
 import torch
 from torch.distributed._tensor.api import DTensor
+from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -83,6 +84,7 @@ def track_val_metrics(
 def train(
     args: TrainingArgs,
     model_list: list[ModelWrapperForPretraining],
+    pipeline_schedule: _PipelineSchedule,
     optimizer_list: list[Optimizer],
     lr_scheduler_list: list[LambdaLR],
     train_dataloader: DataLoader,
@@ -96,6 +98,7 @@ def train(
     Args:
         args (TrainingArgs): training args
         model_list (ModelWrapperForPretraining): list of models
+        pipeline_schedule (_PipelineSchedule): pipeline schedule
         optimizer_list (list[Optimizer]): list of optimizers
         lr_scheduler_list (list[LRScheduler]): list of learning rate schedulers
         train_dataloader (DataLoader): training dataloader
@@ -344,7 +347,7 @@ def main(mode: Mode = Mode.training) -> None:
     set_seed(args.random_args.seed)
 
     model_list = get_model_list(args, mode)
-    model_list, pipeline_stages = wrap_model_list_for_distributed_training(args, model_list)
+    model_list, pipeline_schedule = wrap_model_list_for_distributed_training(args, model_list)
 
     optimizer_list = get_optimizer_list(
         optimizer_class_name=args.optimizer_args.class_name,
@@ -395,6 +398,7 @@ def main(mode: Mode = Mode.training) -> None:
     train(
         args,
         model_list=model_list,
+        pipeline_schedule=pipeline_schedule,
         optimizer_list=optimizer_list,
         lr_scheduler_list=lr_scheduler_list,
         train_dataloader=train_dataloader,

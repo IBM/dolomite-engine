@@ -1,5 +1,6 @@
 import logging
 from functools import partial
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -12,6 +13,12 @@ from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
 from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from torch.distributed.pipelining import PipelineStage
+from torch.distributed.pipelining.schedules import (
+    PipelineScheduleMulti,
+    PipelineScheduleSingle,
+    _PipelineSchedule,
+    get_schedule_class,
+)
 
 from ..arguments import TrainingArgs
 from ..enums import FP8Backend
@@ -41,7 +48,7 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 
 def wrap_model_list_for_distributed_training(
     args: TrainingArgs, model_list: list[ModelWrapper]
-) -> tuple[list[ModelWrapper], list[PipelineStage]]:
+) -> tuple[list[ModelWrapper], _PipelineSchedule]:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -49,7 +56,7 @@ def wrap_model_list_for_distributed_training(
         model_list (list[ModelWrapper]): list of nn.Module object
 
     Returns:
-        tuple[list[ModelWrapper], list[PipelineStage]]: parallelized list of models and pipeline stages
+        tuple[list[ModelWrapper], _PipelineSchedule]: parallelized list of models and pipeline schedule
     """
 
     stage = args.distributed_args.stage
@@ -261,7 +268,39 @@ def wrap_model_list_for_distributed_training(
             )
             pipeline_stages.append(stage)
 
-    return model_list, pipeline_stages
+        pipeline_schedule = _get_pipeline_parallel_schedule(
+            pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,
+            gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
+            pipeline_stages=pipeline_stages,
+            loss_fn=model.get_loss,
+        )
+
+    return model_list, pipeline_schedule
+
+
+def _get_pipeline_parallel_schedule(
+    pipeline_parallel_schedule: str,
+    gradient_accumulation_steps: int,
+    pipeline_stages: list[PipelineStage],
+    loss_fn: Callable,
+) -> _PipelineSchedule:
+    try:
+        schedule_class = get_schedule_class(pipeline_parallel_schedule)
+    except ValueError:
+        raise ValueError(
+            f"unexpected schedule ({pipeline_parallel_schedule}), expected values are: ['1F1B', "
+            "'Interleaved1F1B', 'GPipe', 'FlexibleInterleaved1F1B', 'LoopedBFS', 'InterleavedZeroBubble', "
+            "'PipelineScheduleSingle', 'PipelineScheduleMulti']"
+        )
+
+    if schedule_class in [PipelineScheduleSingle, PipelineScheduleMulti]:
+        raise NotImplementedError()
+
+    return schedule_class(
+        pipeline_stages if issubclass(schedule_class, PipelineScheduleMulti) else pipeline_stages[0],
+        n_microbatches=gradient_accumulation_steps,
+        loss_fn=loss_fn,
+    )
 
 
 def _get_fsdp_mixed_precision(
