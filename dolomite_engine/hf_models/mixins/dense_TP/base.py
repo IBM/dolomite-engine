@@ -144,8 +144,27 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             )
         else:
             assert past_key_values is None
+            assert attention_mask is None
 
             hidden_states = input_ids
+            past_length = 0
+
+            if self._use_padding_free_transformer:
+                key_length = max_seqlen
+                # query length will change if past_key_values is not None
+                query_length = key_length - past_length
+            else:
+                key_length = (
+                    hidden_states.size(1) * self.tp_world_size if self.sequence_parallel else hidden_states.size(1)
+                )
+                query_length = key_length - past_length
+
+            position_ids = torch.arange(past_length, key_length, dtype=torch.long, device=hidden_states.device)
+            position_ids = position_ids.unsqueeze(0).view(-1, query_length)
+
+            rope_cos_sin = self._get_rope_cos_sin(
+                key_length, position_ids, dtype=hidden_states.dtype, device=hidden_states.device
+            )
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
@@ -190,6 +209,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     sequence_parallel=self.sequence_parallel,
                 )
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
+            if self.pp_world_size > 1:
+                raise NotImplementedError()
+
             self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
             if self.config.rope_scaling is None:
