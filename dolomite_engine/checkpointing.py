@@ -8,7 +8,6 @@ import torch
 import torch.distributed
 import torch.distributed.checkpoint as dcp
 import yaml
-from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import _CHECKPOINT_WRAPPED_MODULE
 from torch.distributed.checkpoint import FileSystemReader
 from torch.distributed.checkpoint.format_utils import _EmptyStateDictLoadPlanner
 from torch.distributed.checkpoint.state_dict import (
@@ -27,7 +26,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from .data import ResumableDataLoader
-from .enums import DistributedBackend, Mode, TuningMethod
+from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model
 from .optimization import get_scheduler
@@ -64,7 +63,6 @@ def save_checkpoint(
         ValueError: if unexpected distributed backend is found
     """
 
-    args.distributed_args.distributed_backend
     save_optimizer = args.save_args.save_optimizer
 
     save_path = _get_base_path(args.save_args.save_path, iteration)
@@ -181,7 +179,6 @@ def load_checkpoint_for_training(
     if args.load_args is None or args.load_args.load_path is None:
         return
 
-    args.distributed_args.distributed_backend
     load_optimizer = args.load_args.load_optimizer
     load_lr_scheduler = args.load_args.load_lr_scheduler
     load_rng_state = args.load_args.load_rng_state
@@ -310,7 +307,6 @@ def load_checkpoint_for_inference(
         log_rank_0(logging.INFO, "overriding mixed precision args")
         args_from_checkpoint.mixed_precision_args = args.mixed_precision_args
 
-    args_from_checkpoint.distributed_args.distributed_backend
     checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_size
 
     with (

@@ -103,7 +103,6 @@ def train(
 
     eval_during_training = args.training_parameters.eval_during_training
     eval_interval = args.training_parameters.eval_interval
-    distributed_backend = args.distributed_args.distributed_backend
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
@@ -170,7 +169,6 @@ def train(
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            distributed_backend=distributed_backend,
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
@@ -339,27 +337,23 @@ def main(mode: Mode = Mode.training) -> None:
     model = get_model(args, mode)
     model = wrap_model_for_distributed_training(args, model)
 
-    if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer = get_optimizer(
-            optimizer_class_name=args.optimizer_args.class_name,
-            optimizer_class_args=args.optimizer_args.class_args,
-            model=model,
-            params_group_method=args.optimizer_args.params_group_method,
-        )
+    optimizer = get_optimizer(
+        optimizer_class_name=args.optimizer_args.class_name,
+        optimizer_class_args=args.optimizer_args.class_args,
+        model=model,
+        params_group_method=args.optimizer_args.params_group_method,
+    )
 
-        lr_scheduler = get_scheduler(
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
-            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
-            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
-            num_training_steps=args.training_parameters.num_training_steps,
-            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
-            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
-            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
-        )
-    else:
-        optimizer = None
-        lr_scheduler = None
+    lr_scheduler = get_scheduler(
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+        num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+        num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+        num_training_steps=args.training_parameters.num_training_steps,
+        lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+        lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+        extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+    )
 
     log_model(model)
     log_optimizer(optimizer)

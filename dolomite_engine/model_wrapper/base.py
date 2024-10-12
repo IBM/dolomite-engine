@@ -68,8 +68,6 @@ class ModelWrapper(nn.Module):
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
-        self.distributed_backend = distributed_backend if self.mode == Mode.training else None
-
         self._setup_config()
 
         if self.tp_world_size > 1:

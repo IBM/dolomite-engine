@@ -306,8 +306,6 @@ class ZeroTopologyArgs(BaseArgs):
 class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
-    # distributed backend to use
-    distributed_backend: DistributedBackend = DistributedBackend.torch
     # overlap communication with computation
     overlap_comm: bool = False
     # use contiguous buffers for gradients, requires more memory if enabled
