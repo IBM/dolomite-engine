@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, DistributedBackend, KLDivergenceMethod, Mode, MoEImplementation
+from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
 from ..utils import log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
@@ -24,7 +24,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
-        distributed_backend: DistributedBackend,
         micro_batch_size: int,
         sequence_length: int,
         teacher_model_name: str | None,
@@ -52,7 +51,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
-            distributed_backend (DistributedBackend): distributed backend to use for model
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -80,7 +78,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
-            distributed_backend=distributed_backend,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
             neft_alpha=neft_alpha,

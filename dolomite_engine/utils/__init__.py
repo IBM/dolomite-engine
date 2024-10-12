@@ -10,7 +10,6 @@ from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torc
 from .packages import (
     is_apex_available,
     is_causal_conv1d_available,
-    is_deepspeed_available,
     is_einops_available,
     is_fla_available,
     is_flash_attention_available,
