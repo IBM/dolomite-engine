@@ -111,13 +111,16 @@ def get_optimizer_list(
 
 
 @run_rank_n
-def log_optimizer(optimizer: Optimizer) -> None:
+def log_optimizer_list(optimizer_list: Optimizer) -> None:
     """print optimizer
 
     Args:
         optimizer (Optimizer): optimizer to print
     """
 
-    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
-    log_rank_0(logging.INFO, optimizer)
-    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")
+    log_rank_0(logging.INFO, "------------------------ optimizer list ------------------------")
+    for optimizer in optimizer_list:
+        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
+        log_rank_0(logging.INFO, optimizer)
+        log_rank_0(logging.INFO, "-------------------- pipeline stage --------------------")
+    log_rank_0(logging.INFO, "-------------------- end of optimizer list ---------------------")
