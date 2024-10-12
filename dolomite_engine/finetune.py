@@ -247,7 +247,7 @@ def main() -> None:
             is_encoder_decoder=model_list[0].is_encoder_decoder,
         )
 
-    model_list = wrap_model_list_for_distributed_training(args, model_list)
+    model_list, _ = wrap_model_list_for_distributed_training(args, model_list)
 
     optimizer_list = get_optimizer_list(
         optimizer_class_name=args.optimizer_args.class_name,

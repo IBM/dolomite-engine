@@ -344,7 +344,7 @@ def main(mode: Mode = Mode.training) -> None:
     set_seed(args.random_args.seed)
 
     model_list = get_model_list(args, mode)
-    model_list = wrap_model_list_for_distributed_training(args, model_list)
+    model_list, pipeline_stages = wrap_model_list_for_distributed_training(args, model_list)
 
     optimizer_list = get_optimizer_list(
         optimizer_class_name=args.optimizer_args.class_name,
