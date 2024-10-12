@@ -6,13 +6,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..enums import AttentionImplementation, Mode, MoEImplementation
 from ..hf_models import get_model_parallel_class, is_custom_model
-from ..utils import (
-    ProcessGroupManager,
-    SafeTensorsWeightsManager,
-    get_pipeline_num_stages_and_stage_ids_on_current_rank,
-    log_rank_0,
-    string_to_torch_dtype,
-)
+from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
 class ModelWrapper(nn.Module):
@@ -91,10 +85,6 @@ class ModelWrapper(nn.Module):
 
         self.num_pipeline_stages = num_pipeline_stages
         self.pipeline_stage_id = pipeline_stage_id
-
-        _, self.stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
-            self.num_pipeline_stages
-        )
 
         if self.use_padding_free_transformer:
             assert is_custom_model(

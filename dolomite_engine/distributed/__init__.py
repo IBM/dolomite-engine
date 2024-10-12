@@ -11,12 +11,19 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
 from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+from torch.distributed.pipelining import PipelineStage
 
 from ..arguments import TrainingArgs
 from ..enums import FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..model_wrapper import ModelWrapper
-from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from ..utils import (
+    ProcessGroupManager,
+    get_module_class_from_name,
+    get_pipeline_num_stages_and_stage_ids_on_current_rank,
+    log_rank_0,
+    string_to_torch_dtype,
+)
 from .fp8 import convert_model_to_transformer_engine
 
 
@@ -31,7 +38,9 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 
-def wrap_model_list_for_distributed_training(args: TrainingArgs, model_list: list[ModelWrapper]) -> list[ModelWrapper]:
+def wrap_model_list_for_distributed_training(
+    args: TrainingArgs, model_list: list[ModelWrapper]
+) -> tuple[list[ModelWrapper], list[PipelineStage]]:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
@@ -39,7 +48,7 @@ def wrap_model_list_for_distributed_training(args: TrainingArgs, model_list: lis
         model_list (list[ModelWrapper]): list of nn.Module object
 
     Returns:
-        list[ModelWrapper]: parallelized list of models
+        tuple[list[ModelWrapper], list[PipelineStage]]: parallelized list of models and pipeline stages
     """
 
     stage = args.distributed_args.stage
@@ -50,6 +59,7 @@ def wrap_model_list_for_distributed_training(args: TrainingArgs, model_list: lis
     fp8_backend = args.mixed_precision_args.fp8_backend
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
+    num_pipeline_stages = args.distributed_args.num_pipeline_stages
 
     if dtype in ["fp16", "bf16"]:
         if communication_dtype != "fp32":
@@ -203,7 +213,24 @@ def wrap_model_list_for_distributed_training(args: TrainingArgs, model_list: lis
         for i in range(len(model_list)):
             model_list[i] = torch.compile(model_list[i])
 
-    return model_list
+    pipeline_stages = []
+
+    if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
+        _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
+            num_pipeline_stages
+        )
+
+        for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_list):
+            stage = PipelineStage(
+                model,
+                stage_index=pipeline_stage_idx,
+                num_stages=num_pipeline_stages,
+                device=torch.cuda.current_device(),
+                group=ProcessGroupManager.get_pipeline_parallel_group(),
+            )
+            pipeline_stages.append(stage)
+
+    return model_list, pipeline_stages
 
 
 def _get_fsdp_mixed_precision(
