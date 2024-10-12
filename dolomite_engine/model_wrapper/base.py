@@ -98,7 +98,7 @@ class ModelWrapper(nn.Module):
         self.pipeline_stage_id = pipeline_stage_id
 
         _, self.stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
-            self.num_pipeline_stages, self.pipeline_schedule
+            self.num_pipeline_stages
         )
 
         if self.use_padding_free_transformer:

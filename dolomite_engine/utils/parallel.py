@@ -370,19 +370,12 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
     return wrapped_func
 
 
-def get_pipeline_num_stages_and_stage_ids_on_current_rank(
-    num_stages: int, schedule: PipelineScheduleSingle | PipelineScheduleMulti
-) -> tuple[int, tuple[int]]:
+def get_pipeline_num_stages_and_stage_ids_on_current_rank(num_stages: int) -> tuple[int, tuple[int]]:
     pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
     pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
 
     num_stages_per_rank = divide_if_divisible(
         num_stages, pp_world_size, f"num_stages {num_stages} must be evenly divisible by pp_world_size {pp_world_size}"
     )
-
-    if isinstance(schedule, PipelineScheduleSingle):
-        assert num_stages_per_rank == 1
-    elif isinstance(schedule, PipelineScheduleMulti):
-        assert num_stages_per_rank > 1
 
     return num_stages_per_rank, tuple(pp_rank + i * pp_world_size for i in range(num_stages_per_rank))
