@@ -19,7 +19,14 @@ from .distributed import wrap_model_list_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model_list
 from .optimization import get_optimizer_list, get_scheduler_list
-from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
+from .train_utils import (
+    all_reduce_metrics_tracker,
+    get_model_tflops,
+    get_torch_profiler,
+    set_train_mode,
+    track_metrics,
+    train_step,
+)
 from .utils import (
     ExperimentsTracker,
     MetricsTrackingDict,
@@ -75,9 +82,9 @@ def track_val_metrics(
 
 def train(
     args: TrainingArgs,
-    model: ModelWrapperForPretraining,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_list: list[ModelWrapperForPretraining],
+    optimizer_list: list[Optimizer],
+    lr_scheduler_list: list[LambdaLR],
     train_dataloader: DataLoader,
     val_dataloaders: list[DataLoader],
     test_dataloaders: list[DataLoader],
@@ -88,9 +95,9 @@ def train(
 
     Args:
         args (TrainingArgs): training args
-        model (ModelWrapperForPretraining): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LRScheduler): learning rate scheduler
+        model_list (ModelWrapperForPretraining): list of models
+        optimizer_list (list[Optimizer]): list of optimizers
+        lr_scheduler_list (list[LRScheduler]): list of learning rate schedulers
         train_dataloader (DataLoader): training dataloader
         val_dataloaders (list[DataLoader]): validation dataloaders
         test_dataloaders (list[DataLoader]): test dataloaders
@@ -112,11 +119,11 @@ def train(
     if val_weighted_split_paths is not None:
         group_names = [key for key in val_weighted_split_paths.keys()[0]]
 
-    model.train()
+    set_train_mode(model_list, mode=True)
 
     if eval_during_training:
         eval_steps = args.datasets[0].class_args.get("eval_steps")
-        evaluate(val_dataloaders, model, starting_iteration, experiments_tracker, eval_steps, group_names)
+        evaluate(val_dataloaders, model_list, starting_iteration, experiments_tracker, eval_steps, group_names)
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
@@ -236,7 +243,7 @@ def train(
 @torch.no_grad()
 def evaluate(
     val_dataloaders: list[DataLoader],
-    model: ModelWrapperForPretraining,
+    model_list: list[ModelWrapperForPretraining],
     global_step: int,
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
@@ -246,7 +253,7 @@ def evaluate(
 
     Args:
         val_dataloaders (list[DataLoader]): list of validation dataloaders
-        model (ModelWrapperForPretraining): model
+        model_list (list[ModelWrapperForPretraining]): list of models
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
@@ -276,7 +283,7 @@ def evaluate(
     if is_val_dataloader_none:
         return
 
-    model.eval()
+    set_train_mode(model_list, mode=False)
 
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
         metrics_tracker = MetricsTrackingDict({})
@@ -301,7 +308,7 @@ def evaluate(
             group_name=group_name,
         )
 
-    model.train()
+    set_train_mode(model_list, mode=True)
 
     return metrics_tracker
 
@@ -364,7 +371,7 @@ def main(mode: Mode = Mode.training) -> None:
     experiments_tracker_state_dict = None
     if args.load_args is not None:
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
-            args, model_list, optimizer, lr_scheduler, None
+            args, model_list, optimizer_list, lr_scheduler_list, None
         )
 
         # metadata field contains the dataloader state so we need to reset it here
@@ -388,8 +395,8 @@ def main(mode: Mode = Mode.training) -> None:
     train(
         args,
         model_list=model_list,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
+        optimizer_list=optimizer_list,
+        lr_scheduler_list=lr_scheduler_list,
         train_dataloader=train_dataloader,
         val_dataloaders=val_dataloaders,
         test_dataloaders=test_dataloaders,

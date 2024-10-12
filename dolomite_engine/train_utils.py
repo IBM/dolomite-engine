@@ -2,6 +2,7 @@ import logging
 from contextlib import AbstractContextManager, nullcontext
 
 import torch
+import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -202,3 +203,8 @@ def get_model_tflops(
     model_flops /= 10**12
 
     return model_flops
+
+
+def set_train_mode(model_list: list[nn.Module], mode: bool = True) -> None:
+    for model in model_list:
+        model.train(mode=mode)
