@@ -18,7 +18,7 @@ from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import set_deepspeed_config, wrap_model_list_for_distributed_training
 from .enums import DistributedBackend, FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model_list, log_model_list
-from .optimization import get_optimizer_list, get_scheduler, log_optimizer
+from .optimization import get_optimizer_list, get_scheduler_list, log_optimizer_list
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -348,15 +348,15 @@ def main(mode: Mode = Mode.training) -> None:
     model_list = wrap_model_list_for_distributed_training(args, model_list)
 
     if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer = get_optimizer_list(
+        optimizer_list = get_optimizer_list(
             optimizer_class_name=args.optimizer_args.class_name,
             optimizer_class_args=args.optimizer_args.class_args,
             model_list=model_list,
             params_group_method=args.optimizer_args.params_group_method,
         )
 
-        lr_scheduler = get_scheduler(
-            optimizer=optimizer,
+        lr_scheduler_list = get_scheduler_list(
+            optimizer_list=optimizer_list,
             num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
             num_constant_steps=args.lr_scheduler_args.num_constant_steps,
             num_decay_steps=args.lr_scheduler_args.num_decay_steps,
