@@ -15,11 +15,12 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .distributed import wrap_model_list_for_distributed_training
+from .distributed import wrap_model_container_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForPretraining, get_model_list
-from .optimization import get_optimizer_list, get_scheduler_list
+from .model_wrapper import ModelWrapperForPretraining, get_model_container
+from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import (
     all_reduce_metrics_tracker,
     get_model_tflops,
@@ -348,18 +349,18 @@ def main(mode: Mode = Mode.training) -> None:
     )
     set_seed(args.random_args.seed)
 
-    model_list = get_model_list(args, mode)
-    model_list, pipeline_schedule = wrap_model_list_for_distributed_training(args, model_list)
+    model_container = get_model_container(args, mode)
+    model_container, pipeline_schedule = wrap_model_container_for_distributed_training(args, model_container)
 
-    optimizer_list = get_optimizer_list(
+    optimizer_container = get_optimizer_container(
         optimizer_class_name=args.optimizer_args.class_name,
         optimizer_class_args=args.optimizer_args.class_args,
-        model_list=model_list,
+        model_container=model_container,
         params_group_method=args.optimizer_args.params_group_method,
     )
 
-    lr_scheduler_list = get_scheduler_list(
-        optimizer_list=optimizer_list,
+    lr_scheduler_container = get_scheduler_container(
+        optimizer_container=optimizer_container,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
         num_decay_steps=args.lr_scheduler_args.num_decay_steps,

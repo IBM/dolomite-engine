@@ -12,8 +12,8 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
+from ..containers import ModelContainer, OptimizerContainer
 from ..enums import ParamsGroupMethod
-from ..model_wrapper import ModelWrapper
 from ..utils import is_apex_available
 from .params_group import get_param_groups_list
 
@@ -52,12 +52,12 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def get_optimizer_list(
+def get_optimizer_container(
     optimizer_class_name: str,
     optimizer_class_args: dict,
-    model_list: list[ModelWrapper],
+    model_container: ModelContainer,
     params_group_method: ParamsGroupMethod,
-) -> list[Optimizer]:
+) -> OptimizerContainer:
     """setup list of optimizers for the model
 
     Args:
@@ -67,7 +67,7 @@ def get_optimizer_list(
         params_group_method (ParamsGroupMethod): the params grouping to use
 
     Returns:
-        list[Optimizer]: list of optimizers
+        OptimizerContainer: optimizer container
     """
 
     if optimizer_class_name not in _OPTIMIZER_CLASSES:
@@ -77,7 +77,7 @@ def get_optimizer_list(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    params_groups_list = get_param_groups_list(model_list, optimizer_class_args, params_group_method)
+    params_groups_list = get_param_groups_list(model_container, optimizer_class_args, params_group_method)
     optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
 
-    return optimizer_list
+    return OptimizerContainer(optimizer_list)

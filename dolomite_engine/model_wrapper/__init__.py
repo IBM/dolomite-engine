@@ -1,4 +1,5 @@
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
+from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
 from ..utils import ProcessGroupManager, get_pipeline_num_stages_and_stage_ids_on_current_rank
 from .base import ModelWrapper
@@ -17,9 +18,9 @@ _MODEL_CLASS_MAPPING = {
 }
 
 
-def get_model_list(
+def get_model_container(
     args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
-) -> list[ModelWrapper]:
+) -> ModelContainer:
     tuning_method = args.tuning_args.tuning_method
 
     if tuning_method != TuningMethod.pretraining:
@@ -67,9 +68,9 @@ def get_model_list(
 
     _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(num_pipeline_stages)
 
-    model = []
+    model_list = []
     for pipeline_stage_id in pipeline_stage_ids_on_current_rank:
         kwargs["pipeline_stage_id"] = pipeline_stage_id
-        model.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
+        model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
-    return model
+    return ModelContainer(model_list)

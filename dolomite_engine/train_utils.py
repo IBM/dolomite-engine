@@ -15,7 +15,7 @@ from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapper
-from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics, log_rank_0
+from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics
 
 
 def train_step(

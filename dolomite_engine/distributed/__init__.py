@@ -21,9 +21,9 @@ from torch.distributed.pipelining.schedules import (
 )
 
 from ..arguments import TrainingArgs
+from ..containers import ModelContainer
 from ..enums import FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
-from ..model_wrapper import ModelWrapper
 from ..utils import (
     ProcessGroupManager,
     divide_if_divisible,
@@ -46,17 +46,17 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 
-def wrap_model_list_for_distributed_training(
-    args: TrainingArgs, model_list: list[ModelWrapper]
-) -> tuple[list[ModelWrapper], _PipelineSchedule]:
+def wrap_model_container_for_distributed_training(
+    args: TrainingArgs, model_container: ModelContainer
+) -> tuple[ModelContainer, _PipelineSchedule]:
     """converts the model to a ZeRO-DP sharded model
 
     Args:
         args (TrainingArgs): arguments based on training mode
-        model_list (list[ModelWrapper]): list of nn.Module object
+        model_container (ModelContainer): model container
 
     Returns:
-        tuple[list[ModelWrapper], _PipelineSchedule]: parallelized list of models and pipeline schedule
+        tuple[model_container, _PipelineSchedule]: container of parallelized models and pipeline schedule
     """
 
     stage = args.distributed_args.stage
@@ -81,8 +81,10 @@ def wrap_model_list_for_distributed_training(
         convert_model_to_transformer_engine(model)
         dtype = "bf16"
 
-    block_names = model_list[0].model._no_split_modules
-    teacher_block_names = model_list[0].teacher_model._no_split_modules if model_list[0].has_teacher_model() else []
+    block_names = model_container[0].model._no_split_modules
+    teacher_block_names = (
+        model_container[0].teacher_model._no_split_modules if model_container[0].has_teacher_model() else []
+    )
 
     dtype = None if dtype is None else string_to_torch_dtype(dtype)
     communication_dtype = None if communication_dtype is None else string_to_torch_dtype(communication_dtype)
@@ -90,12 +92,14 @@ def wrap_model_list_for_distributed_training(
     assert stage in [0, 2, 3]
 
     dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
-    block_classes = [get_module_class_from_name(model_list[0], name) for name in block_names + teacher_block_names]
+    block_classes = [
+        get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
+    ]
 
     if args.distributed_args.gradient_checkpointing_method is not None:
         assert len(block_names) == 1
 
-        for model in model_list:
+        for model in model_container:
             apply_gradient_checkpointing(
                 model,
                 args.distributed_args.gradient_checkpointing_method,
@@ -132,8 +136,8 @@ def wrap_model_list_for_distributed_training(
                 if efficient_initialization and ProcessGroupManager.get_data_parallel_rank() != 0:
                     module = module.to_empty(device=torch.cuda.current_device())
 
-        model_list = [
-            FSDP(
+        for i, model in enumerate(model_container):
+            model_container[i] = FSDP(
                 model,
                 sharding_strategy=sharding_strategy,
                 cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
@@ -151,16 +155,14 @@ def wrap_model_list_for_distributed_training(
                 param_init_fn=_param_init if efficient_initialization else None,
                 device_mesh=dp_mesh,
             )
-            for model in model_list
-        ]
     else:
         if stage == 0:
             log_rank_0(logging.INFO, "using DDP")
 
             assert not efficient_initialization
 
-            model_list = [
-                FSDP(
+            for i, model in enumerate(model_container):
+                model_container[i] = FSDP(
                     model,
                     sharding_strategy=ShardingStrategy.NO_SHARD,
                     cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
@@ -174,8 +176,6 @@ def wrap_model_list_for_distributed_training(
                     use_orig_params=True,
                     device_mesh=dp_mesh,
                 )
-                for model in model_list
-            ]
         else:
             log_rank_0(logging.INFO, "using FSDP-2")
 
@@ -187,7 +187,7 @@ def wrap_model_list_for_distributed_training(
 
             zero3 = stage == 3
 
-            for i, model in enumerate(model_list):
+            for i, model in enumerate(model_container):
                 for module in model.modules():
                     if isinstance(module, tuple(block_classes)):
                         fully_shard(
@@ -213,13 +213,13 @@ def wrap_model_list_for_distributed_training(
                         if hasattr(module, "reset_parameters"):
                             module.reset_parameters()
 
-                    model_list[i] = model
+                    model_container[i] = model
 
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
 
-        for i in range(len(model_list)):
-            model_list[i] = torch.compile(model_list[i])
+        for i in range(len(model_container)):
+            model_container[i] = torch.compile(model_container[i])
 
     pipeline_stages = []
 
@@ -232,7 +232,7 @@ def wrap_model_list_for_distributed_training(
         sequence_length = args.datasets[0].class_args.get("sequence_length")
         hidden_size = args.model_args.pretrained_config.get("n_embd")
 
-        for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_list):
+        for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_container):
             if pipeline_stage_idx == 0:
                 dummy_input = torch.empty(micro_batch_size, sequence_length + 1, dtype=torch.long, device="meta")
             else:
@@ -275,7 +275,7 @@ def wrap_model_list_for_distributed_training(
             loss_fn=model.get_loss,
         )
 
-    return model_list, pipeline_schedule
+    return model_container, pipeline_schedule
 
 
 def _get_pipeline_parallel_schedule(

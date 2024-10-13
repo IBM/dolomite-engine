@@ -3,6 +3,7 @@ import math
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
+from ..containers import LRSchedulerContainer, OptimizerContainer
 from ..enums import LRDecaySchedule
 
 
@@ -190,8 +191,8 @@ _LR_SCHEDULER_CLASSES = {
 }
 
 
-def get_scheduler_list(
-    optimizer_list: list[Optimizer],
+def get_scheduler_container(
+    optimizer_container: OptimizerContainer,
     num_warmup_steps: int,
     num_constant_steps: int,
     num_decay_steps: int,
@@ -215,7 +216,7 @@ def get_scheduler_list(
             **extra_lr_scheduler_args,
             last_epoch=last_epoch,
         )
-        for optimizer in optimizer_list
+        for optimizer in optimizer_container
     ]
 
-    return lr_scheduler_list
+    return LRSchedulerContainer(lr_scheduler_list)
