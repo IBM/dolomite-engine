@@ -139,24 +139,19 @@ class DeltaNet(nn.Module):
             if self.share_conv_kernel:
                 # conv state is updated inplace
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
-
-                c_attn = self.c_attn(hidden_states)
-                q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
+                q, k, v = self._prepare_qkv_for_forward(hidden_states)
             else:
                 conv_state_q = last_state[0] if use_cache else None
                 conv_state_k = last_state[1] if use_cache else None
                 conv_state_v = last_state[2] if use_cache else None
 
-                c_attn = self.c_attn(hidden_states)
-                q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
+                q, k, v = self._prepare_qkv_for_forward(hidden_states)
 
                 q = self.q_conv1d(q, attention_mask, conv_state_q)
                 k = self.k_conv1d(k, attention_mask, conv_state_k)
                 v = self.v_conv1d(v, attention_mask, conv_state_v)
         else:
-            c_attn = self.c_attn(hidden_states)
-            q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
-
+            q, k, v = self._prepare_qkv_for_forward(hidden_states)
             v = F.silu(v)
 
         # dealing with left-padding
@@ -240,3 +235,8 @@ class DeltaNet(nn.Module):
                 )
         state += (param.new_zeros(batch_size, self.num_heads, self.head_qk_dim, self.head_v_dim),)
         return state
+
+    def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+        c_attn = self.c_attn(hidden_states)
+        q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
+        return q, k, v
