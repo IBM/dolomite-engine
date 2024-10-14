@@ -7,6 +7,7 @@ from ..hf_models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     MoEDolomiteForCausalLM,
+    MoEDolomiteForCausalLM_TP,
     RNNDolomiteForCausalLM,
     RNNMoEDolomiteForCausalLM,
 )
@@ -70,6 +71,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             GPTDolomiteForCausalLM_TP,
             RNNDolomiteForCausalLM,
             RNNMoEDolomiteForCausalLM,
+            MoEDolomiteForCausalLM_TP,
         ),
     ), "mup is not supported with this model architecture"
 

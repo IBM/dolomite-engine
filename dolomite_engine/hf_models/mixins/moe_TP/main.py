@@ -61,7 +61,9 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             lm_logits = lm_logits / self.m_width
 
         lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
-        aux_loss = tensor_to_dtensor(transformer_outputs.aux_loss, current_placement=Replicate())
+        aux_loss = tensor_to_dtensor(
+            transformer_outputs.aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate()
+        )
 
         if lm_loss is None:
             loss = None
@@ -73,8 +75,8 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         else:
             if self.tensor_parallel_word_embeddings:
                 # all gather
-                lm_logits = tensor_to_dtensor(lm_logits, current_placement=Shard(-1))
-                lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
+                lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+                lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
         return MoeCausalLMOutputWithPast(
             loss=loss,
