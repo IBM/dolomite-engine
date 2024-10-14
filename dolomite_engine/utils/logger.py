@@ -1,9 +1,7 @@
 import logging
 from warnings import warn
 
-import torch.nn as nn
-from torch.optim import Optimizer
-
+from ..containers import ModelContainer, OptimizerContainer
 from .parallel import ProcessGroupManager, is_tracking_rank, run_rank_n
 
 
@@ -65,16 +63,16 @@ def warn_rank_0(*args, **kwargs) -> None:
     warn(*args, **kwargs, stacklevel=3)
 
 
-def log_model_optimizer_list(model_list: nn.Module, optimizer_list: Optimizer) -> None:
+def log_model_optimizer_container(model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
     """print model and optimizer
 
     Args:
-        model_list (list[nn.Module]): list of models to print
-        optimizer_list (list[Optimizer]): list of optimizers to print
+        model_container (ModelContainer): container of models to print
+        optimizer_container (OptimizerContainer): container of optimizers to print
     """
 
     log_rank_0(logging.INFO, "------------------------ model & optimizer list ------------------------")
-    for model, optimizer in zip(model_list, optimizer_list):
+    for model, optimizer in zip(model_container, optimizer_container):
         log_rank_0(logging.INFO, model)
         log_rank_0(logging.INFO, optimizer)
     log_rank_0(logging.INFO, "-------------------- end of model & optimizer list ---------------------")

@@ -7,8 +7,6 @@ import torch
 from torch.distributed._tensor.api import DTensor
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from transformers import set_seed
 
@@ -21,21 +19,14 @@ from .distributed import wrap_model_container_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
 from .model_wrapper import ModelWrapperForPretraining, get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
-from .train_utils import (
-    all_reduce_metrics_tracker,
-    get_model_tflops,
-    get_torch_profiler,
-    set_train_mode,
-    track_metrics,
-    train_step,
-)
+from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
     MetricsTrackingDict,
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
-    log_model_optimizer_list,
+    log_model_optimizer_container,
     log_rank_0,
     setup_tf32,
 )
@@ -84,10 +75,10 @@ def track_val_metrics(
 
 def train(
     args: TrainingArgs,
-    model_list: list[ModelWrapperForPretraining],
+    model_container: ModelContainer,
     pipeline_schedule: _PipelineSchedule,
-    optimizer_list: list[Optimizer],
-    lr_scheduler_list: list[LambdaLR],
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: DataLoader,
     val_dataloaders: list[DataLoader],
     test_dataloaders: list[DataLoader],
@@ -98,10 +89,10 @@ def train(
 
     Args:
         args (TrainingArgs): training args
-        model_list (ModelWrapperForPretraining): list of models
+        model_container (ModelContainer): container of models
         pipeline_schedule (_PipelineSchedule): pipeline schedule
-        optimizer_list (list[Optimizer]): list of optimizers
-        lr_scheduler_list (list[LRScheduler]): list of learning rate schedulers
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (DataLoader): training dataloader
         val_dataloaders (list[DataLoader]): validation dataloaders
         test_dataloaders (list[DataLoader]): test dataloaders
@@ -123,7 +114,7 @@ def train(
     if val_weighted_split_paths is not None:
         group_names = [key for key in val_weighted_split_paths.keys()[0]]
 
-    set_train_mode(model_list, mode=True)
+    model_container.train()
 
     if eval_during_training:
         eval_steps = args.datasets[0].class_args.get("eval_steps")
@@ -141,7 +132,7 @@ def train(
     model_flops = (
         get_model_tflops(
             model_class=args.model_args.model_class,
-            config=model_list[0].config,
+            config=model_container[0].config,
             batch_size=global_batch_size,
             sequence_length=sequence_length,
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
@@ -177,10 +168,10 @@ def train(
         steps_since_start_time += 1
 
         loss_step_dict = train_step(
-            model_list=model_list,
+            model_container=model_container,
             pipeline_schedule=pipeline_schedule,
-            optimizer_list=optimizer_list,
-            lr_scheduler_list=lr_scheduler_list,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
@@ -202,7 +193,7 @@ def train(
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            metrics_tracker["learning_rate"] = lr_scheduler_list[0].get_lr()[0]
+            metrics_tracker["learning_rate"] = lr_scheduler_container[0].get_lr()[0]
 
             if model_flops is not None:
                 metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed
@@ -370,14 +361,14 @@ def main(mode: Mode = Mode.training) -> None:
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
     )
 
-    log_model_optimizer_list(model_list, optimizer_list)
+    log_model_optimizer_container(model_container, optimizer_container)
 
     starting_iteration = 0
     metadata = None
     experiments_tracker_state_dict = None
     if args.load_args is not None:
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
-            args, model_list, optimizer_list, lr_scheduler_list, None
+            args, model_container, optimizer_container, lr_scheduler_container, None
         )
 
         # metadata field contains the dataloader state so we need to reset it here
@@ -385,7 +376,7 @@ def main(mode: Mode = Mode.training) -> None:
             metadata["consumed_samples"] = 0
 
     train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
-        args, model_list[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
+        args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
     experiments_tracker = ExperimentsTracker(
