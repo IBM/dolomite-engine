@@ -185,7 +185,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_fc = ColumnParallelScatteredExperts(
+        self.c_fc_moe = ColumnParallelScatteredExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
@@ -198,7 +198,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = RowParallelScatteredExperts(
+        self.c_proj_moe = RowParallelScatteredExperts(
             num_experts=config.num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
@@ -207,8 +207,48 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
+        self._init_shared(config, config.shared_n_inner)
 
         self.placement = Shard(0) if sequence_parallel else Replicate()
+
+    def _init_shared(self, config: MoEDolomiteConfig, intermediate_size) -> None:
+        if intermediate_size is not None:
+            tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+            self.shared_out_features_per_device = divide_if_divisible(
+                intermediate_size,
+                # 2 * intermediate_size if is_glu(config.activation_function) else intermediate_size,
+                tp_world_size,
+                f"`shared_n_inner` ({intermediate_size}) must be divisible by "
+                f"`tensor_parallel_world_size` ({tp_world_size})",
+            )
+            sharded_intermediate_size = self.shared_out_features_per_device
+        else:
+            sharded_intermediate_size = None
+        super()._init_shared(config, sharded_intermediate_size)
+        if self.has_shared_expert:
+            # Wrap in DTensor
+            self.c_fc_mlp_weight = nn.Parameter(
+                DTensor.from_local(
+                    self.c_fc_mlp_weight.data,
+                    device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                    placements=[Shard(0)],
+                )
+            )
+            self.c_proj_mlp_weight = nn.Parameter(
+                DTensor.from_local(
+                    self.c_proj_mlp_weight.data,
+                    device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                    placements=[Shard(1)],
+                )
+            )
+
+    def _compute_shared_experts(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = F.linear(hidden_states, self.c_fc_mlp_weight)
+        hidden_states = dtensor_to_tensor(hidden_states, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
+        hidden_states = self.act(hidden_states)
+        hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+        hidden_states = F.linear(hidden_states, self.c_proj_mlp_weight)
+        return hidden_states
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
@@ -234,6 +274,9 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=self.placement)
 
+        if self.has_shared_expert:
+            shared_output = self._compute_shared_experts(hidden_states)
+
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
 
         hidden_states = dtensor_to_tensor(
@@ -243,6 +286,10 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
 
         hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=Partial())
+
+        if self.has_shared_expert:
+            hidden_states = hidden_states + shared_output
+
         hidden_states = dtensor_to_tensor(
             hidden_states, device_mesh=self.tp_mesh, desired_placement=self.placement, grad_placement=self.placement
         )

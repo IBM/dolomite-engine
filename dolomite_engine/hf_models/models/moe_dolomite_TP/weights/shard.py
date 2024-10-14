@@ -86,9 +86,23 @@ def _get_moe(
             config=config,
             safetensors_weights_manager=safetensors_weights_manager,
             prefix=prefix,
+            c_fc_prefix="c_fc_moe.",
+            c_proj_prefix="c_proj_moe.",
             column_parallel_shard_dim=column_parallel_shard_dim,
             row_parallel_shard_dim=row_parallel_shard_dim,
         )
     )
 
+    if config.shared_n_inner is not None:
+        state_dict.update(
+            _get_mlp(
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix,
+                c_fc_prefix="c_fc_mlp_",
+                c_proj_prefix="c_proj_mlp_",
+                column_parallel_shard_dim=0,
+                row_parallel_shard_dim=1,
+            )
+        )
     return state_dict

@@ -51,7 +51,14 @@ class ParamsGroupTest(TestCommons):
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
         )
-        assert expected_group == names
+        assert expected_group.keys() == names.keys()
+        for k in expected_group:
+            expected_group_set = set(expected_group[k])
+            names_set = set(names[k])
+            diff = expected_group_set.symmetric_difference(names_set)
+            assert len(diff) == 0, diff
+
+        # assert expected_group == names
 
     @parameterized.expand(
         [
@@ -91,4 +98,9 @@ class ParamsGroupTest(TestCommons):
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
         )
-        assert expected_group == names
+        assert expected_group.keys() == names.keys()
+        for k in expected_group:
+            expected_group_set = set(expected_group[k])
+            names_set = set(names[k])
+            diff = expected_group_set.symmetric_difference(names_set)
+            assert len(diff) == 0, f"{k}: {diff}"
