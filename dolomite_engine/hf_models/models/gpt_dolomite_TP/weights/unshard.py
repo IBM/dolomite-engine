@@ -204,34 +204,45 @@ def _get_attention(
 
 
 def _get_mlp(
-    tensor_parallel_state_dicts: list[dict], is_glu: bool, add_bias: bool, prefix: str, check_correctness: bool
+    tensor_parallel_state_dicts: list[dict],
+    is_glu: bool,
+    add_bias: bool,
+    prefix: str,
+    check_correctness: bool,
+    c_fc_prefix="c_fc.",
+    c_proj_prefix="c_proj.",
 ) -> dict:
     output = {
         prefix
-        + "c_proj.weight": _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_proj.weight", dim=1
+        + c_proj_prefix
+        + "weight": _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + c_proj_prefix + "weight", dim=1
         )
     }
     if add_bias:
-        output[prefix + "c_proj.bias"] = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
+        output[prefix + c_proj_prefix + "bias"] = _get_once_from_state_dicts_with_check(
+            tensor_parallel_state_dicts, key=prefix + c_proj_prefix + "bias", check_correctness=check_correctness
         )
 
     if is_glu:
-        weights = [state_dict[prefix + "c_fc.weight"].chunk(2) for state_dict in tensor_parallel_state_dicts]
+        print(
+            prefix + c_fc_prefix + "weight",
+            [state_dict[prefix + c_fc_prefix + "weight"].size() for state_dict in tensor_parallel_state_dicts],
+        )
+        weights = [state_dict[prefix + c_fc_prefix + "weight"].chunk(2) for state_dict in tensor_parallel_state_dicts]
         weights = (torch.cat([w[0] for w in weights]), torch.cat([w[1] for w in weights]))
-        output[prefix + "c_fc.weight"] = torch.cat(weights)
+        output[prefix + c_fc_prefix + "weight"] = torch.cat(weights)
         if add_bias:
-            bias = [state_dict[prefix + "c_fc.bias"].chunk(2) for state_dict in tensor_parallel_state_dicts]
+            bias = [state_dict[prefix + c_fc_prefix + "bias"].chunk(2) for state_dict in tensor_parallel_state_dicts]
             bias = (torch.cat([b[0] for b in bias]), torch.cat([b[1] for b in bias]))
-            output[prefix + "c_fc.bias"] = torch.cat(bias)
+            output[prefix + c_fc_prefix + "bias"] = torch.cat(bias)
     else:
-        output[prefix + "c_fc.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_fc.weight", dim=0
+        output[prefix + c_fc_prefix + "weight"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + c_fc_prefix + "weight", dim=0
         )
         if add_bias:
-            output[prefix + "c_fc.bias"] = _concatenate_tensors_from_state_dicts(
-                tensor_parallel_state_dicts, key=prefix + "c_fc.bias", dim=0
+            output[prefix + c_fc_prefix + "bias"] = _concatenate_tensors_from_state_dicts(
+                tensor_parallel_state_dicts, key=prefix + c_fc_prefix + "bias", dim=0
             )
 
     return output

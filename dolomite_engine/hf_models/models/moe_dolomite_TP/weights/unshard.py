@@ -9,6 +9,7 @@ from ...gpt_dolomite_TP.weights.unshard import (
     _get_attention,
     _get_embeddings_or_lm_head,
     _get_layernorm,
+    _get_mlp,
     _get_once_from_state_dicts_with_check,
 )
 from ...moe_dolomite import MoEDolomiteConfig
@@ -135,7 +136,12 @@ def _concatenate_tensors_from_moe(
 
 
 def _get_moe(
-    tensor_parallel_state_dicts: list[dict], config: MoEDolomiteConfig, prefix: str, check_correctness: bool
+    tensor_parallel_state_dicts: list[dict],
+    config: MoEDolomiteConfig,
+    prefix: str,
+    check_correctness: bool,
+    c_fc_prefix="c_fc_moe.",
+    c_proj_prefix="c_proj_moe.",
 ) -> dict:
     assert not config.add_bias
 
@@ -148,17 +154,32 @@ def _get_moe(
 
     if is_glu(config.activation_function):
         # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
-        weights = [state_dict[prefix + "c_fc.weight"].chunk(2, dim=0) for state_dict in tensor_parallel_state_dicts]
+        weights = [
+            state_dict[prefix + c_fc_prefix + "weight"].chunk(2, dim=0) for state_dict in tensor_parallel_state_dicts
+        ]
         weights = (torch.cat([w[0] for w in weights], dim=0), torch.cat([w[1] for w in weights], dim=0))
-        output[prefix + "c_fc.weight"] = torch.cat(weights, dim=0)
+        output[prefix + c_fc_prefix + "weight"] = torch.cat(weights, dim=0)
     else:
-        output[prefix + "c_fc.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, prefix + "c_fc.weight", dim=0
+        output[prefix + c_fc_prefix + "weight"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, prefix + c_fc_prefix + "weight", dim=0
         )
 
-    output[prefix + "c_proj.weight"] = _concatenate_tensors_from_moe(
-        tensor_parallel_state_dicts, prefix + "c_proj.weight", dim=2
+    output[prefix + c_proj_prefix + "weight"] = _concatenate_tensors_from_moe(
+        tensor_parallel_state_dicts, prefix + c_proj_prefix + "weight", dim=2
     )
+    if config.shared_n_inner is not None:
+        output.update(
+            _get_mlp(
+                tensor_parallel_state_dicts,
+                is_glu=is_glu(config.activation_function),
+                add_bias=config.add_bias,
+                prefix=prefix,
+                check_correctness=check_correctness,
+                c_fc_prefix="c_fc_mlp_",
+                c_proj_prefix="c_proj_mlp_",
+            )
+        )
+
     return output
 
 
@@ -167,12 +188,21 @@ def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: 
 
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
-            key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc.weight"
+            key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc_moe.weight"
             weight = state_dict[key]
             weight = weight.chunk(tensor_parallel_size, dim=0)
             weight = [w.chunk(2, dim=0) for w in weight]
             w0 = torch.cat([w[0] for w in weight])
             w1 = torch.cat([w[1] for w in weight])
             state_dict[key] = torch.cat([w0, w1], dim=0)
+
+            if config.shared_n_inner is not None:
+                key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc_mlp_weight"
+                weight = state_dict[key]
+                weight = weight.chunk(tensor_parallel_size, dim=0)
+                weight = [w.chunk(2, dim=0) for w in weight]
+                w0 = torch.cat([w[0] for w in weight])
+                w1 = torch.cat([w[1] for w in weight])
+                state_dict[key] = torch.cat([w0, w1], dim=0)
 
     return state_dict

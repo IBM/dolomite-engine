@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedLinear, ParameterizedTransposedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 
 
@@ -97,7 +97,8 @@ class SparseMoE(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_fc = ParameterizedExperts(
+
+        self.c_fc_moe = ParameterizedExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
@@ -110,7 +111,7 @@ class SparseMoE(nn.Module):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedExperts(
+        self.c_proj_moe = ParameterizedExperts(
             num_experts=config.num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
@@ -119,15 +120,40 @@ class SparseMoE(nn.Module):
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self._init_shared(config, config.shared_n_inner)
+
+    def _init_shared(self, config, intermediate_size):
+        self.has_shared_expert = config.shared_n_inner is not None
+        if self.has_shared_expert:
+            init_method = InitMethod(config.init_method)
+            initializer_range = config.initializer_range
+            m_width = config.m_width
+            std = initializer_range
+            self.c_fc_mlp_weight = nn.Parameter(
+                torch.empty(
+                    2 * intermediate_size if is_glu(config.activation_function) else intermediate_size,
+                    self.hidden_size,
+                )
+            )
+            nn.init.normal_(self.c_fc_mlp_weight, mean=0, std=std)
+            std = initializer_range / math.sqrt(2 * config.n_layer)
+            if init_method == InitMethod.mup:
+                std /= math.sqrt(m_width)
+            self.c_proj_mlp_weight = nn.Parameter(torch.empty(self.hidden_size, intermediate_size))
+            nn.init.normal_(self.c_proj_mlp_weight, mean=0, std=std)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
 
         hidden_states = hidden_states.view(-1, self.hidden_size)
+        hidden_states_ = hidden_states
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
         hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+        if self.has_shared_expert:
+            hidden_states = hidden_states + self._compute_shared_experts(hidden_states_)
 
         if not self.use_padding_free_transformer:
             hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
@@ -164,15 +190,20 @@ class SparseMoE(nn.Module):
 
         expert_inputs = hidden_states[batch_index]
 
-        hidden_states = self.c_fc(expert_inputs, num_experts_per_token)
+        hidden_states = self.c_fc_moe(expert_inputs, num_experts_per_token)
         hidden_states = self.act(hidden_states)
-        hidden_states = self.c_proj(hidden_states, num_experts_per_token)
+        hidden_states = self.c_proj_moe(hidden_states, num_experts_per_token)
 
         hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
         zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
         hidden_states = zeros.index_add(0, batch_index, hidden_states)
-
         return hidden_states
+
+    def _compute_shared_experts(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        mlp_hidden_states = F.linear(hidden_states, self.c_fc_mlp_weight)
+        mlp_hidden_states = self.act(mlp_hidden_states)
+        mlp_hidden_states = F.linear(mlp_hidden_states, self.c_proj_mlp_weight)
+        return mlp_hidden_states
 
     def _compute_expert_assignment(
         self, router_weights: torch.Tensor, selected_experts: torch.Tensor

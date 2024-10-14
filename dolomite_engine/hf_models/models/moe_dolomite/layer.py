@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
@@ -50,13 +48,6 @@ class SparseMoEBlock(nn.Module):
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,
         )
-
-        self.mlp = None
-        if config.shared_n_inner is not None:
-            shared_config = deepcopy(config)
-            shared_config.n_inner = config.shared_n_inner
-            self.mlp = MLP(shared_config)
-            del shared_config
 
     def forward(
         self,
@@ -110,9 +101,4 @@ class SparseMoEBlock(nn.Module):
 
     def _compute_moe_and_mlp(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         moe_output, router_logits, aux_loss = self.moe(hidden_states)
-
-        if self.mlp is not None:
-            mlp_output = self.mlp(hidden_states)
-            moe_output = mlp_output + moe_output
-
         return moe_output, router_logits, aux_loss

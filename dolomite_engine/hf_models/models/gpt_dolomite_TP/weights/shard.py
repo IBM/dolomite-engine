@@ -166,10 +166,12 @@ def _get_mlp(
     prefix: str,
     column_parallel_shard_dim: int,
     row_parallel_shard_dim: int,
+    c_fc_prefix="c_fc.",
+    c_proj_prefix="c_proj.",
 ) -> None:
     # GLU is a special case and needs to be handled explicitely
     if is_glu(config.activation_function):
-        weight = safetensors_weights_manager.get_slice(prefix + "c_fc.weight")
+        weight = safetensors_weights_manager.get_slice(prefix + c_fc_prefix + "weight")
 
         tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -185,7 +187,7 @@ def _get_mlp(
         start_end = (tp_rank * stride, (tp_rank + 1) * stride)
         weight_1 = tensor_parallel_split_safetensor_slice(weight, column_parallel_shard_dim, start_end)
         if config.add_bias:
-            bias = safetensors_weights_manager.get_slice(prefix + "c_fc.bias")
+            bias = safetensors_weights_manager.get_slice(prefix + c_fc_prefix + "bias")
             bias_1 = tensor_parallel_split_safetensor_slice(bias, column_parallel_shard_dim, start_end)
 
         start_end = (
@@ -196,14 +198,14 @@ def _get_mlp(
         if config.add_bias:
             bias_2 = tensor_parallel_split_safetensor_slice(bias, column_parallel_shard_dim, start_end)
 
-        state_dict = {prefix + "c_fc.weight": torch.cat([weight_1, weight_2])}
+        state_dict = {prefix + c_fc_prefix + "weight": torch.cat([weight_1, weight_2])}
         if config.add_bias:
-            state_dict[prefix + "c_fc.bias"] = torch.cat([bias_1, bias_2])
+            state_dict[prefix + c_fc_prefix + "bias"] = torch.cat([bias_1, bias_2])
     else:
         state_dict = _get_column_parallel(
             config=config,
             safetensors_weights_manager=safetensors_weights_manager,
-            prefix=prefix + "c_fc.",
+            prefix=prefix + c_fc_prefix,
             shard_dim=column_parallel_shard_dim,
         )
 
@@ -211,7 +213,7 @@ def _get_mlp(
         _get_row_parallel(
             config=config,
             safetensors_weights_manager=safetensors_weights_manager,
-            prefix=prefix + "c_proj.",
+            prefix=prefix + c_proj_prefix,
             shard_dim=row_parallel_shard_dim,
         )
     )

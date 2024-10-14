@@ -88,7 +88,6 @@ def dtensor_to_tensor(
 @torch.no_grad()
 def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefix: str, strip_keys: bool) -> dict:
     module_state_dict = module.state_dict()
-
     result = {}
     for key, tensor in state_dict.items():
         if key.startswith(prefix):

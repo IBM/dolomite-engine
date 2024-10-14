@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import torch.nn as nn
 
 from ...enums import AttentionHeadType
@@ -61,10 +59,3 @@ class SparseMoEBlock_TP(SparseMoEBlock):
             sequence_parallel=sequence_parallel,
             layer_idx=layer_idx,
         )
-
-        self.mlp = None
-        if config.shared_n_inner is not None:
-            shared_config = deepcopy(config)
-            shared_config.n_inner = config.shared_n_inner
-            self.mlp = MLP_TP(shared_config)
-            del shared_config
