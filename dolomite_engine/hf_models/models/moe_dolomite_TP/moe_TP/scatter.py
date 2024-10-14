@@ -37,12 +37,9 @@ class ReplicatedTransposedLinear_TP(ParameterizedTransposedLinear, DTensorModule
 
         self.weight = nn.Parameter(
             DTensor.from_local(
-                self.weight.T, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
             )
         )
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return input @ self.weight
 
 
 class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
