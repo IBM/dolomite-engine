@@ -72,54 +72,23 @@ def save_checkpoint(
         ValueError: if unexpected distributed backend is found
     """
 
-    num_pipeline_stages = args.distributed_args.num_pipeline_stages
-
     save_optimizer = args.save_args.save_optimizer
 
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    if args.distributed_args.fsdp_algorithm == 1:
-        dp_rank = ProcessGroupManager.get_data_parallel_rank()
+    dcp.save(model_container.state_dict(), checkpoint_id=_get_model_path(save_path))
 
-        # TODO add support for local state dict
-        for local_stage_id, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
-            # for pipeline parallel, we don't pass in the stage
-            global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
-
-            with FSDP.state_dict_type(
-                model,
-                state_dict_type=StateDictType.FULL_STATE_DICT,
-                state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
-                optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
-            ):
-                model_state_dict = model.state_dict()
-                if model.has_teacher_model():
-                    model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
-
-                if dp_rank == 0:
-                    torch.save(model_state_dict, f"{_get_model_path(save_path, global_stage_id=global_stage_id)}.pt")
-
-                if save_optimizer:
-                    optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
-                    if dp_rank == 0:
-                        torch.save(
-                            optimizer_state_dict,
-                            f"{_get_optimizer_path(save_path, global_stage_id=global_stage_id)}.pt",
-                        )
-    else:
-        dcp.save(model_container.state_dict(), checkpoint_id=_get_model_path(save_path))
-
-        if save_optimizer:
-            if optimizer_container is None:
-                log_rank_0(
-                    logging.WARN,
-                    "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
-                    "Therefore, the function will not save the optimizer",
-                )
-            else:
-                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-                dcp.save(optimizer_container.state_dict(model_container), checkpoint_id=_get_optimizer_path(save_path))
+    if save_optimizer:
+        if optimizer_container is None:
+            log_rank_0(
+                logging.WARN,
+                "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
+                "Therefore, the function will not save the optimizer",
+            )
+        else:
+            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+            dcp.save(optimizer_container.state_dict(model_container), checkpoint_id=_get_optimizer_path(save_path))
 
     if lr_scheduler_container is None:
         log_rank_0(
