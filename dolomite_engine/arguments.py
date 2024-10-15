@@ -340,7 +340,7 @@ class DistributedArgs(BaseArgs):
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
     # total number of pipeline stages
-    num_pipeline_stages: int | None = None
+    num_pipeline_stages: int = 1
     # pipeline parallel shedule to use
     pipeline_parallel_schedule: str = ""
 
