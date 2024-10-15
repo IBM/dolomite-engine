@@ -215,14 +215,16 @@ def train(
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
             save_checkpoint(
-                args,
-                model,
-                optimizer,
-                lr_scheduler,
-                None,
-                experiments_tracker,
-                global_step,
-                {"consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size},
+                args=args,
+                model_container=model_container,
+                optimizer_container=optimizer_container,
+                lr_scheduler_container=lr_scheduler_container,
+                train_dataloader=None,
+                experiments_tracker=experiments_tracker,
+                iteration=global_step,
+                metadata={
+                    "consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size
+                },
             )
 
             start_time = time.perf_counter()
