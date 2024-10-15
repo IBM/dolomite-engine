@@ -51,10 +51,10 @@ def train_step(
 
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
         metrics_tracker = _train_step_with_pipeline_parallel(
-            model_list=model_list,
+            model_container=model_container,
             pipeline_schedule=pipeline_schedule,
-            optimizer_list=optimizer_list,
-            lr_scheduler_list=lr_scheduler_list,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
