@@ -49,6 +49,9 @@ def train_step(
         MetricsTrackingDict: metrics to track
     """
 
+    assert len(model_container) == len(optimizer_container)
+    assert len(optimizer_container) == len(lr_scheduler_container)
+
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
         metrics_tracker = _train_step_with_pipeline_parallel(
             model_container=model_container,
@@ -63,8 +66,6 @@ def train_step(
         )
     else:
         assert len(model_container) == 1
-        assert len(optimizer_container) == 1
-        assert len(lr_scheduler_container) == 1
 
         metrics_tracker = _train_step_without_pipeline_parallel(
             model=model_container[0],
