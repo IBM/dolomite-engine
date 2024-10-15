@@ -104,8 +104,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> BaseModelOutputWithPast:
-        original_attention_mask = attention_mask
-
         (
             output_hidden_states,
             use_cache,
@@ -137,7 +135,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
-                original_attention_mask=original_attention_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,

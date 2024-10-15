@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
@@ -53,46 +51,3 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
         )
 
         self.mlp = MLP(config)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        original_attention_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor]:
-        residual = hidden_states
-        hidden_states = self.ln_1(hidden_states)
-
-        hidden_states = self.attn(
-            hidden_states,
-            past_key_values=past_key_values,
-            attention_mask=(
-                attention_mask if self.attention_pattern == "flash_attention_2" else original_attention_mask
-            ),
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
-
-        if self.m_residual is not None:
-            hidden_states = hidden_states * self.m_residual
-
-        # residual connection
-        hidden_states = hidden_states + residual
-
-        residual = hidden_states
-        hidden_states = self.ln_2(hidden_states)
-
-        hidden_states = self.mlp(hidden_states)
-
-        if self.m_residual is not None:
-            hidden_states = hidden_states * self.m_residual
-
-        # residual connection
-        hidden_states = hidden_states + residual
-
-        return hidden_states
