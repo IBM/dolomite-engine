@@ -8,6 +8,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, get_next_batch
 from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
@@ -17,10 +18,10 @@ from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager,
 
 
 def train_step(
-    model_list: list[ModelWrapper],
+    model_container: ModelContainer,
     pipeline_schedule: _PipelineSchedule,
-    optimizer_list: list[Optimizer],
-    lr_scheduler_list: list[LambdaLR],
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
@@ -33,10 +34,10 @@ def train_step(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model_list (list[ModelWrapper]): list of models
+        model_container (ModelContainer): container of models
         pipeline_schedule (_PipelineSchedule): pipeline schedule
-        optimizer_list (list[Optimizer]): list of optimizers
-        lr_scheduler_list (list[LamdaLR]): list of learning rate schedulers
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
@@ -61,10 +62,14 @@ def train_step(
             sequence_length=sequence_length,
         )
     else:
+        assert len(model_container) == 1
+        assert len(optimizer_container) == 1
+        assert len(lr_scheduler_container) == 1
+
         metrics_tracker = _train_step_without_pipeline_parallel(
-            model=model_list[0],
-            optimizer=optimizer_list[0],
-            lr_scheduler=lr_scheduler_list[0],
+            model=model_container[0],
+            optimizer=optimizer_container[0],
+            lr_scheduler=lr_scheduler_container[0],
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
@@ -77,10 +82,10 @@ def train_step(
 
 
 def _train_step_with_pipeline_parallel(
-    model_list: list[ModelWrapper],
+    model_container: ModelContainer,
     pipeline_schedule: _PipelineSchedule,
-    optimizer_list: list[Optimizer],
-    lr_scheduler_list: list[LambdaLR],
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
@@ -90,10 +95,10 @@ def _train_step_with_pipeline_parallel(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model_list (list[ModelWrapper]): list of models
+        model_container (ModelContainer): container of models
         pipeline_schedule (_PipelineSchedule): pipeline schedule
-        optimizer_list (list[Optimizer]): list of optimizers
-        lr_scheduler_list (list[LamdaLR]): list of learning rate schedulers
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
@@ -102,18 +107,17 @@ def _train_step_with_pipeline_parallel(
         MetricsTrackingDict: metrics to track
     """
 
-    fsdp_algorithm = 2 if hasattr(model_list[0], "set_requires_gradient_sync") else 1
+    fsdp_algorithm = 2 if hasattr(model_container[0], "set_requires_gradient_sync") else 1
     grad_norm = []
 
-    for optimizer in optimizer_list:
-        optimizer.zero_grad()
+    optimizer_container.zero_grad()
 
     batch = get_next_batch(train_dataloader)
 
     if ProcessGroupManager.get_tensor_parallel_rank() == 0:
         batch = batch["text"]
 
-    batch = model_list[0].broadcast_tensor_parallel_input(batch, (batch_size, sequence_length + 1))
+    batch = model_container[0].broadcast_tensor_parallel_input(batch, (batch_size, sequence_length + 1))
 
     is_first_pipeline_stage = ProcessGroupManager.get_pipeline_parallel_rank() == 0
     is_last_pipeline_stage = (
@@ -130,15 +134,14 @@ def _train_step_with_pipeline_parallel(
         pipeline_schedule.step()
 
     if gradient_clipping is not None:
-        for model in model_list:
+        for model in model_container:
             if fsdp_algorithm == 1:
                 grad_norm.append(model.clip_grad_norm_(gradient_clipping))
             else:
                 grad_norm.append(torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping))
 
-    for optimizer, lr_scheduler in zip(optimizer_list, lr_scheduler_list):
-        optimizer.step()
-        lr_scheduler.step()
+    optimizer_container.step()
+    lr_scheduler_container.step()
 
     metrics_tracker = MetricsTrackingDict({})
 

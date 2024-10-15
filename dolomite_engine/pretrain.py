@@ -118,7 +118,7 @@ def train(
 
     if eval_during_training:
         eval_steps = args.datasets[0].class_args.get("eval_steps")
-        evaluate(val_dataloaders, model_list, starting_iteration, experiments_tracker, eval_steps, group_names)
+        evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
@@ -126,6 +126,7 @@ def train(
     global_batch_size = local_batch_size * ProcessGroupManager.get_data_parallel_world_size()
     tokens_per_batch = global_batch_size * sequence_length
 
+    ProcessGroupManager.get_pipeline_parallel_world_size()
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
 
     # model flops per GPU
@@ -391,10 +392,10 @@ def main(mode: Mode = Mode.training) -> None:
     # main training loop
     train(
         args,
-        model_list=model_list,
+        model_container=model_container,
         pipeline_schedule=pipeline_schedule,
-        optimizer_list=optimizer_list,
-        lr_scheduler_list=lr_scheduler_list,
+        optimizer_container=optimizer_container,
+        lr_scheduler_container=lr_scheduler_container,
         train_dataloader=train_dataloader,
         val_dataloaders=val_dataloaders,
         test_dataloaders=test_dataloaders,
