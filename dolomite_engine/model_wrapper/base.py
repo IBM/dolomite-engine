@@ -239,11 +239,7 @@ class ModelWrapper(nn.Module):
 
             self.model = _get_model(torch_dtype=torch_dtype)
 
-        num_parameters = 0
-        for param in self.model.parameters():
-            num_parameters += param.numel()
-
-        log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")
+        log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
 
     def _override_embedding_forward_with_neft_forward(self, neft_alpha: float) -> None:
         if not hasattr(self.model, "get_input_embeddings"):
@@ -266,6 +262,19 @@ class ModelWrapper(nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
+
+    def calculate_num_parameters(self) -> int:
+        with torch.device("meta"):
+            if self.model_name is None:
+                model = self.model_class.from_config(config=self.config)
+            else:
+                model = self.model_class.from_pretrained(pretrained_model_name_or_path=self.model_name)
+
+            num_parameters = 0
+            for param in model.parameters():
+                num_parameters += param.numel()
+
+            return num_parameters
 
     def has_teacher_model(self) -> bool:
         return False
