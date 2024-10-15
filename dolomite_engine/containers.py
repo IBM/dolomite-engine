@@ -1,11 +1,13 @@
 import logging
+from typing import Any, Dict
 
 import torch.nn as nn
+from torch.distributed.checkpoint.stateful import Stateful
 
 from .utils import log_rank_0
 
 
-class _Container:
+class _Container(Stateful):
     def __init__(self, model_list: list[nn.Module]) -> None:
         self.model_list = model_list
 
@@ -18,6 +20,13 @@ class _Container:
 
     def __setindex__(self, index: int, model: nn.Module) -> None:
         self.model_list[index] = model
+
+    def state_dict(self) -> Dict[str, Any]:
+        # NOTE that the lr scheduler overrites for each stage since its the same thing on every stage
+        final_state_dict = {}
+        for model in self:
+            final_state_dict.update(model.state_dict())
+        return final_state_dict
 
 
 class ModelContainer(_Container):

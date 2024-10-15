@@ -108,29 +108,22 @@ def save_checkpoint(
                             f"{_get_optimizer_path(save_path, global_stage_id=global_stage_id)}.pt",
                         )
     else:
-        for local_stage_id, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
-            # for pipeline parallel, we don't pass in the stage
-            global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
+        model_state_dict = get_model_state_dict(model_container)
+        if model_container[0].has_teacher_model():
+            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
-            model_state_dict = get_model_state_dict(model)
-            if model.has_teacher_model():
-                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
 
-            dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, global_stage_id=global_stage_id))
-
-            if save_optimizer:
-                if optimizer is None:
-                    log_rank_0(
-                        logging.WARN,
-                        "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
-                        "Therefore, the function will not save the optimizer",
-                    )
-                else:
-                    # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-                    dcp.save(
-                        get_optimizer_state_dict(model, optimizer),
-                        checkpoint_id=_get_optimizer_path(save_path, global_stage_id=global_stage_id),
-                    )
+        if save_optimizer:
+            if optimizer is None:
+                log_rank_0(
+                    logging.WARN,
+                    "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
+                    "Therefore, the function will not save the optimizer",
+                )
+            else:
+                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+                dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
 
     if lr_scheduler_container is None:
         log_rank_0(
@@ -138,12 +131,7 @@ def save_checkpoint(
             "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
         )
     else:
-        for local_stage_id, lr_scheduler in enumerate(lr_scheduler_container):
-            # for pipeline parallel, we don't pass in the stage
-            global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
-            run_rank_n(torch.save)(
-                lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path, global_stage_id=global_stage_id)
-            )
+        run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -434,22 +422,16 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str, global_stage_id: int | None = None) -> str:
-    if global_stage_id is None:
-        return os.path.join(path, "model")
-    return os.path.join(path, f"model-{global_stage_id}")
+def _get_model_path(path: str) -> str:
+    return os.path.join(path, "model")
 
 
-def _get_optimizer_path(path: str, global_stage_id: int | None = None) -> str:
-    if global_stage_id is None:
-        return os.path.join(path, "optimizer")
-    return os.path.join(path, f"optimizer-{global_stage_id}")
+def _get_optimizer_path(path: str) -> str:
+    return os.path.join(path, "optimizer")
 
 
-def _get_lr_scheduler_path(path: str, global_stage_id: int | None = None) -> str:
-    if global_stage_id is None:
-        return os.path.join(path, "lr_scheduler.pt")
-    return os.path.join(path, f"lr_scheduler-{global_stage_id}.pt")
+def _get_lr_scheduler_path(path: str) -> str:
+    return os.path.join(path, "lr_scheduler.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
