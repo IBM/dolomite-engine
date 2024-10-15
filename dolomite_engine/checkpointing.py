@@ -31,7 +31,15 @@ from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_scheduler_container
-from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
+from .utils import (
+    ExperimentsTracker,
+    ProcessGroupManager,
+    get_global_stage_id_from_local_stage_id,
+    load_yaml,
+    log_rank_0,
+    run_rank_n,
+    string_to_torch_dtype,
+)
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
@@ -64,7 +72,7 @@ def save_checkpoint(
         ValueError: if unexpected distributed backend is found
     """
 
-    pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
+    num_pipeline_stages = args.distributed_args.num_pipeline_stages
 
     save_optimizer = args.save_args.save_optimizer
 
@@ -75,10 +83,9 @@ def save_checkpoint(
         dp_rank = ProcessGroupManager.get_data_parallel_rank()
 
         # TODO add support for local state dict
-        for stage, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
+        for local_stage_id, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
             # for pipeline parallel, we don't pass in the stage
-            if pp_world_size == 1:
-                stage = None
+            global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
 
             with FSDP.state_dict_type(
                 model,
@@ -91,23 +98,25 @@ def save_checkpoint(
                     model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
                 if dp_rank == 0:
-                    torch.save(model_state_dict, f"{_get_model_path(save_path, stage=stage)}.pt")
+                    torch.save(model_state_dict, f"{_get_model_path(save_path, global_stage_id=global_stage_id)}.pt")
 
                 if save_optimizer:
                     optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
                     if dp_rank == 0:
-                        torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path, stage=stage)}.pt")
+                        torch.save(
+                            optimizer_state_dict,
+                            f"{_get_optimizer_path(save_path, global_stage_id=global_stage_id)}.pt",
+                        )
     else:
-        for stage, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
+        for local_stage_id, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
             # for pipeline parallel, we don't pass in the stage
-            if pp_world_size == 1:
-                stage = None
+            global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
 
             model_state_dict = get_model_state_dict(model)
             if model.has_teacher_model():
                 model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
-            dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, stage=stage))
+            dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, global_stage_id=global_stage_id))
 
             if save_optimizer:
                 if optimizer is None:
@@ -131,9 +140,7 @@ def save_checkpoint(
     else:
         for stage, lr_scheduler in enumerate(lr_scheduler_container):
             # for pipeline parallel, we don't pass in the stage
-            if pp_world_size == 1:
-                stage = None
-
+            global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
             run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path, stage=stage))
 
     rng_state = {

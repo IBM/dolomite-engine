@@ -378,7 +378,12 @@ def is_tracking_rank() -> bool:
     )
 
 
-def get_pipeline_num_stages_and_stage_ids_on_current_rank(num_stages: int) -> tuple[int, tuple[int]]:
+def get_pipeline_num_stages_and_stage_ids_on_current_rank(num_stages: int | None) -> tuple[int, tuple[int]]:
+    if num_stages is None:
+        assert ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+    else:
+        assert ProcessGroupManager.get_pipeline_parallel_world_size() > 1
+
     pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
     pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
 
@@ -387,3 +392,12 @@ def get_pipeline_num_stages_and_stage_ids_on_current_rank(num_stages: int) -> tu
     )
 
     return num_stages_per_rank, tuple(pp_rank + i * pp_world_size for i in range(num_stages_per_rank))
+
+
+def get_global_stage_id_from_local_stage_id(num_stages: int | None, local_stage_id: int) -> int | None:
+    if num_stages is None:
+        assert ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+        return None
+
+    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(num_stages)
+    return pipeline_stage_ids_on_current_rank[local_stage_id]
