@@ -25,6 +25,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader
 from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
@@ -39,9 +40,9 @@ _INFERENCE_CONFIG_PREFIX = "inference_config"
 
 def save_checkpoint(
     args: TrainingArgs,
-    model: ModelWrapper,
-    optimizer: Optimizer | None,
-    lr_scheduler: LambdaLR | None,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer | None,
+    lr_scheduler_container: LRSchedulerContainer | None,
     train_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
     iteration: int,
@@ -51,9 +52,9 @@ def save_checkpoint(
 
     Args:
         args (TrainingArgs): arguments for training
-        model (ModelWrapper): model to save
-        optimizer (Optimizer): optimizer to save
-        lr_scheduler (LambdaLR): learning rate scheduler to save
+        model_container (ModelContainer): models to save
+        optimizer_container (OptimizerContainer): optimizers to save
+        lr_scheduler_container (LRSchedulerContainer): learning rate schedulers to save
         train_dataloader (DataLoader): train dataloader to save
         experiments_tracker (ExperimentsTracker): experiment tracker to save
         iteration (int): current iteration
@@ -62,6 +63,8 @@ def save_checkpoint(
     Raises:
         ValueError: if unexpected distributed backend is found
     """
+
+    pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
 
     save_optimizer = args.save_args.save_optimizer
 
@@ -72,48 +75,66 @@ def save_checkpoint(
         dp_rank = ProcessGroupManager.get_data_parallel_rank()
 
         # TODO add support for local state dict
-        with FSDP.state_dict_type(
-            model,
-            state_dict_type=StateDictType.FULL_STATE_DICT,
-            state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
-            optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
-        ):
-            model_state_dict = model.state_dict()
+        for stage, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
+            # for pipeline parallel, we don't pass in the stage
+            if pp_world_size == 1:
+                stage = None
+
+            with FSDP.state_dict_type(
+                model,
+                state_dict_type=StateDictType.FULL_STATE_DICT,
+                state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+                optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            ):
+                model_state_dict = model.state_dict()
+                if model.has_teacher_model():
+                    model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
+                if dp_rank == 0:
+                    torch.save(model_state_dict, f"{_get_model_path(save_path, stage=stage)}.pt")
+
+                if save_optimizer:
+                    optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
+                    if dp_rank == 0:
+                        torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path, stage=stage)}.pt")
+    else:
+        for stage, (model, optimizer) in enumerate(zip(model_container, optimizer_container)):
+            # for pipeline parallel, we don't pass in the stage
+            if pp_world_size == 1:
+                stage = None
+
+            model_state_dict = get_model_state_dict(model)
             if model.has_teacher_model():
                 model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
-            if dp_rank == 0:
-                torch.save(model_state_dict, f"{_get_model_path(save_path)}.pt")
+            dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, stage=stage))
 
             if save_optimizer:
-                optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
-                if dp_rank == 0:
-                    torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
-    else:
-        model_state_dict = get_model_state_dict(model)
-        if model.has_teacher_model():
-            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+                if optimizer is None:
+                    log_rank_0(
+                        logging.WARN,
+                        "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
+                        "Therefore, the function will not save the optimizer",
+                    )
+                else:
+                    # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+                    dcp.save(
+                        get_optimizer_state_dict(model, optimizer),
+                        checkpoint_id=_get_optimizer_path(save_path, stage=stage),
+                    )
 
-        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
-
-        if save_optimizer:
-            if optimizer is None:
-                log_rank_0(
-                    logging.WARN,
-                    "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
-                    "Therefore, the function will not save the optimizer",
-                )
-            else:
-                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-                dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
-
-    if lr_scheduler is None:
+    if lr_scheduler_container is None:
         log_rank_0(
             logging.WARN,
             "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
         )
     else:
-        run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
+        for stage, lr_scheduler in enumerate(lr_scheduler_container):
+            # for pipeline parallel, we don't pass in the stage
+            if pp_world_size == 1:
+                stage = None
+
+            run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path, stage=stage))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -404,16 +425,22 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str) -> str:
-    return os.path.join(path, "model")
+def _get_model_path(path: str, stage: int | None = None) -> str:
+    if stage is None:
+        return os.path.join(path, "model")
+    return os.path.join(path, f"model-{stage}")
 
 
-def _get_optimizer_path(path: str) -> str:
-    return os.path.join(path, "optimizer")
+def _get_optimizer_path(path: str, stage: int | None = None) -> str:
+    if stage is None:
+        return os.path.join(path, "optimizer")
+    return os.path.join(path, f"optimizer-{stage}")
 
 
-def _get_lr_scheduler_path(path: str) -> str:
-    return os.path.join(path, "lr_scheduler.pt")
+def _get_lr_scheduler_path(path: str, stage: int | None = None) -> str:
+    if stage is None:
+        return os.path.join(path, "lr_scheduler.pt")
+    return os.path.join(path, f"lr_scheduler-{stage}.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
