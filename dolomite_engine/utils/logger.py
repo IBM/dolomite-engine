@@ -1,7 +1,6 @@
 import logging
 from warnings import warn
 
-from ..containers import ModelContainer, OptimizerContainer
 from .parallel import ProcessGroupManager, is_tracking_rank, run_rank_n
 
 
@@ -61,18 +60,3 @@ def warn_rank_0(*args, **kwargs) -> None:
     """warn on a single process"""
 
     warn(*args, **kwargs, stacklevel=3)
-
-
-def log_model_optimizer_container(model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
-    """print model and optimizer
-
-    Args:
-        model_container (ModelContainer): container of models to print
-        optimizer_container (OptimizerContainer): container of optimizers to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ model & optimizer list ------------------------")
-    for model, optimizer in zip(model_container, optimizer_container):
-        log_rank_0(logging.INFO, model)
-        log_rank_0(logging.INFO, optimizer)
-    log_rank_0(logging.INFO, "-------------------- end of model & optimizer list ---------------------")

@@ -13,7 +13,7 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
-from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import wrap_model_container_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
@@ -26,7 +26,6 @@ from .utils import (
     ProcessGroupManager,
     init_distributed,
     is_transformer_engine_available,
-    log_model_optimizer_container,
     log_rank_0,
     setup_tf32,
 )
