@@ -11,10 +11,10 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
-from .distributed import wrap_model_list_for_distributed_training
+from .distributed import wrap_model_container_for_distributed_training
 from .enums import DatasetSplit, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForFinetuning, get_model_list
-from .optimization import get_optimizer_list, get_scheduler_list
+from .model_wrapper import ModelWrapperForFinetuning, get_model_container
+from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -227,7 +227,7 @@ def main() -> None:
     )
     set_seed(args.random_args.seed)
 
-    model_list = get_model_list(args, mode)
+    model_list = get_model_container(args, mode)
 
     train_dataloader = get_dataloader(
         args,
@@ -247,16 +247,16 @@ def main() -> None:
             is_encoder_decoder=model_list[0].is_encoder_decoder,
         )
 
-    model_list, _ = wrap_model_list_for_distributed_training(args, model_list)
+    model_list, _ = wrap_model_container_for_distributed_training(args, model_list)
 
-    optimizer_list = get_optimizer_list(
+    optimizer_list = get_optimizer_container(
         optimizer_class_name=args.optimizer_args.class_name,
         optimizer_class_args=args.optimizer_args.class_args,
         model_list=model_list,
         params_group_method=args.optimizer_args.params_group_method,
     )
 
-    lr_scheduler = get_scheduler_list(
+    lr_scheduler = get_scheduler_container(
         optimizer_list=optimizer_list,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,

@@ -28,8 +28,8 @@ from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from .data import ResumableDataLoader
 from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
-from .model_wrapper import ModelWrapper, get_model_list
-from .optimization import get_scheduler_list
+from .model_wrapper import ModelWrapper, get_model_container
+from .optimization import get_scheduler_container
 from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 
@@ -314,7 +314,7 @@ def load_checkpoint_for_inference(
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
     ):
-        model = get_model_list(args_from_checkpoint, mode)
+        model = get_model_container(args_from_checkpoint, mode)
 
     if use_meta:
         model = model.to_empty(device="cpu")
@@ -377,7 +377,7 @@ def _resume_learning_rate(
 
     # we create lr scheduler again here since optimizer is loaded from disk and lr scheduler is now out of sync
     # this helps to resume phase 2
-    lr_scheduler_tmp = get_scheduler(
+    lr_scheduler_tmp = get_scheduler_container(
         optimizer=optimizer,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
