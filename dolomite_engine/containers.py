@@ -1,26 +1,18 @@
-import logging
-
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
-
-from .model_wrapper import ModelWrapper
-from .utils import log_rank_0
+import torch.nn as nn
 
 
 class _Container:
-    model_list: list[ModelWrapper | Optimizer | LambdaLR]
-
-    def __init__(self, model_list: list[ModelWrapper]) -> None:
+    def __init__(self, model_list: list[nn.Module]) -> None:
         self.model_list = model_list
 
     def __iter__(self):
         for model in self.model_list:
             yield model
 
-    def __getitem__(self, index: int) -> ModelWrapper:
+    def __getitem__(self, index: int) -> nn.Module:
         return self.model_list[index]
 
-    def __setindex__(self, index: int, model: ModelWrapper) -> None:
+    def __setindex__(self, index: int, model: nn.Module) -> None:
         self.model_list[index] = model
 
 
