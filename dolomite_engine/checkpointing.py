@@ -129,7 +129,7 @@ def save_checkpoint(
                     # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
                     dcp.save(
                         get_optimizer_state_dict(model, optimizer),
-                        checkpoint_id=_get_optimizer_path(save_path, stage=stage),
+                        checkpoint_id=_get_optimizer_path(save_path, global_stage_id=global_stage_id),
                     )
 
     if lr_scheduler_container is None:
@@ -138,10 +138,12 @@ def save_checkpoint(
             "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
         )
     else:
-        for stage, lr_scheduler in enumerate(lr_scheduler_container):
+        for local_stage_id, lr_scheduler in enumerate(lr_scheduler_container):
             # for pipeline parallel, we don't pass in the stage
             global_stage_id = get_global_stage_id_from_local_stage_id(num_pipeline_stages, local_stage_id)
-            run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path, stage=stage))
+            run_rank_n(torch.save)(
+                lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path, global_stage_id=global_stage_id)
+            )
 
     rng_state = {
         "random_rng_state": random.getstate(),
