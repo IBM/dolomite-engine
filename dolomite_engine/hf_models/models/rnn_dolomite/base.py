@@ -26,6 +26,12 @@ class RNNDolomitePreTrainedModel(PreTrainedModelMixin):
     def __init__(self, config: RNNDolomiteConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
 
+        self.attention_implementation = "flash_attention_2"
+
+        self._use_eager_attention = False
+        self._use_sdpa = False
+        self._use_flash_attention_2 = True
+
         assert not self._use_padding_free_transformer, "RNN models are not implemented with padding free transformer"
 
 
