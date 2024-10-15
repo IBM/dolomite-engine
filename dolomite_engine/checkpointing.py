@@ -432,22 +432,22 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str, stage: int | None = None) -> str:
-    if stage is None:
+def _get_model_path(path: str, global_stage_id: int | None = None) -> str:
+    if global_stage_id is None:
         return os.path.join(path, "model")
-    return os.path.join(path, f"model-{stage}")
+    return os.path.join(path, f"model-{global_stage_id}")
 
 
-def _get_optimizer_path(path: str, stage: int | None = None) -> str:
-    if stage is None:
+def _get_optimizer_path(path: str, global_stage_id: int | None = None) -> str:
+    if global_stage_id is None:
         return os.path.join(path, "optimizer")
-    return os.path.join(path, f"optimizer-{stage}")
+    return os.path.join(path, f"optimizer-{global_stage_id}")
 
 
-def _get_lr_scheduler_path(path: str, stage: int | None = None) -> str:
-    if stage is None:
+def _get_lr_scheduler_path(path: str, global_stage_id: int | None = None) -> str:
+    if global_stage_id is None:
         return os.path.join(path, "lr_scheduler.pt")
-    return os.path.join(path, f"lr_scheduler-{stage}.pt")
+    return os.path.join(path, f"lr_scheduler-{global_stage_id}.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
