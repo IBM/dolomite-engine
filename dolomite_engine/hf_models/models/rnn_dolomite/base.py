@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import Cache
+from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import is_fla_available
@@ -87,7 +87,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: Cache | None = None,
+        past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -97,7 +97,9 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple | BaseModelOutputWithPast:
+    ) -> BaseModelOutputWithPast:
+        original_attention_mask = attention_mask
+
         (
             output_hidden_states,
             use_cache,
@@ -129,6 +131,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
+                original_attention_mask=original_attention_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
