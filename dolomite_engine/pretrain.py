@@ -125,21 +125,19 @@ def train(
     global_batch_size = local_batch_size * ProcessGroupManager.get_data_parallel_world_size()
     tokens_per_batch = global_batch_size * sequence_length
 
-    ProcessGroupManager.get_pipeline_parallel_world_size()
+    pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
 
     # model flops per GPU
-    model_flops = (
-        get_model_tflops(
-            model_class=args.model_args.model_class,
-            config=model_container[0].config,
-            batch_size=global_batch_size,
-            sequence_length=sequence_length,
-            gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
-            gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
-        )
-        / dp_world_size
-    )
+    # we divide by pipeline parallel world size since each unit takes 1 / PP time
+    model_flops = get_model_tflops(
+        model_class=args.model_args.model_class,
+        config=model_container[0].config,
+        batch_size=global_batch_size,
+        sequence_length=sequence_length,
+        gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
+        gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
+    ) / (dp_world_size * pp_world_size)
 
     forward_context = (
         partial(
