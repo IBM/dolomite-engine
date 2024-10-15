@@ -108,14 +108,10 @@ def save_checkpoint(
                             f"{_get_optimizer_path(save_path, global_stage_id=global_stage_id)}.pt",
                         )
     else:
-        model_state_dict = get_model_state_dict(model_container)
-        if model_container[0].has_teacher_model():
-            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
-
-        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
+        dcp.save(model_container.state_dict(), checkpoint_id=_get_model_path(save_path))
 
         if save_optimizer:
-            if optimizer is None:
+            if optimizer_container is None:
                 log_rank_0(
                     logging.WARN,
                     "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
@@ -123,7 +119,7 @@ def save_checkpoint(
                 )
             else:
                 # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-                dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
+                dcp.save(optimizer_container.state_dict(model_container), checkpoint_id=_get_optimizer_path(save_path))
 
     if lr_scheduler_container is None:
         log_rank_0(
@@ -452,12 +448,3 @@ def _get_experiments_tracker_path(path: str) -> str:
 
 def _get_metadata_path(path: str) -> str:
     return os.path.join(path, "metadata.json")
-
-
-def _filter_out_teacher_state_dict(state_dict: dict) -> dict:
-    result = {}
-    for key, value in state_dict.items():
-        if not "teacher_model" in key:
-            result[key] = value
-
-    return result
