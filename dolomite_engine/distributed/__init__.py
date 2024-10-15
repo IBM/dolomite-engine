@@ -222,6 +222,7 @@ def wrap_model_container_for_distributed_training(
             model_container[i] = torch.compile(model_container[i])
 
     pipeline_stages = []
+    pipeline_schedule = None
 
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
         _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
