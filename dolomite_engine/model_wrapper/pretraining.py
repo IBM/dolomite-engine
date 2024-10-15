@@ -216,7 +216,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         if self.pp_world_size == 1:
             if self.tp_world_size > 1:
                 tokens = self.broadcast_tensor_parallel_input(
-                    batch["text"], (self.micro_batch_size, self.sequence_length + 1)
+                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
                 )
             else:
                 tokens = batch["text"]
