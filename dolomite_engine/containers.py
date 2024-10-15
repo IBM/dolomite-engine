@@ -19,6 +19,9 @@ class _Container:
     def __setindex__(self, index: int, model: nn.Module) -> None:
         self.model_list[index] = model
 
+    def __len__(self) -> int:
+        return len(self.model_list)
+
 
 class ModelContainer(_Container):
     def train(self) -> "ModelContainer":
