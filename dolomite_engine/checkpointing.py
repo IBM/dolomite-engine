@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import random
+from typing import Any, Dict
 
 import numpy as np
 import torch
@@ -18,6 +19,7 @@ from torch.distributed.checkpoint.state_dict import (
     set_optimizer_state_dict,
 )
 from torch.distributed.checkpoint.state_dict_loader import _load_state_dict
+from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import StateDictType
@@ -31,19 +33,59 @@ from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_scheduler_container
-from .utils import (
-    ExperimentsTracker,
-    ProcessGroupManager,
-    get_global_stage_id_from_local_stage_id,
-    load_yaml,
-    log_rank_0,
-    run_rank_n,
-    string_to_torch_dtype,
-)
+from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
 _INFERENCE_CONFIG_PREFIX = "inference_config"
+
+
+class _Saver(Stateful):
+    def __init__(
+        self,
+        model_container: ModelContainer,
+        optimizer_container: OptimizerContainer,
+        lr_scheduler_container: LRSchedulerContainer,
+    ) -> None:
+        super().__init__()
+
+        self.model_container = model_container
+        self.optimizer_container = optimizer_container
+        self.lr_scheduler_container = lr_scheduler_container
+
+        self.current_save = None
+
+    def set_current_save(self, current_save: int) -> None:
+        self.current_save = current_save
+
+    def state_dict(self) -> Dict[str, Any]:
+        final_state_dict = {}
+
+        if self.current_save == 0:
+            for model in self.model_container:
+                model_state_dict = get_model_state_dict(model)
+
+                if model.has_teacher_model():
+                    model_state_dict = self._filter_out_teacher_state_dict(model_state_dict)
+
+                final_state_dict.update(model_state_dict)
+        elif self.current_save == 1:
+            for model, optimizer in zip(self.model_container, self.optimizer_container):
+                optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
+                final_state_dict.update(optimizer_state_dict)
+        elif self.current_save == 2:
+            for lr_scheduler in self.lr_scheduler_container:
+                final_state_dict.update(lr_scheduler.state_dict())
+
+        return final_state_dict
+
+    def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
+        result = {}
+        for key, value in state_dict.items():
+            if not "teacher_model" in key:
+                result[key] = value
+
+        return result
 
 
 def save_checkpoint(
@@ -77,8 +119,12 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    dcp.save(model_container.state_dict(), checkpoint_id=_get_model_path(save_path))
+    saver = _Saver(model_container, optimizer_container, lr_scheduler_container)
 
+    saver.set_current_save(0)
+    dcp.save({"model": saver}, checkpoint_id=_get_model_path(save_path))
+
+    saver.set_current_save(1)
     if save_optimizer:
         if optimizer_container is None:
             log_rank_0(
@@ -88,8 +134,9 @@ def save_checkpoint(
             )
         else:
             # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            dcp.save(optimizer_container.state_dict(model_container), checkpoint_id=_get_optimizer_path(save_path))
+            dcp.save({"optimizer": saver}, checkpoint_id=_get_optimizer_path(save_path))
 
+    saver.set_current_save(2)
     if lr_scheduler_container is None:
         log_rank_0(
             logging.WARN,
