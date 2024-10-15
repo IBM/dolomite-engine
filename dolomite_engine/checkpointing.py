@@ -143,7 +143,7 @@ def save_checkpoint(
             "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
         )
     else:
-        run_rank_n(torch.save)(lr_scheduler_container.state_dict(), _get_lr_scheduler_path(save_path))
+        run_rank_n(torch.save)({"lr_scheduler": saver.state_dict()}, _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
