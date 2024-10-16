@@ -240,7 +240,7 @@ def train(
 @torch.no_grad()
 def evaluate(
     val_dataloaders: list[DataLoader],
-    model_list: list[ModelWrapperForPretraining],
+    model_container: ModelContainer,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
@@ -250,7 +250,7 @@ def evaluate(
 
     Args:
         val_dataloaders (list[DataLoader]): list of validation dataloaders
-        model_list (list[ModelWrapperForPretraining]): list of models
+        model_container (ModelContainer): container of models
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
@@ -280,7 +280,7 @@ def evaluate(
     if is_val_dataloader_none:
         return
 
-    set_train_mode(model_list, mode=False)
+    model_container.eval()
 
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
         metrics_tracker = MetricsTrackingDict({})
@@ -305,7 +305,7 @@ def evaluate(
             group_name=group_name,
         )
 
-    set_train_mode(model_list, mode=True)
+    model_container.train()
 
     return metrics_tracker
 
