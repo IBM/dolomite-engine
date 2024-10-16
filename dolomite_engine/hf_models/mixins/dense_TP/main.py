@@ -233,15 +233,20 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             if self.tensor_parallel_word_embeddings and output_parallel_lm_logits_if_possible:
                 vocab_size = divide_if_divisible(vocab_size, ProcessGroupManager.get_tensor_parallel_world_size(), "")
 
-            dtype = torch.float32 if self.upcast_logits_for_loss else intermediate_dtype
-
             if self._use_padding_free_transformer:
                 tensor = torch.empty(
-                    micro_batch_size * sequence_length, vocab_size, device=torch.cuda.current_device(), dtype=dtype
+                    micro_batch_size * sequence_length,
+                    vocab_size,
+                    device=torch.cuda.current_device(),
+                    dtype=intermediate_dtype,
                 )
             else:
                 tensor = torch.empty(
-                    micro_batch_size, sequence_length, vocab_size, device=torch.cuda.current_device(), dtype=dtype
+                    micro_batch_size,
+                    sequence_length,
+                    vocab_size,
+                    device=torch.cuda.current_device(),
+                    dtype=intermediate_dtype,
                 )
         else:
             tensor = self._get_dummy_intermediate_tensor(
