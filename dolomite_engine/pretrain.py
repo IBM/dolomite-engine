@@ -260,6 +260,56 @@ def evaluate(
         MetricsTrackingDict: metrics tracker
     """
 
+    if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
+        metrics_tracker = _train_step_with_pipeline_parallel(
+            model_container=model_container,
+            pipeline_schedule=pipeline_schedule,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
+            train_dataloader=train_dataloader,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_clipping=gradient_clipping,
+            batch_size=batch_size,
+            sequence_length=sequence_length,
+        )
+    else:
+        assert len(model_container) == 1
+
+        metrics_tracker = _evaluate_without_pipeline_parallel(
+            val_dataloaders=val_dataloaders,
+            model=model_container[0],
+            global_step=global_step,
+            experiments_tracker=experiments_tracker,
+            eval_steps=eval_steps,
+            group_names=group_names,
+        )
+
+    return metrics_tracker
+
+
+@torch.no_grad()
+def _evaluate_without_pipeline_parallel(
+    val_dataloaders: list[DataLoader],
+    model: ModelWrapperForPretraining,
+    global_step: int,
+    experiments_tracker: ExperimentsTracker,
+    eval_steps: int,
+    group_names: list[str],
+) -> float:
+    """main validation loop for the program
+
+    Args:
+        val_dataloaders (list[DataLoader]): list of validation dataloaders
+        model (ModelWrapperForPretraining): model
+        global_step (int): global step during training
+        experiments_tracker (ExperimentsTracker): metrics tracker
+        eval_steps (int): number of steps to run eval for
+        group_names (list[str]): names of the datasets in validation/test group
+
+    Returns:
+        MetricsTrackingDict: metrics tracker
+    """
+
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
     if tp_world_size > 1:
@@ -280,7 +330,7 @@ def evaluate(
     if is_val_dataloader_none:
         return
 
-    model_container.eval()
+    model.eval()
 
     for group_name, val_dataloader in zip(group_names, val_dataloaders):
         metrics_tracker = MetricsTrackingDict({})
@@ -305,7 +355,7 @@ def evaluate(
             group_name=group_name,
         )
 
-    model_container.train()
+    model.train()
 
     return metrics_tracker
 
