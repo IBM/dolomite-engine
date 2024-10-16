@@ -1,22 +1,6 @@
 import torch
 
 
-def divide_if_divisible(dividend: int, divisor: int, msg: str) -> int:
-    """divide if divisible else raise an error
-
-    Args:
-        dividend (int): dividend
-        divisor (int): divisor
-        msg (str): error message
-
-    Returns:
-        int: result
-    """
-
-    assert dividend % divisor == 0, msg
-    return dividend // divisor
-
-
 def convert_padding_free_lists_to_tensors(
     input_ids: list[list[int]] | None = None,
     inputs_embeds: list[list[float]] | None = None,

@@ -25,11 +25,12 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader
 from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
-from .model_wrapper import ModelWrapper, get_model
-from .optimization import get_scheduler
+from .model_wrapper import ModelWrapper, get_model_container
+from .optimization import get_scheduler_container
 from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 
@@ -39,9 +40,9 @@ _INFERENCE_CONFIG_PREFIX = "inference_config"
 
 def save_checkpoint(
     args: TrainingArgs,
-    model: ModelWrapper,
-    optimizer: Optimizer | None,
-    lr_scheduler: LambdaLR | None,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer | None,
+    lr_scheduler_container: LRSchedulerContainer | None,
     train_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
     iteration: int,
@@ -51,9 +52,9 @@ def save_checkpoint(
 
     Args:
         args (TrainingArgs): arguments for training
-        model (ModelWrapper): model to save
-        optimizer (Optimizer): optimizer to save
-        lr_scheduler (LambdaLR): learning rate scheduler to save
+        model_container (ModelContainer): models to save
+        optimizer_container (OptimizerContainer): optimizers to save
+        lr_scheduler_container (LRSchedulerContainer): learning rate schedulers to save
         train_dataloader (DataLoader): train dataloader to save
         experiments_tracker (ExperimentsTracker): experiment tracker to save
         iteration (int): current iteration
@@ -90,14 +91,14 @@ def save_checkpoint(
                 if dp_rank == 0:
                     torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
     else:
-        model_state_dict = get_model_state_dict(model)
-        if model.has_teacher_model():
-            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+        model_state_dict = get_model_state_dict(model_container[0])
+        # if model.has_teacher_model():
+        #     model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
         dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
 
         if save_optimizer:
-            if optimizer is None:
+            if optimizer_container is None:
                 log_rank_0(
                     logging.WARN,
                     "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
@@ -105,15 +106,18 @@ def save_checkpoint(
                 )
             else:
                 # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-                dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
+                dcp.save(
+                    get_optimizer_state_dict(model_container[0], optimizer_container[0]),
+                    checkpoint_id=_get_optimizer_path(save_path),
+                )
 
-    if lr_scheduler is None:
+    if lr_scheduler_container is None:
         log_rank_0(
             logging.WARN,
             "lr_scheduler is not passed to save_checkpoint. " "Therefore, the function will not save the lr_scheduler",
         )
     else:
-        run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
+        run_rank_n(torch.save)(lr_scheduler_container[0].state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),

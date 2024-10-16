@@ -1,7 +1,7 @@
 import logging
 from warnings import warn
 
-from .parallel import ProcessGroupManager, run_rank_n
+from .parallel import ProcessGroupManager, is_tracking_rank, run_rank_n
 
 
 _LOGGER: logging.Logger = None
@@ -22,7 +22,7 @@ def set_logger(level: int = logging.INFO, colored_log: bool = False) -> None:
         logging.basicConfig(level=level, handlers=[stream], format="%(asctime)s - [%(levelname)-8s] ▶ %(message)s")
 
     global _LOGGER
-    _LOGGER = run_rank_n(logging.getLogger)()
+    _LOGGER = logging.getLogger()
 
 
 def get_logger() -> logging.Logger:
@@ -31,9 +31,14 @@ def get_logger() -> logging.Logger:
 
 @run_rank_n
 def log_rank_0(level: int, msg: str) -> None:
-    logger = get_logger()
-    if logger is not None:
-        logger.log(level=level, msg=msg, stacklevel=3)
+    get_logger().log(level=level, msg=msg, stacklevel=3)
+
+
+def log_metrics(level: int, msg: str) -> None:
+    if not is_tracking_rank():
+        return
+
+    get_logger().log(level=level, msg=msg, stacklevel=3)
 
 
 @run_rank_n
