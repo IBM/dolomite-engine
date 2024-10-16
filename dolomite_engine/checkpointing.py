@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import random
-from typing import Any, Dict
 
 import numpy as np
 import torch
@@ -19,7 +18,6 @@ from torch.distributed.checkpoint.state_dict import (
     set_optimizer_state_dict,
 )
 from torch.distributed.checkpoint.state_dict_loader import _load_state_dict
-from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import StateDictType
@@ -38,54 +36,6 @@ from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_
 
 _TRAINING_CONFIG_PREFIX = "training_config"
 _INFERENCE_CONFIG_PREFIX = "inference_config"
-
-
-class _Saver(Stateful):
-    def __init__(
-        self,
-        model_container: ModelContainer,
-        optimizer_container: OptimizerContainer,
-        lr_scheduler_container: LRSchedulerContainer,
-    ) -> None:
-        super().__init__()
-
-        self.model_container = model_container
-        self.optimizer_container = optimizer_container
-        self.lr_scheduler_container = lr_scheduler_container
-
-        self.current_save = None
-
-    def set_current_save(self, current_save: int) -> None:
-        self.current_save = current_save
-
-    def state_dict(self) -> Dict[str, Any]:
-        final_state_dict = {}
-
-        if self.current_save == 0:
-            for model in self.model_container:
-                model_state_dict = get_model_state_dict(model)
-
-                if model.has_teacher_model():
-                    model_state_dict = self._filter_out_teacher_state_dict(model_state_dict)
-
-                final_state_dict.update(model_state_dict)
-        elif self.current_save == 1:
-            for model, optimizer in zip(self.model_container, self.optimizer_container):
-                optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-                final_state_dict.update(optimizer_state_dict)
-        elif self.current_save == 2:
-            for lr_scheduler in self.lr_scheduler_container:
-                final_state_dict.update(lr_scheduler.state_dict())
-
-        return final_state_dict
-
-    def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
-        result = {}
-        for key, value in state_dict.items():
-            if not "teacher_model" in key:
-                result[key] = value
-
-        return result
 
 
 def save_checkpoint(
@@ -119,31 +69,55 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    saver = _Saver(model_container, optimizer_container, lr_scheduler_container)
+    if args.distributed_args.fsdp_algorithm == 1:
+        dp_rank = ProcessGroupManager.get_data_parallel_rank()
 
-    saver.set_current_save(0)
-    dcp.save({"model": saver}, checkpoint_id=_get_model_path(save_path))
+        # TODO add support for local state dict
+        with FSDP.state_dict_type(
+            model,
+            state_dict_type=StateDictType.FULL_STATE_DICT,
+            state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
+        ):
+            model_state_dict = model.state_dict()
+            if model.has_teacher_model():
+                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
-    saver.set_current_save(1)
-    if save_optimizer:
-        if optimizer_container is None:
-            log_rank_0(
-                logging.WARN,
-                "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
-                "Therefore, the function will not save the optimizer",
-            )
-        else:
-            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            dcp.save({"optimizer": saver}, checkpoint_id=_get_optimizer_path(save_path))
+            if dp_rank == 0:
+                torch.save(model_state_dict, f"{_get_model_path(save_path)}.pt")
 
-    saver.set_current_save(2)
+            if save_optimizer:
+                optimizer_state_dict = FSDP.optim_state_dict(model=model, optim=optimizer)
+                if dp_rank == 0:
+                    torch.save(optimizer_state_dict, f"{_get_optimizer_path(save_path)}.pt")
+    else:
+        model_state_dict = get_model_state_dict(model_container[0])
+        # if model.has_teacher_model():
+        #     model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
+        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
+
+        if save_optimizer:
+            if optimizer_container is None:
+                log_rank_0(
+                    logging.WARN,
+                    "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
+                    "Therefore, the function will not save the optimizer",
+                )
+            else:
+                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+                dcp.save(
+                    get_optimizer_state_dict(model_container[0], optimizer_container[0]),
+                    checkpoint_id=_get_optimizer_path(save_path),
+                )
+
     if lr_scheduler_container is None:
         log_rank_0(
             logging.WARN,
-            "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
+            "lr_scheduler is not passed to save_checkpoint. " "Therefore, the function will not save the lr_scheduler",
         )
     else:
-        run_rank_n(torch.save)({"lr_scheduler": saver.state_dict()}, _get_lr_scheduler_path(save_path))
+        run_rank_n(torch.save)(lr_scheduler_container[0].state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -344,7 +318,7 @@ def load_checkpoint_for_inference(
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
     ):
-        model = get_model_container(args_from_checkpoint, mode)
+        model = get_model(args_from_checkpoint, mode)
 
     if use_meta:
         model = model.to_empty(device="cpu")
@@ -407,7 +381,7 @@ def _resume_learning_rate(
 
     # we create lr scheduler again here since optimizer is loaded from disk and lr scheduler is now out of sync
     # this helps to resume phase 2
-    lr_scheduler_tmp = get_scheduler_container(
+    lr_scheduler_tmp = get_scheduler(
         optimizer=optimizer,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
@@ -464,3 +438,12 @@ def _get_experiments_tracker_path(path: str) -> str:
 
 def _get_metadata_path(path: str) -> str:
     return os.path.join(path, "metadata.json")
+
+
+def _filter_out_teacher_state_dict(state_dict: dict) -> dict:
+    result = {}
+    for key, value in state_dict.items():
+        if not "teacher_model" in key:
+            result[key] = value
+
+    return result
