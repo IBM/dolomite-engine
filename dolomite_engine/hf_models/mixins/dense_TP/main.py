@@ -206,29 +206,46 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         self.load_state_dict(state_dict)
 
-    def get_dummy_input_shape(self, micro_batch_size: int, sequence_length: int) -> tuple[int]:
+    def get_dummy_input_shape(
+        self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
+    ) -> tuple[int]:
         if self.is_first_stage:
             # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
-            shape = (micro_batch_size, sequence_length + 1)
+            tensor = torch.empty(
+                micro_batch_size, sequence_length + 1, device=torch.cuda.current_device(), dtype=torch.long
+            )
         else:
-            shape = self._get_dummy_intermediate_shape(micro_batch_size, sequence_length)
+            tensor = self._get_dummy_intermediate_tensor(
+                micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+            )
 
-        return shape
+        return tensor
 
-    def get_dummy_output_shape(self, micro_batch_size: int, sequence_length: int) -> tuple[int]:
+    def get_dummy_output_shape(
+        self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
+    ) -> tuple[int]:
         if self.is_last_stage:
             vocab_size = self.config.vocab_size
+            dtype = torch.float32 if self.upcast_logits_for_loss else intermediate_dtype
 
             if self._use_padding_free_transformer:
-                shape = (micro_batch_size * sequence_length, vocab_size)
+                tensor = torch.empty(
+                    micro_batch_size * sequence_length, vocab_size, device=torch.cuda.current_device(), dtype=dtype
+                )
             else:
-                shape = (micro_batch_size, sequence_length, vocab_size)
+                tensor = torch.empty(
+                    micro_batch_size, sequence_length, vocab_size, device=torch.cuda.current_device(), dtype=dtype
+                )
         else:
-            shape = self._get_dummy_intermediate_shape(micro_batch_size, sequence_length)
+            tensor = self._get_dummy_intermediate_tensor(
+                micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+            )
 
-        return shape
+        return tensor
 
-    def _get_dummy_intermediate_shape(self, micro_batch_size: int, sequence_length: int) -> tuple[int]:
+    def _get_dummy_intermediate_tensor(
+        self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
+    ) -> tuple[int]:
         sharded_sequence_length = (
             divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
             if self.sequence_parallel
@@ -238,8 +255,19 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         hidden_size = self.config.hidden_size
 
         if self._use_padding_free_transformer:
-            shape = (micro_batch_size * sharded_sequence_length, hidden_size)
+            tensor = torch.empty(
+                micro_batch_size * sharded_sequence_length,
+                hidden_size,
+                device=torch.cuda.current_device(),
+                dtype=intermediate_dtype,
+            )
         else:
-            shape = (micro_batch_size, sharded_sequence_length, hidden_size)
+            tensor = torch.empty(
+                micro_batch_size,
+                sharded_sequence_length,
+                hidden_size,
+                device=torch.cuda.current_device(),
+                dtype=intermediate_dtype,
+            )
 
-        return shape
+        return tensor
