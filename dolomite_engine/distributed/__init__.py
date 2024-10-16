@@ -240,7 +240,10 @@ def wrap_model_container_for_distributed_training(
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
             dummy_output_tensor = model.model.get_dummy_output_tensor(
-                micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+                micro_batch_size,
+                sequence_length,
+                intermediate_dtype=intermediate_dtype,
+                output_parallel_lm_logits_if_possible=True,
             )
 
             stage = PipelineStage(

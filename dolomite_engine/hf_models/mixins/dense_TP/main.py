@@ -222,10 +222,17 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         return tensor
 
     def get_dummy_output_tensor(
-        self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
+        self,
+        micro_batch_size: int,
+        sequence_length: int,
+        intermediate_dtype: torch.dtype,
+        output_parallel_lm_logits_if_possible: bool,
     ) -> tuple[int]:
         if self.is_last_stage:
             vocab_size = self.config.vocab_size
+            if self.tensor_parallel_word_embeddings and output_parallel_lm_logits_if_possible:
+                vocab_size = divide_if_divisible(vocab_size, ProcessGroupManager.get_tensor_parallel_world_size(), "")
+
             dtype = torch.float32 if self.upcast_logits_for_loss else intermediate_dtype
 
             if self._use_padding_free_transformer:
