@@ -206,7 +206,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         self.load_state_dict(state_dict)
 
-    def get_dummy_input_shape(
+    def get_dummy_input_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
     ) -> tuple[int]:
         if self.is_first_stage:
@@ -221,7 +221,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         return tensor
 
-    def get_dummy_output_shape(
+    def get_dummy_output_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
     ) -> tuple[int]:
         if self.is_last_stage:
