@@ -235,24 +235,22 @@ def wrap_model_container_for_distributed_training(
 
         with torch.no_grad():
             for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_container):
-                dummy_input_shape = model.get_dummy_input_shape(micro_batch_size, sequence_length)
-                dummy_output_shape = model.get_dummy_output_shape(micro_batch_size, sequence_length)
+                intermediate_dtype = string_to_torch_dtype(args.mixed_precision_args.dtype)
+
+                dummy_input_tensor = model.get_dummy_input_tensor(
+                    micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+                )
+                dummy_output_tensor = model.get_dummy_output_tensor(
+                    micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+                )
 
                 stage = PipelineStage(
                     model,
                     stage_index=pipeline_stage_idx,
                     num_stages=num_pipeline_stages,
                     device=torch.cuda.current_device(),
-                    input_args=torch.empty(
-                        dummy_input_shape,
-                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
-                        device=torch.cuda.current_device(),
-                    ),
-                    output_args=torch.empty(
-                        dummy_output_shape,
-                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
-                        device=torch.cuda.current_device(),
-                    ),
+                    input_args=dummy_input_tensor,
+                    output_args=dummy_output_tensor,
                     group=ProcessGroupManager.get_pipeline_parallel_group(),
                 )
                 pipeline_stages.append(stage)
