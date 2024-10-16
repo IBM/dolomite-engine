@@ -79,6 +79,8 @@ class ModelWrapper(nn.Module):
 
         self._setup_config()
 
+        log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
+
         if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_model_parallel_class(self.config.model_type)
@@ -238,8 +240,6 @@ class ModelWrapper(nn.Module):
                 torch_dtype = string_to_torch_dtype(self.dtype)
 
             self.model = _get_model(torch_dtype=torch_dtype)
-
-        log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
 
     def _override_embedding_forward_with_neft_forward(self, neft_alpha: float) -> None:
         if not hasattr(self.model, "get_input_embeddings"):
