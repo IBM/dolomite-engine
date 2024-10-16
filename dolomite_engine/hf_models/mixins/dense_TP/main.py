@@ -9,7 +9,7 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
+from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible, string_to_torch_dtype
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
 from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
@@ -205,3 +205,41 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         )
 
         self.load_state_dict(state_dict)
+
+    def get_dummy_input_shape(self, micro_batch_size: int, sequence_length: int) -> tuple[int]:
+        if self.is_first_stage:
+            # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
+            shape = (micro_batch_size, sequence_length + 1)
+        else:
+            shape = self._get_dummy_intermediate_shape(micro_batch_size, sequence_length)
+
+        return shape
+
+    def get_dummy_output_shape(self, micro_batch_size: int, sequence_length: int) -> tuple[int]:
+        if self.is_last_stage:
+            vocab_size = self.config.vocab_size
+
+            if self._use_padding_free_transformer:
+                shape = (micro_batch_size * sequence_length, vocab_size)
+            else:
+                shape = (micro_batch_size, sequence_length, vocab_size)
+        else:
+            shape = self._get_dummy_intermediate_shape(micro_batch_size, sequence_length)
+
+        return shape
+
+    def _get_dummy_intermediate_shape(self, micro_batch_size: int, sequence_length: int) -> tuple[int]:
+        sharded_sequence_length = (
+            divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
+            if self.sequence_parallel
+            else sequence_length
+        )
+
+        hidden_size = self.config.hidden_size
+
+        if self._use_padding_free_transformer:
+            shape = (micro_batch_size * sharded_sequence_length, hidden_size)
+        else:
+            shape = (micro_batch_size, sharded_sequence_length, hidden_size)
+
+        return shape

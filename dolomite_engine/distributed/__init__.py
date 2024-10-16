@@ -231,43 +231,28 @@ def wrap_model_container_for_distributed_training(
 
         micro_batch_size = args.training_parameters.micro_batch_size
         sequence_length = args.datasets[0].class_args.get("sequence_length")
-        hidden_size = args.model_args.pretrained_config.get("n_embd")
+        args.model_args.pretrained_config.get("n_embd")
 
         with torch.no_grad():
             for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_container):
-                if pipeline_stage_idx == 0:
-                    dummy_input = torch.empty(
-                        micro_batch_size, sequence_length + 1, dtype=torch.long, device=torch.cuda.current_device()
-                    )
-                else:
-                    sharded_sequence_length = (
-                        divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
-                        if args.distributed_args.sequence_parallel
-                        else sequence_length
-                    )
-
-                    if args.model_args.use_padding_free_transformer:
-                        dummy_input = torch.empty(
-                            micro_batch_size * sharded_sequence_length,
-                            hidden_size,
-                            dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
-                            device=torch.cuda.current_device(),
-                        )
-                    else:
-                        dummy_input = torch.empty(
-                            micro_batch_size,
-                            sharded_sequence_length,
-                            hidden_size,
-                            dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
-                            device=torch.cuda.current_device(),
-                        )
+                dummy_input_shape = model.get_dummy_input_shape(micro_batch_size, sequence_length)
+                dummy_output_shape = model.get_dummy_output_shape(micro_batch_size, sequence_length)
 
                 stage = PipelineStage(
                     model,
                     stage_index=pipeline_stage_idx,
                     num_stages=num_pipeline_stages,
                     device=torch.cuda.current_device(),
-                    input_args=dummy_input,
+                    input_args=torch.empty(
+                        dummy_input_shape,
+                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
+                        device=torch.cuda.current_device(),
+                    ),
+                    output_args=torch.empty(
+                        dummy_output_shape,
+                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
+                        device=torch.cuda.current_device(),
+                    ),
                     group=ProcessGroupManager.get_pipeline_parallel_group(),
                 )
                 pipeline_stages.append(stage)
