@@ -233,27 +233,26 @@ def wrap_model_container_for_distributed_training(
         sequence_length = args.datasets[0].class_args.get("sequence_length")
         args.model_args.pretrained_config.get("n_embd")
 
-        with torch.no_grad():
-            for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_container):
-                intermediate_dtype = string_to_torch_dtype(args.mixed_precision_args.dtype)
+        for model in model_container:
+            intermediate_dtype = string_to_torch_dtype(args.mixed_precision_args.dtype)
 
-                dummy_input_tensor = model.get_dummy_input_tensor(
-                    micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
-                )
-                dummy_output_tensor = model.get_dummy_output_tensor(
-                    micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
-                )
+            dummy_input_tensor = model.model.get_dummy_input_tensor(
+                micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+            )
+            dummy_output_tensor = model.model.get_dummy_output_tensor(
+                micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+            )
 
-                stage = PipelineStage(
-                    model,
-                    stage_index=pipeline_stage_idx,
-                    num_stages=num_pipeline_stages,
-                    device=torch.cuda.current_device(),
-                    input_args=dummy_input_tensor,
-                    output_args=dummy_output_tensor,
-                    group=ProcessGroupManager.get_pipeline_parallel_group(),
-                )
-                pipeline_stages.append(stage)
+            stage = PipelineStage(
+                model,
+                stage_index=model.stage_id,
+                num_stages=num_pipeline_stages,
+                device=torch.cuda.current_device(),
+                input_args=dummy_input_tensor,
+                output_args=dummy_output_tensor,
+                group=ProcessGroupManager.get_pipeline_parallel_group(),
+            )
+            pipeline_stages.append(stage)
 
         pipeline_schedule = _get_pipeline_parallel_schedule(
             pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,
