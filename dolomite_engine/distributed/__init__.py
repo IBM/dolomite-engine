@@ -233,41 +233,44 @@ def wrap_model_container_for_distributed_training(
         sequence_length = args.datasets[0].class_args.get("sequence_length")
         hidden_size = args.model_args.pretrained_config.get("n_embd")
 
-        for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_container):
-            if pipeline_stage_idx == 0:
-                dummy_input = torch.empty(micro_batch_size, sequence_length + 1, dtype=torch.long, device="meta")
-            else:
-                sharded_sequence_length = (
-                    divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
-                    if args.distributed_args.sequence_parallel
-                    else sequence_length
-                )
-
-                if args.model_args.use_padding_free_transformer:
+        with torch.no_grad():
+            for pipeline_stage_idx, model in zip(pipeline_stage_ids_on_current_rank, model_container):
+                if pipeline_stage_idx == 0:
                     dummy_input = torch.empty(
-                        micro_batch_size * sharded_sequence_length,
-                        hidden_size,
-                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
-                        device="meta",
+                        micro_batch_size, sequence_length + 1, dtype=torch.long, device=torch.cuda.current_device()
                     )
                 else:
-                    dummy_input = torch.empty(
-                        micro_batch_size,
-                        sharded_sequence_length,
-                        hidden_size,
-                        dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
-                        device="meta",
+                    sharded_sequence_length = (
+                        divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
+                        if args.distributed_args.sequence_parallel
+                        else sequence_length
                     )
 
-            stage = PipelineStage(
-                model,
-                stage_index=pipeline_stage_idx,
-                num_stages=num_pipeline_stages,
-                device=torch.cuda.current_device(),
-                input_args=dummy_input,
-                group=ProcessGroupManager.get_pipeline_parallel_group(),
-            )
-            pipeline_stages.append(stage)
+                    if args.model_args.use_padding_free_transformer:
+                        dummy_input = torch.empty(
+                            micro_batch_size * sharded_sequence_length,
+                            hidden_size,
+                            dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
+                            device=torch.cuda.current_device(),
+                        )
+                    else:
+                        dummy_input = torch.empty(
+                            micro_batch_size,
+                            sharded_sequence_length,
+                            hidden_size,
+                            dtype=string_to_torch_dtype(args.mixed_precision_args.dtype),
+                            device=torch.cuda.current_device(),
+                        )
+
+                stage = PipelineStage(
+                    model,
+                    stage_index=pipeline_stage_idx,
+                    num_stages=num_pipeline_stages,
+                    device=torch.cuda.current_device(),
+                    input_args=dummy_input,
+                    group=ProcessGroupManager.get_pipeline_parallel_group(),
+                )
+                pipeline_stages.append(stage)
 
         pipeline_schedule = _get_pipeline_parallel_schedule(
             pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,
