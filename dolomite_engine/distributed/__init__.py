@@ -225,10 +225,6 @@ def wrap_model_container_for_distributed_training(
     pipeline_schedule = None
 
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
-        _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
-            num_pipeline_stages
-        )
-
         micro_batch_size = args.training_parameters.micro_batch_size
         sequence_length = args.datasets[0].class_args.get("sequence_length")
         args.model_args.pretrained_config.get("n_embd")
