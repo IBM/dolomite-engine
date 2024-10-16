@@ -245,7 +245,7 @@ def wrap_model_container_for_distributed_training(
 
             stage = PipelineStage(
                 model,
-                stage_index=model.stage_id,
+                stage_index=model.pipeline_stage_id,
                 num_stages=num_pipeline_stages,
                 device=torch.cuda.current_device(),
                 input_args=dummy_input_tensor,
