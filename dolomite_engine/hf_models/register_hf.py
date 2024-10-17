@@ -15,6 +15,9 @@ from .models import (
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
+    RNNMoEDolomiteConfig,
+    RNNMoEDolomiteForCausalLM,
+    RNNMoEDolomiteModel,
 )
 
 
@@ -24,6 +27,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
+    (RNNMoEDolomiteConfig, RNNMoEDolomiteModel, RNNMoEDolomiteForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []

@@ -23,6 +23,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         kernel_size: int,
         bias: bool = False,
         activation: nn.Module = nn.Identity(),
+        activation_string: str | None = None,
         use_fast_conv1d: bool = True,
         std: float | None = None,
     ) -> None:
@@ -39,6 +40,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
 
         self.hidden_size = hidden_size
         self.activation = activation
+        self.activation_string = activation_string
 
         if not is_causal_conv1d_available():
             if use_fast_conv1d:
@@ -100,7 +102,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
                 x=x,
                 weight=rearrange(self.weight, "d 1 w -> d w"),
                 bias=self.bias,
-                activation=self.activation,
+                activation=self.activation_string,
             )
         else:
             x = self._conv_forward(x, self.weight, self.bias)[..., : x.shape[-1]]
@@ -117,7 +119,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
                 conv_state=cache,
                 weight=rearrange(self.weight, "d 1 w -> d w"),
                 bias=self.bias,
-                activation=self.activation,
+                activation=self.activation_string,
             )
         else:
             dtype = x.dtype
