@@ -189,6 +189,7 @@ class DeltaNet(nn.Module):
             o, recurrent_state = fused_recurrent_delta_rule(
                 q=q, k=k, v=v, beta=beta, initial_state=state, output_final_state=use_cache
             )
+            o = o.squeeze(0)
         elif mode == "fused_chunk":
             assert self.chunk_size in [16, 32, 64]
             o, recurrent_state = fused_chunk_delta_rule(
