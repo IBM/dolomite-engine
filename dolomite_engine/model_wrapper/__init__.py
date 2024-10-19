@@ -1,8 +1,7 @@
-import logging
-
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
+from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
-from ..utils import log_rank_0, run_rank_n
+from ..utils import ProcessGroupManager, get_pipeline_num_stages_and_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
@@ -19,8 +18,20 @@ _MODEL_CLASS_MAPPING = {
 }
 
 
-def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode) -> ModelWrapper:
+def get_model_container(
+    args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
+) -> ModelContainer:
     tuning_method = args.tuning_args.tuning_method
+
+    if tuning_method != TuningMethod.pretraining:
+        assert (
+            ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+        ), "pipeline parallelism is only supported with pretraining"
+
+    if tuning_method not in _MODEL_CLASS_MAPPING:
+        raise ValueError(f"unexpected tuning_method ({tuning_method})")
+
+    num_pipeline_stages = args.distributed_args.num_pipeline_stages
 
     kwargs = {
         "mode": mode,
@@ -34,6 +45,7 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         "use_padding_free_transformer": args.model_args.use_padding_free_transformer,
         "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,
+        "num_pipeline_stages": num_pipeline_stages,
         "neft_alpha": args.research_args.neft_alpha,
         "trust_remote_code": args.model_args.trust_remote_code,
         "tokenizer_name": args.tokenizer_args.tokenizer_name,
@@ -54,20 +66,11 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
         kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
-    if tuning_method in _MODEL_CLASS_MAPPING:
-        return _MODEL_CLASS_MAPPING[tuning_method](**kwargs)
+    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(num_pipeline_stages)
 
-    raise ValueError(f"unexpected tuning_method ({tuning_method})")
+    model_list = []
+    for pipeline_stage_id in pipeline_stage_ids_on_current_rank:
+        kwargs["pipeline_stage_id"] = pipeline_stage_id
+        model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
-
-@run_rank_n
-def log_model(model: ModelWrapper) -> None:
-    """print model
-
-    Args:
-        model (ModelWrapper): model to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ model ------------------------")
-    log_rank_0(logging.INFO, model)
-    log_rank_0(logging.INFO, "-------------------- end of model ---------------------")
+    return ModelContainer(model_list)

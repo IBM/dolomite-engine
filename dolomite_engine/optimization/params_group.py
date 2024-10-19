@@ -2,6 +2,7 @@ import logging
 
 import torch.nn as nn
 
+from ..containers import ModelContainer
 from ..enums import ParamsGroupMethod
 from ..hf_models import (
     GPTDolomiteForCausalLM,
@@ -133,10 +134,10 @@ _PARAM_GROUPS = {
 }
 
 
-def get_param_groups(
-    model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
-) -> list[dict]:
-    if params_group_method in _PARAM_GROUPS:
-        return _PARAM_GROUPS[params_group_method](model, optimizer_class_args)[0]
+def get_param_groups_list(
+    model_container: ModelContainer, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
+) -> list[list[dict]]:
+    if params_group_method not in _PARAM_GROUPS:
+        raise ValueError(f"unexpected `params_group_method` {params_group_method}")
 
-    raise ValueError(f"unexpected `params_group_method` {params_group_method}")
+    return [_PARAM_GROUPS[params_group_method](model, optimizer_class_args)[0] for model in model_container]

@@ -4,8 +4,9 @@ import torch
 import torch.distributed
 
 from .hf_hub import download_repo
-from .logger import log_rank_0, print_rank_0, print_ranks_all, set_logger
+from .logger import log_metrics, log_rank_0, print_rank_0, print_ranks_all, set_logger
 from .loss_dict import MetricsTrackingDict
+from .miscellaneous import divide_if_divisible
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
 from .packages import (
     is_apex_available,
@@ -19,7 +20,12 @@ from .packages import (
     is_triton_available,
     log_environment,
 )
-from .parallel import ProcessGroupManager, run_rank_n
+from .parallel import (
+    ProcessGroupManager,
+    get_global_stage_id_from_local_stage_id,
+    get_pipeline_num_stages_and_stage_ids_on_current_rank,
+    run_rank_n,
+)
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
 from .tracking import ExperimentsTracker, ProgressBar
@@ -29,6 +35,7 @@ from .yaml import load_yaml
 
 def init_distributed(
     tensor_parallel_size: int,
+    pipeline_parallel_size: int,
     data_parallel_size: int,
     data_parallel_replication_world_size: int,
     data_parallel_sharding_world_size: int,
@@ -39,6 +46,7 @@ def init_distributed(
 
     Args:
         tensor_parallel_size (int): tensor parallel size
+        pipeline_parallel_size (int): pipeline parallel size
         data_parallel_size (int): data parallel size
         data_parallel_replication_world_size (int): data parallel replication world size
         data_parallel_sharding_world_size (int): data parallel sharding world size
@@ -48,6 +56,7 @@ def init_distributed(
 
     process_group_manager = ProcessGroupManager(
         tensor_parallel_size=tensor_parallel_size,
+        pipeline_parallel_size=pipeline_parallel_size,
         data_parallel_size=data_parallel_size,
         data_parallel_replication_world_size=data_parallel_replication_world_size,
         data_parallel_sharding_world_size=data_parallel_sharding_world_size,

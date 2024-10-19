@@ -6,7 +6,7 @@ import torch.distributed
 
 from dolomite_engine.arguments import TrainingArgs, UnshardingArgs
 from dolomite_engine.checkpointing import load_checkpoint_for_inference, save_checkpoint
-from dolomite_engine.distributed import wrap_model_for_distributed_training
+from dolomite_engine.distributed import wrap_model_list_for_distributed_training
 from dolomite_engine.enums import Mode
 from dolomite_engine.hf_models import AttentionHeadType
 from dolomite_engine.model_wrapper import get_model
@@ -76,7 +76,7 @@ unshard_config.load_args.iteration = iteration
 unshard_config.unsharded_path = os.path.join(args.tmp_path, "unsharded_path")
 
 model_tp = get_model(train_config, Mode.training)
-model_tp = wrap_model_for_distributed_training(train_config, model_tp)
+model_tp = wrap_model_list_for_distributed_training(train_config, model_tp)
 
 save_checkpoint(
     train_config,

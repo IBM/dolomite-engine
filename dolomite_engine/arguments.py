@@ -329,6 +329,8 @@ class DistributedArgs(BaseArgs):
     tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
+    # pipeline parallel world size
+    pipeline_parallel_size: int = 1
     # data parallel world size
     data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes
@@ -337,6 +339,10 @@ class DistributedArgs(BaseArgs):
     fsdp_algorithm: int = 1
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
+    # total number of pipeline stages
+    num_pipeline_stages: int = 1
+    # pipeline parallel shedule to use
+    pipeline_parallel_schedule: str = ""
 
     def model_post_init(self, __context: Any) -> None:
         # communication dtype
@@ -363,6 +369,13 @@ class DistributedArgs(BaseArgs):
             )
 
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
+
+        if self.pipeline_parallel_size > 1:
+            _check_not_None([(self.num_pipeline_stages, "num_pipeline_stages")])
+
+            assert (
+                self.num_pipeline_stages % self.pipeline_parallel_size == 0
+            ), "num_pipeline_stages should be a multiple of pipeline_parallel_size"
 
 
 class AimArgs(BaseArgs):
