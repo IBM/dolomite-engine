@@ -256,12 +256,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                     ),
                     persistent=False,
                 )
-                self.register_buffer(
-                    "max_seqlen",
-                    torch.tensor(self.sequence_length, device=torch.cuda.current_device()),
-                    persistent=False,
-                )
-
+                self.max_seqlen = self.sequence_length
             if self.reset_position_ids:
                 assert self.reset_attention_mask, "reset_attention_mask should be specified with reset_position_ids"
             else:
