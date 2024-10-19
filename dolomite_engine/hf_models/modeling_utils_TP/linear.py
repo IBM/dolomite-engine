@@ -1,6 +1,7 @@
 import torch
 import torch.distributed
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
@@ -109,9 +110,7 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         else:
             input = copy_to_tensor_parallel_region(input)
 
-        input = nn.functional.linear(
-            input, self.weight.to_local(), None if self.bias is None else self.bias.to_local()
-        )
+        input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
 
         return input
 
