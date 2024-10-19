@@ -9,7 +9,7 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
-from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible, string_to_torch_dtype
+from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
 from ...modeling_utils_TP import LMHead_TP, dtensor_to_tensor, tensor_to_dtensor
