@@ -337,6 +337,8 @@ class DistributedArgs(BaseArgs):
     fsdp_algorithm: int = 1
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
+    # whether to use async-TP
+    use_async_tensor_parallel: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         # communication dtype
@@ -363,6 +365,9 @@ class DistributedArgs(BaseArgs):
             )
 
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
+
+        if self.use_async_tensor_parallel:
+            assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
 
 
 class AimArgs(BaseArgs):

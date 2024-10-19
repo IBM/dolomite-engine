@@ -48,6 +48,9 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        if torch._inductor.config._micro_pipeline_tp:
+            self.compile()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
         input = super().forward(input)
@@ -103,6 +106,9 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
+
+        if torch._inductor.config._micro_pipeline_tp:
+            self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.sequence_parallel:
@@ -163,6 +169,9 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
             )
 
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+
+        if torch._inductor.config._micro_pipeline_tp:
+            self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
