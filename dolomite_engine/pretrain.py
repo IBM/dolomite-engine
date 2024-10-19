@@ -136,7 +136,7 @@ def train(
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
             gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
         )
-        / dp_world_size
+        / ProcessGroupManager.get_world_size()
     )
 
     forward_context = (
