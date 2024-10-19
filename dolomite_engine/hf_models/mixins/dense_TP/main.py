@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
-from transformers.modeling_outputs import CausalLMOutputWithPast
+from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager
 from ...config import CommonConfig
@@ -72,7 +72,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             output_attentions=output_attentions,
         )
 
-        transformer_outputs = self.transformer(
+        transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -84,9 +84,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
-        hidden_states = transformer_outputs[0]
 
-        lm_logits = self.get_lm_logits(hidden_states)
+        lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
@@ -98,8 +97,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         else:
             if self.tensor_parallel_word_embeddings:
                 # all gather
-                lm_logits = tensor_to_dtensor(lm_logits, current_placement=Shard(-1))
-                lm_logits = dtensor_to_tensor(lm_logits, desired_placement=Replicate())
+                lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+                lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
         return CausalLMOutputWithPast(
             loss=loss,
@@ -117,6 +116,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
+                tp_mesh=self.tp_mesh,
             )
             if self._tied_word_embeddings
             else self.lm_head(hidden_states)
@@ -141,9 +141,11 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
 
         shift_logits = tensor_to_dtensor(
-            shift_logits, current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate()
+            shift_logits,
+            device_mesh=self.tp_mesh,
+            current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
         )
-        shift_labels = tensor_to_dtensor(shift_labels, current_placement=Replicate())
+        shift_labels = tensor_to_dtensor(shift_labels, device_mesh=self.tp_mesh, current_placement=Replicate())
 
         if self.upcast_logits_for_loss:
             shift_logits = shift_logits.float()

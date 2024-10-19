@@ -5,13 +5,13 @@ import torch.nn as nn
 
 from .....utils import is_kernel_hyperdrive_available
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 from .base import ParameterizedExperts, SparseMoE
 
 
 if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import padded_block_indices, scattered_experts
+    from khd.kernels.scattermoe.triton_implementation import expert_boundaries, scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -33,30 +33,26 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
 
     def forward(
         self,
-        inputs,
-        k,
-        sorted_expert_idxs,
-        sorted_scattered_idxs,
-        padded_block_idxs,
-        expert_offsets,
-        gates=None,
-        grouped_in=False,
-        grouped_out=False,
-    ):
-        results = scattered_experts(
-            inputs,
-            self.weight.view(self.num_experts, self.out_features, -1).permute(0, 2, 1),
-            k,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-            gates,
-            grouped_in,
-            grouped_out,
+        input: torch.Tensor,
+        k: int,
+        sorted_expert_idxs: torch.Tensor,
+        sorted_scattered_idxs: torch.Tensor,
+        expert_offsets: torch.Tensor,
+        gates: torch.Tensor | None = None,
+        grouped_in: bool = False,
+        grouped_out: bool = False,
+    ) -> torch.Tensor:
+        return scattered_experts(
+            inputs=input,
+            expert_weights=self.weight.permute(1, 2, 0),
+            k=k,
+            sorted_expert_idxs=sorted_expert_idxs,
+            sorted_scattered_idxs=sorted_scattered_idxs,
+            expert_offsets=expert_offsets,
+            gates=gates,
+            grouped_in=grouped_in,
+            grouped_out=grouped_out,
         )
-
-        return results
 
 
 class ScatterMoE(SparseMoE):
@@ -84,7 +80,7 @@ class ScatterMoE(SparseMoE):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ParameterizedLinear(
+        self.gate = ParameterizedTransposedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
@@ -121,15 +117,14 @@ class ScatterMoE(SparseMoE):
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
         with torch.no_grad():
-            sorted_expert_idxs, sorted_scattered_idxs = torch.sort(selected_experts.flatten())
-            padded_block_idxs, expert_offsets = padded_block_indices(sorted_expert_idxs, self.num_experts)
+            sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
+            expert_offsets = expert_boundaries(sorted_expert_idxs, self.num_experts)
 
         hidden_states = self.c_fc(
             hidden_states,
             self.top_k,
             sorted_expert_idxs,
             sorted_scattered_idxs,
-            padded_block_idxs,
             expert_offsets,
             grouped_out=True,
         )
@@ -139,9 +134,9 @@ class ScatterMoE(SparseMoE):
             1,
             sorted_expert_idxs,
             sorted_scattered_idxs,
-            padded_block_idxs,
             expert_offsets,
             grouped_in=True,
             gates=router_weights,
         )
+        hidden_states = self.dropout(hidden_states)
         return hidden_states

@@ -38,10 +38,10 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
             normalization_implementation=normalization_implementation,
         )
 
-        if attention_pattern == "DeltaNet":
-            self.attn = DeltaNet(config=config, layer_idx=layer_idx)
-        elif attention_pattern == "flash_attention_2":
+        if attention_pattern == "flash_attention_2":
             self.attn = RNNFlashAttention2(config, True, layer_idx)
+        elif attention_pattern == "deltanet":
+            self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         else:
             raise ValueError(f"Attention pattern {attention_pattern} not supported.")
 
