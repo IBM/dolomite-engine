@@ -16,7 +16,7 @@ class _Container:
     def __getitem__(self, index: int) -> nn.Module:
         return self.model_list[index]
 
-    def __setindex__(self, index: int, model: nn.Module) -> None:
+    def __setitem__(self, index: int, model: nn.Module) -> None:
         self.model_list[index] = model
 
     def __len__(self) -> int:
