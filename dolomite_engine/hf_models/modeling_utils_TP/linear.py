@@ -8,7 +8,13 @@ from ...utils import ProcessGroupManager
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import (
+    all_gather_from_sequence_parallel_region,
+    copy_to_tensor_parallel_region,
+    dtensor_to_tensor,
+    get_module_placements,
+    tensor_to_dtensor,
+)
 
 
 class ReplicatedLinear(ParameterizedLinear, DTensorModule):
@@ -94,10 +100,19 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        self.use_padding_free_transformer = use_padding_free_transformer
+        self.sequence_parallel = sequence_parallel
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
+        if self.sequence_parallel:
+            input = all_gather_from_sequence_parallel_region(input, dim=0 if self.use_padding_free_transformer else 1)
+        else:
+            input = copy_to_tensor_parallel_region(input)
+
+        input = nn.functional.linear(
+            input, self.weight.to_local(), None if self.bias is None else self.bias.to_local()
+        )
+
         return input
 
     def extra_repr(self) -> str:
