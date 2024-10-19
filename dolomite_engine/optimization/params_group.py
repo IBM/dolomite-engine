@@ -123,7 +123,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         "no_weight_decay": list(no_weight_decay_params.keys()),
         "mup": list(mup_params.keys()),
     }
-
+    log_rank_0(logging.INFO, names)
     return trainable_parameters_or_param_groups, names
 
 
