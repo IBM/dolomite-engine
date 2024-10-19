@@ -24,14 +24,15 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         self.vocab_size = config.vocab_size
         self.transformer = self.base_model_class(config, **kwargs)
 
-        if not self._tied_word_embeddings and self.is_last_stage:
-            self.lm_head = LMHead_TP(
-                self.vocab_size,
-                config.n_embd,
-                std=config.initializer_range,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-                sequence_parallel=self.sequence_parallel,
-            )
+        if self.is_last_stage:
+            if not self._tied_word_embeddings:
+                self.lm_head = LMHead_TP(
+                    self.vocab_size,
+                    config.n_embd,
+                    std=config.initializer_range,
+                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                    sequence_parallel=self.sequence_parallel,
+                )
 
             self.m_width = config.m_width
             self.upcast_logits_for_loss = config.upcast_logits_for_loss
