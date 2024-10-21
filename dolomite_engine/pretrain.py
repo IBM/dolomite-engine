@@ -331,6 +331,7 @@ def main(mode: Mode = Mode.training) -> None:
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
         zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
+        use_async_tensor_parallel=args.distributed_args.use_async_tensor_parallel,
     )
     set_seed(args.random_args.seed)
 
