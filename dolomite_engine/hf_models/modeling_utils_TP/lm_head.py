@@ -63,22 +63,3 @@ class LMHead_TP(Embedding_TP):
             input, device_mesh=tp_mesh, desired_placement=Shard(-1) if tensor_parallel_word_embeddings else Replicate()
         )
         return input
-
-    @torch.compile
-    @staticmethod
-    def _compute_with_weight_compileable(
-        input: torch.Tensor,
-        weight: torch.Tensor,
-        tensor_parallel_word_embeddings: bool,
-        use_padding_free_transformer: bool,
-        sequence_parallel: bool,
-        tp_mesh: DeviceMesh,
-    ) -> torch.Tensor:
-        return LMHead_TP._compute_with_weight(
-            input=input,
-            weight=weight,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
-            use_padding_free_transformer=use_padding_free_transformer,
-            sequence_parallel=sequence_parallel,
-            tp_mesh=tp_mesh,
-        )
