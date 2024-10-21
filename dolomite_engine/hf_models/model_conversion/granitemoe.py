@@ -118,7 +118,7 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
         ).T.contiguous()
 
-        state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = (
+        state_dict[f"transformer.h.{layer_idx}.moe.c_fc_moe.weight"] = (
             _split_and_reorder_for_glu(
                 safetensors_weights_manager.get_tensor(
                     f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"
@@ -127,7 +127,7 @@ def _import_state_dict_from_huggingface(
             .transpose(0, 1)
             .contiguous()
         )
-        state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = (
+        state_dict[f"transformer.h.{layer_idx}.moe.c_proj_moe.weight"] = (
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight")
             .transpose(0, 1)
             .contiguous()
@@ -247,10 +247,10 @@ def _export_state_dict_to_huggingface(
         ).T.contiguous()
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight").transpose(0, 1)
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc_moe.weight").transpose(0, 1)
         ).contiguous()
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight").transpose(0, 1)
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj_moe.weight").transpose(0, 1)
         ).contiguous()
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(

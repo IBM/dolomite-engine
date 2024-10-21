@@ -90,7 +90,7 @@ class ScatterMoE(SparseMoE):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_fc = ParameterizedScatteredExperts(
+        self.c_fc_moe = ParameterizedScatteredExperts(
             num_experts=config.num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
@@ -103,7 +103,7 @@ class ScatterMoE(SparseMoE):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedScatteredExperts(
+        self.c_proj_moe = ParameterizedScatteredExperts(
             num_experts=config.num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
@@ -112,6 +112,7 @@ class ScatterMoE(SparseMoE):
         )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self._init_shared(config, config.shared_n_inner)
 
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
@@ -120,7 +121,7 @@ class ScatterMoE(SparseMoE):
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
             expert_offsets = expert_boundaries(sorted_expert_idxs, self.num_experts)
 
-        hidden_states = self.c_fc(
+        hidden_states = self.c_fc_moe(
             hidden_states,
             self.top_k,
             sorted_expert_idxs,
@@ -129,7 +130,7 @@ class ScatterMoE(SparseMoE):
             grouped_out=True,
         )
         hidden_states = self.act(hidden_states)
-        hidden_states = self.c_proj(
+        hidden_states = self.c_proj_moe(
             hidden_states,
             1,
             sorted_expert_idxs,
