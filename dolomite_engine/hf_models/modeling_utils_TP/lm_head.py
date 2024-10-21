@@ -9,7 +9,7 @@ from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor, use
 
 class LMHead_TP(Embedding_TP):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return LMHead_TP.compute_with_weight(
+        return self.compute_with_weight(
             input,
             self.weight,
             tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
