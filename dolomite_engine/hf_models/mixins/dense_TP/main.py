@@ -109,18 +109,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         )
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        return (
-            LMHead_TP.compute_with_weight(
-                hidden_states,
-                weight=self.transformer.wte.weight,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-                use_padding_free_transformer=self._use_padding_free_transformer,
-                sequence_parallel=self.sequence_parallel,
-                tp_mesh=self.tp_mesh,
-            )
-            if self._tied_word_embeddings
-            else self.lm_head(hidden_states)
-        )
+        return self.lm_head(hidden_states, weight=self.transformer.wte.weight if self._tied_word_embeddings else None)
 
     def get_autoregressive_language_modeling_loss(
         self, lm_logits: torch.Tensor, labels: torch.Tensor | None, cu_seqlens: torch.Tensor
