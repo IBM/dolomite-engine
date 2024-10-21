@@ -15,6 +15,7 @@ from .TP import (
     dtensor_to_tensor,
     get_module_placements,
     tensor_to_dtensor,
+    use_async_tensor_parallel,
 )
 
 
@@ -48,7 +49,7 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
-        if torch._inductor.config._micro_pipeline_tp:
+        if use_async_tensor_parallel():
             self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
@@ -107,7 +108,7 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
 
-        if torch._inductor.config._micro_pipeline_tp:
+        if use_async_tensor_parallel():
             self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
@@ -170,7 +171,7 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
-        if torch._inductor.config._micro_pipeline_tp:
+        if use_async_tensor_parallel():
             self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:

@@ -4,7 +4,7 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.device_mesh import DeviceMesh
 
 from .embedding import Embedding_TP
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor, use_async_tensor_parallel
 
 
 class LMHead_TP(Embedding_TP):
@@ -26,7 +26,7 @@ class LMHead_TP(Embedding_TP):
             sequence_parallel,
         )
 
-        if torch._inductor.config._micro_pipeline_tp:
+        if use_async_tensor_parallel():
             self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
