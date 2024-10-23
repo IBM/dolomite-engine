@@ -67,39 +67,48 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    model_state_dict = get_model_state_dict(model)
-    if model.has_teacher_model():
-        model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
-
-    dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
-
-    model_state_dict = get_model_state_dict(model_container[0])
-    if model_container[0].has_teacher_model():
-        model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
-
-    dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
-
-    if save_optimizer:
-        if optimizer_container is None:
-            log_rank_0(
-                logging.WARN,
-                "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
-                "Therefore, the function will not save the optimizer",
-            )
-        else:
-            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            dcp.save(
-                get_optimizer_state_dict(model_container[0], optimizer_container[0]),
-                checkpoint_id=_get_optimizer_path(save_path),
-            )
+    if optimizer_container is None:
+        optimizer_container = [None] * len(model_container)
 
     if lr_scheduler_container is None:
-        log_rank_0(
-            logging.WARN,
-            "lr_scheduler is not passed to save_checkpoint. " "Therefore, the function will not save the lr_scheduler",
-        )
-    else:
-        run_rank_n(torch.save)(lr_scheduler_container[0].state_dict(), _get_lr_scheduler_path(save_path))
+        lr_scheduler_container = [None] * len(model_container)
+
+    assert len(model_container) == len(optimizer_container)
+    assert len(model_container) == len(lr_scheduler_container)
+
+    for pipeline_stage, model, optimizer, lr_scheduler in zip(
+        model_container, optimizer_container, lr_scheduler_container
+    ):
+        model_state_dict = get_model_state_dict(model)
+        if model.has_teacher_model():
+            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
+        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, pipeline_stage=pipeline_stage))
+
+        if save_optimizer:
+            if optimizer is None:
+                log_rank_0(
+                    logging.WARN,
+                    "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
+                    "Therefore, the function will not save the optimizer",
+                )
+            else:
+                # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+                dcp.save(
+                    get_optimizer_state_dict(model, optimizer),
+                    checkpoint_id=_get_optimizer_path(save_path, pipeline_stage=pipeline_stage),
+                )
+
+        if lr_scheduler is None:
+            log_rank_0(
+                logging.WARN,
+                "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
+            )
+        else:
+            run_rank_n(torch.save)(
+                lr_scheduler_container[0].state_dict(),
+                _get_lr_scheduler_path(save_path, pipeline_stage=pipeline_stage),
+            )
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -366,16 +375,16 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str) -> str:
-    return os.path.join(path, "model")
+def _get_model_path(path: str, pipeline_stage: int | None = None) -> str:
+    return os.path.join(path, "model" if pipeline_stage is None else f"model-{pipeline_stage}")
 
 
-def _get_optimizer_path(path: str) -> str:
-    return os.path.join(path, "optimizer")
+def _get_optimizer_path(path: str, pipeline_stage: int | None = None) -> str:
+    return os.path.join(path, "model" if pipeline_stage is None else f"model-{pipeline_stage}")
 
 
-def _get_lr_scheduler_path(path: str) -> str:
-    return os.path.join(path, "lr_scheduler.pt")
+def _get_lr_scheduler_path(path: str, pipeline_stage: int | None = None) -> str:
+    return os.path.join(path, "lr_scheduler.pt" if pipeline_stage is None else f"lr_scheduler-{pipeline_stage}.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
