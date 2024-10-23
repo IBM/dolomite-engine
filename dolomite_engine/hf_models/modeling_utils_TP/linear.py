@@ -107,17 +107,25 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
+        self.use_async_tensor_parallel = use_async_tensor_parallel()
 
-        if use_async_tensor_parallel():
+        if self.use_async_tensor_parallel:
             self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        if self.sequence_parallel:
-            input = all_gather_from_sequence_parallel_region(input, dim=0 if self.use_padding_free_transformer else 1)
-        else:
-            input = copy_to_tensor_parallel_region(input)
+        if self.use_async_tensor_parallel:
+            if self.sequence_parallel:
+                input = all_gather_from_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
+            else:
+                input = copy_to_tensor_parallel_region(input)
 
-        input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
+            input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
+        else:
+            input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
+            input = super().forward(input)
+            input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
 
         return input
 
