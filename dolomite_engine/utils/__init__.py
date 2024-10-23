@@ -41,6 +41,7 @@ def init_distributed(
     data_parallel_sharding_world_size: int,
     zero_stage: int,
     timeout_minutes: int = None,
+    use_async_tensor_parallel: bool = False,
 ) -> None:
     """intialize distributed
 
@@ -52,6 +53,7 @@ def init_distributed(
         data_parallel_sharding_world_size (int): data parallel sharding world size
         zero_stage (int): zero stage
         timeout_minutes (int, optional): distributed timeout in minutes. Defaults to None.
+        use_async_tensor_parallel (bool): whether to use async-TP. Defaults to False.
     """
 
     process_group_manager = ProcessGroupManager(
@@ -62,17 +64,13 @@ def init_distributed(
         data_parallel_sharding_world_size=data_parallel_sharding_world_size,
         zero_stage=zero_stage,
         timeout_minutes=timeout_minutes,
+        use_async_tensor_parallel=use_async_tensor_parallel,
     )
 
     log_rank_0(logging.INFO, process_group_manager)
     log_rank_0(logging.INFO, f"total GPUs = {process_group_manager.get_world_size()}")
     log_rank_0(logging.INFO, f"tensor parallel size = {process_group_manager.get_tensor_parallel_world_size()}")
     log_rank_0(logging.INFO, f"data parallel size = {process_group_manager.get_data_parallel_world_size()}")
-
-    print_ranks_all(f"tensor parallel mesh = {process_group_manager.get_tensor_parallel_mesh()}")
-    print_ranks_all(f"data parallel mesh = {process_group_manager.get_data_parallel_mesh()}")
-    print_ranks_all(f"DDP mesh = {process_group_manager.get_mesh()['ddp']}")
-    print_ranks_all(f"FSDP mesh = {process_group_manager.get_mesh()['fsdp']}")
 
 
 def setup_tf32(use_tf32: bool = True) -> None:

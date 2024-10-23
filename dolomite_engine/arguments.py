@@ -343,6 +343,8 @@ class DistributedArgs(BaseArgs):
     num_pipeline_stages: int = 1
     # pipeline parallel shedule to use
     pipeline_parallel_schedule: str = ""
+    # whether to use async-TP
+    use_async_tensor_parallel: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         # communication dtype
@@ -376,6 +378,9 @@ class DistributedArgs(BaseArgs):
             assert (
                 self.num_pipeline_stages % self.pipeline_parallel_size == 0
             ), "num_pipeline_stages should be a multiple of pipeline_parallel_size"
+
+        if self.use_async_tensor_parallel:
+            assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
 
 
 class AimArgs(BaseArgs):
