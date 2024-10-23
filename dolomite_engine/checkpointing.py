@@ -76,8 +76,8 @@ def save_checkpoint(
     assert len(model_container) == len(optimizer_container)
     assert len(model_container) == len(lr_scheduler_container)
 
-    for pipeline_stage, (model, optimizer, lr_scheduler) in zip(
-        model_container, optimizer_container, lr_scheduler_container
+    for pipeline_stage, (model, optimizer, lr_scheduler) in enumerate(
+        zip(model_container, optimizer_container, lr_scheduler_container)
     ):
         model_state_dict = get_model_state_dict(model)
         if model.has_teacher_model():
