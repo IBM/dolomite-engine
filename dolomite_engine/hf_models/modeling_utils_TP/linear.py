@@ -113,6 +113,7 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
             self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        # FIXME dtensor redistribute uses alltoall for large number of GPUs
         if self.use_async_tensor_parallel:
             if self.sequence_parallel:
                 input = all_gather_from_sequence_parallel_region(
