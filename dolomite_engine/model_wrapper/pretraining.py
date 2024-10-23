@@ -165,7 +165,8 @@ class ModelWrapperForPretraining(ModelWrapper):
                 position_ids = self.position_ids
 
             batch["cu_seqlens"] = cu_seqlens
-            batch["max_seqlen"] = max_seqlen
+            # we move to CPU here otherwise FlashAttention will move to CPU on every invocation i.e all layers
+            batch["max_seqlen"] = max_seqlen.item()
             batch["position_ids"] = position_ids
 
         batch["input_ids"] = input_ids
