@@ -188,7 +188,8 @@ class ModelWrapperForPretraining(ModelWrapper):
                 cu_seqlens = cu_seqlens.to(torch.int32)
 
                 seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
-                max_seqlen = seqlen.max()
+                # we move to CPU here otherwise FlashAttention will move to CPU on every invocation i.e all layers
+                max_seqlen = seqlen.max().item()
 
                 if self.reset_position_ids:
                     position_ids = torch.cat(
@@ -202,8 +203,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 position_ids = self.position_ids
 
             batch["cu_seqlens"] = cu_seqlens
-            # we move to CPU here otherwise FlashAttention will move to CPU on every invocation i.e all layers
-            batch["max_seqlen"] = max_seqlen.item()
+            batch["max_seqlen"] = max_seqlen
             batch["position_ids"] = position_ids
 
         batch["input_ids"] = input_ids
