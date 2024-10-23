@@ -1,6 +1,7 @@
 import torch
 import torch.distributed
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
@@ -8,7 +9,14 @@ from ...utils import ProcessGroupManager
 from ..modeling_utils import ParameterizedLinear
 from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import (
+    all_gather_from_sequence_parallel_region,
+    copy_to_tensor_parallel_region,
+    dtensor_to_tensor,
+    get_module_placements,
+    tensor_to_dtensor,
+    use_async_tensor_parallel,
+)
 
 
 class ReplicatedLinear(ParameterizedLinear, DTensorModule):
@@ -40,6 +48,9 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
             )
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+
+        if use_async_tensor_parallel():
+            self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
@@ -94,10 +105,29 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        self.use_padding_free_transformer = use_padding_free_transformer
+        self.sequence_parallel = sequence_parallel
+        self.use_async_tensor_parallel = use_async_tensor_parallel()
+
+        if self.use_async_tensor_parallel:
+            self.compile()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
+        # FIXME dtensor redistribute uses alltoall for large number of GPUs
+        if self.use_async_tensor_parallel:
+            if self.sequence_parallel:
+                input = all_gather_from_sequence_parallel_region(
+                    input, dim=0 if self.use_padding_free_transformer else 1
+                )
+            else:
+                input = copy_to_tensor_parallel_region(input)
+
+            input = F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
+        else:
+            input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
+            input = super().forward(input)
+            input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
+
         return input
 
     def extra_repr(self) -> str:
@@ -149,6 +179,9 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
             )
 
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+
+        if use_async_tensor_parallel():
+            self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
