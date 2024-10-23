@@ -1,4 +1,3 @@
-from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
 from torch.optim.adam import Adam as TorchAdam
