@@ -35,6 +35,9 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
         self.is_first_stage = self.stage_id == 0
         self.is_last_stage = self.stage_id == self.num_stages - 1
 
+        if self._tied_word_embeddings:
+            raise NotImplementedError()
+
         super().__init__(config, *args, **kwargs)
 
 
