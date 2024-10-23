@@ -35,6 +35,7 @@ from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_
 
 _TRAINING_CONFIG_PREFIX = "training_config"
 _INFERENCE_CONFIG_PREFIX = "inference_config"
+_KILLSWITCH = "KILLSWITCH"
 
 
 def save_checkpoint(
@@ -148,7 +149,7 @@ def save_checkpoint(
         indent=4,
     )
 
-    if os.path.exists(os.path.join(args.save_args.save_path, "KILLSWITCH")):
+    if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
         ProcessGroupManager.destroy_process_groups()
         exit()
 
