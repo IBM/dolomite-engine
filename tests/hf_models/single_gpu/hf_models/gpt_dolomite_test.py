@@ -227,7 +227,7 @@ class AttentionTestForDenseModel(TestCommons):
 
         seqlens = torch.tensor([0] + [len(i) for i in input_ids])
         cu_seqlens = seqlens.cumsum(dim=-1).to(device, torch.int32)
-        max_seqlen = seqlens.max().to(device)
+        max_seqlen = seqlens.max().item()
         position_ids = torch.tensor(list(itertools.chain(*[list(range(len(i))) for i in input_ids])), device=device)
         input_ids = torch.tensor(list(itertools.chain(*input_ids)), device=device)
         labels = torch.tensor(list(itertools.chain(*labels)), device=device)
