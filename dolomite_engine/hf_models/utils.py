@@ -37,7 +37,7 @@ def convert_padding_free_lists_to_tensors(
     # prepare inputs for the model
     seqlens = torch.tensor([0] + [len(x) for x in input_ids], device=device)
     cu_seqlens = seqlens.cumsum(dim=-1).to(torch.int32)
-    max_seqlen = seqlens.max().to(device)
+    max_seqlen = seqlens.max().item()
 
     if position_ids is None:
         position_ids = [list(range(len(x))) for x in input_ids]
