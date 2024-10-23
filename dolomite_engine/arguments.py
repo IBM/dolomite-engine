@@ -330,7 +330,7 @@ class DistributedArgs(BaseArgs):
     # whether to use sequence parallel
     sequence_parallel: bool = False
     # pipeline parallel world size
-    pipeline_parallel_size: int = 1
+    pipeline_parallel_world_size: int = 1
     # data parallel world size
     data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes
@@ -372,12 +372,12 @@ class DistributedArgs(BaseArgs):
 
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
 
-        if self.pipeline_parallel_size > 1:
+        if self.pipeline_parallel_world_size > 1:
             _check_not_None([(self.num_pipeline_stages, "num_pipeline_stages")])
 
             assert (
-                self.num_pipeline_stages % self.pipeline_parallel_size == 0
-            ), "num_pipeline_stages should be a multiple of pipeline_parallel_size"
+                self.num_pipeline_stages % self.pipeline_parallel_world_size == 0
+            ), "num_pipeline_stages should be a multiple of pipeline_parallel_world_size"
 
         if self.use_async_tensor_parallel:
             assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
