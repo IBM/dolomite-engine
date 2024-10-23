@@ -312,7 +312,7 @@ def load_checkpoint_for_inference(
         log_rank_0(logging.INFO, "overriding mixed precision args")
         args_from_checkpoint.mixed_precision_args = args.mixed_precision_args
 
-    checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_size
+    checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_world_size
 
     with (
         torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
@@ -337,7 +337,7 @@ def load_checkpoint_for_inference(
 
         if checkpoint_tp_world_size > 1:
             state = fix_unsharded_state_dict(
-                model.config, state, tensor_parallel_size=checkpoint_tp_world_size, prefix="model."
+                model.config, state, tensor_parallel_world_size=checkpoint_tp_world_size, prefix="model."
             )
 
     was_compiled_model = args_from_checkpoint.distributed_args.torch_compile

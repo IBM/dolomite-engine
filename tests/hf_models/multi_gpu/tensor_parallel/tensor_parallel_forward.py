@@ -32,7 +32,7 @@ args = parser.parse_args()
 
 set_seed(42)
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 

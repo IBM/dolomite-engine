@@ -107,13 +107,13 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
 
 
 def fix_gpt_dolomite_unsharded_state_dict(
-    config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
+    config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
         : config.vocab_size, :
     ]
     state_dict = _fix_attention(config, state_dict, prefix)
-    state_dict = _fix_mlp(config, state_dict, tensor_parallel_size, prefix)
+    state_dict = _fix_mlp(config, state_dict, tensor_parallel_world_size, prefix)
     return state_dict
 
 
@@ -268,11 +268,11 @@ def _fix_attention(config: GPTDolomiteConfig, state_dict: dict, prefix: str) -> 
     return state_dict
 
 
-def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str) -> dict:
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
             key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
-            weight = state_dict[key].chunk(tensor_parallel_size)
+            weight = state_dict[key].chunk(tensor_parallel_world_size)
             weight = [w.chunk(2) for w in weight]
             w0 = torch.cat([w[0] for w in weight])
             w1 = torch.cat([w[1] for w in weight])
@@ -280,7 +280,7 @@ def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: 
 
             if config.add_bias:
                 key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.bias"
-                weight = state_dict[key].chunk(tensor_parallel_size)
+                weight = state_dict[key].chunk(tensor_parallel_world_size)
                 weight = [w.chunk(2) for w in weight]
                 w0 = torch.cat([w[0] for w in weight])
                 w1 = torch.cat([w[1] for w in weight])

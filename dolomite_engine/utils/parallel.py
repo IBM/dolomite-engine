@@ -41,7 +41,7 @@ _DATA_PARALLEL_WORLD_SIZE: int | None = None
 class ProcessGroupManager:
     def __init__(
         self,
-        tensor_parallel_size: int = 1,
+        tensor_parallel_world_size: int = 1,
         pipeline_parallel_world_size: int = 1,
         data_parallel_size: int | None = None,
         data_parallel_replication_world_size: int | None = None,
@@ -62,9 +62,9 @@ class ProcessGroupManager:
         total_gpus = int(os.getenv("WORLD_SIZE", 1))
 
         if data_parallel_size is None:
-            data_parallel_size = total_gpus // (tensor_parallel_size * pipeline_parallel_world_size)
+            data_parallel_size = total_gpus // (tensor_parallel_world_size * pipeline_parallel_world_size)
 
-        assert tensor_parallel_size * pipeline_parallel_world_size * data_parallel_size == total_gpus
+        assert tensor_parallel_world_size * pipeline_parallel_world_size * data_parallel_size == total_gpus
 
         if zero_stage == 0:
             assert data_parallel_sharding_world_size is None or data_parallel_sharding_world_size == 1
@@ -90,7 +90,7 @@ class ProcessGroupManager:
                 pipeline_parallel_world_size,
                 data_parallel_replication_world_size,
                 data_parallel_sharding_world_size,
-                tensor_parallel_size,
+                tensor_parallel_world_size,
             ),
             mesh_dim_names=("pp", "ddp", "fsdp", "tp"),
         )

@@ -27,7 +27,7 @@ parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
 tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()

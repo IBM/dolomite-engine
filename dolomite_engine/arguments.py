@@ -324,7 +324,7 @@ class DistributedArgs(BaseArgs):
     # whether to use a dispatching dataloader
     dispatching_dataloader: bool = False
     # tensor parallel world size
-    tensor_parallel_size: int = 1
+    tensor_parallel_world_size: int = 1
     # tensor parallel embeddings
     tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
@@ -352,14 +352,14 @@ class DistributedArgs(BaseArgs):
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
         if self.sequence_parallel:
-            assert self.tensor_parallel_size > 1, "tensor parallel needs to be enabled for sequence parallel"
+            assert self.tensor_parallel_world_size > 1, "tensor parallel needs to be enabled for sequence parallel"
 
         if self.tensor_parallel_word_embeddings:
             assert (
-                self.tensor_parallel_size > 1
+                self.tensor_parallel_world_size > 1
             ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
-        if self.tensor_parallel_size > 1:
+        if self.tensor_parallel_world_size > 1:
             version = Version(torch.__version__).release
             version = [str(i) for i in version]
             version = ".".join(version)

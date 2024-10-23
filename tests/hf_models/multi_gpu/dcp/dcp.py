@@ -42,11 +42,11 @@ train_config.model_args.pretrained_config["num_key_value_heads"] = num_key_value
 # activation function
 train_config.model_args.pretrained_config["activation_function"] = args.activation_function
 
-tp_world_size = train_config.distributed_args.tensor_parallel_size
+tp_world_size = train_config.distributed_args.tensor_parallel_world_size
 dp_world_size = int(os.getenv("WORLD_SIZE")) // tp_world_size
 
 ProcessGroupManager(
-    tensor_parallel_size=tp_world_size,
+    tensor_parallel_world_size=tp_world_size,
     data_parallel_size=dp_world_size,
     data_parallel_replication_world_size=args.data_parallel_replication_world_size,
     data_parallel_sharding_world_size=args.data_parallel_sharding_world_size,

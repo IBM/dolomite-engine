@@ -34,7 +34,7 @@ from .yaml import load_yaml
 
 
 def init_distributed(
-    tensor_parallel_size: int,
+    tensor_parallel_world_size: int,
     pipeline_parallel_world_size: int,
     data_parallel_size: int,
     data_parallel_replication_world_size: int,
@@ -46,7 +46,7 @@ def init_distributed(
     """intialize distributed
 
     Args:
-        tensor_parallel_size (int): tensor parallel size
+        tensor_parallel_world_size (int): tensor parallel size
         pipeline_parallel_world_size (int): pipeline parallel size
         data_parallel_size (int): data parallel size
         data_parallel_replication_world_size (int): data parallel replication world size
@@ -57,7 +57,7 @@ def init_distributed(
     """
 
     process_group_manager = ProcessGroupManager(
-        tensor_parallel_size=tensor_parallel_size,
+        tensor_parallel_world_size=tensor_parallel_world_size,
         pipeline_parallel_world_size=pipeline_parallel_world_size,
         data_parallel_size=data_parallel_size,
         data_parallel_replication_world_size=data_parallel_replication_world_size,
