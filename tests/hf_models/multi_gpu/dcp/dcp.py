@@ -6,10 +6,10 @@ import torch.distributed
 
 from dolomite_engine.arguments import TrainingArgs, UnshardingArgs
 from dolomite_engine.checkpointing import load_checkpoint_for_inference, save_checkpoint
-from dolomite_engine.distributed import wrap_model_list_for_distributed_training
+from dolomite_engine.distributed import wrap_model_container_for_distributed_training
 from dolomite_engine.enums import Mode
 from dolomite_engine.hf_models import AttentionHeadType
-from dolomite_engine.model_wrapper import get_model
+from dolomite_engine.model_wrapper import get_model_container
 from dolomite_engine.utils import ProcessGroupManager, load_yaml
 
 
@@ -59,8 +59,8 @@ if global_rank == 0:
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
     ):
-        model = get_model(train_config, Mode.training)
-        model.save_pretrained(os.path.join(args.tmp_path, "single_rank"))
+        model_container = get_model_container(train_config, Mode.training)
+        model_container[0].save_pretrained(os.path.join(args.tmp_path, "single_rank"))
 
 torch.distributed.barrier()
 
@@ -75,14 +75,14 @@ unshard_config.load_args.load_path = train_config.save_args.save_path
 unshard_config.load_args.iteration = iteration
 unshard_config.unsharded_path = os.path.join(args.tmp_path, "unsharded_path")
 
-model_tp = get_model(train_config, Mode.training)
-model_tp = wrap_model_list_for_distributed_training(train_config, model_tp)
+parallel_model_container = get_model_container(train_config, Mode.training)
+parallel_model_container, _ = wrap_model_container_for_distributed_training(train_config, parallel_model_container)
 
 save_checkpoint(
     train_config,
-    model=model_tp,
-    optimizer=None,
-    lr_scheduler=None,
+    model_container=parallel_model_container,
+    optimizer_container=None,
+    lr_scheduler_container=None,
     train_dataloader=None,
     experiments_tracker=None,
     iteration=iteration,
@@ -94,7 +94,7 @@ torch.distributed.barrier()
 _, _, consolidated_state_dict = load_checkpoint_for_inference(unshard_config, mode=Mode.unsharding, use_meta=False)
 
 if global_rank == 0:
-    original_state_dict = model.state_dict()
+    original_state_dict = model_container[0].state_dict()
 
     assert consolidated_state_dict.keys() == original_state_dict.keys()
     for key in original_state_dict:
