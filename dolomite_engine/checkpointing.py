@@ -47,7 +47,7 @@ class _ModelSaver(Stateful):
         for model in self.model_container:
             model_state_dict = get_model_state_dict(model)
             if model.has_teacher_model():
-                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+                model_state_dict = self._filter_out_teacher_state_dict(model_state_dict)
 
             state_dict.update(model_state_dict)
 
@@ -62,6 +62,14 @@ class _ModelSaver(Stateful):
                 del state_dict[key]
 
         assert len(state_dict) == 0, "unused keys found in the state dict"
+
+    def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
+        result = {}
+        for key, value in state_dict.items():
+            if not "teacher_model" in key:
+                result[key] = value
+
+        return result
 
 
 class _OptimizerSaver(Stateful):
@@ -442,12 +450,3 @@ def _get_experiments_tracker_path(path: str) -> str:
 
 def _get_metadata_path(path: str) -> str:
     return os.path.join(path, "metadata.json")
-
-
-def _filter_out_teacher_state_dict(state_dict: dict) -> dict:
-    result = {}
-    for key, value in state_dict.items():
-        if not "teacher_model" in key:
-            result[key] = value
-
-    return result
