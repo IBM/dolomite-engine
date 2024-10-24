@@ -188,9 +188,9 @@ class ModelWrapper(nn.Module):
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
-
-        model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
-        model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
+        if self.is_pipeline_parallel_enabled:
+            model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
+            model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:
@@ -204,7 +204,7 @@ class ModelWrapper(nn.Module):
 
         def _get_model(**extras):
             if self.model_name is None:
-                if ProcessGroupManager.is_tensor_parallel_enabled():
+                if self.is_pipeline_parallel_enabled or ProcessGroupManager.is_tensor_parallel_enabled():
                     # avoid inferring the model class so use _from_config instead of from_config
                     model = self.model_class._from_config(**model_kwargs, **extras)
                 else:

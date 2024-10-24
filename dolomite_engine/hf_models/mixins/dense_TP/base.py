@@ -12,21 +12,12 @@ from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
-    def __init__(
-        self,
-        config: CommonConfig,
-        *args,
-        tensor_parallel_word_embeddings: bool = False,
-        sequence_parallel: bool = False,
-        num_pipeline_stages: int = 1,
-        pipeline_stage_id: int = 0,
-        **kwargs,
-    ) -> None:
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
-        self.sequence_parallel = sequence_parallel
+    def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
+        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
+        self.sequence_parallel = kwargs.get("sequence_parallel", False)
 
-        self.num_pipeline_stages = num_pipeline_stages
-        self.pipeline_stage_id = pipeline_stage_id
+        self.num_pipeline_stages = kwargs.get("num_pipeline_stages", 1)
+        self.pipeline_stage_id = kwargs.get("pipeline_stage_id", 0)
 
         self.is_first_stage = self.pipeline_stage_id == 0
         self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
