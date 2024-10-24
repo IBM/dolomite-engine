@@ -89,14 +89,13 @@ class _OptimizerSaver(Stateful):
         return state_dict
 
     def load_state_dict(self, state_dict: dict) -> None:
-        for model in self.model_container:
-            model_state_dict = get_model_state_dict(model)
-            set_model_state_dict(model, model_state_dict=state_dict, options=StateDictOptions(strict=False))
-
-            for key in model_state_dict:
-                del state_dict[key]
-
-        assert len(state_dict) == 0, "unused keys found in the state dict"
+        for model, optimizer in zip(self.model_container, self.optimizer_container):
+            set_optimizer_state_dict(
+                model,
+                optimizer,
+                optim_state_dict=state_dict,
+                options=StateDictOptions(flatten_optimizer_state_dict=True),
+            )
 
 
 def save_checkpoint(
