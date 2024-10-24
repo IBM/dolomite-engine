@@ -28,7 +28,15 @@ from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_scheduler_container
-from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
+from .utils import (
+    ExperimentsTracker,
+    ProcessGroupManager,
+    get_pipeline_num_stages_and_stage_ids_on_current_rank,
+    load_yaml,
+    log_rank_0,
+    run_rank_n,
+    string_to_torch_dtype,
+)
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
@@ -76,8 +84,12 @@ def save_checkpoint(
     assert len(model_container) == len(optimizer_container)
     assert len(model_container) == len(lr_scheduler_container)
 
-    for pipeline_stage, (model, optimizer, lr_scheduler) in enumerate(
-        zip(model_container, optimizer_container, lr_scheduler_container)
+    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
+        args.distributed_args.num_pipeline_stages
+    )
+
+    for pipeline_stage, model, optimizer, lr_scheduler in zip(
+        pipeline_stage_ids_on_current_rank, model_container, optimizer_container, lr_scheduler_container
     ):
         model_state_dict = get_model_state_dict(model)
         if model.has_teacher_model():
