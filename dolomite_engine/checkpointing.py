@@ -179,11 +179,6 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    saver = _ModelSaver(model_container)
-    state_dict = {"state": saver.state_dict()}
-    dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
-    saver.load_state_dict(state_dict["state"])
-
     for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
         model_state_dict = get_model_state_dict(model)
         dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
