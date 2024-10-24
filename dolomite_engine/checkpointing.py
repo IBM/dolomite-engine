@@ -184,27 +184,18 @@ def load_checkpoint_for_training(
     dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
     saver.load_state_dict(state_dict["state"])
 
-    # for pipeline_stage, model, optimizer, lr_scheduler in zip(
-    #     pipeline_stage_ids_on_current_rank, model_container, optimizer_container, lr_scheduler_container
-    # ):
-    #     has_teacher_model = model.has_teacher_model()
-    #     if has_teacher_model:
-    #         log_rank_0(
-    #             logging.WARN,
-    #             "the model will use non-strict loading of state dict during distillation, this has potential of incorrect behavior",
-    #         )
+    for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
+        model_state_dict = get_model_state_dict(model)
+        dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
+        set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
+        del model_state_dict
 
-    #     model_state_dict = get_model_state_dict(model)
-    #     dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path, pipeline_stage=pipeline_stage))
-    #     set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
-    #     del model_state_dict
-
-    #     if load_optimizer:
-    #         # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-    #         optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-    #         dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path, pipeline_stage=pipeline_stage))
-    #         set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
-    #         del optimizer_state_dict
+        if load_optimizer:
+            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+            optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
+            dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path))
+            set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
+            del optimizer_state_dict
 
     if load_lr_scheduler:
         assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
