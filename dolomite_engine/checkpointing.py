@@ -217,7 +217,6 @@ def load_checkpoint_for_training(
     if args.load_args is None or args.load_args.load_path is None:
         return
 
-    args.load_args.load_optimizer
     args.load_args.load_lr_scheduler
     load_rng_state = args.load_args.load_rng_state
     load_dataloader_state = args.load_args.load_dataloader_state
@@ -234,10 +233,22 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
+    # FIXME drop original_state_dict after https://github.com/pytorch/pytorch/pull/138575 is fixed
     saver = _ModelSaver(model_container)
     state_dict = {"state": saver.state_dict()}
+    original_state_dict = {"state": {key: value for key, value in state_dict["state"].items()}}
     dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
+    state_dict.update(original_state_dict)
     saver.load_state_dict(state_dict["state"])
+
+    if args.load_args.load_optimizer:
+        # FIXME drop original_state_dict after https://github.com/pytorch/pytorch/pull/138575 is fixed
+        saver = _OptimizerSaver(model_container, optimizer_container)
+        state_dict = {"state": saver.state_dict()}
+        original_state_dict = {"state": {key: value for key, value in state_dict["state"].items()}}
+        dcp.load(state_dict, checkpoint_id=_get_optimizer_path(load_path))
+        state_dict.update(original_state_dict)
+        saver.load_state_dict(state_dict["state"])
 
     # for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
     #     if load_optimizer:
