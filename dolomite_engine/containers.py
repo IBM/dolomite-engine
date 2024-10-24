@@ -59,6 +59,4 @@ def log_model_optimizer_container(model_container: ModelContainer, optimizer_con
     for model, optimizer in zip(model_container, optimizer_container):
         log_rank_0(logging.INFO, model)
         log_rank_0(logging.INFO, optimizer)
-        for param_group in optimizer.param_groups:
-            log_rank_0(logging.INFO, f"num parameters in group = {len(param_group['params'])}")
     log_rank_0(logging.INFO, "-------------------- end of model & optimizer list ---------------------")
