@@ -165,9 +165,9 @@ def save_checkpoint(
             "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
         )
     else:
-        torch.save(
-            [lr_scheduler.state_dict() for lr_scheduler in lr_scheduler_container], _get_lr_scheduler_path(save_path)
-        )
+        lr_scheduler_path = _get_lr_scheduler_path(save_path)
+        os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
+        torch.save([lr_scheduler.state_dict() for lr_scheduler in lr_scheduler_container], lr_scheduler_path)
 
     rng_state = {
         "random_rng_state": random.getstate(),
