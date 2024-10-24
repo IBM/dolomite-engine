@@ -167,7 +167,7 @@ def load_checkpoint_for_training(
         return
 
     load_optimizer = args.load_args.load_optimizer
-    load_lr_scheduler = args.load_args.load_lr_scheduler
+    args.load_args.load_lr_scheduler
     load_rng_state = args.load_args.load_rng_state
     load_dataloader_state = args.load_args.load_dataloader_state
     load_experiments_tracker_state = args.load_args.load_experiments_tracker_state
@@ -198,19 +198,19 @@ def load_checkpoint_for_training(
 
         break
 
-    if load_lr_scheduler:
-        assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
+    # if load_lr_scheduler:
+    #     assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
-        for lr_scheduler in lr_scheduler_container:
-            lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
-    elif args.load_args.resume_learning_rate:
-        for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
-            _resume_learning_rate(
-                args,
-                optimizer=optimizer,
-                lr_scheduler=lr_scheduler,
-                iteration=iteration if load_starting_iteration else None,
-            )
+    #     for lr_scheduler in lr_scheduler_container:
+    #         lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+    # elif args.load_args.resume_learning_rate:
+    #     for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
+    #         _resume_learning_rate(
+    #             args,
+    #             optimizer=optimizer,
+    #             lr_scheduler=lr_scheduler,
+    #             iteration=iteration if load_starting_iteration else None,
+    #         )
 
     if load_rng_state:
         rng_state = torch.load(_get_rng_state_path(load_path))
