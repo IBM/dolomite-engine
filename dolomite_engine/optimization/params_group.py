@@ -52,12 +52,17 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
             list(model.parameters())
         ), "params in groups don't sum up to total parameters"
 
-        trainable_parameters_or_param_groups = [
-            {"params": list(normal_params.values())},
-            {"params": list(no_weight_decay_params.values()), "weight_decay": 0},
-        ]
+        trainable_parameters_or_param_groups = []
+        names = {}
 
-        names = {"normal": list(normal_params.keys()), "no_weight_decay": list(no_weight_decay_params.keys())}
+        if len(normal_params) > 0:
+            trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
+            names["normal"] = list(normal_params.keys())
+        if len(no_weight_decay_params) > 0:
+            trainable_parameters_or_param_groups.append(
+                {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
+            )
+            names["no_weight_decay"] = list(no_weight_decay_params.keys())
 
     return trainable_parameters_or_param_groups, names
 
@@ -113,17 +118,22 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
-    trainable_parameters_or_param_groups = [
-        {"params": list(normal_params.values())},
-        {"params": list(no_weight_decay_params.values()), "weight_decay": 0},
-        {"params": list(mup_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
-    ]
+    trainable_parameters_or_param_groups = []
+    names = {}
 
-    names = {
-        "normal": list(normal_params.keys()),
-        "no_weight_decay": list(no_weight_decay_params.keys()),
-        "mup": list(mup_params.keys()),
-    }
+    if len(normal_params) > 0:
+        trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
+        names["normal"] = list(normal_params.keys())
+    if len(no_weight_decay_params) > 0:
+        trainable_parameters_or_param_groups.append(
+            {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
+        )
+        names["no_weight_decay"] = list(no_weight_decay_params.keys())
+    if len(mup_params) > 0:
+        trainable_parameters_or_param_groups.append(
+            {"params": list(mup_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width}
+        )
+        names["mup"] = list(mup_params.keys())
 
     return trainable_parameters_or_param_groups, names
 

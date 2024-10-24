@@ -1,6 +1,5 @@
 import logging
 
-import torch
 import torch.nn as nn
 
 from .utils import log_rank_0
