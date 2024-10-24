@@ -6,8 +6,7 @@ from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
 from torch.distributed.device_mesh import DeviceMesh
 
-from ...utils import ProcessGroupManager
-from ..utils import divide_if_divisible
+from ...utils import ProcessGroupManager, divide_if_divisible
 
 
 def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int, int] | None = None) -> torch.Tensor:
@@ -49,6 +48,9 @@ def tensor_to_dtensor(
     desired_placement: Placement | list[Placement] | None = None,
     run_check: bool = False,
 ) -> DTensor:
+    if isinstance(tensor, DTensor):
+        return tensor
+
     if isinstance(current_placement, Placement):
         current_placement = [current_placement]
 
@@ -69,6 +71,9 @@ def dtensor_to_tensor(
     desired_placement: Placement | list[Placement] | None = None,
     grad_placement: Placement | list[Placement] | None = None,
 ) -> torch.Tensor:
+    if not isinstance(dtensor, DTensor):
+        return dtensor
+
     if desired_placement is not None:
         if isinstance(desired_placement, Placement):
             desired_placement = [desired_placement]
@@ -97,7 +102,14 @@ def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefi
             param = module_state_dict[stripped_key]
             device_mesh = param.device_mesh
             placements = param.placements
-            result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
+
+            if isinstance(tensor, DTensor):
+                assert tensor.device_mesh == device_mesh
+                assert tensor.placements == placements
+
+                result[key] = tensor
+            else:
+                result[key] = tensor_to_dtensor(tensor, device_mesh=device_mesh, current_placement=placements)
 
     return result
 

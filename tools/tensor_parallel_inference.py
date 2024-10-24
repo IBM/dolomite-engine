@@ -14,7 +14,7 @@ local_rank = torch.distributed.get_rank() % device_count_per_node
 
 torch.cuda.set_device(local_rank)
 
-ProcessGroupManager(tensor_parallel_size=8)
+ProcessGroupManager(tensor_parallel_world_size=8)
 
 model_name = "save/"
 

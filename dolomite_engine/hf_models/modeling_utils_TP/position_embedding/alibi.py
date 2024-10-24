@@ -2,7 +2,7 @@ import math
 
 import torch
 
-from ....utils import ProcessGroupManager
+from ....utils import ProcessGroupManager, divide_if_divisible
 from ...modeling_utils import Alibi
 
 
@@ -20,8 +20,7 @@ class Alibi_TP(Alibi):
             slopes = torch.cat([slopes, torch.pow(extra_base, extra_powers)], dim=0)
 
         tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-        num_heads_tp = self.num_heads // tp_world_size
+        num_heads_tp = divide_if_divisible(self.num_heads, ProcessGroupManager.get_tensor_parallel_world_size(), "")
         slopes = slopes[tp_rank * num_heads_tp : (tp_rank + 1) * num_heads_tp]
 
         self.register_buffer("slopes", slopes, persistent=False)

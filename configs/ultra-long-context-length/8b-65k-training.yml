@@ -47,7 +47,7 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
-  tensor_parallel_size: 8
+  tensor_parallel_world_size: 8
   fsdp_algorithm: 2
   sequence_parallel: true
   tensor_parallel_word_embeddings: true

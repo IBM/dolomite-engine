@@ -9,6 +9,8 @@ from torch.distributed import ProcessGroup
 from torch.distributed._symmetric_memory import enable_symm_mem_for_group
 from torch.distributed.device_mesh import DeviceMesh, init_device_mesh
 
+from .miscellaneous import divide_if_divisible
+
 
 # general
 _MESH: DeviceMesh | None = None
@@ -23,6 +25,12 @@ _TENSOR_PARALLEL_RANK: int | None = None
 _TENSOR_PARALLEL_WORLD_SIZE: int | None = None
 _TENSOR_PARALLEL_FIRST_RANK: int | None = None
 
+# pipeline parallel
+_PIPELINE_PARALLEL_MESH: DeviceMesh | None = None
+_PIPELINE_PARALLEL_GROUP: ProcessGroup | None = None
+_PIPELINE_PARALLEL_RANK: int | None = None
+_PIPELINE_PARALLEL_WORLD_SIZE: int | None = None
+
 # data parallel
 _DATA_PARALLEL_MESH: DeviceMesh | None = None
 _DATA_PARALLEL_GROUP: ProcessGroup | None = None
@@ -33,7 +41,8 @@ _DATA_PARALLEL_WORLD_SIZE: int | None = None
 class ProcessGroupManager:
     def __init__(
         self,
-        tensor_parallel_size: int = 1,
+        tensor_parallel_world_size: int = 1,
+        pipeline_parallel_world_size: int = 1,
         data_parallel_size: int | None = None,
         data_parallel_replication_world_size: int | None = None,
         data_parallel_sharding_world_size: int | None = None,
@@ -53,9 +62,9 @@ class ProcessGroupManager:
         total_gpus = int(os.getenv("WORLD_SIZE", 1))
 
         if data_parallel_size is None:
-            data_parallel_size = total_gpus // tensor_parallel_size
+            data_parallel_size = total_gpus // (tensor_parallel_world_size * pipeline_parallel_world_size)
 
-        assert tensor_parallel_size * data_parallel_size == total_gpus
+        assert tensor_parallel_world_size * pipeline_parallel_world_size * data_parallel_size == total_gpus
 
         if zero_stage == 0:
             assert data_parallel_sharding_world_size is None or data_parallel_sharding_world_size == 1
@@ -77,8 +86,13 @@ class ProcessGroupManager:
 
         _MESH = init_device_mesh(
             "cuda",
-            (data_parallel_replication_world_size, data_parallel_sharding_world_size, tensor_parallel_size),
-            mesh_dim_names=("ddp", "fsdp", "tp"),
+            (
+                pipeline_parallel_world_size,
+                data_parallel_replication_world_size,
+                data_parallel_sharding_world_size,
+                tensor_parallel_world_size,
+            ),
+            mesh_dim_names=("pp", "ddp", "fsdp", "tp"),
         )
 
         local_rank = int(os.getenv("LOCAL_RANK", 0))
@@ -93,7 +107,7 @@ class ProcessGroupManager:
         return torch.distributed.is_initialized()
 
     @staticmethod
-    def get_mesh() -> int:
+    def get_mesh() -> DeviceMesh:
         global _MESH
         return _MESH
 
@@ -127,8 +141,7 @@ class ProcessGroupManager:
         global _TENSOR_PARALLEL_MESH
 
         if _TENSOR_PARALLEL_MESH is None:
-            global _MESH
-            _TENSOR_PARALLEL_MESH = _MESH["tp"]
+            _TENSOR_PARALLEL_MESH = ProcessGroupManager.get_mesh()["tp"]
         return _TENSOR_PARALLEL_MESH
 
     @staticmethod
@@ -205,14 +218,74 @@ class ProcessGroupManager:
     def is_tensor_parallel_enabled() -> bool:
         return ProcessGroupManager.get_tensor_parallel_world_size() > 1
 
+    @staticmethod
+    def is_tensor_parallel_first_rank() -> bool:
+        return ProcessGroupManager.get_tensor_parallel_rank() == 0
+
+    # pipeline parallel
+    @staticmethod
+    def get_pipeline_parallel_mesh() -> DeviceMesh:
+        global _PIPELINE_PARALLEL_MESH
+
+        if _PIPELINE_PARALLEL_MESH is None:
+            _PIPELINE_PARALLEL_MESH = ProcessGroupManager.get_mesh()["pp"]
+        return _PIPELINE_PARALLEL_MESH
+
+    @staticmethod
+    def get_pipeline_parallel_group() -> ProcessGroup:
+        global _PIPELINE_PARALLEL_GROUP
+
+        if _PIPELINE_PARALLEL_GROUP is None:
+            _PIPELINE_PARALLEL_GROUP = ProcessGroupManager.get_pipeline_parallel_mesh().get_group()
+        return _PIPELINE_PARALLEL_GROUP
+
+    @staticmethod
+    def get_pipeline_parallel_rank() -> int:
+        global _PIPELINE_PARALLEL_RANK
+
+        if _PIPELINE_PARALLEL_RANK is None:
+            _PIPELINE_PARALLEL_RANK = ProcessGroupManager.get_pipeline_parallel_mesh().get_local_rank()
+        return _PIPELINE_PARALLEL_RANK
+
+    @contextmanager
+    @staticmethod
+    def set_dummy_pipeline_parallel_rank(rank: int):
+        global _PIPELINE_PARALLEL_RANK
+
+        original_rank = _PIPELINE_PARALLEL_RANK
+        _PIPELINE_PARALLEL_RANK = rank
+
+        yield
+
+        _PIPELINE_PARALLEL_RANK = original_rank
+
+    @staticmethod
+    def get_pipeline_parallel_world_size() -> int:
+        global _PIPELINE_PARALLEL_WORLD_SIZE
+
+        if _PIPELINE_PARALLEL_WORLD_SIZE is None:
+            _PIPELINE_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_pipeline_parallel_mesh().size()
+        return _PIPELINE_PARALLEL_WORLD_SIZE
+
+    @contextmanager
+    @staticmethod
+    def set_dummy_pipeline_parallel_world_size(world_size: int):
+        global _PIPELINE_PARALLEL_WORLD_SIZE
+
+        original_world_size = _PIPELINE_PARALLEL_WORLD_SIZE
+        _PIPELINE_PARALLEL_WORLD_SIZE = world_size
+
+        yield
+
+        _PIPELINE_PARALLEL_WORLD_SIZE = original_world_size
+
     # data parallel
     @staticmethod
     def get_data_parallel_mesh() -> DeviceMesh:
         global _DATA_PARALLEL_MESH
 
         if _DATA_PARALLEL_MESH is None:
-            global _MESH
-            _DATA_PARALLEL_MESH = _MESH["ddp", "fsdp"]
+            _DATA_PARALLEL_MESH = ProcessGroupManager.get_mesh()["ddp", "fsdp"]
         return _DATA_PARALLEL_MESH
 
     @staticmethod
@@ -273,6 +346,46 @@ class ProcessGroupManager:
             torch.distributed.destroy_process_group()
 
 
+_NUM_PIPELINE_STAGES: int = 1
+_NUM_PIPELINE_STAGES_PER_RANK: int = 1
+_PIPELINE_STAGE_IDS_ON_CURRENT_RANK: tuple[int] = (1,)
+
+
+class PipelineStageManager:
+    def __init__(self, num_pipeline_stages: int = 1) -> None:
+        global _NUM_PIPELINE_STAGES, _NUM_PIPELINE_STAGES_PER_RANK, _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
+
+        pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
+
+        _NUM_PIPELINE_STAGES = num_pipeline_stages
+
+        _NUM_PIPELINE_STAGES_PER_RANK = divide_if_divisible(
+            num_pipeline_stages,
+            pp_world_size,
+            "num_pipeline_stages should be divisible by pipeline_parallel_world_size",
+        )
+
+        _PIPELINE_STAGE_IDS_ON_CURRENT_RANK = tuple(
+            ProcessGroupManager.get_pipeline_parallel_rank() + i * pp_world_size
+            for i in range(_NUM_PIPELINE_STAGES_PER_RANK)
+        )
+
+    @staticmethod
+    def get_num_pipeline_stages() -> int:
+        global _NUM_PIPELINE_STAGES
+        return _NUM_PIPELINE_STAGES
+
+    @staticmethod
+    def get_num_pipeline_stages_per_rank() -> int:
+        global _NUM_PIPELINE_STAGES_PER_RANK
+        return _NUM_PIPELINE_STAGES_PER_RANK
+
+    @staticmethod
+    def get_pipeline_stage_ids_per_rank() -> int:
+        global _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
+        return _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
+
+
 def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable:
     """wraps a function to run on a single rank, returns a no-op for other ranks
 
@@ -308,3 +421,12 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
         wrapped_func = func_rank_other
 
     return wrapped_func
+
+
+def is_tracking_rank() -> bool:
+    return (
+        ProcessGroupManager.get_data_parallel_rank() == 0
+        and ProcessGroupManager.is_tensor_parallel_first_rank()
+        and ProcessGroupManager.get_pipeline_parallel_rank()
+        == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
+    )

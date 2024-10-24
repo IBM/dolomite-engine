@@ -19,7 +19,7 @@ from .models import (
     RNNDolomiteModel,
     convert_gpt_dolomite_to_gpt_crosslayer,
 )
-from .register_hf import get_tensor_parallel_class, is_custom_model, register_model_classes
+from .register_hf import get_model_parallel_class, is_custom_model, register_model_classes
 from .unshard import fix_unsharded_state_dict, unshard_tensor_parallel_state_dicts
 from .utils import convert_padding_free_lists_to_tensors
 

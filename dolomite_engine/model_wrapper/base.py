@@ -5,7 +5,7 @@ import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
 from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..hf_models import get_tensor_parallel_class, is_custom_model
+from ..hf_models import get_model_parallel_class, is_custom_model
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
@@ -25,6 +25,8 @@ class ModelWrapper(nn.Module):
         use_padding_free_transformer: bool,
         tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -43,6 +45,8 @@ class ModelWrapper(nn.Module):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
@@ -65,13 +69,19 @@ class ModelWrapper(nn.Module):
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
-        self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
+        self.num_pipeline_stages = num_pipeline_stages
+        self.pipeline_stage_id = pipeline_stage_id
+        self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
+
+        use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.is_pipeline_parallel_enabled
 
         self._setup_config()
 
-        if ProcessGroupManager.is_tensor_parallel_enabled():
+        log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
+
+        if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-            self.model_class = get_tensor_parallel_class(self.config.model_type)
+            self.model_class = get_model_parallel_class(self.config.model_type)
 
         if self.use_padding_free_transformer:
             assert is_custom_model(
@@ -178,6 +188,9 @@ class ModelWrapper(nn.Module):
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
+        if self.is_pipeline_parallel_enabled:
+            model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
+            model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:
@@ -191,7 +204,7 @@ class ModelWrapper(nn.Module):
 
         def _get_model(**extras):
             if self.model_name is None:
-                if ProcessGroupManager.is_tensor_parallel_enabled():
+                if self.is_pipeline_parallel_enabled or ProcessGroupManager.is_tensor_parallel_enabled():
                     # avoid inferring the model class so use _from_config instead of from_config
                     model = self.model_class._from_config(**model_kwargs, **extras)
                 else:
@@ -223,12 +236,6 @@ class ModelWrapper(nn.Module):
 
             self.model = _get_model(torch_dtype=torch_dtype)
 
-        num_parameters = 0
-        for param in self.model.parameters():
-            num_parameters += param.numel()
-
-        log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")
-
     def _override_embedding_forward_with_neft_forward(self, neft_alpha: float) -> None:
         if not hasattr(self.model, "get_input_embeddings"):
             raise Exception(
@@ -250,6 +257,19 @@ class ModelWrapper(nn.Module):
 
         # overrides the forward function of torch.nn.Embedding
         self.model.get_input_embeddings().forward = _noisy_forward
+
+    def calculate_num_parameters(self) -> int:
+        with torch.device("meta"):
+            if self.model_name is None:
+                model = self.model_class.from_config(config=self.config)
+            else:
+                model = self.model_class.from_pretrained(pretrained_model_name_or_path=self.model_name)
+
+            num_parameters = 0
+            for param in model.parameters():
+                num_parameters += param.numel()
+
+            return num_parameters
 
     def has_teacher_model(self) -> bool:
         return False
