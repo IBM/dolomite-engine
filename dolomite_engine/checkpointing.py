@@ -27,7 +27,7 @@ from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader
 from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
-from .model_wrapper import ModelWrapper
+from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_scheduler_container
 from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
@@ -340,8 +340,10 @@ def load_checkpoint_for_inference(
         torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+        ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
+        ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
     ):
-        model = get_model(args_from_checkpoint, mode)
+        model = get_model_container(args_from_checkpoint, mode)[0]
 
     if use_meta:
         model = model.to_empty(device="cpu")
