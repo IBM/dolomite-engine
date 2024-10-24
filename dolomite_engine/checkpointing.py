@@ -356,6 +356,8 @@ def load_checkpoint_for_inference(
         no_dist=True,
     )
 
+    state = state["state"]
+
     if checkpoint_tp_world_size > 1:
         state = fix_unsharded_state_dict(
             model.config, state, tensor_parallel_world_size=checkpoint_tp_world_size, prefix="model."
