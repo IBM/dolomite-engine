@@ -37,6 +37,60 @@ _INFERENCE_CONFIG_PREFIX = "inference_config"
 _KILLSWITCH = "KILLSWITCH"
 
 
+class _ModelSaver(Stateful):
+    def __init__(self, model_container: ModelContainer) -> None:
+        self.model_container = model_container
+
+    def state_dict(self) -> dict:
+        state_dict = {}
+
+        for model in self.model_container:
+            model_state_dict = get_model_state_dict(model)
+            if model.has_teacher_model():
+                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+
+            state_dict.update(model_state_dict)
+
+        return state_dict
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        for model in self.model_container:
+            model_state_dict = get_model_state_dict(model)
+            set_model_state_dict(model, model_state_dict=state_dict, options=StateDictOptions(strict=False))
+
+            for key in model_state_dict:
+                del state_dict[key]
+
+        assert len(state_dict) == 0, "unused keys found in the state dict"
+
+
+class _OptimizerSaver(Stateful):
+    def __init__(self, model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
+        self.model_container = model_container
+        self.optimizer_container = optimizer_container
+
+    def state_dict(self) -> dict:
+        state_dict = {}
+
+        for model, optimizer in zip(self.model_container, self.optimizer_container):
+            optimizer_state_dict = get_optimizer_state_dict(
+                model, optimizer, options=StateDictOptions(flatten_optimizer_state_dict=True)
+            )
+            state_dict.update(optimizer_state_dict)
+
+        return state_dict
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        for model in self.model_container:
+            model_state_dict = get_model_state_dict(model)
+            set_model_state_dict(model, model_state_dict=state_dict, options=StateDictOptions(strict=False))
+
+            for key in model_state_dict:
+                del state_dict[key]
+
+        assert len(state_dict) == 0, "unused keys found in the state dict"
+
+
 def save_checkpoint(
     args: TrainingArgs,
     model_container: ModelContainer,
@@ -63,34 +117,28 @@ def save_checkpoint(
         ValueError: if unexpected distributed backend is found
     """
 
-    save_optimizer = args.save_args.save_optimizer
+    args.save_args.save_optimizer
 
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    pipeline_stage = 0
+    dcp.save({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(save_path))
 
-    for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
-        model_state_dict = get_model_state_dict(model)
-        if model.has_teacher_model():
-            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+    # for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
+    #     if save_optimizer:
+    #         if optimizer is None:
+    #             log_rank_0(
+    #                 logging.WARN,
+    #                 "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
+    #                 "Therefore, the function will not save the optimizer",
+    #             )
+    #         else:
+    #             dcp.save(
+    #                 get_optimizer_state_dict(model, optimizer),
+    #                 checkpoint_id=_get_optimizer_path(save_path, pipeline_stage=pipeline_stage),
+    #             )
 
-        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, pipeline_stage=pipeline_stage))
-
-        if save_optimizer:
-            if optimizer is None:
-                log_rank_0(
-                    logging.WARN,
-                    "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
-                    "Therefore, the function will not save the optimizer",
-                )
-            else:
-                dcp.save(
-                    get_optimizer_state_dict(model, optimizer),
-                    checkpoint_id=_get_optimizer_path(save_path, pipeline_stage=pipeline_stage),
-                )
-
-        break
+    #     break
 
     # if lr_scheduler_container is None:
     #     log_rank_0(
@@ -166,7 +214,7 @@ def load_checkpoint_for_training(
     if args.load_args is None or args.load_args.load_path is None:
         return
 
-    load_optimizer = args.load_args.load_optimizer
+    args.load_args.load_optimizer
     args.load_args.load_lr_scheduler
     load_rng_state = args.load_args.load_rng_state
     load_dataloader_state = args.load_args.load_dataloader_state
@@ -183,20 +231,20 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
-        model_state_dict = get_model_state_dict(model)
-        dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path, pipeline_stage=0))
-        set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=True))
-        del model_state_dict
+    saver = _ModelSaver(model_container)
+    state_dict = {"state": saver.state_dict()}
+    dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
+    saver.load_state_dict(state_dict["state"])
 
-        if load_optimizer:
-            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-            dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path, pipeline_stage=0))
-            set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
-            del optimizer_state_dict
+    # for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
+    #     if load_optimizer:
+    #         # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+    #         optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
+    #         dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path, pipeline_stage=0))
+    #         set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
+    #         del optimizer_state_dict
 
-        break
+    #     break
 
     # if load_lr_scheduler:
     #     assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
