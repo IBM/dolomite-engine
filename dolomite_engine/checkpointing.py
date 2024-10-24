@@ -95,6 +95,24 @@ class _OptimizerSaver(Stateful):
             set_optimizer_state_dict(model, optimizer, optim_state_dict=state_dict[i])
 
 
+class _LRSchedulerSaver(Stateful):
+    def __init__(self, lr_scheduler_container: LRSchedulerContainer) -> None:
+        self.lr_scheduler_container = lr_scheduler_container
+
+    def state_dict(self):
+        if self.lr_scheduler_container is None:
+            return []
+
+        return [lr_scheduler.state_dict() for lr_scheduler in self.lr_scheduler_container]
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        if self.lr_scheduler_container is None:
+            return
+
+        for i, lr_scheduler in enumerate(self.lr_scheduler_container):
+            lr_scheduler.load_state_dict(state_dict[i])
+
+
 def save_checkpoint(
     args: TrainingArgs,
     model_container: ModelContainer,
@@ -126,7 +144,7 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    savers = {"model": _ModelSaver(model_container)}
+    dcp.save({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(save_path))
 
     if save_optimizer:
         if optimizer_container is None:
@@ -136,41 +154,20 @@ def save_checkpoint(
                 "Therefore, the function will not save the optimizer",
             )
         else:
-            savers["optimizer"] = _OptimizerSaver(model_container, optimizer_container)
+            dcp.save(
+                {"state": _OptimizerSaver(model_container, optimizer_container)},
+                checkpoint_id=_get_optimizer_path(save_path),
+            )
 
-    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
-        args.distributed_args.num_pipeline_stages
-    )
-
-    dcp.save(savers, checkpoint_id=_get_model_path(save_path))
-
-    # for pipeline_stage, model, optimizer, lr_scheduler in zip(
-    #     pipeline_stage_ids_on_current_rank, model_container, optimizer_container, lr_scheduler_container
-    # ):
-    #     if save_optimizer:
-    #         if optimizer is None:
-    #             log_rank_0(
-    #                 logging.WARN,
-    #                 "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
-    #                 "Therefore, the function will not save the optimizer",
-    #             )
-    #         else:
-    #             # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-    #             dcp.save(
-    #                 get_optimizer_state_dict(model, optimizer),
-    #                 checkpoint_id=_get_optimizer_path(save_path, pipeline_stage=pipeline_stage),
-    #             )
-
-    #     if lr_scheduler is None:
-    #         log_rank_0(
-    #             logging.WARN,
-    #             "lr_scheduler is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
-    #         )
-    #     else:
-    #         run_rank_n(torch.save)(
-    #             lr_scheduler.state_dict(),
-    #             _get_lr_scheduler_path(save_path, pipeline_stage=pipeline_stage),
-    #         )
+    if lr_scheduler_container is None:
+        log_rank_0(
+            logging.WARN,
+            "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
+        )
+    else:
+        torch.save(
+            [lr_scheduler.state_dict() for lr_scheduler in lr_scheduler_container], _get_lr_scheduler_path(save_path)
+        )
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -452,16 +449,16 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str, pipeline_stage: int | None = None) -> str:
-    return os.path.join(path, "model" if pipeline_stage is None else f"model-{pipeline_stage}")
+def _get_model_path(path: str) -> str:
+    return os.path.join(path, "model")
 
 
-def _get_optimizer_path(path: str, pipeline_stage: int | None = None) -> str:
-    return os.path.join(path, "optimizer" if pipeline_stage is None else f"optimizer-{pipeline_stage}")
+def _get_optimizer_path(path: str) -> str:
+    return os.path.join(path, "optimizer")
 
 
-def _get_lr_scheduler_path(path: str, pipeline_stage: int | None = None) -> str:
-    return os.path.join(path, "lr_scheduler.pt" if pipeline_stage is None else f"lr_scheduler-{pipeline_stage}.pt")
+def _get_lr_scheduler_path(path: str) -> str:
+    return os.path.join(path, "lr_scheduler", f"lr_scheduler-{ProcessGroupManager.get_global_rank()}.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
