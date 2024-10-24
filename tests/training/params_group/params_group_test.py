@@ -5,7 +5,7 @@ import torch
 from parameterized import parameterized
 
 from dolomite_engine.enums import Mode
-from dolomite_engine.model_wrapper import get_model
+from dolomite_engine.model_wrapper import get_model_container
 from dolomite_engine.optimization.params_group import get_mup_group_with_names, get_normal_group_with_names
 from dolomite_engine.utils import ProcessGroupManager
 
