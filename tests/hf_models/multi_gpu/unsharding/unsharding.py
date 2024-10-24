@@ -10,7 +10,7 @@ from dolomite_engine.hf_models import (
     GPTDolomiteConfig,
     MoEDolomiteConfig,
     fix_unsharded_state_dict,
-    get_tensor_parallel_class,
+    get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
 )
 from dolomite_engine.utils import ProcessGroupManager
@@ -68,7 +68,7 @@ if is_tp_first_rank:
 
 torch.distributed.barrier()
 
-model_tp = get_tensor_parallel_class(args.model_type).from_pretrained(
+model_tp = get_model_parallel_class(args.model_type).from_pretrained(
     args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings, **kwargs
 )
 
