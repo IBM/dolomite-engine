@@ -20,12 +20,7 @@ from .packages import (
     is_triton_available,
     log_environment,
 )
-from .parallel import (
-    ProcessGroupManager,
-    get_global_stage_id_from_local_stage_id,
-    get_pipeline_num_stages_and_stage_ids_on_current_rank,
-    run_rank_n,
-)
+from .parallel import PipelineStageManager, ProcessGroupManager, run_rank_n
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
 from .tracking import ExperimentsTracker, ProgressBar

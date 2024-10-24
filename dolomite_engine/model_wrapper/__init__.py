@@ -1,7 +1,7 @@
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
-from ..utils import ProcessGroupManager, get_pipeline_num_stages_and_stage_ids_on_current_rank
+from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
