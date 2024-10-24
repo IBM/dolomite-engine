@@ -36,8 +36,8 @@ def log_rank_0(level: int, msg: str) -> None:
     if logger is None:
         set_logger()
         log_rank_0(logging.WARN, "logger is not initialized yet, initializing now")
-
-    logger.log(level=level, msg=msg, stacklevel=3)
+    else:
+        logger.log(level=level, msg=msg, stacklevel=3)
 
 
 def log_metrics(level: int, msg: str) -> None:
