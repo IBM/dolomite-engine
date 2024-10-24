@@ -110,20 +110,25 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    dcp.save({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(save_path))
+    for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
+        model_state_dict = get_model_state_dict(model)
+        if model.has_teacher_model():
+            model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
-    if save_optimizer:
-        if optimizer_container is None:
-            log_rank_0(
-                logging.WARN,
-                "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
-                "Therefore, the function will not save the optimizer",
-            )
-        else:
-            dcp.save(
-                {"state": _OptimizerSaver(model_container, optimizer_container)},
-                checkpoint_id=_get_optimizer_path(save_path),
-            )
+        dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path, pipeline_stage=pipeline_stage))
+
+        if save_optimizer:
+            if optimizer is None:
+                log_rank_0(
+                    logging.WARN,
+                    "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
+                    "Therefore, the function will not save the optimizer",
+                )
+            else:
+                dcp.save(
+                    get_optimizer_state_dict(model, optimizer),
+                    checkpoint_id=_get_optimizer_path(save_path, pipeline_stage=pipeline_stage),
+                )
 
     if lr_scheduler_container is None:
         log_rank_0(
@@ -133,7 +138,7 @@ def save_checkpoint(
     else:
         lr_scheduler_path = _get_lr_scheduler_path(save_path)
         os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
-        torch.save([lr_scheduler.state_dict() for lr_scheduler in lr_scheduler_container], lr_scheduler_path)
+        run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -409,16 +414,16 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str) -> str:
-    return os.path.join(path, "model")
+def _get_model_path(path: str, pipeline_stage: int | None = None) -> str:
+    return os.path.join(path, "model" if pipeline_stage is None else f"model-{pipeline_stage}")
 
 
-def _get_optimizer_path(path: str) -> str:
-    return os.path.join(path, "optimizer")
+def _get_optimizer_path(path: str, pipeline_stage: int | None = None) -> str:
+    return os.path.join(path, "optimizer" if pipeline_stage is None else f"optimizer-{pipeline_stage}")
 
 
 def _get_lr_scheduler_path(path: str) -> str:
-    return os.path.join(path, "lr_scheduler", f"lr_scheduler-{ProcessGroupManager.get_global_rank()}.pt")
+    return os.path.join(path, "lr_scheduler.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
