@@ -102,7 +102,14 @@ def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefi
             param = module_state_dict[stripped_key]
             device_mesh = param.device_mesh
             placements = param.placements
-            result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
+
+            if isinstance(tensor, DTensor):
+                assert tensor.device_mesh == device_mesh
+                assert tensor.placements == placements
+
+                result[key] = tensor
+            else:
+                result[key] = tensor_to_dtensor(tensor, device_mesh=device_mesh, current_placement=placements)
 
     return result
 

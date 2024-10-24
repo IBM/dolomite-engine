@@ -68,6 +68,8 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
+    pipeline_stage = 0
+
     for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
         model_state_dict = get_model_state_dict(model)
         if model.has_teacher_model():
@@ -88,15 +90,17 @@ def save_checkpoint(
                     checkpoint_id=_get_optimizer_path(save_path, pipeline_stage=pipeline_stage),
                 )
 
-    if lr_scheduler_container is None:
-        log_rank_0(
-            logging.WARN,
-            "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
-        )
-    else:
-        lr_scheduler_path = _get_lr_scheduler_path(save_path)
-        os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
-        run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
+        break
+
+    # if lr_scheduler_container is None:
+    #     log_rank_0(
+    #         logging.WARN,
+    #         "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
+    #     )
+    # else:
+    #     lr_scheduler_path = _get_lr_scheduler_path(save_path)
+    #     os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
+    #     run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -181,16 +185,18 @@ def load_checkpoint_for_training(
 
     for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
         model_state_dict = get_model_state_dict(model)
-        dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
-        set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
+        dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path, pipeline_stage=0))
+        set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=True))
         del model_state_dict
 
         if load_optimizer:
             # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
             optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-            dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path))
+            dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path, pipeline_stage=0))
             set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
             del optimizer_state_dict
+
+        break
 
     if load_lr_scheduler:
         assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
