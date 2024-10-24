@@ -120,14 +120,14 @@ def _train_step_with_pipeline_parallel(
 
     batch = model_container[0].broadcast_tensor_parallel_input(batch, (batch_size, sequence_length + 1))
 
-    is_first_pipeline_stage = ProcessGroupManager.get_pipeline_parallel_rank() == 0
-    is_last_pipeline_stage = (
+    is_first_pipeline_rank = ProcessGroupManager.get_pipeline_parallel_rank() == 0
+    is_last_pipeline_rank = (
         ProcessGroupManager.get_pipeline_parallel_rank() == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
     )
 
-    if is_first_pipeline_stage:
+    if is_first_pipeline_rank:
         pipeline_schedule.step(batch)
-    elif is_last_pipeline_stage:
+    elif is_last_pipeline_rank:
         losses = []
         labels = batch[:, 1:]
         pipeline_schedule.step(target=labels, losses=losses)
@@ -155,7 +155,7 @@ def _train_step_with_pipeline_parallel(
 
         torch.distributed.all_reduce(grad_norm, group=ProcessGroupManager.get_pipeline_parallel_group())
 
-        if is_last_pipeline_stage:
+        if is_last_pipeline_rank:
             losses = sum(losses)
 
             metrics_tracker = metrics_tracker + {"loss": losses, "grad_norm": grad_norm}
