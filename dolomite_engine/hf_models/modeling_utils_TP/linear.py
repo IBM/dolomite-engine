@@ -148,13 +148,13 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.in_features_per_device = divide_if_divisible(
             in_features,
-            self.tp_world_size,
-            f"`in_features` ({in_features}) must be divisible by `tensor_parallel_world_size` ({self.tp_world_size})",
+            tp_world_size,
+            f"`in_features` ({in_features}) must be divisible by `tensor_parallel_world_size` ({tp_world_size})",
         )
 
         super().__init__(

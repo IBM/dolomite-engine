@@ -30,7 +30,6 @@ args = parser.parse_args()
 ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
 
 tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
 num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:

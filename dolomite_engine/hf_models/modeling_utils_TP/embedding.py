@@ -23,8 +23,10 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
         sequence_parallel: bool = False,
     ) -> None:
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings and self.tp_world_size > 1
+        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
+        if self.tensor_parallel_word_embeddings:
+            assert ProcessGroupManager.is_tensor_parallel_enabled()
+
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
 

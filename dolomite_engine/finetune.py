@@ -153,9 +153,7 @@ def evaluate(
         MetricsTrackingDict: metrics tracker
     """
 
-    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-    if tp_world_size > 1:
+    if ProcessGroupManager.is_tensor_parallel_enabled():
         if ProcessGroupManager.get_tensor_parallel_rank() == 0:
             num_steps = 0 if val_dataloader is None else len(val_dataloader)
         else:
