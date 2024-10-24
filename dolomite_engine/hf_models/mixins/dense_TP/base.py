@@ -1,11 +1,9 @@
-import logging
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....utils import ProcessGroupManager, divide_if_divisible, log_rank_0
+from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
@@ -14,30 +12,29 @@ from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
-    def __init__(self, config: CommonConfig, *args, **kwargs):
-        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
-        self.sequence_parallel = kwargs.get("sequence_parallel", False)
+    def __init__(
+        self,
+        config: CommonConfig,
+        *args,
+        tensor_parallel_word_embeddings: bool = False,
+        sequence_parallel: bool = False,
+        num_pipeline_stages: int = 1,
+        pipeline_stage_id: int = 0,
+        **kwargs,
+    ) -> None:
+        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
+        self.sequence_parallel = sequence_parallel
 
-        self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
-        self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
+        self.num_pipeline_stages = num_pipeline_stages
+        self.pipeline_stage_id = pipeline_stage_id
 
-        if "num_pipeline_stages" not in kwargs:
-            log_rank_0(
-                logging.WARN,
-                f"num_pipeline_stages not passed to the model, setting to PP world size ({self.pp_world_size})",
-            )
-        self.num_stages = kwargs.get("num_pipeline_stages", self.pp_world_size)
-
-        if "pipeline_stage_id" not in kwargs:
-            log_rank_0(logging.WARN, f"pipeline_stage_id not passed to the model, setting to PP rank ({self.pp_rank})")
-        self.stage_id = kwargs.get("pipeline_stage_id", self.pp_rank)
-
-        self.is_first_stage = self.stage_id == 0
-        self.is_last_stage = self.stage_id == self.num_stages - 1
+        self.is_first_stage = self.pipeline_stage_id == 0
+        self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
+        self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
 
         super().__init__(config, *args, **kwargs)
 
-        if self.pp_world_size > 1 and self._tied_word_embeddings:
+        if self.is_pipeline_parallel_enabled and self._tied_word_embeddings:
             raise NotImplementedError()
 
 
@@ -212,7 +209,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     sequence_parallel=self.sequence_parallel,
                 )
         elif self.position_embedding_type == PositionEmbeddingType.alibi:
-            if self.pp_world_size > 1:
+            if self.is_pipeline_parallel_enabled:
                 raise NotImplementedError()
 
             self.alibi = Alibi_TP(self.num_heads)

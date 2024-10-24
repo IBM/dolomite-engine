@@ -88,7 +88,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             additional_special_tokens=additional_special_tokens,
         )
 
-        if self.pp_world_size > 1:
+        if self.is_pipeline_parallel_enabled:
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
@@ -116,7 +116,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         model_outputs = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
-        if self.pp_world_size == 1:
+        if not self.is_pipeline_parallel_enabled:
             model_outputs = self.get_loss(model_outputs, labels)
 
         return model_outputs
@@ -215,18 +215,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         return batch
 
     def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> tuple[torch.Tensor]:
-        if self.pp_world_size == 1:
-            if ProcessGroupManager.is_tensor_parallel_enabled():
-                tokens = self.broadcast_tensor_parallel_input(
-                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
-                )
-            else:
-                tokens = batch["text"]
-                tokens = tokens.to(torch.cuda.current_device())
-
-            input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
-        else:
+        if self.is_pipeline_parallel_enabled:
             # when using pipeline parallel, we broadcast the input outside the model function
             tokens = batch["text"]
             tokens = tokens.to(torch.cuda.current_device())
@@ -237,6 +226,17 @@ class ModelWrapperForPretraining(ModelWrapper):
                 input_ids = tokens
 
             labels = None
+        else:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
+                tokens = self.broadcast_tensor_parallel_input(
+                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
+                )
+            else:
+                tokens = batch["text"]
+                tokens = tokens.to(torch.cuda.current_device())
+
+            input_ids = tokens[:, :-1]
+            labels = tokens[:, 1:]
 
         return input_ids, labels
 

@@ -371,17 +371,17 @@ class PipelineStageManager:
         )
 
     @staticmethod
+    def get_num_pipeline_stages() -> int:
+        global _NUM_PIPELINE_STAGES
+        return _NUM_PIPELINE_STAGES
+
+    @staticmethod
     def get_num_pipeline_stages_per_rank() -> int:
         global _NUM_PIPELINE_STAGES_PER_RANK
         return _NUM_PIPELINE_STAGES_PER_RANK
 
     @staticmethod
     def get_pipeline_stage_ids_per_rank() -> int:
-        global _NUM_PIPELINE_STAGES_PER_RANK
-        return _NUM_PIPELINE_STAGES_PER_RANK
-
-    @staticmethod
-    def get_pipeline_num_stages_and_stage_ids_on_current_rank() -> tuple[int]:
         global _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
         return _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
 

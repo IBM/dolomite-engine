@@ -340,6 +340,7 @@ def main(mode: Mode = Mode.training) -> None:
     init_distributed(
         tensor_parallel_world_size=args.distributed_args.tensor_parallel_world_size,
         pipeline_parallel_world_size=args.distributed_args.pipeline_parallel_world_size,
+        num_pipeline_stages=args.distributed_args.num_pipeline_stages,
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
@@ -347,6 +348,7 @@ def main(mode: Mode = Mode.training) -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
         use_async_tensor_parallel=args.distributed_args.use_async_tensor_parallel,
     )
+
     set_seed(args.random_args.seed)
 
     if mode == Mode.distillation:

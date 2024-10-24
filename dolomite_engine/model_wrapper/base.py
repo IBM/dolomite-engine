@@ -69,10 +69,11 @@ class ModelWrapper(nn.Module):
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
-        self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
-        self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
+        self.num_pipeline_stages = num_pipeline_stages
+        self.pipeline_stage_id = pipeline_stage_id
+        self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
 
-        use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.pp_world_size > 1
+        use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.is_pipeline_parallel_enabled
 
         self._setup_config()
 
@@ -81,9 +82,6 @@ class ModelWrapper(nn.Module):
         if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_model_parallel_class(self.config.model_type)
-
-        self.num_pipeline_stages = num_pipeline_stages
-        self.pipeline_stage_id = pipeline_stage_id
 
         if self.use_padding_free_transformer:
             assert is_custom_model(
@@ -190,9 +188,9 @@ class ModelWrapper(nn.Module):
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
-        if self.pp_world_size > 1:
-            model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
-            model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
+
+        model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
+        model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:

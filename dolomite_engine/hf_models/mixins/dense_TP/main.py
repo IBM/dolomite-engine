@@ -59,7 +59,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> CausalLMOutputWithPast | torch.Tensor:
-        if self.pp_world_size == 1 or self.is_first_stage:
+        if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
@@ -87,16 +87,16 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        if self.pp_world_size == 1 or self.is_last_stage:
+        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
             lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
             if self.m_width is not None:
                 lm_logits = lm_logits / self.m_width
 
-        if self.pp_world_size == 1:
+        if not self.is_pipeline_parallel_enabled:
             loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
-        if self.pp_world_size == 1 or self.is_last_stage:
+        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
             if output_parallel_lm_logits:
                 assert self.tensor_parallel_word_embeddings
             else:
@@ -105,7 +105,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
                     lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-        if self.pp_world_size == 1:
+        if not self.is_pipeline_parallel_enabled:
             output = CausalLMOutputWithPast(
                 loss=loss,
                 logits=lm_logits,

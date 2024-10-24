@@ -31,6 +31,7 @@ from .yaml import load_yaml
 def init_distributed(
     tensor_parallel_world_size: int,
     pipeline_parallel_world_size: int,
+    num_pipeline_stages: int,
     data_parallel_size: int,
     data_parallel_replication_world_size: int,
     data_parallel_sharding_world_size: int,
@@ -43,6 +44,7 @@ def init_distributed(
     Args:
         tensor_parallel_world_size (int): tensor parallel size
         pipeline_parallel_world_size (int): pipeline parallel size
+        num_pipeline_stages (int): num pipeline stages
         data_parallel_size (int): data parallel size
         data_parallel_replication_world_size (int): data parallel replication world size
         data_parallel_sharding_world_size (int): data parallel sharding world size
@@ -61,6 +63,8 @@ def init_distributed(
         timeout_minutes=timeout_minutes,
         use_async_tensor_parallel=use_async_tensor_parallel,
     )
+
+    PipelineStageManager(num_pipeline_stages)
 
     log_rank_0(logging.INFO, process_group_manager)
     log_rank_0(logging.INFO, f"total GPUs = {process_group_manager.get_world_size()}")
