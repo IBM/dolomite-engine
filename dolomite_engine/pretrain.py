@@ -255,9 +255,7 @@ def evaluate(
         MetricsTrackingDict: metrics tracker
     """
 
-    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-    if tp_world_size > 1:
+    if ProcessGroupManager.is_tensor_parallel_enabled():
         # other tensor parallel ranks need to be told if val dataloader is None or not
         is_val_dataloader_none = (
             val_dataloaders is None or len(val_dataloaders) == 0

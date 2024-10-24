@@ -26,7 +26,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         self.initializer_range = config.initializer_range
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.wte = Embedding_TP(
             config.vocab_size,
             self.embed_dim,

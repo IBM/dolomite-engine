@@ -201,6 +201,10 @@ class ProcessGroupManager:
 
         _TENSOR_PARALLEL_FIRST_RANK = original_rank
 
+    @staticmethod
+    def is_tensor_parallel_enabled() -> bool:
+        return ProcessGroupManager.get_tensor_parallel_world_size() > 1
+
     # data parallel
     @staticmethod
     def get_data_parallel_mesh() -> DeviceMesh:

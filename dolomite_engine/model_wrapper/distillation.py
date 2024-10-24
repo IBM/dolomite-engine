@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
-from ..utils import log_rank_0, string_to_torch_dtype
+from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
 
@@ -88,7 +88,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             reset_position_ids=reset_position_ids,
         )
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             raise NotImplementedError()
 
     def forward(self, batch: dict) -> dict:
