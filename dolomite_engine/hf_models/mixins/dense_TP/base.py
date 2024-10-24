@@ -37,7 +37,7 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
 
         super().__init__(config, *args, **kwargs)
 
-        if self._tied_word_embeddings:
+        if self.pp_world_size > 1 and self._tied_word_embeddings:
             raise NotImplementedError()
 
 
