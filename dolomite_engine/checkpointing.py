@@ -37,48 +37,6 @@ _INFERENCE_CONFIG_PREFIX = "inference_config"
 _KILLSWITCH = "KILLSWITCH"
 
 
-class _ModelSaver(Stateful):
-    def __init__(self, model_container: ModelContainer) -> None:
-        self.model_container = model_container
-
-    def state_dict(self):
-        state_dict = {}
-        for model in self.model_container:
-            model_state_dict = get_model_state_dict(model)
-            if model.has_teacher_model():
-                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
-
-            state_dict.update(model_state_dict)
-
-        return state_dict
-
-    def load_state_dict(self, state_dict: dict) -> None:
-        for model in self.model_container:
-            set_model_state_dict(model, model_state_dict=state_dict, options=StateDictOptions(strict=False))
-
-
-class _OptimizerSaver(Stateful):
-    def __init__(self, model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
-        self.model_container = model_container
-        self.optimizer_container = optimizer_container
-
-    def state_dict(self):
-        if self.optimizer_container is None:
-            return []
-
-        return [
-            get_optimizer_state_dict(model, optimizer)
-            for model, optimizer in zip(self.model_container, self.optimizer_container)
-        ]
-
-    def load_state_dict(self, state_dict: dict) -> None:
-        if self.optimizer_container is None:
-            return
-
-        for i, (model, optimizer) in enumerate(zip(self.model_container, self.optimizer_container)):
-            set_optimizer_state_dict(model, optimizer, optim_state_dict=state_dict[i])
-
-
 def save_checkpoint(
     args: TrainingArgs,
     model_container: ModelContainer,
