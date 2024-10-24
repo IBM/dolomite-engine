@@ -17,7 +17,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
             torch.Tensor: loss tensor
         """
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
         model_outputs = self.model(**batch)

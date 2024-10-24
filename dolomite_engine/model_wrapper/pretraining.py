@@ -132,7 +132,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         loss_context = nullcontext
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             logits = tensor_to_dtensor(
                 logits,
                 device_mesh=self.tp_mesh,
@@ -208,14 +208,14 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         batch["input_ids"] = input_ids
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
 
         return batch
 
     def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> tuple[torch.Tensor]:
         if self.pp_world_size == 1:
-            if self.tp_world_size > 1:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
                 tokens = self.broadcast_tensor_parallel_input(
                     None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
                 )

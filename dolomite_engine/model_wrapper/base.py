@@ -70,12 +70,11 @@ class ModelWrapper(nn.Module):
         self.trust_remote_code = trust_remote_code
 
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
         self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
         self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
 
-        use_model_parallelism = self.tp_world_size > 1 or self.pp_world_size > 1
+        use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.pp_world_size > 1
 
         self._setup_config()
 
@@ -124,7 +123,7 @@ class ModelWrapper(nn.Module):
             List[str]: list of generated text. input is trimmed from the generated text
         """
 
-        if self.use_padding_free_transformer or self.tp_world_size > 1:
+        if self.use_padding_free_transformer or ProcessGroupManager.is_tensor_parallel_enabled():
             raise NotImplementedError("padding free transformer and tensor parallel doesn't support generation")
 
         for i in batch:
@@ -209,7 +208,7 @@ class ModelWrapper(nn.Module):
 
         def _get_model(**extras):
             if self.model_name is None:
-                if self.tp_world_size > 1:
+                if ProcessGroupManager.is_tensor_parallel_enabled():
                     # avoid inferring the model class so use _from_config instead of from_config
                     model = self.model_class._from_config(**model_kwargs, **extras)
                 else:
@@ -226,7 +225,7 @@ class ModelWrapper(nn.Module):
                         self.model = _get_model()
                 else:
                     assert (
-                        self.tp_world_size == 1
+                        not ProcessGroupManager.is_tensor_parallel_enabled()
                     ), "tensor parallel models don't support efficient init with model name"
 
                     self.model = _get_model(low_cpu_mem_usage=True)
