@@ -158,15 +158,16 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
-        tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
-        tp_group = ProcessGroupManager.get_tensor_parallel_group()
-
-        if self.tp_rank == 0:
+        if ProcessGroupManager.is_tensor_parallel_first_rank():
             tokens = tokens.to(torch.cuda.current_device())
         else:
             tokens = torch.empty(shape, dtype=torch.long, device=torch.cuda.current_device())
 
-        torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
+        torch.distributed.broadcast(
+            tokens,
+            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
+            group=ProcessGroupManager.get_tensor_parallel_group(),
+        )
 
         return tokens
 

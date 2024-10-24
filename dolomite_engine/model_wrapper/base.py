@@ -69,8 +69,6 @@ class ModelWrapper(nn.Module):
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
-        self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-
         self.pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
         self.pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
 

@@ -29,7 +29,7 @@ args = parser.parse_args()
 
 ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
-tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
+is_tp_first_rank = ProcessGroupManager.is_tensor_parallel_first_rank()
 
 num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
@@ -62,7 +62,7 @@ elif args.model_type == MoEDolomiteConfig.model_type:
     kwargs["moe_implementation"] = "scattermoe"
 
 
-if tp_rank == 0:
+if is_tp_first_rank:
     model = TestCommons.from_config(None, config)
     model.save_pretrained(args.tmp_path, safe_serialization=True)
 
@@ -109,7 +109,7 @@ def run_check(fix: bool):
 
     torch.distributed.barrier()
 
-    if tp_rank == 0:
+    if is_tp_first_rank:
         original_state_dict = model.state_dict()
 
         assert tp_state_dict_unsharded.keys() == original_state_dict.keys()

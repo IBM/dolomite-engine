@@ -28,13 +28,14 @@ class ModelWrapperForFinetuning(ModelWrapper):
     def _broadcast_inputs_for_tensor_parallel(self, batch: dict) -> dict:
         device = torch.cuda.current_device()
 
+        is_tp_first_rank = ProcessGroupManager.is_tensor_parallel_first_rank()
         tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
         tp_group = ProcessGroupManager.get_tensor_parallel_group()
 
         if self.use_padding_free_transformer:
             keys = ["input_ids", "position_ids", "labels", "cu_seqlens", "max_seqlen"]
 
-            if self.tp_rank == 0:
+            if is_tp_first_rank:
                 metadata = torch.tensor([batch["cu_seqlens"].numel(), batch["input_ids"].numel()], device=device)
             else:
                 metadata = torch.empty(2, dtype=torch.long, device=device)
@@ -42,7 +43,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
             torch.distributed.broadcast(metadata, src=tp_source_rank, group=tp_group)
             cu_seqlens_num_elements, input_ids_num_elements = metadata
 
-            if self.tp_rank != 0:
+            if not is_tp_first_rank:
                 batch = {
                     "input_ids": torch.empty(input_ids_num_elements, dtype=torch.long, device=device),
                     "position_ids": torch.empty(input_ids_num_elements, dtype=torch.long, device=device),
@@ -53,10 +54,10 @@ class ModelWrapperForFinetuning(ModelWrapper):
         else:
             keys = ["input_ids", "attention_mask", "labels"]
 
-            batch_shape = batch["input_ids"].shape if self.tp_rank == 0 else None
+            batch_shape = batch["input_ids"].shape if is_tp_first_rank else None
             batch_shape = Communication.broadcast_object(batch_shape, src=tp_source_rank, group=tp_group)
 
-            if self.tp_rank != 0:
+            if not is_tp_first_rank:
                 batch = {key: torch.empty(batch_shape, dtype=torch.long, device=device) for key in keys}
 
         for key in keys:

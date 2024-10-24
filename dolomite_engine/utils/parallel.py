@@ -218,6 +218,10 @@ class ProcessGroupManager:
     def is_tensor_parallel_enabled() -> bool:
         return ProcessGroupManager.get_tensor_parallel_world_size() > 1
 
+    @staticmethod
+    def is_tensor_parallel_first_rank() -> bool:
+        return ProcessGroupManager.get_tensor_parallel_rank() == 0
+
     # pipeline parallel
     @staticmethod
     def get_pipeline_parallel_mesh() -> DeviceMesh:
