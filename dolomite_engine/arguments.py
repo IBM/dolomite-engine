@@ -372,15 +372,12 @@ class DistributedArgs(BaseArgs):
 
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
 
-        if self.pipeline_parallel_world_size > 1:
-            _check_not_None([(self.num_pipeline_stages, "num_pipeline_stages")])
-
-            assert (
-                self.num_pipeline_stages % self.pipeline_parallel_world_size == 0
-            ), "num_pipeline_stages should be a multiple of pipeline_parallel_world_size"
-
         if self.use_async_tensor_parallel:
             assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
+
+        assert (
+            self.num_pipeline_stages % self.pipeline_parallel_world_size == 0
+        ), "num_pipeline_stages should be a multiple of pipeline_parallel_world_size"
 
 
 class AimArgs(BaseArgs):
