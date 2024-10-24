@@ -162,18 +162,18 @@ def save_checkpoint(
 
 def load_checkpoint_for_training(
     args: TrainingArgs,
-    model: ModelWrapper,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
 ) -> tuple[int, dict, dict]:
     """load checkpoint for training
 
     Args:
         args (TrainingArgs): arguments for training
-        model (ModelWrapper): model to load
-        optimizer (Optimizer): optimizer to save
-        lr_scheduler (LambdaLR): learning rate scheduler to load
+        model_container (ModelContainer): models to save
+        optimizer_container (OptimizerContainer): optimizers to save
+        lr_scheduler_container (LRSchedulerContainer): learning rate schedulers to save
         train_dataloader (ResumableDataLoader): train dataloader to load
 
     Raises:
@@ -203,31 +203,46 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    has_teacher_model = model.has_teacher_model()
-    if has_teacher_model:
-        log_rank_0(
-            logging.WARN,
-            "the model will use non-strict loading of state dict during distillation, this has potential of incorrect behavior",
-        )
+    if optimizer_container is None:
+        optimizer_container = [None] * len(model_container)
 
-    model_state_dict = get_model_state_dict(model)
-    dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
-    set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
-    del model_state_dict
+    if lr_scheduler_container is None:
+        lr_scheduler_container = [None] * len(model_container)
 
-    if load_optimizer:
-        # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-        optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-        dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path))
-        set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
-        del optimizer_state_dict
+    assert len(model_container) == len(optimizer_container)
+    assert len(model_container) == len(lr_scheduler_container)
 
-    if load_lr_scheduler:
-        assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
+    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
+        args.distributed_args.num_pipeline_stages
+    )
 
-        lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
-    else:
-        if args.load_args.resume_learning_rate:
+    for pipeline_stage, model, optimizer, lr_scheduler in zip(
+        pipeline_stage_ids_on_current_rank, model_container, optimizer_container, lr_scheduler_container
+    ):
+        has_teacher_model = model.has_teacher_model()
+        if has_teacher_model:
+            log_rank_0(
+                logging.WARN,
+                "the model will use non-strict loading of state dict during distillation, this has potential of incorrect behavior",
+            )
+
+        model_state_dict = get_model_state_dict(model)
+        dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path, pipeline_stage=pipeline_stage))
+        set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
+        del model_state_dict
+
+        if load_optimizer:
+            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
+            optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
+            dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path, pipeline_stage=pipeline_stage))
+            set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
+            del optimizer_state_dict
+
+        if load_lr_scheduler:
+            assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
+
+            lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path, pipeline_stage=pipeline_stage)))
+        elif args.load_args.resume_learning_rate:
             _resume_learning_rate(
                 args,
                 optimizer=optimizer,
