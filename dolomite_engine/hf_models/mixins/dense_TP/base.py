@@ -51,8 +51,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         self.initializer_range = config.initializer_range
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
         self.layers_per_stage = divide_if_divisible(
             config.n_layer, self.num_stages, "layers should be divisible by num_stages"
         )
@@ -158,7 +156,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 query_length = key_length - past_length
             else:
                 key_length = (
-                    hidden_states.size(1) * self.tp_world_size if self.sequence_parallel else hidden_states.size(1)
+                    hidden_states.size(1) * ProcessGroupManager.get_tensor_parallel_world_size()
+                    if self.sequence_parallel
+                    else hidden_states.size(1)
                 )
                 query_length = key_length - past_length
 
