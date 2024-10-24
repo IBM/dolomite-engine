@@ -118,7 +118,7 @@ def save_checkpoint(
             )
         else:
             run_rank_n(torch.save)(
-                lr_scheduler_container[0].state_dict(),
+                lr_scheduler.state_dict(),
                 _get_lr_scheduler_path(save_path, pipeline_stage=pipeline_stage),
             )
 
