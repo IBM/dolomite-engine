@@ -29,15 +29,7 @@ from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_scheduler_container
-from .utils import (
-    ExperimentsTracker,
-    ProcessGroupManager,
-    get_pipeline_num_stages_and_stage_ids_on_current_rank,
-    load_yaml,
-    log_rank_0,
-    run_rank_n,
-    string_to_torch_dtype,
-)
+from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 
 _TRAINING_CONFIG_PREFIX = "training_config"
@@ -50,27 +42,19 @@ class _ModelSaver(Stateful):
         self.model_container = model_container
 
     def state_dict(self):
-        result = []
+        state_dict = {}
         for model in self.model_container:
-            state_dict = get_model_state_dict(model)
-
+            model_state_dict = get_model_state_dict(model)
             if model.has_teacher_model():
-                state_dict = _filter_out_teacher_state_dict(state_dict)
+                model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
 
-            result.append(state_dict)
+            state_dict.update(model_state_dict)
 
-        return result
+        return state_dict
 
     def load_state_dict(self, state_dict: dict) -> None:
-        for i, model in enumerate(self.model_container):
-            has_teacher_model = model.has_teacher_model()
-            if has_teacher_model:
-                log_rank_0(
-                    logging.WARN,
-                    "the model will use non-strict loading of state dict during distillation, this has potential of incorrect behavior",
-                )
-
-            set_model_state_dict(model, state_dict[i], options=StateDictOptions(strict=not has_teacher_model))
+        for model in self.model_container:
+            set_model_state_dict(model, model_state_dict=state_dict, options=StateDictOptions(strict=False))
 
 
 class _OptimizerSaver(Stateful):
@@ -232,7 +216,10 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    dcp.load({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(load_path))
+    saver = _ModelSaver(model_container)
+    state_dict = {"state": saver.state_dict()}
+    dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
+    saver.load_state_dict(state_dict["state"])
 
     # for pipeline_stage, model, optimizer, lr_scheduler in zip(
     #     pipeline_stage_ids_on_current_rank, model_container, optimizer_container, lr_scheduler_container
