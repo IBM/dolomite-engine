@@ -34,6 +34,8 @@ class ParamsGroupTest(TestCommons):
                     torch.device("meta"),
                     ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                     ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+                    ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
+                    ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
                 ):
                     model_container = get_model_container(args, Mode.training)
             except RuntimeError:
@@ -43,6 +45,8 @@ class ParamsGroupTest(TestCommons):
                 torch.device("meta"),
                 ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                 ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+                ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
+                ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
             ):
                 model_container = get_model_container(args, Mode.training)
 
@@ -74,6 +78,8 @@ class ParamsGroupTest(TestCommons):
                     torch.device("meta"),
                     ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                     ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+                    ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
+                    ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
                 ):
                     model_container = get_model_container(args, Mode.training)
             except RuntimeError:
@@ -83,6 +89,8 @@ class ParamsGroupTest(TestCommons):
                 torch.device("meta"),
                 ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                 ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+                ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
+                ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
             ):
                 model_container = get_model_container(args, Mode.training)
 
