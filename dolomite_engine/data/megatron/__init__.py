@@ -58,7 +58,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
         is_built_on_rank = ProcessGroupManager.get_global_rank() == node_rank * num_ranks_per_node
     else:
         # only build dataloader on first rank of each TP group
-        is_built_on_rank = ProcessGroupManager.get_tensor_parallel_rank() == 0
+        is_built_on_rank = ProcessGroupManager.is_tensor_parallel_first_rank()
 
     gpt_dataset_builder = BlendedMegatronDatasetBuilder(
         GPTDataset,

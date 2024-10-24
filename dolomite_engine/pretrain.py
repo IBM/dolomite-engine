@@ -274,7 +274,7 @@ def evaluate(
         # other tensor parallel ranks need to be told if val dataloader is None or not
         is_val_dataloader_none = (
             val_dataloaders is None or len(val_dataloaders) == 0
-            if ProcessGroupManager.get_tensor_parallel_rank() == 0
+            if ProcessGroupManager.is_tensor_parallel_first_rank()
             else None
         )
         is_val_dataloader_none = Communication.broadcast_object(

@@ -169,7 +169,7 @@ def evaluate(
     """
 
     if ProcessGroupManager.is_tensor_parallel_enabled():
-        if ProcessGroupManager.get_tensor_parallel_rank() == 0:
+        if ProcessGroupManager.is_tensor_parallel_first_rank():
             num_steps = 0 if val_dataloader is None else len(val_dataloader)
         else:
             num_steps = 0

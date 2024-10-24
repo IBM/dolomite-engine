@@ -115,7 +115,7 @@ def _train_step_with_pipeline_parallel(
 
     batch = get_next_batch(train_dataloader)
 
-    if ProcessGroupManager.get_tensor_parallel_rank() == 0:
+    if ProcessGroupManager.is_tensor_parallel_first_rank():
         batch = batch["text"]
 
     batch = model_container[0].broadcast_tensor_parallel_input(batch, (batch_size, sequence_length + 1))
