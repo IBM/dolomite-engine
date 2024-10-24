@@ -95,24 +95,6 @@ class _OptimizerSaver(Stateful):
             set_optimizer_state_dict(model, optimizer, optim_state_dict=state_dict[i])
 
 
-class _LRSchedulerSaver(Stateful):
-    def __init__(self, lr_scheduler_container: LRSchedulerContainer) -> None:
-        self.lr_scheduler_container = lr_scheduler_container
-
-    def state_dict(self):
-        if self.lr_scheduler_container is None:
-            return []
-
-        return [lr_scheduler.state_dict() for lr_scheduler in self.lr_scheduler_container]
-
-    def load_state_dict(self, state_dict: dict) -> None:
-        if self.lr_scheduler_container is None:
-            return
-
-        for i, lr_scheduler in enumerate(self.lr_scheduler_container):
-            lr_scheduler.load_state_dict(state_dict[i])
-
-
 def save_checkpoint(
     args: TrainingArgs,
     model_container: ModelContainer,
@@ -250,18 +232,7 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    if optimizer_container is None:
-        optimizer_container = [None] * len(model_container)
-
-    if lr_scheduler_container is None:
-        lr_scheduler_container = [None] * len(model_container)
-
-    assert len(model_container) == len(optimizer_container)
-    assert len(model_container) == len(lr_scheduler_container)
-
-    _, pipeline_stage_ids_on_current_rank = get_pipeline_num_stages_and_stage_ids_on_current_rank(
-        args.distributed_args.num_pipeline_stages
-    )
+    dcp.load({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(load_path))
 
     for pipeline_stage, model, optimizer, lr_scheduler in zip(
         pipeline_stage_ids_on_current_rank, model_container, optimizer_container, lr_scheduler_container
