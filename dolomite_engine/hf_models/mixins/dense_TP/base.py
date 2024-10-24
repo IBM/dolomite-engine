@@ -52,8 +52,8 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             config.n_layer, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
         )
 
-        self.layer_start_id = self.layers_per_stage * self.stage_id
-        self.layer_end_id = self.layers_per_stage * (self.stage_id + 1)
+        self.layer_start_id = self.layers_per_stage * self.pipeline_stage_id
+        self.layer_end_id = self.layers_per_stage * (self.pipeline_stage_id + 1)
 
         if self.is_first_stage:
             self.wte = Embedding_TP(
