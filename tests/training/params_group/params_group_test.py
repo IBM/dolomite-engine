@@ -35,7 +35,7 @@ class ParamsGroupTest(TestCommons):
                     ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                     ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
                 ):
-                    model = get_model(args, Mode.training)
+                    model_container = get_model_container(args, Mode.training)
             except RuntimeError:
                 self.skipTest("skipping rnn_dolomite test since causal-conv1d is not installed")
         else:
@@ -44,9 +44,9 @@ class ParamsGroupTest(TestCommons):
                 ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                 ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
             ):
-                model = get_model(args, Mode.training)
+                model_container = get_model_container(args, Mode.training)
 
-        _, names = get_mup_group_with_names(model, args.optimizer_args.class_args)
+        _, names = get_mup_group_with_names(model_container[0], args.optimizer_args.class_args)
 
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
@@ -75,7 +75,7 @@ class ParamsGroupTest(TestCommons):
                     ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                     ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
                 ):
-                    model = get_model(args, Mode.training)
+                    model_container = get_model_container(args, Mode.training)
             except RuntimeError:
                 self.skipTest("skipping rnn_dolomite test since causal-conv1d is not installed")
         else:
@@ -84,9 +84,9 @@ class ParamsGroupTest(TestCommons):
                 ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
                 ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
             ):
-                model = get_model(args, Mode.training)
+                model_container = get_model_container(args, Mode.training)
 
-        _, names = get_normal_group_with_names(model, args.optimizer_args.class_args)
+        _, names = get_normal_group_with_names(model_container[0], args.optimizer_args.class_args)
 
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
