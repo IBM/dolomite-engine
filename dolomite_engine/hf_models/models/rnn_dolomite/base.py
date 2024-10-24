@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import Cache
+from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import is_fla_available
@@ -25,6 +25,12 @@ class RNNDolomitePreTrainedModel(PreTrainedModelMixin):
 
     def __init__(self, config: RNNDolomiteConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
+
+        self.attention_implementation = "flash_attention_2"
+
+        self._use_eager_attention = False
+        self._use_sdpa = False
+        self._use_flash_attention_2 = True
 
         assert not self._use_padding_free_transformer, "RNN models are not implemented with padding free transformer"
 
@@ -87,7 +93,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: Cache | None = None,
+        past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -97,7 +103,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple | BaseModelOutputWithPast:
+    ) -> BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,

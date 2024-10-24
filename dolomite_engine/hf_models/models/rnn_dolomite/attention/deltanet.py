@@ -82,16 +82,18 @@ class DeltaNet(nn.Module):
                     self.key_dim,
                     conv_size,
                     activation=nn.SiLU() if qk_activation == "silu" else nn.Identity(),
+                    activation_string="silu" if qk_activation == "silu" else None,
                     std=std_conv,
                 )
                 self.k_conv1d = ParameterizedShortConvolution(
                     self.key_dim,
                     conv_size,
                     activation=nn.SiLU() if qk_activation == "silu" else nn.Identity(),
+                    activation_string="silu" if qk_activation == "silu" else None,
                     std=std_conv,
                 )
                 self.v_conv1d = ParameterizedShortConvolution(
-                    self.value_dim, conv_size, activation=nn.SiLU(), std=std_conv
+                    self.value_dim, conv_size, activation=nn.SiLU(), activation_string="silu", std=std_conv
                 )
 
         self.use_beta = use_beta
@@ -132,23 +134,24 @@ class DeltaNet(nn.Module):
             if attention_mask.shape[-1] != hidden_states.shape[-2]:
                 attention_mask = attention_mask[:, -1:]
 
-        c_attn = self.c_attn(hidden_states)
-        q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
-
         if self.use_short_conv:
             conv_state = last_state[0] if use_cache else None
             if self.share_conv_kernel:
                 # conv state is updated inplace
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
+                q, k, v = self._prepare_qkv_for_forward(hidden_states)
             else:
                 conv_state_q = last_state[0] if use_cache else None
                 conv_state_k = last_state[1] if use_cache else None
                 conv_state_v = last_state[2] if use_cache else None
 
+                q, k, v = self._prepare_qkv_for_forward(hidden_states)
+
                 q = self.q_conv1d(q, attention_mask, conv_state_q)
                 k = self.k_conv1d(k, attention_mask, conv_state_k)
                 v = self.v_conv1d(v, attention_mask, conv_state_v)
         else:
+            q, k, v = self._prepare_qkv_for_forward(hidden_states)
             v = F.silu(v)
 
         # dealing with left-padding
@@ -183,15 +186,19 @@ class DeltaNet(nn.Module):
             beta = q.new_ones(q.shape[0], q.shape[1], q.shape[2])
         state = past_key_values[self.layer_idx][-1] if use_cache else None
         if mode == "fused_recurrent":
-            o, recurrent_state = fused_recurrent_delta_rule(q, k, v, beta, state, output_final_state=use_cache)
+            o, recurrent_state = fused_recurrent_delta_rule(
+                q=q, k=k, v=v, beta=beta, initial_state=state, output_final_state=use_cache
+            )
         elif mode == "fused_chunk":
             assert self.chunk_size in [16, 32, 64]
             o, recurrent_state = fused_chunk_delta_rule(
-                q, k, v, beta, self.chunk_size, state, output_final_state=use_cache
+                q=q, k=k, v=v, beta=beta, BT=self.chunk_size, initial_state=state, output_final_state=use_cache
             )
         elif mode == "chunk":
             assert self.chunk_size in [16, 32, 64]
-            o, recurrent_state = chunk_delta_rule(q, k, v, beta, self.chunk_size, state, output_final_state=use_cache)
+            o, recurrent_state = chunk_delta_rule(
+                q=q, k=k, v=v, beta=beta, BT=self.chunk_size, initial_state=state, output_final_state=use_cache
+            )
         else:
             raise NotImplementedError(f"Not supported mode `{mode}`.")
 
@@ -228,3 +235,8 @@ class DeltaNet(nn.Module):
                 )
         state += (param.new_zeros(batch_size, self.num_heads, self.head_qk_dim, self.head_v_dim),)
         return state
+
+    def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+        c_attn = self.c_attn(hidden_states)
+        q, k, v = c_attn.split((self.key_dim, self.key_dim, self.value_dim), dim=-1)
+        return q, k, v

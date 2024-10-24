@@ -2,7 +2,6 @@ import logging
 from contextlib import AbstractContextManager, nullcontext
 
 import torch
-from torch.distributed import ReduceOp
 from torch.distributed._tensor.api import DTensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
