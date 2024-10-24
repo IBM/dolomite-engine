@@ -250,16 +250,6 @@ def load_checkpoint_for_training(
         state_dict.update(original_state_dict)
         saver.load_state_dict(state_dict["state"])
 
-    # for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
-    #     if load_optimizer:
-    #         # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-    #         optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-    #         dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path, pipeline_stage=0))
-    #         set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
-    #         del optimizer_state_dict
-
-    #     break
-
     # if load_lr_scheduler:
     #     assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
