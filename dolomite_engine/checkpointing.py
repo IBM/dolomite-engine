@@ -98,6 +98,20 @@ class _OptimizerSaver(Stateful):
             )
 
 
+class _LRSchedulerSaver(Stateful):
+    def __init__(self, lr_scheduler_container: LRSchedulerContainer) -> None:
+        self.lr_scheduler_container = lr_scheduler_container
+
+    def state_dict(self) -> dict:
+        return [lr_scheduler.state_dict() for lr_scheduler in self.lr_scheduler_container]
+
+    def load_state_dict(self, state_dict: list[dict]) -> None:
+        assert len(self.lr_scheduler_container) == len(state_dict)
+
+        for lr_scheduler, lr_scheduler_state_dict in zip(self.lr_scheduler_container, state_dict):
+            lr_scheduler.load_state_dict(lr_scheduler_state_dict)
+
+
 def save_checkpoint(
     args: TrainingArgs,
     model_container: ModelContainer,
@@ -142,15 +156,15 @@ def save_checkpoint(
                 checkpoint_id=_get_optimizer_path(save_path),
             )
 
-    # if lr_scheduler_container is None:
-    #     log_rank_0(
-    #         logging.WARN,
-    #         "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
-    #     )
-    # else:
-    #     lr_scheduler_path = _get_lr_scheduler_path(save_path)
-    #     os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
-    #     run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
+    if lr_scheduler_container is None:
+        log_rank_0(
+            logging.WARN,
+            "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
+        )
+    else:
+        lr_scheduler_path = _get_lr_scheduler_path(save_path)
+        os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
+        torch.save(_LRSchedulerSaver(lr_scheduler_container).state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -216,7 +230,7 @@ def load_checkpoint_for_training(
     if args.load_args is None or args.load_args.load_path is None:
         return
 
-    args.load_args.load_lr_scheduler
+    load_optimizer = args.load_args.load_optimizer
     load_rng_state = args.load_args.load_rng_state
     load_dataloader_state = args.load_args.load_dataloader_state
     load_experiments_tracker_state = args.load_args.load_experiments_tracker_state
@@ -240,7 +254,7 @@ def load_checkpoint_for_training(
     state_dict.update(original_state_dict)
     saver.load_state_dict(state_dict["state"])
 
-    if args.load_args.load_optimizer:
+    if load_optimizer:
         # FIXME drop original_state_dict after https://github.com/pytorch/pytorch/pull/138575 is fixed
         saver = _OptimizerSaver(model_container, optimizer_container)
         state_dict = {"state": saver.state_dict()}
@@ -249,19 +263,18 @@ def load_checkpoint_for_training(
         state_dict.update(original_state_dict)
         saver.load_state_dict(state_dict["state"])
 
-    # if load_lr_scheduler:
-    #     assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
+    if args.load_args.load_lr_scheduler:
+        assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
-    #     for lr_scheduler in lr_scheduler_container:
-    #         lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
-    # elif args.load_args.resume_learning_rate:
-    #     for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
-    #         _resume_learning_rate(
-    #             args,
-    #             optimizer=optimizer,
-    #             lr_scheduler=lr_scheduler,
-    #             iteration=iteration if load_starting_iteration else None,
-    #         )
+        _LRSchedulerSaver(lr_scheduler_container).load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+    elif args.load_args.resume_learning_rate:
+        for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
+            _resume_learning_rate(
+                args,
+                optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
+                iteration=iteration if load_starting_iteration else None,
+            )
 
     if load_rng_state:
         rng_state = torch.load(_get_rng_state_path(load_path))
