@@ -351,6 +351,11 @@ def main(mode: Mode = Mode.training) -> None:
     )
     set_seed(args.random_args.seed)
 
+    if mode == Mode.distillation:
+        assert (
+            ProcessGroupManager.get_pipeline_parallel_world_size() == 1
+        ), "pipeline parallel is not supported with distillation"
+
     model_container = get_model_container(args, mode)
     model_container, pipeline_schedule = wrap_model_container_for_distributed_training(args, model_container)
 
