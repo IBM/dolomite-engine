@@ -392,7 +392,7 @@ def _get_model_path(path: str, pipeline_stage: int | None = None) -> str:
 
 
 def _get_optimizer_path(path: str, pipeline_stage: int | None = None) -> str:
-    return os.path.join(path, "model" if pipeline_stage is None else f"model-{pipeline_stage}")
+    return os.path.join(path, "optimizer" if pipeline_stage is None else f"optimizer-{pipeline_stage}")
 
 
 def _get_lr_scheduler_path(path: str, pipeline_stage: int | None = None) -> str:
