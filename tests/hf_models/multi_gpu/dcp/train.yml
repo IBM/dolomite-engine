@@ -35,7 +35,7 @@ model_args:
     attention_head_type: mha
     scale_attn_weights: true
     vocab_size: 50304
-    tie_word_embeddings: true
+    tie_word_embeddings: false
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
