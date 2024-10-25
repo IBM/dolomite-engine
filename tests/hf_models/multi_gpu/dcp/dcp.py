@@ -42,14 +42,9 @@ train_config.model_args.pretrained_config["num_key_value_heads"] = num_key_value
 # activation function
 train_config.model_args.pretrained_config["activation_function"] = args.activation_function
 
-tp_world_size = train_config.distributed_args.tensor_parallel_world_size
-dp_world_size = int(os.getenv("WORLD_SIZE")) // tp_world_size
-
 ProcessGroupManager(
-    tensor_parallel_world_size=tp_world_size,
-    data_parallel_size=dp_world_size,
-    data_parallel_replication_world_size=args.data_parallel_replication_world_size,
-    data_parallel_sharding_world_size=args.data_parallel_sharding_world_size,
+    tensor_parallel_world_size=train_config.distributed_args.tensor_parallel_world_size,
+    pipeline_parallel_world_size=train_config.distributed_args.pipeline_parallel_world_size,
 )
 
 global_rank = ProcessGroupManager.get_global_rank()
@@ -58,9 +53,16 @@ if global_rank == 0:
     with (
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+        ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
+        ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
     ):
+        original_num_stages = train_config.distributed_args.num_pipeline_stages
+        train_config.distributed_args.num_pipeline_stages = 1
+
         model_container = get_model_container(train_config, Mode.training)
         model_container[0].save_pretrained(os.path.join(args.tmp_path, "single_rank"))
+
+        train_config.distributed_args.num_pipeline_stages = original_num_stages
 
 torch.distributed.barrier()
 

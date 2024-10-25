@@ -343,7 +343,12 @@ def load_checkpoint_for_inference(
         ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
         ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
     ):
+        original_num_stages = args_from_checkpoint.distributed_args.num_pipeline_stages
+        args_from_checkpoint.distributed_args.num_pipeline_stages = 1
+
         model = get_model_container(args_from_checkpoint, mode)[0]
+
+        args_from_checkpoint.distributed_args.num_pipeline_stages = original_num_stages
 
     if use_meta:
         model = model.to_empty(device="cpu")

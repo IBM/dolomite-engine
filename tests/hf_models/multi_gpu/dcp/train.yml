@@ -78,3 +78,6 @@ distributed_args:
   fsdp_algorithm: 2
   stage: 3
   tensor_parallel_world_size: 2
+  pipeline_parallel_world_size: 2
+  num_pipeline_stages: 4
+  pipeline_parallel_schedule: 1F1B
