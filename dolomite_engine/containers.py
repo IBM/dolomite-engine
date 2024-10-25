@@ -22,6 +22,9 @@ class _Container:
     def __len__(self) -> int:
         return len(self.model_list)
 
+    def __str__(self):
+        return str(self.model_list)
+
 
 class ModelContainer(_Container):
     def train(self) -> "ModelContainer":
