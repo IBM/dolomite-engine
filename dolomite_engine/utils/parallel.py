@@ -346,46 +346,6 @@ class ProcessGroupManager:
             torch.distributed.destroy_process_group()
 
 
-_NUM_PIPELINE_STAGES: int = 1
-_NUM_PIPELINE_STAGES_PER_RANK: int = 1
-_PIPELINE_STAGE_IDS_ON_CURRENT_RANK: tuple[int] = (1,)
-
-
-class PipelineStageManager:
-    def __init__(self, num_pipeline_stages: int = 1) -> None:
-        global _NUM_PIPELINE_STAGES, _NUM_PIPELINE_STAGES_PER_RANK, _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
-
-        pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
-
-        _NUM_PIPELINE_STAGES = num_pipeline_stages
-
-        _NUM_PIPELINE_STAGES_PER_RANK = divide_if_divisible(
-            num_pipeline_stages,
-            pp_world_size,
-            "num_pipeline_stages should be divisible by pipeline_parallel_world_size",
-        )
-
-        _PIPELINE_STAGE_IDS_ON_CURRENT_RANK = tuple(
-            ProcessGroupManager.get_pipeline_parallel_rank() + i * pp_world_size
-            for i in range(_NUM_PIPELINE_STAGES_PER_RANK)
-        )
-
-    @staticmethod
-    def get_num_pipeline_stages() -> int:
-        global _NUM_PIPELINE_STAGES
-        return _NUM_PIPELINE_STAGES
-
-    @staticmethod
-    def get_num_pipeline_stages_per_rank() -> int:
-        global _NUM_PIPELINE_STAGES_PER_RANK
-        return _NUM_PIPELINE_STAGES_PER_RANK
-
-    @staticmethod
-    def get_pipeline_stage_ids_per_rank() -> int:
-        global _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
-        return _PIPELINE_STAGE_IDS_ON_CURRENT_RANK
-
-
 def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable:
     """wraps a function to run on a single rank, returns a no-op for other ranks
 
@@ -430,3 +390,17 @@ def is_tracking_rank() -> bool:
         and ProcessGroupManager.get_pipeline_parallel_rank()
         == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
     )
+
+
+@staticmethod
+def get_pipeline_stage_ids_on_current_rank(num_pipeline_stages: int) -> int:
+    pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
+    pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
+
+    num_pipeline_stages_per_rank = divide_if_divisible(
+        num_pipeline_stages,
+        pp_world_size,
+        "num_pipeline_stages should be divisible by pipeline_parallel_world_size",
+    )
+
+    return tuple(pp_rank + i * pp_world_size for i in range(num_pipeline_stages_per_rank))
