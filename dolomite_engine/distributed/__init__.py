@@ -220,7 +220,6 @@ def wrap_model_container_for_distributed_training(
     if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
         micro_batch_size = args.training_parameters.micro_batch_size
         sequence_length = args.datasets[0].class_args.get("sequence_length")
-        args.model_args.pretrained_config.get("n_embd")
 
         for model in model_container:
             intermediate_dtype = string_to_torch_dtype(args.mixed_precision_args.dtype)
