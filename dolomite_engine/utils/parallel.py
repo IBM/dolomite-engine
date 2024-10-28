@@ -392,7 +392,6 @@ def is_tracking_rank() -> bool:
     )
 
 
-@staticmethod
 def get_pipeline_stage_ids_on_current_rank(num_pipeline_stages: int) -> int:
     pp_rank = ProcessGroupManager.get_pipeline_parallel_rank()
     pp_world_size = ProcessGroupManager.get_pipeline_parallel_world_size()
