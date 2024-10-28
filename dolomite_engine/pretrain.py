@@ -128,7 +128,6 @@ def train(
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
 
     # model flops per GPU
-    # we divide by pipeline parallel world size since each unit takes 1 / PP time
     model_flops = (
         get_model_tflops(
             model_class=args.model_args.model_class,
