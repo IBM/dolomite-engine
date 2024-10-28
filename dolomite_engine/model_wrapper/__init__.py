@@ -22,16 +22,13 @@ def get_model_container(
     args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
 ) -> ModelContainer:
     tuning_method = args.tuning_args.tuning_method
+    num_pipeline_stages = args.distributed_args.num_pipeline_stages
 
     if tuning_method != TuningMethod.pretraining:
-        assert (
-            ProcessGroupManager.get_pipeline_parallel_world_size() == 1
-        ), "pipeline parallelism is only supported with pretraining"
+        assert num_pipeline_stages == 1, "pipeline parallelism is only supported with pretraining"
 
     if tuning_method not in _MODEL_CLASS_MAPPING:
         raise ValueError(f"unexpected tuning_method ({tuning_method})")
-
-    num_pipeline_stages = args.distributed_args.num_pipeline_stages
 
     kwargs = {
         "mode": mode,
