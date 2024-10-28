@@ -17,7 +17,8 @@ class ProgressBar:
     """progress bar for training or validation"""
 
     def __init__(self, start: int, end: int, desc: str | None = None) -> None:
-        if not is_tracking_rank():
+        self.is_tracking_rank = is_tracking_rank()
+        if not self.is_tracking_rank:
             return
 
         self.progress_bar = tqdm(total=end, desc=desc)
@@ -30,7 +31,7 @@ class ProgressBar:
             n (int, optional): Number of steps to update the progress bar with. Defaults to 1.
         """
 
-        if not is_tracking_rank():
+        if not self.is_tracking_rank:
             return
 
         self.progress_bar.update(n=n)
@@ -38,7 +39,7 @@ class ProgressBar:
     def track(self, **loss_kwargs) -> None:
         """track specific metrics in progress bar"""
 
-        if not is_tracking_rank():
+        if not self.is_tracking_rank:
             return
 
         # for key in loss_kwargs:
@@ -56,7 +57,8 @@ class ExperimentsTracker:
         wandb_args: BaseArgs,
         checkpoint_metadata: dict,
     ) -> None:
-        if not is_tracking_rank():
+        self.is_tracking_rank = is_tracking_rank()
+        if not self.is_tracking_rank:
             return
 
         self.experiments_tracker_name = experiments_tracker_name
@@ -86,7 +88,7 @@ class ExperimentsTracker:
             args (BaseArgs): pydantic object
         """
 
-        if not is_tracking_rank():
+        if not self.is_tracking_rank:
             return
 
         if self.tracking_enabled:
@@ -112,7 +114,7 @@ class ExperimentsTracker:
             context (str, optional): context for tracking. Defaults to None.
         """
 
-        if not is_tracking_rank():
+        if not self.is_tracking_rank:
             return
 
         if self.tracking_enabled:
@@ -134,7 +136,7 @@ class ExperimentsTracker:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
     def finish(self) -> None:
-        if not is_tracking_rank():
+        if not self.is_tracking_rank:
             return
 
         if self.tracking_enabled:
@@ -146,7 +148,7 @@ class ExperimentsTracker:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
     def state_dict(self) -> dict:
-        if not is_tracking_rank():
+        if not self.is_tracking_rank:
             return
 
         state_dict = {}
