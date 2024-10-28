@@ -262,11 +262,6 @@ def evaluate(
         MetricsTrackingDict: metrics tracker
     """
 
-    if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
-        raise NotImplementedError(
-            "pipeline parallel doesn't support evaluation yet, pass eval_during_training = false"
-        )
-
     assert len(model_container) == 1
     model = model_container[0]
 

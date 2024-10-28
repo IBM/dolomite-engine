@@ -217,7 +217,7 @@ def wrap_model_container_for_distributed_training(
     pipeline_stages = []
     pipeline_schedule = None
 
-    if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
+    if num_pipeline_stages > 1:
         micro_batch_size = args.training_parameters.micro_batch_size
         sequence_length = args.datasets[0].class_args.get("sequence_length")
 

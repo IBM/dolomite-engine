@@ -501,6 +501,9 @@ class TrainingArgs(BaseArgs):
         # datasets
         _check_datasets(self.datasets)
 
+        if self.distributed_args.num_pipeline_stages > 1 and self.training_parameters.eval_during_training:
+            raise NotImplementedError("evaluation is not supported with pipeline parallel")
+
 
 class GenerationParameters(BaseArgs):
     # batch size
