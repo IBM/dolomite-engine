@@ -62,7 +62,7 @@ def get_optimizer_container(
     Args:
         optimizer_class_name (str): optimizer class name
         optimizer_class_args (dict): args for the optimizer class
-        model_list (list[ModelWrapper]): list of models
+        model_container (ModelContainer): model container
         params_group_method (ParamsGroupMethod): the params grouping to use
 
     Returns:
