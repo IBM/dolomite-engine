@@ -242,9 +242,7 @@ def main() -> None:
 
     set_seed(args.random_args.seed)
 
-    assert (
-        ProcessGroupManager.get_pipeline_parallel_world_size() == 1
-    ), "pipeline parallel is not supported with finetuning"
+    assert args.distributed_args.num_pipeline_stages == 1, "pipeline parallel is not supported with finetuning"
 
     model_container = get_model_container(args, mode)
 
