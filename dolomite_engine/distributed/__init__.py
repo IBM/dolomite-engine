@@ -206,8 +206,6 @@ def wrap_model_container_for_distributed_training(
                         if hasattr(module, "reset_parameters"):
                             module.reset_parameters()
 
-                    model_container[i] = model
-
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
 
