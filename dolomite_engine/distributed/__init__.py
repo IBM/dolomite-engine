@@ -49,7 +49,7 @@ def wrap_model_container_for_distributed_training(
         model_container (ModelContainer): model container
 
     Returns:
-        tuple[model_container, _PipelineSchedule]: container of parallelized models and pipeline schedule
+        tuple[ModelContainer, _PipelineSchedule]: container of parallelized models and pipeline schedule
     """
 
     stage = args.distributed_args.stage
