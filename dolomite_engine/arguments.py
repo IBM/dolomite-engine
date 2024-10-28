@@ -342,7 +342,7 @@ class DistributedArgs(BaseArgs):
     # total number of pipeline stages
     num_pipeline_stages: int = 1
     # pipeline parallel shedule to use
-    pipeline_parallel_schedule: str = ""
+    pipeline_parallel_schedule: str | None = None
     # whether to use async-TP
     use_async_tensor_parallel: bool = False
 
@@ -378,6 +378,9 @@ class DistributedArgs(BaseArgs):
         assert (
             self.num_pipeline_stages % self.pipeline_parallel_world_size == 0
         ), "num_pipeline_stages should be a multiple of pipeline_parallel_world_size"
+
+        if self.num_pipeline_stages > 1:
+            _check_not_None([(self.pipeline_parallel_schedule, "pipeline_parallel_schedule")])
 
 
 class AimArgs(BaseArgs):
