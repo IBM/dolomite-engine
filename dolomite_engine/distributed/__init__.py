@@ -271,6 +271,9 @@ def _get_pipeline_parallel_schedule(
     if schedule_class in [PipelineScheduleSingle, PipelineScheduleMulti]:
         raise NotImplementedError()
 
+    if issubclass(schedule_class, PipelineScheduleSingle):
+        assert len(pipeline_stages) == 1
+
     def custom_loss_function(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         loss_dict = loss_fn(output, target)
         return loss_dict["loss"]
