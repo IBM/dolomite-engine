@@ -28,6 +28,7 @@ def train_step(
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
+    is_pipeline_parallel_enabled: bool,
     batch_size: int,
     sequence_length: int,
 ) -> MetricsTrackingDict:
@@ -44,6 +45,7 @@ def train_step(
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+        is_pipeline_parallel_enabled (bool): whether to use pipeline parallel
         batch_size (int): batch size
         sequence_length (int): sequence length
 
@@ -54,7 +56,7 @@ def train_step(
     assert len(model_container) == len(optimizer_container)
     assert len(optimizer_container) == len(lr_scheduler_container)
 
-    if ProcessGroupManager.get_pipeline_parallel_world_size() > 1:
+    if is_pipeline_parallel_enabled:
         metrics_tracker = _train_step_with_pipeline_parallel(
             model_container=model_container,
             pipeline_schedule=pipeline_schedule,
