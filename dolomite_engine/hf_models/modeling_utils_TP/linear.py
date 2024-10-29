@@ -4,10 +4,11 @@ import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
+from ...distributed import dtensor_to_tensor, tensor_to_dtensor, use_async_tensor_parallel
 from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedLinear
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor, use_async_tensor_parallel
+from .TP import get_module_placements
 
 
 class ReplicatedLinear(ParameterizedLinear, DTensorModule):

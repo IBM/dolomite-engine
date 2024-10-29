@@ -3,9 +3,10 @@ import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate
 
+from .....distributed import dtensor_to_tensor, tensor_to_dtensor
 from .....utils import ProcessGroupManager
 from ...dtensor_module import DTensorModule
-from ...TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from ...TP import get_module_placements
 
 
 class RMSNorm_TP(nn.RMSNorm, DTensorModule):
