@@ -153,7 +153,7 @@ def train(
 @torch.no_grad()
 def evaluate(
     val_dataloader: ResumableDataLoader,
-    model: ModelWrapperForFinetuning,
+    model_container: ModelContainer,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
 ) -> MetricsTrackingDict:
@@ -161,7 +161,7 @@ def evaluate(
 
     Args:
         val_dataloader (ResumableDataLoader): validation dataloader
-        model (ModelWrapperForFinetuning): model
+        model_container (ModelContainer): model container
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
 
@@ -184,14 +184,14 @@ def evaluate(
     if num_steps == 0:
         return
 
-    model.eval()
+    model_container.eval()
 
     metrics_tracker = MetricsTrackingDict({})
     val_dataloader = custom_iterator(val_dataloader, infinite=False)
 
     for _ in range(num_steps):
         batch = get_next_batch(val_dataloader)
-        loss_step_dict = model(batch)
+        loss_step_dict = model_container[0](batch)
         metrics_tracker = metrics_tracker + loss_step_dict
 
     metrics_tracker = metrics_tracker / num_steps
@@ -209,7 +209,7 @@ def evaluate(
         context="val",
     )
 
-    model.train()
+    model_container.train()
 
     return metrics_tracker
 
