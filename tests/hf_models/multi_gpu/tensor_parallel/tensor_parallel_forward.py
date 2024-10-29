@@ -5,14 +5,7 @@ import torch
 import torch.distributed
 from transformers import set_seed
 
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
-    MoEDolomiteConfig,
-    MoEDolomiteForCausalLM_TP,
-    get_tensor_parallel_class,
-)
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig, get_model_parallel_class
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
@@ -32,7 +25,7 @@ args = parser.parse_args()
 
 set_seed(42)
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
@@ -83,7 +76,7 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
 
-    model_tp = get_tensor_parallel_class(args.model_type)._from_config(
+    model_tp = get_model_parallel_class(args.model_type)._from_config(
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,

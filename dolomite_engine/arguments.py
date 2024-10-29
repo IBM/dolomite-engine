@@ -324,11 +324,13 @@ class DistributedArgs(BaseArgs):
     # whether to use a dispatching dataloader
     dispatching_dataloader: bool = False
     # tensor parallel world size
-    tensor_parallel_size: int = 1
+    tensor_parallel_world_size: int = 1
     # tensor parallel embeddings
     tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
+    # pipeline parallel world size
+    pipeline_parallel_world_size: int = 1
     # data parallel world size
     data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes
@@ -337,6 +339,10 @@ class DistributedArgs(BaseArgs):
     fsdp_algorithm: int = 1
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
+    # total number of pipeline stages
+    num_pipeline_stages: int = 1
+    # pipeline parallel shedule to use
+    pipeline_parallel_schedule: str | None = None
     # whether to use async-TP
     use_async_tensor_parallel: bool = False
 
@@ -346,14 +352,14 @@ class DistributedArgs(BaseArgs):
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
         if self.sequence_parallel:
-            assert self.tensor_parallel_size > 1, "tensor parallel needs to be enabled for sequence parallel"
+            assert self.tensor_parallel_world_size > 1, "tensor parallel needs to be enabled for sequence parallel"
 
         if self.tensor_parallel_word_embeddings:
             assert (
-                self.tensor_parallel_size > 1
+                self.tensor_parallel_world_size > 1
             ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
-        if self.tensor_parallel_size > 1:
+        if self.tensor_parallel_world_size > 1:
             version = Version(torch.__version__).release
             version = [str(i) for i in version]
             version = ".".join(version)
@@ -368,6 +374,13 @@ class DistributedArgs(BaseArgs):
 
         if self.use_async_tensor_parallel:
             assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
+
+        assert (
+            self.num_pipeline_stages % self.pipeline_parallel_world_size == 0
+        ), "num_pipeline_stages should be a multiple of pipeline_parallel_world_size"
+
+        if self.num_pipeline_stages > 1:
+            _check_not_None([(self.pipeline_parallel_schedule, "pipeline_parallel_schedule")])
 
 
 class AimArgs(BaseArgs):
@@ -490,6 +503,9 @@ class TrainingArgs(BaseArgs):
 
         # datasets
         _check_datasets(self.datasets)
+
+        if self.distributed_args.num_pipeline_stages > 1 and self.training_parameters.eval_during_training:
+            raise NotImplementedError("evaluation is not supported with pipeline parallel")
 
 
 class GenerationParameters(BaseArgs):

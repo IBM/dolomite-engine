@@ -35,7 +35,7 @@ model_args:
     attention_head_type: mha
     scale_attn_weights: true
     vocab_size: 50304
-    tie_word_embeddings: true
+    tie_word_embeddings: false
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
@@ -77,4 +77,7 @@ mixed_precision_args:
 distributed_args:
   fsdp_algorithm: 2
   stage: 3
-  tensor_parallel_size: 2
+  tensor_parallel_world_size: 2
+  pipeline_parallel_world_size: 2
+  num_pipeline_stages: 4
+  pipeline_parallel_schedule: 1F1B

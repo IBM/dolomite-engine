@@ -18,15 +18,17 @@ from torch.distributed.checkpoint.state_dict import (
     set_optimizer_state_dict,
 )
 from torch.distributed.checkpoint.state_dict_loader import _load_state_dict
+from torch.distributed.checkpoint.stateful import Stateful
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from .arguments import InferenceArgs, TrainingArgs, UnshardingArgs
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader
 from .enums import Mode
 from .hf_models import fix_unsharded_state_dict
-from .model_wrapper import ModelWrapper, get_model
-from .optimization import get_scheduler
+from .model_wrapper import ModelWrapper, get_model_container
+from .optimization import get_scheduler_container
 from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_0, run_rank_n, string_to_torch_dtype
 
 
@@ -35,11 +37,88 @@ _INFERENCE_CONFIG_PREFIX = "inference_config"
 _KILLSWITCH = "KILLSWITCH"
 
 
+class _ModelSaver(Stateful):
+    def __init__(self, model_container: ModelContainer) -> None:
+        self.model_container = model_container
+
+    def state_dict(self) -> dict:
+        state_dict = {}
+
+        for model in self.model_container:
+            model_state_dict = get_model_state_dict(model)
+            if model.has_teacher_model():
+                model_state_dict = self._filter_out_teacher_state_dict(model_state_dict)
+
+            state_dict.update(model_state_dict)
+
+        return state_dict
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        for model in self.model_container:
+            model_state_dict = get_model_state_dict(model)
+            set_model_state_dict(
+                model, model_state_dict=state_dict, options=StateDictOptions(strict=not model.has_teacher_model())
+            )
+
+            for key in model_state_dict:
+                del state_dict[key]
+
+        assert len(state_dict) == 0, "unused keys found in the state dict"
+
+    def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
+        result = {}
+        for key, value in state_dict.items():
+            if not "teacher_model" in key:
+                result[key] = value
+
+        return result
+
+
+class _OptimizerSaver(Stateful):
+    def __init__(self, model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
+        self.model_container = model_container
+        self.optimizer_container = optimizer_container
+
+    def state_dict(self) -> dict:
+        state_dict = {}
+
+        for model, optimizer in zip(self.model_container, self.optimizer_container):
+            optimizer_state_dict = get_optimizer_state_dict(
+                model, optimizer, options=StateDictOptions(flatten_optimizer_state_dict=True)
+            )
+            state_dict.update(optimizer_state_dict)
+
+        return state_dict
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        for model, optimizer in zip(self.model_container, self.optimizer_container):
+            set_optimizer_state_dict(
+                model,
+                optimizer,
+                optim_state_dict=state_dict,
+                options=StateDictOptions(flatten_optimizer_state_dict=True),
+            )
+
+
+class _LRSchedulerSaver(Stateful):
+    def __init__(self, lr_scheduler_container: LRSchedulerContainer) -> None:
+        self.lr_scheduler_container = lr_scheduler_container
+
+    def state_dict(self) -> dict:
+        return [lr_scheduler.state_dict() for lr_scheduler in self.lr_scheduler_container]
+
+    def load_state_dict(self, state_dict: list[dict]) -> None:
+        assert len(self.lr_scheduler_container) == len(state_dict)
+
+        for lr_scheduler, lr_scheduler_state_dict in zip(self.lr_scheduler_container, state_dict):
+            lr_scheduler.load_state_dict(lr_scheduler_state_dict)
+
+
 def save_checkpoint(
     args: TrainingArgs,
-    model: ModelWrapper,
-    optimizer: Optimizer | None,
-    lr_scheduler: LambdaLR | None,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer | None,
+    lr_scheduler_container: LRSchedulerContainer | None,
     train_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
     iteration: int,
@@ -49,9 +128,9 @@ def save_checkpoint(
 
     Args:
         args (TrainingArgs): arguments for training
-        model (ModelWrapper): model to save
-        optimizer (Optimizer): optimizer to save
-        lr_scheduler (LambdaLR): learning rate scheduler to save
+        model_container (ModelContainer): models to save
+        optimizer_container (OptimizerContainer): optimizers to save
+        lr_scheduler_container (LRSchedulerContainer): learning rate schedulers to save
         train_dataloader (DataLoader): train dataloader to save
         experiments_tracker (ExperimentsTracker): experiment tracker to save
         iteration (int): current iteration
@@ -61,35 +140,33 @@ def save_checkpoint(
         ValueError: if unexpected distributed backend is found
     """
 
-    save_optimizer = args.save_args.save_optimizer
-
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    model_state_dict = get_model_state_dict(model)
-    if model.has_teacher_model():
-        model_state_dict = _filter_out_teacher_state_dict(model_state_dict)
+    dcp.save({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(save_path))
 
-    dcp.save(model_state_dict, checkpoint_id=_get_model_path(save_path))
-
-    if save_optimizer:
-        if optimizer is None:
+    if args.save_args.save_optimizer:
+        if optimizer_container is None:
             log_rank_0(
                 logging.WARN,
-                "optimizer is not passed to save_checkpoint but save_optimizer is set to True. "
+                "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
                 "Therefore, the function will not save the optimizer",
             )
         else:
-            # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-            dcp.save(get_optimizer_state_dict(model, optimizer), checkpoint_id=_get_optimizer_path(save_path))
+            dcp.save(
+                {"state": _OptimizerSaver(model_container, optimizer_container)},
+                checkpoint_id=_get_optimizer_path(save_path),
+            )
 
-    if lr_scheduler is None:
+    if lr_scheduler_container is None:
         log_rank_0(
             logging.WARN,
-            "lr_scheduler is not passed to save_checkpoint. " "Therefore, the function will not save the lr_scheduler",
+            "lr_scheduler_container is not passed to save_checkpoint. Therefore, the function will not save the lr_scheduler",
         )
     else:
-        run_rank_n(torch.save)(lr_scheduler.state_dict(), _get_lr_scheduler_path(save_path))
+        lr_scheduler_path = _get_lr_scheduler_path(save_path)
+        os.makedirs(os.path.dirname(lr_scheduler_path), exist_ok=True)
+        torch.save(_LRSchedulerSaver(lr_scheduler_container).state_dict(), _get_lr_scheduler_path(save_path))
 
     rng_state = {
         "random_rng_state": random.getstate(),
@@ -131,18 +208,18 @@ def save_checkpoint(
 
 def load_checkpoint_for_training(
     args: TrainingArgs,
-    model: ModelWrapper,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
 ) -> tuple[int, dict, dict]:
     """load checkpoint for training
 
     Args:
         args (TrainingArgs): arguments for training
-        model (ModelWrapper): model to load
-        optimizer (Optimizer): optimizer to save
-        lr_scheduler (LambdaLR): learning rate scheduler to load
+        model_container (ModelContainer): models to save
+        optimizer_container (OptimizerContainer): optimizers to save
+        lr_scheduler_container (LRSchedulerContainer): learning rate schedulers to save
         train_dataloader (ResumableDataLoader): train dataloader to load
 
     Raises:
@@ -156,7 +233,6 @@ def load_checkpoint_for_training(
         return
 
     load_optimizer = args.load_args.load_optimizer
-    load_lr_scheduler = args.load_args.load_lr_scheduler
     load_rng_state = args.load_args.load_rng_state
     load_dataloader_state = args.load_args.load_dataloader_state
     load_experiments_tracker_state = args.load_args.load_experiments_tracker_state
@@ -172,31 +248,29 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    has_teacher_model = model.has_teacher_model()
-    if has_teacher_model:
-        log_rank_0(
-            logging.WARN,
-            "the model will use non-strict loading of state dict during distillation, this has potential of incorrect behavior",
-        )
-
-    model_state_dict = get_model_state_dict(model)
-    dcp.load(model_state_dict, checkpoint_id=_get_model_path(load_path))
-    set_model_state_dict(model, model_state_dict, options=StateDictOptions(strict=not has_teacher_model))
-    del model_state_dict
+    # FIXME drop original_state_dict after https://github.com/pytorch/pytorch/pull/138575 is fixed
+    saver = _ModelSaver(model_container)
+    state_dict = {"state": saver.state_dict()}
+    original_state_dict = {"state": {key: value for key, value in state_dict["state"].items()}}
+    dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
+    state_dict.update(original_state_dict)
+    saver.load_state_dict(state_dict["state"])
 
     if load_optimizer:
-        # TODO add options=StateDictOptions(flatten_optimizer_state_dict=True))
-        optimizer_state_dict = get_optimizer_state_dict(model, optimizer)
-        dcp.load(optimizer_state_dict, checkpoint_id=_get_optimizer_path(load_path))
-        set_optimizer_state_dict(model, optimizer, optim_state_dict=optimizer_state_dict)
-        del optimizer_state_dict
+        # FIXME drop original_state_dict after https://github.com/pytorch/pytorch/pull/138575 is fixed
+        saver = _OptimizerSaver(model_container, optimizer_container)
+        state_dict = {"state": saver.state_dict()}
+        original_state_dict = {"state": {key: value for key, value in state_dict["state"].items()}}
+        dcp.load(state_dict, checkpoint_id=_get_optimizer_path(load_path))
+        state_dict.update(original_state_dict)
+        saver.load_state_dict(state_dict["state"])
 
-    if load_lr_scheduler:
+    if args.load_args.load_lr_scheduler:
         assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
-        lr_scheduler.load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
-    else:
-        if args.load_args.resume_learning_rate:
+        _LRSchedulerSaver(lr_scheduler_container).load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+    elif args.load_args.resume_learning_rate:
+        for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
             _resume_learning_rate(
                 args,
                 optimizer=optimizer,
@@ -262,14 +336,21 @@ def load_checkpoint_for_inference(
         log_rank_0(logging.INFO, "overriding mixed precision args")
         args_from_checkpoint.mixed_precision_args = args.mixed_precision_args
 
-    checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_size
+    checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_world_size
 
     with (
         torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+        ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
+        ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
     ):
-        model = get_model(args_from_checkpoint, mode)
+        original_num_stages = args_from_checkpoint.distributed_args.num_pipeline_stages
+        args_from_checkpoint.distributed_args.num_pipeline_stages = 1
+
+        model = get_model_container(args_from_checkpoint, mode)[0]
+
+        args_from_checkpoint.distributed_args.num_pipeline_stages = original_num_stages
 
     if use_meta:
         model = model.to_empty(device="cpu")
@@ -282,9 +363,11 @@ def load_checkpoint_for_inference(
         no_dist=True,
     )
 
+    state = state["state"]
+
     if checkpoint_tp_world_size > 1:
         state = fix_unsharded_state_dict(
-            model.config, state, tensor_parallel_size=checkpoint_tp_world_size, prefix="model."
+            model.config, state, tensor_parallel_world_size=checkpoint_tp_world_size, prefix="model."
         )
 
     was_compiled_model = args_from_checkpoint.distributed_args.torch_compile
@@ -329,8 +412,8 @@ def _resume_learning_rate(
 
     # we create lr scheduler again here since optimizer is loaded from disk and lr scheduler is now out of sync
     # this helps to resume phase 2
-    lr_scheduler_tmp = get_scheduler(
-        optimizer=optimizer,
+    lr_scheduler_tmp = get_scheduler_container(
+        optimizer_container=OptimizerContainer([optimizer]),
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
         num_decay_steps=args.lr_scheduler_args.num_decay_steps,
@@ -339,7 +422,7 @@ def _resume_learning_rate(
         lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
         last_epoch=-1 if iteration is None else iteration - 1,
-    )
+    )[0]
 
     for grp, lr_ in zip(optimizer.param_groups, initial_lr):
         grp["initial_lr"] = lr_
@@ -365,7 +448,7 @@ def _get_optimizer_path(path: str) -> str:
 
 
 def _get_lr_scheduler_path(path: str) -> str:
-    return os.path.join(path, "lr_scheduler.pt")
+    return os.path.join(path, "lr_scheduler", f"lr_scheduler-{ProcessGroupManager.get_global_rank()}.pt")
 
 
 def _get_dataloader_path(path: str) -> str:
@@ -386,12 +469,3 @@ def _get_experiments_tracker_path(path: str) -> str:
 
 def _get_metadata_path(path: str) -> str:
     return os.path.join(path, "metadata.json")
-
-
-def _filter_out_teacher_state_dict(state_dict: dict) -> dict:
-    result = {}
-    for key, value in state_dict.items():
-        if not "teacher_model" in key:
-            result[key] = value
-
-    return result

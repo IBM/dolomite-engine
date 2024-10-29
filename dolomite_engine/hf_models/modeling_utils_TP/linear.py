@@ -5,9 +5,8 @@ import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ...utils import ProcessGroupManager
+from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedLinear
-from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
 from .TP import (
     all_gather_from_sequence_parallel_region,
