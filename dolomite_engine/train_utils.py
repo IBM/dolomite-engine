@@ -44,6 +44,8 @@ def train_step(
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+        batch_size (int): batch size
+        sequence_length (int): sequence length
 
     Returns:
         MetricsTrackingDict: metrics to track
@@ -103,6 +105,8 @@ def _train_step_with_pipeline_parallel(
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
+        batch_size (int): batch size
+        sequence_length (int): sequence length
 
     Returns:
         MetricsTrackingDict: metrics to track
