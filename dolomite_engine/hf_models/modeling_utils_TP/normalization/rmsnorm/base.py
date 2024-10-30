@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate
 
 from .....distributed import dtensor_to_tensor, tensor_to_dtensor
@@ -22,8 +21,8 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Replicate()
             )
         )
 

@@ -1,7 +1,6 @@
 import torch
 import torch.distributed
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from ...distributed import dtensor_to_tensor, tensor_to_dtensor, use_async_tensor_parallel
@@ -28,14 +27,16 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Replicate()
             )
         )
         if bias:
             self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                tensor_to_dtensor(
+                    self.bias,
+                    device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                    current_placement=Replicate(),
                 )
             )
 
@@ -84,14 +85,14 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         )
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
             )
         )
         if bias:
             self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
+                tensor_to_dtensor(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
                 )
             )
 
@@ -145,14 +146,16 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         )
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(1)]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(1)
             )
         )
         if bias:
             self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                tensor_to_dtensor(
+                    self.bias,
+                    device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                    current_placement=Replicate(),
                 )
             )
 
