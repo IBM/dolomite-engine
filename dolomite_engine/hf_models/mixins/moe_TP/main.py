@@ -3,7 +3,7 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
-from ...modeling_utils_TP import dtensor_to_tensor, tensor_to_dtensor
+from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ..dense_TP import CausalLMModelMixin_TP
 from ..moe import CausalLMMoEModelMixin, MoeModelOutputWithPastAndAuxLoss
 

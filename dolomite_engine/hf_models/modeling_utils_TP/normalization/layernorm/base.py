@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate
 
+from .....distributed import dtensor_to_tensor, tensor_to_dtensor
 from .....utils import ProcessGroupManager
 from ...dtensor_module import DTensorModule
-from ...TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from ...TP import get_module_placements
 
 
 class LayerNorm_TP(nn.LayerNorm, DTensorModule):
@@ -21,13 +21,15 @@ class LayerNorm_TP(nn.LayerNorm, DTensorModule):
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            tensor_to_dtensor(
+                self.weight,
+                device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                current_placement=Replicate(),
             )
         )
         self.bias = nn.Parameter(
-            DTensor.from_local(
-                self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            tensor_to_dtensor(
+                self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Replicate()
             )
         )
 

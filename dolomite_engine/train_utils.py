@@ -10,6 +10,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, get_next_batch
+from .distributed import dtensor_to_tensor
 from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
@@ -153,12 +154,7 @@ def _train_step_with_pipeline_parallel(
     metrics_tracker = MetricsTrackingDict({})
 
     with torch.inference_mode():
-        grad_norm = sum(grad_norm)
-        if not isinstance(grad_norm, torch.Tensor):
-            grad_norm = torch.tensor(grad_norm, device=torch.cuda.current_device())
-        elif isinstance(grad_norm, DTensor):
-            grad_norm = grad_norm.to_local()
-
+        grad_norm = dtensor_to_tensor(sum(grad_norm))
         torch.distributed.all_reduce(grad_norm, group=ProcessGroupManager.get_pipeline_parallel_group())
 
         if is_last_pipeline_rank:
@@ -170,8 +166,7 @@ def _train_step_with_pipeline_parallel(
             metrics_tracker["grad_norm"] = grad_norm
 
             for key in metrics_tracker:
-                if isinstance(metrics_tracker[key], DTensor):
-                    metrics_tracker[key] = metrics_tracker[key].to_local()
+                metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
 
             metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
@@ -263,8 +258,7 @@ def _train_step_without_pipeline_parallel(
         )
 
         for key in metrics_tracker:
-            if isinstance(metrics_tracker[key], DTensor):
-                metrics_tracker[key] = metrics_tracker[key].to_local()
+            metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
 
         metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 

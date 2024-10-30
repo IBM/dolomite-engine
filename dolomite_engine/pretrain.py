@@ -15,7 +15,7 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .distributed import wrap_model_container_for_distributed_training
+from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import FP8Backend, Mode, TuningMethod
 from .model_wrapper import get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
@@ -296,8 +296,7 @@ def evaluate(
         metrics_tracker = metrics_tracker / eval_steps
 
         for key in metrics_tracker:
-            if isinstance(metrics_tracker[key], DTensor):
-                metrics_tracker[key] = metrics_tracker[key].to_local()
+            metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
 
         metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 

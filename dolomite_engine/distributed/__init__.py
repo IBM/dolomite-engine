@@ -25,6 +25,12 @@ from ..containers import ModelContainer
 from ..enums import FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from .dtensors import (
+    dtensor_to_tensor,
+    modify_state_dict_to_dtensor_dict,
+    tensor_to_dtensor,
+    use_async_tensor_parallel,
+)
 from .fp8 import convert_model_to_transformer_engine
 
 

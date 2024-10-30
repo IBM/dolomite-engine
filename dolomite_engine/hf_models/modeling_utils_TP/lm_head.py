@@ -3,8 +3,9 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.device_mesh import DeviceMesh
 
+from ...distributed import dtensor_to_tensor, tensor_to_dtensor, use_async_tensor_parallel
 from .embedding import Embedding_TP
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor, use_async_tensor_parallel
+from .TP import get_module_placements
 
 
 class LMHead_TP(Embedding_TP):

@@ -2,13 +2,13 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 
+from ...distributed import dtensor_to_tensor, tensor_to_dtensor
 from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedEmbedding
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import get_module_placements
 
 
 class Embedding_TP(ParameterizedEmbedding, DTensorModule):
@@ -43,8 +43,8 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
             placement = Replicate()
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[placement]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=placement
             )
         )
 
