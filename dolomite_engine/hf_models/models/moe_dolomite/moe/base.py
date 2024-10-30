@@ -209,7 +209,7 @@ class SparseMoE(nn.Module):
         acc_probs = probs.sum(0)
         freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
 
-        if ProcessGroupManager.get_data_parallel_world_size() > 1:
+        if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
 
         switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
