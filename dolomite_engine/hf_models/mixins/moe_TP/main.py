@@ -4,6 +4,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ...modeling_utils_TP import get_autoregressive_language_modeling_loss_TP
 from ..dense_TP import CausalLMModelMixin_TP
 from ..moe import CausalLMMoEModelMixin, MoeModelOutputWithPastAndAuxLoss
 
@@ -60,7 +61,17 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
 
-        lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+        lm_loss = None
+        if labels is not None:
+            lm_loss = get_autoregressive_language_modeling_loss_TP(
+                lm_logits=lm_logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=cu_seqlens,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            )
+
         aux_loss = tensor_to_dtensor(
             transformer_outputs.aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate()
         )

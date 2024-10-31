@@ -4,7 +4,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ...config import CommonConfig
-from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
+from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear, get_autoregressive_language_modeling_loss
 from .base import PreTrainedModelMixin
 
 
@@ -155,7 +155,15 @@ class CausalLMModelMixin(PreTrainedModelMixin):
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
 
-        loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+        loss = None
+        if labels is not None:
+            loss = get_autoregressive_language_modeling_loss(
+                lm_logits=lm_logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=cu_seqlens,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+            )
 
         return CausalLMOutputWithPast(
             loss=loss,
@@ -171,28 +179,3 @@ class CausalLMModelMixin(PreTrainedModelMixin):
             if self._tied_word_embeddings
             else self.lm_head(hidden_states)
         )
-
-    def get_autoregressive_language_modeling_loss(
-        self, lm_logits: torch.Tensor, labels: torch.Tensor | None, cu_seqlens: torch.Tensor
-    ) -> torch.Tensor:
-        if labels is None:
-            return None
-
-        if self._use_padding_free_transformer:
-            shift_logits = lm_logits[:-1, :]
-            shift_labels = labels[1:].to(shift_logits.device)
-
-            # this is needed so that the last token of current example doesn't predict first token of next example
-            drop_loss_positions = cu_seqlens[1:-1] - 1
-            shift_labels[drop_loss_positions] = -100
-        else:
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
-
-        if self.upcast_logits_for_loss:
-            shift_logits = shift_logits.float()
-
-        loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-
-        return loss

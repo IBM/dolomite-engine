@@ -11,5 +11,6 @@ from .attention import (
 )
 from .embedding import ParameterizedEmbedding
 from .linear import ParameterizedLinear, ParameterizedTransposedLinear
+from .loss import get_autoregressive_language_modeling_loss
 from .normalization import get_normalization_function
 from .position_embedding import Alibi, RoPE, YaRNScaledRoPE, apply_rotary_pos_emb

@@ -3,6 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ...config import CommonConfig
+from ...modeling_utils import get_autoregressive_language_modeling_loss
 from ..dense import CausalLMModelMixin
 from .base import MoeModelOutputWithPastAndAuxLoss
 
@@ -76,7 +77,16 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
 
-        lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+        lm_loss = None
+        if labels is not None:
+            lm_loss = get_autoregressive_language_modeling_loss(
+                lm_logits=lm_logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=cu_seqlens,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+            )
+
         aux_loss = transformer_outputs.aux_loss
 
         if lm_loss is None:

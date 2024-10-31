@@ -149,6 +149,8 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
 
     log_rank_0(logging.INFO, "> finished creating GPT datasets ...")
 
+    static_loss_scaler = micro_batch_size * gradient_accumulation_steps * sequence_length
+
     def _get_dataloader(dataset: GPTDataset | None, consumed_samples: int):
         # we use batch sampler here to match the data order of NVIDIA's megatron repo
         if dispatching_dataloader:
@@ -192,6 +194,7 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
                     (micro_batch_size if num_pipeline_stages == 1 else micro_batch_size * gradient_accumulation_steps),
                     sequence_length + 1,
                 ),
+                static_loss_scaler=static_loss_scaler,
                 keys=["text"],
             )
         else:
@@ -209,7 +212,11 @@ def get_megatron_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, c
             )
 
             dataloader = ResumableDataLoader(
-                dataset, batch_sampler=batch_sampler, num_workers=class_args.get("num_workers", 2), pin_memory=True
+                dataset,
+                batch_sampler=batch_sampler,
+                num_workers=class_args.get("num_workers", 2),
+                pin_memory=True,
+                static_loss_scaler=static_loss_scaler,
             )
 
         return iter(dataloader)
