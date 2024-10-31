@@ -8,6 +8,7 @@ def get_autoregressive_language_modeling_loss(
     upcast_logits_for_loss: bool,
     cu_seqlens: torch.Tensor | None = None,
     use_padding_free_transformer: bool = False,
+    reduction: str = "mean",
 ) -> torch.Tensor:
     if use_padding_free_transformer:
         assert cu_seqlens is not None
@@ -28,6 +29,6 @@ def get_autoregressive_language_modeling_loss(
     if upcast_logits_for_loss:
         shift_logits = shift_logits.float()
 
-    loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+    loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1), reduction=reduction)
 
     return loss
