@@ -1,5 +1,7 @@
 from .enums import AttentionHeadType, PositionEmbeddingType
 from .model_conversion import export_to_huggingface, import_from_huggingface
+from .modeling_utils import get_autoregressive_language_modeling_loss
+from .modeling_utils_TP import get_autoregressive_language_modeling_loss_TP
 from .models import (
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,

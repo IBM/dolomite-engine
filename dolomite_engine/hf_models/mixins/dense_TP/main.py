@@ -55,6 +55,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        reduction: str = "mean",
     ) -> CausalLMOutputWithPast | torch.Tensor:
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -98,6 +99,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 cu_seqlens=cu_seqlens,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                reduction=reduction,
             )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:

@@ -111,6 +111,7 @@ class CausalLMModelMixin(PreTrainedModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        reduction: str = "mean",
     ) -> tuple | CausalLMOutputWithPast:
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
@@ -163,6 +164,7 @@ class CausalLMModelMixin(PreTrainedModelMixin):
                 upcast_logits_for_loss=self.upcast_logits_for_loss,
                 cu_seqlens=cu_seqlens,
                 use_padding_free_transformer=self._use_padding_free_transformer,
+                reduction=reduction,
             )
 
         return CausalLMOutputWithPast(

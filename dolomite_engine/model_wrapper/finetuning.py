@@ -2,6 +2,7 @@ import torch
 import torch.distributed
 
 from ..communication import Communication
+from ..hf_models import get_autoregressive_language_modeling_loss, get_autoregressive_language_modeling_loss_TP
 from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
@@ -17,11 +18,34 @@ class ModelWrapperForFinetuning(ModelWrapper):
             torch.Tensor: loss tensor
         """
 
-        if ProcessGroupManager.is_tensor_parallel_enabled():
+        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+
+        if is_tensor_parallel_enabled:
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
+        labels = batch.pop("labels")
+
         model_outputs = self.model(**batch)
-        loss = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.loss
+
+        if is_tensor_parallel_enabled:
+            loss = get_autoregressive_language_modeling_loss_TP(
+                lm_logits=model_outputs.logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=batch.get("cu_seqlens", None),
+                use_padding_free_transformer=self.use_padding_free_transformer,
+                reduction="sum",
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            )
+        else:
+            loss = get_autoregressive_language_modeling_loss(
+                lm_logits=model_outputs.logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=batch.get("cu_seqlens", None),
+                use_padding_free_transformer=self.use_padding_free_transformer,
+                reduction="sum",
+            )
 
         return {"loss": loss}
 

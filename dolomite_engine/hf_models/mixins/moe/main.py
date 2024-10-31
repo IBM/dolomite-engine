@@ -31,6 +31,7 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        reduction: str = "mean",
         output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -85,6 +86,7 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
                 upcast_logits_for_loss=self.upcast_logits_for_loss,
                 cu_seqlens=cu_seqlens,
                 use_padding_free_transformer=self._use_padding_free_transformer,
+                reduction=reduction,
             )
 
         aux_loss = transformer_outputs.aux_loss
