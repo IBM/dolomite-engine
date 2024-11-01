@@ -37,7 +37,7 @@ def get_autoregressive_language_modeling_loss(
 
     loss_context = nullcontext
 
-    if ProcessGroupManager.is_tensor_parallel_enabled():
+    if ProcessGroupManager.is_initialized() and ProcessGroupManager.is_tensor_parallel_enabled():
         tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         shift_logits = tensor_to_dtensor(
