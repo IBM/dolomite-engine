@@ -3,7 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ...config import CommonConfig
-from ...modeling_utils import get_autoregressive_language_modeling_loss
+from ...loss import get_autoregressive_language_modeling_loss
 from ..dense import CausalLMModelMixin
 from .base import MoeModelOutputWithPastAndAuxLoss
 

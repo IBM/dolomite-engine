@@ -92,7 +92,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
-    def forward(self, batch: dict) -> dict:
+    def forward(self, batch: dict, loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -117,11 +117,11 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         # without pipeline parallel, we compute the loss outside
         if not self.is_pipeline_parallel_enabled:
-            model_outputs = self.get_loss(model_outputs, labels)
+            model_outputs = self.get_loss(model_outputs, labels, loss_multiplier=loss_multiplier)
 
         return model_outputs
 
-    def get_loss(self, model_outputs, labels: torch.Tensor) -> torch.Tensor:
+    def get_loss(self, model_outputs, labels: torch.Tensor, loss_multiplier: float) -> torch.Tensor:
         if isinstance(model_outputs, torch.Tensor):
             logits = model_outputs
         else:
@@ -144,7 +144,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 loss_context = loss_parallel
 
         with loss_context():
-            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
 
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss

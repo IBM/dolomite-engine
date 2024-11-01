@@ -2,52 +2,42 @@ import torch
 import torch.distributed
 
 from ..communication import Communication
-from ..hf_models import get_autoregressive_language_modeling_loss, get_autoregressive_language_modeling_loss_TP
-from ..utils import ProcessGroupManager
+from ..hf_models import get_autoregressive_language_modeling_loss
+from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
 
 class ModelWrapperForFinetuning(ModelWrapper):
-    def forward(self, batch: dict) -> dict:
+    def forward(self, batch: dict) -> MetricsTrackingDict:
         """forward function for a batch
 
         Args:
             batch (dict): a dict of key, value pairs for a batch
 
         Returns:
-            torch.Tensor: loss tensor
+            MetricsTrackingDict: loss tracking dict
         """
 
-        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
-
-        if is_tensor_parallel_enabled:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
         labels = batch.pop("labels")
 
         model_outputs = self.model(**batch)
 
-        if is_tensor_parallel_enabled:
-            loss = get_autoregressive_language_modeling_loss_TP(
-                lm_logits=model_outputs.logits,
-                labels=labels,
-                upcast_logits_for_loss=self.upcast_logits_for_loss,
-                cu_seqlens=batch.get("cu_seqlens", None),
-                use_padding_free_transformer=self.use_padding_free_transformer,
-                reduction="sum",
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-            )
-        else:
-            loss = get_autoregressive_language_modeling_loss(
-                lm_logits=model_outputs.logits,
-                labels=labels,
-                upcast_logits_for_loss=self.upcast_logits_for_loss,
-                cu_seqlens=batch.get("cu_seqlens", None),
-                use_padding_free_transformer=self.use_padding_free_transformer,
-                reduction="sum",
-            )
+        loss = get_autoregressive_language_modeling_loss(
+            lm_logits=model_outputs.logits,
+            labels=labels,
+            upcast_logits_for_loss=self.upcast_logits_for_loss,
+            cu_seqlens=batch.get("cu_seqlens", None),
+            use_padding_free_transformer=self.use_padding_free_transformer,
+            reduction="sum",
+            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+        )
 
-        return {"loss": loss}
+        loss_dict = MetricsTrackingDict({"loss": loss})
+
+        return loss_dict
 
     def _broadcast_inputs_for_tensor_parallel(self, batch: dict) -> dict:
         device = torch.cuda.current_device()

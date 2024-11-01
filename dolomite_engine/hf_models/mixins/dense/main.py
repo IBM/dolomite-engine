@@ -4,7 +4,8 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ...config import CommonConfig
-from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear, get_autoregressive_language_modeling_loss
+from ...loss import get_autoregressive_language_modeling_loss
+from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
 from .base import PreTrainedModelMixin
 
 

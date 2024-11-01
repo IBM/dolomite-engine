@@ -9,7 +9,8 @@ from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
-from ...modeling_utils_TP import LMHead_TP, get_autoregressive_language_modeling_loss_TP
+from ...loss import get_autoregressive_language_modeling_loss
+from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from .base import PreTrainedModelMixin_TP
 
@@ -92,14 +93,14 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 lm_logits = lm_logits / self.m_width
 
         if not self.is_pipeline_parallel_enabled:
-            loss = get_autoregressive_language_modeling_loss_TP(
+            loss = get_autoregressive_language_modeling_loss(
                 lm_logits=lm_logits,
                 labels=labels,
                 upcast_logits_for_loss=self.upcast_logits_for_loss,
                 cu_seqlens=cu_seqlens,
                 use_padding_free_transformer=self._use_padding_free_transformer,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 reduction=reduction,
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
             )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
