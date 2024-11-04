@@ -18,7 +18,7 @@ def get_autoregressive_language_modeling_loss(
     use_padding_free_transformer: bool = False,
     reduction: str = "mean",
     tensor_parallel_word_embeddings: bool = False,
-) -> DTensor:
+) -> torch.Tensor | DTensor:
     if use_padding_free_transformer:
         assert cu_seqlens is not None
 
