@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from ....utils import ProcessGroupManager
+from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
@@ -26,27 +26,37 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         self.initializer_range = config.initializer_range
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.wte = Embedding_TP(
-            config.vocab_size,
-            self.embed_dim,
-            std=self.initializer_range,
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-            use_padding_free_transformer=self._use_padding_free_transformer,
-            sequence_parallel=self.sequence_parallel,
+        self.layers_per_stage = divide_if_divisible(
+            config.n_layer, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
         )
 
-        self.drop = (
-            nn.Identity()
-            if config.embd_pdrop == 0
-            else Dropout_TP(
-                config.embd_pdrop,
+        self.layer_start_id = self.layers_per_stage * self.pipeline_stage_id
+        self.layer_end_id = self.layers_per_stage * (self.pipeline_stage_id + 1)
+
+
+        if self.is_first_stage:
+            self.wte = Embedding_TP(
+                config.vocab_size,
+                self.embed_dim,
+                std=self.initializer_range,
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
-        )
-        self.h = nn.ModuleList(
-            [
-                self.layer_class(
+
+            self.drop = (
+                nn.Identity()
+                if config.embd_pdrop == 0
+                else Dropout_TP(
+                    config.embd_pdrop,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    sequence_parallel=self.sequence_parallel,
+                )
+            )
+
+        self.h = nn.ModuleDict(
+            {
+                str(i): self.layer_class(
                     config,
                     normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,
@@ -56,16 +66,18 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                     sequence_parallel=self.sequence_parallel,
                 )
                 for i in range(config.num_hidden_layers)
-            ]
+            }
         )
-        self.ln_f = get_normalization_function_TP(
-            config.normalization_function,
-            self.embed_dim,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=self.normalization_implementation,
-            use_padding_free_transformer=self._use_padding_free_transformer,
-            sequence_parallel=self.sequence_parallel,
-        )
+
+        if self.is_last_stage:
+            self.ln_f = get_normalization_function_TP(
+                config.normalization_function,
+                self.embed_dim,
+                eps=config.layer_norm_epsilon,
+                normalization_implementation=self.normalization_implementation,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                sequence_parallel=self.sequence_parallel,
+            )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self._setup_positional_encoding()
