@@ -184,7 +184,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     def get_dummy_input_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
-    ) -> tuple[int]:
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_first_stage:
             # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
             tensor = torch.empty(
@@ -203,7 +203,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         sequence_length: int,
         intermediate_dtype: torch.dtype,
         output_parallel_lm_logits_if_possible: bool,
-    ) -> tuple[int]:
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_last_stage:
             vocab_size = self.config.vocab_size
             if self.tensor_parallel_word_embeddings and output_parallel_lm_logits_if_possible:
@@ -233,7 +233,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     def _get_dummy_intermediate_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
-    ) -> tuple[int]:
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         sharded_sequence_length = (
             divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
             if self.sequence_parallel
