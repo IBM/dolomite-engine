@@ -100,3 +100,11 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             attentions=transformer_outputs.attentions,
             router_logits=transformer_outputs.router_logits,
         )
+    def get_dummy_output_tensor(self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype, output_parallel_lm_logits_if_possible: bool) -> tuple[int]:
+        output = super().get_dummy_output_tensor(micro_batch_size, sequence_length, intermediate_dtype, output_parallel_lm_logits_if_possible)    
+        aux_loss_dummy = torch.tensor(0., device=torch.cuda.current_device(), dtype=intermediate_dtype)
+        if isinstance(tuple, output):
+            return output + (aux_loss_dummy,)
+        else:
+            return (output, aux_loss_dummy)
+
