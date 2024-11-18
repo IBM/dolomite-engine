@@ -106,11 +106,10 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         else:
             output = (transformer_outputs.last_hidden_state, aux_loss)
         return output
-            
-        
+                   
 
         
-    def get_dummy_input_tensor(self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype) -> tuple[Tensor] | torch.Tensor:
+    def get_dummy_input_tensor(self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype) -> tuple[torch.Tensor] | torch.Tensor:
         dummy_input = super().get_dummy_input_tensor(micro_batch_size, sequence_length, intermediate_dtype)
 
         if self.is_first_stage:
