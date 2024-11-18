@@ -224,11 +224,13 @@ def _train_step_without_pipeline_parallel(
             batch = get_next_batch(train_dataloader)
             with forward_context():
                 loss_micro_step_dict = model(batch)
-                loss_micro_step_dict = loss_micro_step_dict / (local_batch_size * sequence_length)
+                # divide by the total unmasked tokens and update the dict
+                loss_micro_step_dict = loss_micro_step_dict / (micro_batch_size * sequence_length)
 
             # compute gradients
             with backward_context():
-                loss_micro_step_dict["loss"].backward()
+                loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+                loss_micro_step_scaled.backward()
 
             with torch.inference_mode():
                 metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -239,11 +241,13 @@ def _train_step_without_pipeline_parallel(
     batch = get_next_batch(train_dataloader)
     with forward_context():
         loss_micro_step_dict = model(batch)
+        # divide by the total unmasked tokens and update the dict
+        loss_micro_step_dict = loss_micro_step_dict / (micro_batch_size * sequence_length)
 
     # compute gradients
     with backward_context():
-        loss_micro_step_dict["loss"].backward()
-        loss_micro_step_dict = loss_micro_step_dict / (local_batch_size * sequence_length)
+        loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+        loss_micro_step_scaled.backward()
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -258,6 +262,8 @@ def _train_step_without_pipeline_parallel(
     lr_scheduler.step()
 
     with torch.inference_mode():
+        metrics_tracker = metrics_tracker / gradient_accumulation_steps
+
         metrics_tracker["grad_norm"] = (
             torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
         )
