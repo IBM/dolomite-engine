@@ -32,7 +32,6 @@ class DispatchingDataLoader(ResumableDataLoader):
         source_broadcast_mapping: dict[int, ProcessGroup] | None = None,
         broadcast_world_size: int | None = None,
         static_shape_per_rank: tuple[int, int] | None = None,
-        static_loss_scaler: int | None = None,
         keys: list[str] = ["input_ids", "attention_mask", "labels"],
     ) -> None:
         self.broadcast_world_size = broadcast_world_size
@@ -50,7 +49,6 @@ class DispatchingDataLoader(ResumableDataLoader):
             collate_fn=collate_fn,
             pin_memory=pin_memory,
             drop_last=drop_last,
-            static_loss_scaler=static_loss_scaler,
         )
 
         _length = torch.tensor(
