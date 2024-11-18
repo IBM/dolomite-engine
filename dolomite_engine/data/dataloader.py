@@ -10,12 +10,6 @@ from ..utils import ProcessGroupManager
 
 
 class ResumableDataLoader(DataLoader):
-    def get_loss_scaler(self) -> int:
-        if self.static_loss_scaler is None:
-            raise NotImplementedError()
-
-        return self.static_loss_scaler
-
     def state_dict(self) -> dict:
         return {"dataset": self.dataset.state_dict(), "sampler": self.sampler.state_dict()}
 
