@@ -23,6 +23,7 @@ from .packages import (
 from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
+from .step_tracker import StepTracker
 from .tracking import ExperimentsTracker, ProgressBar
 from .wrapper import get_module_class_from_name
 from .yaml import load_yaml

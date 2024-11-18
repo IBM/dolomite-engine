@@ -4,7 +4,6 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed._tensor.api import DTensor
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.utils.data import DataLoader
@@ -24,6 +23,7 @@ from .utils import (
     ExperimentsTracker,
     MetricsTrackingDict,
     ProcessGroupManager,
+    StepTracker,
     init_distributed,
     is_transformer_engine_available,
     log_rank_0,
@@ -178,7 +178,8 @@ def train(
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
             is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
-            batch_size=local_batch_size,
+            local_batch_size=local_batch_size,
+            micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
         )
 
@@ -340,6 +341,11 @@ def main(mode: Mode = Mode.training) -> None:
         zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
         use_async_tensor_parallel=args.distributed_args.use_async_tensor_parallel,
+    )
+
+    StepTracker(
+        micro_batch_size=args.training_parameters.micro_batch_size,
+        gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
     )
 
     set_seed(args.random_args.seed)

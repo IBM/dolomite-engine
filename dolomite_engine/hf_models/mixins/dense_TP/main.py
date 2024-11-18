@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
-
 import torch
-import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed.tensor.parallel import loss_parallel
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
@@ -13,6 +9,7 @@ from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
+from ...loss import get_autoregressive_language_modeling_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from .base import PreTrainedModelMixin_TP
@@ -59,6 +56,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        reduction: str = "mean",
     ) -> CausalLMOutputWithPast | torch.Tensor:
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -95,7 +93,15 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 lm_logits = lm_logits / self.m_width
 
         if not self.is_pipeline_parallel_enabled:
-            loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+            loss = get_autoregressive_language_modeling_loss(
+                lm_logits=lm_logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=cu_seqlens,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                reduction=reduction,
+                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
             if output_parallel_lm_logits:
@@ -134,40 +140,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             if self._tied_word_embeddings
             else self.lm_head(hidden_states)
         )
-
-    def get_autoregressive_language_modeling_loss(
-        self, lm_logits: torch.Tensor, labels: torch.Tensor | None, cu_seqlens: torch.Tensor
-    ) -> torch.Tensor:
-        if labels is None:
-            return None
-
-        if self._use_padding_free_transformer:
-            shift_logits = lm_logits[:-1, :]
-            shift_labels = labels[1:].to(shift_logits.device)
-
-            # this is needed so that the last token of current example doesn't predict first token of next example
-            drop_loss_positions = cu_seqlens[1:-1] - 1
-            shift_labels[drop_loss_positions] = -100
-        else:
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
-
-        shift_logits = tensor_to_dtensor(
-            shift_logits,
-            device_mesh=self.tp_mesh,
-            current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
-        )
-        shift_labels = tensor_to_dtensor(shift_labels, device_mesh=self.tp_mesh, current_placement=Replicate())
-
-        if self.upcast_logits_for_loss:
-            shift_logits = shift_logits.float()
-
-        loss_context = loss_parallel if self.tensor_parallel_word_embeddings else nullcontext
-        with loss_context():
-            loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-
-        return loss
 
     @classmethod
     def from_pretrained(
