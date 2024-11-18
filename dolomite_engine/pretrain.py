@@ -179,6 +179,7 @@ def train(
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
             is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
             local_batch_size=local_batch_size,
+            micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
         )
 
