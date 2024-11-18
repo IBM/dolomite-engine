@@ -4,7 +4,6 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed._tensor.api import DTensor
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.utils.data import DataLoader
@@ -179,7 +178,7 @@ def train(
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
             is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
-            batch_size=local_batch_size,
+            local_batch_size=local_batch_size,
             sequence_length=sequence_length,
         )
 

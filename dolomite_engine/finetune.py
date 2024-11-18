@@ -2,11 +2,8 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed._tensor.api import DTensor
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
@@ -15,7 +12,7 @@ from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import DatasetSplit, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForFinetuning, get_model_container
+from .model_wrapper import get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
@@ -110,7 +107,7 @@ def train(
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
             is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
-            batch_size=None,
+            local_batch_size=None,
             sequence_length=None,
         )
 

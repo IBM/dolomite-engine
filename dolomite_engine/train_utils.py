@@ -2,7 +2,6 @@ import logging
 from contextlib import AbstractContextManager, nullcontext
 
 import torch
-from torch.distributed._tensor.api import DTensor
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -30,7 +29,7 @@ def train_step(
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
     is_pipeline_parallel_enabled: bool,
-    batch_size: int,
+    local_batch_size: int,
     sequence_length: int,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
@@ -47,7 +46,7 @@ def train_step(
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
         is_pipeline_parallel_enabled (bool): whether to use pipeline parallel
-        batch_size (int): batch size
+        local_batch_size (int): local batch size
         sequence_length (int): sequence length
 
     Returns:
@@ -66,7 +65,7 @@ def train_step(
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
-            batch_size=batch_size,
+            local_batch_size=local_batch_size,
             sequence_length=sequence_length,
         )
     else:
@@ -82,6 +81,8 @@ def train_step(
             forward_context=forward_context,
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=sync_every_gradient_accumulation_step,
+            local_batch_size=local_batch_size,
+            sequence_length=sequence_length,
         )
 
     return metrics_tracker
@@ -95,7 +96,7 @@ def _train_step_with_pipeline_parallel(
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
-    batch_size: int,
+    local_batch_size: int,
     sequence_length: int,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
@@ -108,7 +109,7 @@ def _train_step_with_pipeline_parallel(
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
-        batch_size (int): batch size
+        local_batch_size (int): local batch size
         sequence_length (int): sequence length
 
     Returns:
@@ -125,7 +126,7 @@ def _train_step_with_pipeline_parallel(
     if ProcessGroupManager.is_tensor_parallel_first_rank():
         batch = batch["text"]
 
-    batch = model_container[0].broadcast_tensor_parallel_input(batch, (batch_size, sequence_length + 1))
+    batch = model_container[0].broadcast_tensor_parallel_input(batch, (local_batch_size, sequence_length + 1))
 
     is_first_pipeline_rank = ProcessGroupManager.get_pipeline_parallel_rank() == 0
     is_last_pipeline_rank = (
@@ -183,6 +184,8 @@ def _train_step_without_pipeline_parallel(
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
+    local_batch_size: int,
+    sequence_length: int,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -196,6 +199,8 @@ def _train_step_without_pipeline_parallel(
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+        local_batch_size (int): local batch size
+        sequence_length (int): sequence length
 
     Returns:
         MetricsTrackingDict: metrics to track
@@ -219,6 +224,7 @@ def _train_step_without_pipeline_parallel(
             batch = get_next_batch(train_dataloader)
             with forward_context():
                 loss_micro_step_dict = model(batch)
+                loss_micro_step_dict = loss_micro_step_dict / (local_batch_size * sequence_length)
 
             # compute gradients
             with backward_context():
@@ -237,6 +243,7 @@ def _train_step_without_pipeline_parallel(
     # compute gradients
     with backward_context():
         loss_micro_step_dict["loss"].backward()
+        loss_micro_step_dict = loss_micro_step_dict / (local_batch_size * sequence_length)
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
