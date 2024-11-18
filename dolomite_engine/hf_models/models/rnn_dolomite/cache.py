@@ -1,14 +1,14 @@
-from typing import Any, List
+from typing import Any
 
 import torch
-import transformers
+from transformers import Cache, DynamicCache
 
 
-class RNNCache(transformers.cache_utils.Cache):
-    def __init__(self, seen_tokens: int = 0) -> None:
-
-        self.states: List[torch.Tensor] = []
-        self._seen_tokens = seen_tokens  # Used in `generate` to keep tally of how many tokens the cache has seen
+class RNNCache(Cache):
+    def __init__(self, attention_pattern: str, seen_tokens: int = 0) -> None:
+        self.states = []
+        self.attention_pattern = attention_pattern
+        self._seen_tokens = seen_tokens
 
     def __getitem__(self, layer_idx: int) -> torch.Tensor:
         if layer_idx < len(self):
