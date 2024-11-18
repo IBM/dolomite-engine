@@ -35,9 +35,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
             tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
         )
 
-        loss_dict = MetricsTrackingDict({"loss": loss})
-
-        return loss_dict
+        return MetricsTrackingDict({"loss": loss})
 
     def _broadcast_inputs_for_tensor_parallel(self, batch: dict) -> dict:
         device = torch.cuda.current_device()

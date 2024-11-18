@@ -258,8 +258,6 @@ def _train_step_without_pipeline_parallel(
     lr_scheduler.step()
 
     with torch.inference_mode():
-        metrics_tracker = metrics_tracker / gradient_accumulation_steps
-
         metrics_tracker["grad_norm"] = (
             torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
         )

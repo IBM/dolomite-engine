@@ -9,7 +9,7 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..utils import ProcessGroupManager
+from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -113,13 +113,13 @@ class ModelWrapperForPretraining(ModelWrapper):
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids)
 
-        model_outputs = self.model(**batch, return_dict=True)
+        output = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
         if not self.is_pipeline_parallel_enabled:
-            model_outputs = self.get_loss(model_outputs, labels)
+            output = MetricsTrackingDict(self.get_loss(output, labels))
 
-        return model_outputs
+        return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor) -> torch.Tensor:
         if isinstance(model_outputs, torch.Tensor):
