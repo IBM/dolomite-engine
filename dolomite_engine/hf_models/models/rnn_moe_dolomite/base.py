@@ -2,18 +2,14 @@ import torch
 import torch.nn as nn
 from transformers import Cache
 
-from ....utils import is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
 from ..rnn_dolomite.base import RNNDolomiteModel, RNNDolomitePreTrainedModel
+from ..rnn_dolomite.cache import RNNCache
 from .config import RNNMoEDolomiteConfig
 from .layer import RNNMoEDolomiteBlock
-
-
-if is_fla_available():
-    from fla.models.utils import Cache as FLACache
 
 
 class RNNMoEDolomitePreTrainedModel(PreTrainedMoEModelMixin, RNNDolomitePreTrainedModel):
@@ -106,7 +102,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
             output_router_logits=output_router_logits,
         )
 
-        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = RNNCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
         total_aux_loss = 0

@@ -3,17 +3,13 @@ import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....utils import is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
+from .cache import RNNCache
 from .config import RNNDolomiteConfig
 from .layer import RNNDolomiteBlock
-
-
-if is_fla_available():
-    from fla.models.utils import Cache as FLACache
 
 
 class RNNDolomitePreTrainedModel(PreTrainedModelMixin):
@@ -125,7 +121,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = RNNCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:

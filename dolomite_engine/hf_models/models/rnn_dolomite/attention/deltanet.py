@@ -16,7 +16,6 @@ if is_einops_available():
     from einops import rearrange
 
 if is_fla_available():
-    from fla.models.utils import Cache as FLACache
     from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_delta_rule
 
 
@@ -121,9 +120,6 @@ class DeltaNet(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        if past_key_values is not None:
-            assert isinstance(past_key_values, FLACache)
-
         # change to inference mode.
         mode = "fused_recurrent" if hidden_states.shape[1] < 64 else self.mode
         use_cache = (past_key_values is not None) and (len(past_key_values) > self.layer_idx)
