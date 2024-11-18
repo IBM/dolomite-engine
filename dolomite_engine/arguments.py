@@ -5,7 +5,6 @@ from typing import Any
 import torch
 import transformers
 from packaging.version import Version
-from peft import PromptTuningInit
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
@@ -81,27 +80,6 @@ class ModelArgs(BaseArgs):
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
 
-class PromptTuningArgs(BaseArgs):
-    # prompt tuning init method
-    prompt_tuning_init: PromptTuningInit = None
-    # prompt tuning init text
-    prompt_tuning_init_text: str | None = None
-    # number of virtual tokens for PEFT
-    num_virtual_tokens: int | None = None
-
-    def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.prompt_tuning_init, "prompt_tuning_init")])
-
-        if self.prompt_tuning_init == PromptTuningInit.RANDOM:
-            assert (
-                self.prompt_tuning_init_text is None
-            ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' was specified with RANDOM init method"
-        elif self.prompt_tuning_init == PromptTuningInit.TEXT:
-            assert (
-                self.prompt_tuning_init_text is not None
-            ), f"prompt_tuning_init_text needs to be specified with TEXT init method"
-
-
 class LoRAArgs(BaseArgs):
     # lora rank
     lora_rank: int = None
@@ -117,8 +95,6 @@ class LoRAArgs(BaseArgs):
 class TuningArgs(BaseArgs):
     # type of tuning, full finetuning or PEFT
     tuning_method: TuningMethod = None
-    # prompt tuning related arguments
-    prompt_tuning_args: PromptTuningArgs | None = None
     # lora related arguments
     lora_args: LoRAArgs | None = None
 
@@ -127,17 +103,7 @@ class TuningArgs(BaseArgs):
 
         # check whether the arguments specified are valid
         if self.tuning_method in [TuningMethod.full_finetuning, TuningMethod.pretraining]:
-            assert (
-                self.prompt_tuning_args is None
-            ), "prompt_tuning_args should not be specified with full_finetuning or pretraining"
-            assert self.lora_args is None, "lora_args should not be specified with full_finetuning or pretraining"
-        elif self.tuning_method == TuningMethod.prompt_tuning:
-            assert self.lora_args is None, "lora_args should not be specified with promt_tuning"
-        elif self.tuning_method == TuningMethod.lora:
-            assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with lora"
-
-    def get_num_virtual_tokens(self) -> int:
-        return self.prompt_tuning_args.num_virtual_tokens if self.tuning_method == TuningMethod.prompt_tuning else 0
+            assert self.lora_args is None, "load_args should not be specified with full_finetuning or pretraining"
 
 
 class TrainingParameters(BaseArgs):

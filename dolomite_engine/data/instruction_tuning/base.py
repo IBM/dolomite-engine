@@ -17,7 +17,6 @@ class BaseInstructionDataset(BaseDataset):
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = 0,
     ) -> None:
         super().__init__(
             class_args=class_args,
@@ -30,7 +29,6 @@ class BaseInstructionDataset(BaseDataset):
             output_format=output_format,
             max_input_tokens=max_input_tokens,
             max_output_tokens=max_output_tokens,
-            num_virtual_tokens=num_virtual_tokens,
         )
 
         if self.do_format_input:

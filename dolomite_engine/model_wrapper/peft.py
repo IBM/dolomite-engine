@@ -1,4 +1,4 @@
-from peft import LoraConfig, PromptTuningConfig, TaskType, get_peft_model
+from peft import LoraConfig, TaskType, get_peft_model
 
 from ..arguments import InferenceArgs, TrainingArgs, UnshardingArgs
 from ..enums import Mode, TuningMethod
@@ -20,16 +20,9 @@ class ModelWrapperForPEFT(ModelWrapperForFinetuning):
             model_kwargs["attn_implementation"] = self.attention_implementation.value
 
         assert not self.use_padding_free_transformer
+        tuning_method = args.tuning_args.tuning_method
 
-        if args.tuning_args.tuning_method == TuningMethod.prompt_tuning:
-            self.peft_config = PromptTuningConfig(
-                task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
-                prompt_tuning_init=args.tuning_args.prompt_tuning_args.prompt_tuning_init,
-                num_virtual_tokens=args.tuning_args.get_num_virtual_tokens(),
-                prompt_tuning_init_text=args.tuning_args.prompt_tuning_args.prompt_tuning_init_text,
-                tokenizer_name_or_path=args.model_args.model_name,
-            )
-        elif args.tuning_args.tuning_method == TuningMethod.lora:
+        if tuning_method == TuningMethod.lora:
             self.peft_config = LoraConfig(
                 task_type=TaskType.SEQ_2_SEQ_LM if self.is_encoder_decoder else TaskType.CAUSAL_LM,
                 inference_mode=self.mode != Mode.training,
@@ -37,6 +30,8 @@ class ModelWrapperForPEFT(ModelWrapperForFinetuning):
                 lora_alpha=args.lora_alpha,
                 lora_dropout=args.lora_dropout,
             )
+        else:
+            raise ValueError(f"unexpected tuning_method ({tuning_method})")
 
         self.model = args.model_args.model_class.from_pretrained(
             **model_kwargs, torch_dtype=string_to_torch_dtype(self.dtype)

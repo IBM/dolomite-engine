@@ -58,7 +58,6 @@ class TuningMethod(str, Enum):
 
     pretraining = "pretraining"
     full_finetuning = "full_finetuning"
-    prompt_tuning = "prompt_tuning"
     lora = "lora"
     distillation = "distillation"
 

@@ -20,7 +20,6 @@ class BaseDataset(torch.utils.data.Dataset):
         output_format: str,
         max_input_tokens: int,
         max_output_tokens: int,
-        num_virtual_tokens: int = 0,
     ) -> None:
         super().__init__()
 
@@ -32,9 +31,6 @@ class BaseDataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.is_encoder_decoder = is_encoder_decoder
 
-        # used for prompt tuning
-        self.num_virtual_tokens = num_virtual_tokens
-
         self.data_name = data_name
         self.input_format = input_format
         self.output_format = output_format
@@ -44,12 +40,15 @@ class BaseDataset(torch.utils.data.Dataset):
         self.do_format_output = self.output_format != OUTPUT_FORMAT
 
         # length to use for trimming (excludes eos)
-        self.max_input_tokens = get_max_input_length(
-            max_input_tokens, self.num_virtual_tokens, self.is_encoder_decoder
-        )
-        self.max_output_tokens = get_max_output_length(
-            max_output_tokens, self.num_virtual_tokens, self.is_encoder_decoder
-        )
+        if max_input_tokens is None:
+            self.max_input_tokens = None
+        else:
+            self.max_input_tokens = max_input_tokens
+
+            if self.is_encoder_decoder:
+                self.max_input_tokens -= 1
+
+        self.max_output_tokens = None if max_output_tokens is None else max_output_tokens - 1
 
         self.examples = []
 
@@ -195,53 +194,3 @@ class BlendedDatasets(torch.utils.data.Dataset):
             x += f"\nexamples in {dataset.__class__.__name__} ({dataset.data_name}) = {len(dataset)}"
 
         return x
-
-
-def get_max_input_length(
-    max_input_tokens_specified: int | None, num_virtual_tokens: int, is_encoder_decoder: bool
-) -> int:
-    """max input length for the model, depends on the training / inference type and whether the model is decoder-only or encoder-decoder
-
-    Args:
-        max_input_tokens_specified (int | None): maximum number of specified input tokens
-        num_virtual_tokens (int): virtual tokens for prompt tuning
-        is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
-
-    Returns:
-        int: max input length
-    """
-
-    if max_input_tokens_specified is None:
-        return None
-
-    max_input_tokens = max_input_tokens_specified - num_virtual_tokens
-
-    if is_encoder_decoder:
-        max_input_tokens -= 1
-
-    return max_input_tokens
-
-
-def get_max_output_length(
-    max_output_tokens_specified: int | None, num_virtual_tokens: int, is_encoder_decoder: bool
-) -> int:
-    """max output length for the model, depends on the training / inference type and whether the model is decoder-only or encoder-decoder
-
-    Args:
-        max_output_tokens_specified (int | None): maximum number of specified output tokens
-        num_virtual_tokens (int): virtual tokens for prompt tuning
-        is_encoder_decoder (bool): whether the model is decoder-only or encoder-decoder
-
-    Returns:
-        int: max output length
-    """
-
-    if max_output_tokens_specified is None:
-        return None
-
-    max_output_tokens = max_output_tokens_specified - 1
-
-    if is_encoder_decoder:
-        max_output_tokens -= num_virtual_tokens
-
-    return max_output_tokens

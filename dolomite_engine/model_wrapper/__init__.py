@@ -13,7 +13,6 @@ _MODEL_CLASS_MAPPING = {
     TuningMethod.pretraining: ModelWrapperForPretraining,
     TuningMethod.full_finetuning: ModelWrapperForFinetuning,
     TuningMethod.lora: ModelWrapperForPEFT,
-    TuningMethod.prompt_tuning: ModelWrapperForPEFT,
     TuningMethod.distillation: ModelWrapperForDistillation,
 }
 

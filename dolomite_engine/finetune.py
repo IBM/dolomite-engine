@@ -224,7 +224,6 @@ def main() -> None:
     assert args.tuning_args.tuning_method in [
         TuningMethod.full_finetuning,
         TuningMethod.lora,
-        TuningMethod.prompt_tuning,
     ], f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
