@@ -127,7 +127,6 @@ def main() -> None:
             mode=mode,
             tokenizer=model.tokenizer,
             is_encoder_decoder=model.is_encoder_decoder,
-            num_virtual_tokens=args_from_checkpoint.tuning_args.get_num_virtual_tokens(),
         )
 
     model = model.to(torch.cuda.current_device())
