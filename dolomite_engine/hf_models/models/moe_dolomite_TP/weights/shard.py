@@ -50,7 +50,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
                 config=config,
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix=prefix + "moe.",
-                column_parallel_shard_dim=0,
+                column_parallel_shard_dim=1,
                 row_parallel_shard_dim=2,
             )
         )
