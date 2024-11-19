@@ -4,7 +4,6 @@ import torch
 import torch.distributed
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....distributed import dtensor_to_tensor, tensor_to_dtensor
@@ -73,7 +72,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
 
         self.weight = nn.Parameter(
             tensor_to_dtensor(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(1)
             )
         )
 
@@ -90,7 +89,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
     ) -> torch.Tensor:
         return scattered_experts(
             inputs=input,
-            expert_weights=dtensor_to_tensor(self.weight).permute(1, 2, 0),
+            expert_weights=dtensor_to_tensor(self.weight).permute(0, 2, 1),
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
             sorted_scattered_idxs=sorted_scattered_idxs,

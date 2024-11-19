@@ -44,7 +44,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
     ) -> torch.Tensor:
         return scattered_experts(
             inputs=input,
-            expert_weights=self.weight.permute(1, 2, 0),
+            expert_weights=self.weight.permute(0, 2, 1),
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
             sorted_scattered_idxs=sorted_scattered_idxs,
