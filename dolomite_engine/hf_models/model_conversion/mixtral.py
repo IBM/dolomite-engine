@@ -104,7 +104,7 @@ def _import_state_dict_from_huggingface(
 
         state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"
-        ).T.contiguous()
+        )
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = torch.stack(
             [
@@ -118,7 +118,7 @@ def _import_state_dict_from_huggingface(
                 )
                 for expert_idx in range(num_experts)
             ],
-            dim=1,
+            dim=0,
         )
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = torch.stack(
@@ -128,7 +128,7 @@ def _import_state_dict_from_huggingface(
                 )
                 for expert_idx in range(num_experts)
             ],
-            dim=1,
+            dim=0,
         )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
@@ -240,19 +240,19 @@ def _export_state_dict_to_huggingface(
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"transformer.h.{layer_idx}.moe.gate.weight"
-        ).T.contiguous()
+        )
 
         c_fc_experts = safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
         c_proj_experts = safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
 
         for expert_idx in range(num_experts):
-            up_weight, gate_weight = split_up_gate_tensor_for_mlp(c_fc_experts[:, expert_idx, :].contiguous())
+            up_weight, gate_weight = split_up_gate_tensor_for_mlp(c_fc_experts[expert_idx])
 
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w3.weight"] = up_weight
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w1.weight"] = gate_weight
             state_dict[f"model.layers.{layer_idx}.block_sparse_moe.experts.{expert_idx}.w2.weight"] = c_proj_experts[
-                :, expert_idx
-            ].contiguous()
+                expert_idx
+            ]
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),
