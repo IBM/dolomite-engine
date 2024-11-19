@@ -220,13 +220,13 @@ def _train_step_without_pipeline_parallel(
     grad_norm = None
     optimizer.zero_grad()
 
+    lm_loss_multiplier = 1 / (micro_batch_size * sequence_length)
+
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
             batch = get_next_batch(train_dataloader)
             with forward_context():
-                loss_micro_step_dict = model(batch)
-                # divide by the total unmasked tokens and update the dict
-                loss_micro_step_dict = loss_micro_step_dict / (micro_batch_size * sequence_length)
+                loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
             # compute gradients
             with backward_context():
@@ -241,9 +241,7 @@ def _train_step_without_pipeline_parallel(
 
     batch = get_next_batch(train_dataloader)
     with forward_context():
-        loss_micro_step_dict = model(batch)
-        # divide by the total unmasked tokens and update the dict
-        loss_micro_step_dict = loss_micro_step_dict / (micro_batch_size * sequence_length)
+        loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
     # compute gradients
     with backward_context():
