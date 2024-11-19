@@ -190,19 +190,17 @@ def wrap_model_container_for_distributed_training(
 
             def _sharding_function(parameter: nn.Parameter) -> Shard:
                 if parameter.size(0) > data_parallel_sharding_world_size or parameter.dim() == 1:
-                    placement = Shard(0)
+                    return Shard(0)
                 else:
                     for dim in range(1, parameter.dim() + 1):
                         if (
                             parameter.size(dim) > data_parallel_sharding_world_size
                             and parameter.size(dim) % data_parallel_sharding_world_size == 0
                         ):
-                            placement = Shard(dim)
+                            return Shard(dim)
 
                     log_rank_0(logging.WARN, "sharding along dim=0 since no suitable sharding dimension was found")
-                    placement = Shard(0)
-
-                return placement
+                    return Shard(0)
 
             for i, model in enumerate(model_container):
                 for module in model.modules():
