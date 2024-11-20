@@ -26,8 +26,6 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
-        self.attention_pattern = self.parse_attention_pattern(config.attention_pattern)
-
         self.head_dim = divide_if_divisible(
             self.embed_dim,
             self.num_heads,
