@@ -1,10 +1,10 @@
-from functools import partial
+from functools import partial, wraps
 
 import torch
 
 
 def contiguous(fn):
-    @functools.wraps(fn)
+    @wraps(fn)
     def wrapper(ctx, *args, **kwargs):
         return fn(
             ctx,
