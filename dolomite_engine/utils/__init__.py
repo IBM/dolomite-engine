@@ -11,7 +11,6 @@ from .packages import (
     is_apex_available,
     is_causal_conv1d_available,
     is_einops_available,
-    is_fla_available,
     is_flash_attention_available,
     is_kernel_hyperdrive_available,
     is_ms_amp_available,

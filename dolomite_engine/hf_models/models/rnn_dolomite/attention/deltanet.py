@@ -5,18 +5,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import Cache
 
-from .....utils import is_einops_available, is_fla_available
+from .....utils import is_einops_available
 from ....config import CommonConfig
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_normalization_function
 from .convolution import ParameterizedShortConvolution
+from .delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_delta_rule
 
 
 if is_einops_available():
     from einops import rearrange
-
-if is_fla_available():
-    from fla.ops.delta_rule import chunk_delta_rule, fused_chunk_delta_rule, fused_recurrent_delta_rule
 
 
 # https://github.com/IDSIA/recurrent-fwp/blob/master/algorithmic/layers.py#L86C1-L146C1

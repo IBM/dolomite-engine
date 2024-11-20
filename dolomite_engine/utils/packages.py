@@ -118,23 +118,6 @@ def is_triton_available() -> bool:
 
 
 try:
-    import fla
-
-    _IS_FLA_AVAILABLE = True
-except ImportError:
-    _IS_FLA_AVAILABLE = False
-
-    warn_rank_0(
-        "FlashLinearAttention (FLA) is not installed, install from "
-        "https://github.com/sustcsonglin/flash-linear-attention/"
-    )
-
-
-def is_fla_available() -> bool:
-    return _IS_FLA_AVAILABLE
-
-
-try:
     import einops
 
     _IS_EINOPS_AVAILABLE = True
