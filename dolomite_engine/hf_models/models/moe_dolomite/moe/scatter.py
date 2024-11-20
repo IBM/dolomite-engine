@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from .....utils import is_kernel_hyperdrive_available
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 from .base import ParameterizedExperts, SparseMoE
 
@@ -44,7 +44,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
     ) -> torch.Tensor:
         return scattered_experts(
             inputs=input,
-            expert_weights=self.weight.permute(1, 2, 0),
+            expert_weights=self.weight.permute(0, 2, 1),
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
             sorted_scattered_idxs=sorted_scattered_idxs,
@@ -80,7 +80,7 @@ class ScatterMoE(SparseMoE):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ParameterizedTransposedLinear(
+        self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,

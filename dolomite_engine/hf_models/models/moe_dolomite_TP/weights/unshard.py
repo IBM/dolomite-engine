@@ -146,18 +146,27 @@ def _get_moe(
         )
     }
 
+    column_parallel_shard_dim = 1
+    row_parallel_shard_dim = 2
+
     if is_glu(config.activation_function):
         # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
-        weights = [state_dict[prefix + "c_fc.weight"].chunk(2, dim=0) for state_dict in tensor_parallel_state_dicts]
-        weights = (torch.cat([w[0] for w in weights], dim=0), torch.cat([w[1] for w in weights], dim=0))
-        output[prefix + "c_fc.weight"] = torch.cat(weights, dim=0)
+        weights = [
+            state_dict[prefix + "c_fc.weight"].chunk(2, dim=column_parallel_shard_dim)
+            for state_dict in tensor_parallel_state_dicts
+        ]
+        weights = (
+            torch.cat([w[0] for w in weights], dim=column_parallel_shard_dim),
+            torch.cat([w[1] for w in weights], dim=column_parallel_shard_dim),
+        )
+        output[prefix + "c_fc.weight"] = torch.cat(weights, dim=column_parallel_shard_dim)
     else:
         output[prefix + "c_fc.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, prefix + "c_fc.weight", dim=0
+            tensor_parallel_state_dicts, prefix + "c_fc.weight", dim=column_parallel_shard_dim
         )
 
     output[prefix + "c_proj.weight"] = _concatenate_tensors_from_moe(
-        tensor_parallel_state_dicts, prefix + "c_proj.weight", dim=2
+        tensor_parallel_state_dicts, prefix + "c_proj.weight", dim=row_parallel_shard_dim
     )
     return output
 

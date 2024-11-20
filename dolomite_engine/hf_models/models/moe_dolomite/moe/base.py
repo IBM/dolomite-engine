@@ -7,7 +7,7 @@ from torch.distributed._functional_collectives import all_reduce
 
 from .....utils import ProcessGroupManager
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 
 
@@ -24,11 +24,11 @@ class ParameterizedExperts(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.weight = nn.Parameter(torch.empty(out_features, num_experts, in_features, device=device, dtype=dtype))
+        self.weight = nn.Parameter(torch.empty(num_experts, out_features, in_features, device=device, dtype=dtype))
 
         self.bias = None
         if add_bias:
-            self.bias = nn.Parameter(torch.empty(out_features, num_experts, device=device, dtype=dtype))
+            self.bias = nn.Parameter(torch.empty(num_experts, out_features, device=device, dtype=dtype))
 
         self.std = std
 
@@ -39,14 +39,9 @@ class ParameterizedExperts(nn.Module):
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
-        weight = self.weight.view(self.out_features, self.num_experts, -1)
-
-        if self.bias is not None:
-            bias = self.bias.view(self.out_features, self.num_experts)
-
         input = input.split(num_experts_per_token.tolist(), dim=0)
         input = [
-            F.linear(input[i], weight[:, i], None if self.bias is None else bias[:, i])
+            F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
             for i in range(self.num_experts)
         ]
         input = torch.cat(input, dim=0)
@@ -89,7 +84,7 @@ class SparseMoE(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ParameterizedTransposedLinear(
+        self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,

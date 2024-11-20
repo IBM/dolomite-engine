@@ -4,13 +4,12 @@ import torch
 import torch.distributed
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....distributed import dtensor_to_tensor, tensor_to_dtensor
 from .....utils import ProcessGroupManager, divide_if_divisible, is_kernel_hyperdrive_available
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ....modeling_utils_TP import Dropout_TP, DTensorModule
 from ...moe_dolomite import MoEDolomiteConfig
 from ...moe_dolomite.moe import ScatterMoE
@@ -21,7 +20,7 @@ if is_kernel_hyperdrive_available():
     from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
-class ReplicatedTransposedLinear_TP(ParameterizedTransposedLinear, DTensorModule):
+class ReplicatedLinear_TP(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -73,7 +72,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
 
         self.weight = nn.Parameter(
             tensor_to_dtensor(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(1)
             )
         )
 
@@ -90,7 +89,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
     ) -> torch.Tensor:
         return scattered_experts(
             inputs=input,
-            expert_weights=dtensor_to_tensor(self.weight).permute(1, 2, 0),
+            expert_weights=dtensor_to_tensor(self.weight).permute(0, 2, 1),
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
             sorted_scattered_idxs=sorted_scattered_idxs,
@@ -169,7 +168,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ReplicatedTransposedLinear_TP(
+        self.gate = ReplicatedLinear_TP(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,

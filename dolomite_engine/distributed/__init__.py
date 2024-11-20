@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
+from torch.distributed._tensor.placement_types import Shard
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
@@ -67,6 +68,7 @@ def wrap_model_container_for_distributed_training(
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
+    data_parallel_sharding_world_size = args.distributed_args.zero_topology.data_parallel_sharding_world_size
 
     if dtype in ["fp16", "bf16"]:
         if communication_dtype != "fp32":
@@ -186,6 +188,23 @@ def wrap_model_container_for_distributed_training(
 
             zero3 = stage == 3
 
+            def _sharding_function(parameter: nn.Parameter) -> Shard:
+                dps = (
+                    ProcessGroupManager.get_data_parallel_world_size()
+                    if data_parallel_sharding_world_size is None
+                    else data_parallel_sharding_world_size
+                )
+
+                if parameter.size(0) > dps or parameter.dim() == 1:
+                    return Shard(0)
+                else:
+                    for dim in range(1, parameter.dim() + 1):
+                        if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
+                            return Shard(dim)
+
+                    log_rank_0(logging.WARN, "sharding along dim=0 since no suitable sharding dimension was found")
+                    return Shard(0)
+
             for i, model in enumerate(model_container):
                 for module in model.modules():
                     if isinstance(module, tuple(block_classes)):
@@ -193,6 +212,7 @@ def wrap_model_container_for_distributed_training(
                             module,
                             mesh=dp_mesh,
                             reshard_after_forward=zero3,
+                            shard_placement_fn=_sharding_function,
                             mp_policy=mixed_precision_policy,
                             offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
                         )
@@ -201,6 +221,7 @@ def wrap_model_container_for_distributed_training(
                     model,
                     mesh=dp_mesh,
                     reshard_after_forward=zero3,
+                    shard_placement_fn=_sharding_function,
                     mp_policy=mixed_precision_policy,
                     offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
                 )
