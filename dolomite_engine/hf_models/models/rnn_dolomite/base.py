@@ -102,7 +102,9 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        past_key_values = RNNCache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = (
+            RNNCache(self.attention_pattern) if use_cache and past_key_values is None else past_key_values
+        )
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:
