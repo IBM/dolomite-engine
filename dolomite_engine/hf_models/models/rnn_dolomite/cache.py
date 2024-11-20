@@ -6,12 +6,26 @@ from transformers import Cache, DynamicCache
 
 class RNNCache(Cache):
     def __init__(self, attention_pattern: str, seen_tokens: int = 0) -> None:
-        self.states = []
-        self.attention_pattern = attention_pattern
+        self.attention_states = []
+        self.rnn_states = []
         self._seen_tokens = seen_tokens
+
+        self.cache_map = {}
+        num_attention_layers = 0
+        num_rnn_layers = 0
+        for i, a in enumerate(attention_pattern):
+            if a == "a":
+                self.cache_map[i] = num_attention_layers
+                num_attention_layers += 1
+            elif a == "d":
+                self.cache_map[i] = num_rnn_layers
+                num_rnn_layers += 1
+            else:
+                raise ValueError("unexpected layer type found")
 
     def __getitem__(self, layer_idx: int) -> torch.Tensor:
         if layer_idx < len(self):
+
             return self.states[layer_idx]
         else:
             raise KeyError(f"Cache only has {len(self)} layers, attempted to access layer with index {layer_idx}")

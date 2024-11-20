@@ -1,4 +1,4 @@
-torch==2.5.0.dev20240825
+torch
 transformers
 datasets
 pydantic
