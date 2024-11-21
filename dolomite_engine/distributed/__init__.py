@@ -198,7 +198,7 @@ def wrap_model_container_for_distributed_training(
                 if parameter.size(0) > dps or parameter.dim() == 1:
                     return Shard(0)
                 else:
-                    for dim in range(1, parameter.dim() + 1):
+                    for dim in range(1, parameter.dim()):
                         if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
                             return Shard(dim)
 
