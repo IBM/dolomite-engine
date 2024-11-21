@@ -198,7 +198,7 @@ def wrap_model_container_for_distributed_training(
                 if parameter.size(0) > dps or parameter.dim() == 1:
                     return Shard(0)
                 else:
-                    for dim in range(1, parameter.dim() + 1):
+                    for dim in range(1, parameter.dim()):
                         if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
                             return Shard(dim)
 
@@ -227,12 +227,7 @@ def wrap_model_container_for_distributed_training(
                 )
 
                 if efficient_initialization and args.model_args.model_name is None:
-                    model = model.to_empty(device=torch.cuda.current_device())
-
-                    for module in model.modules():
-                        if hasattr(module, "reset_parameters"):
-                            with torch.device(torch.cuda.current_device()):
-                                module.reset_parameters()
+                    _init_model(model)
 
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
@@ -328,3 +323,12 @@ def _get_fsdp_mixed_precision(
         mixed_precision = MixedPrecision2(param_dtype=dtype, reduce_dtype=communication_dtype)
 
     return mixed_precision
+
+
+def _init_model(model: nn.Module) -> None:
+    model = model.to_empty(device=torch.cuda.current_device())
+
+    for module in model.modules():
+        if hasattr(module, "reset_parameters"):
+            with torch.device(torch.cuda.current_device()):
+                module.reset_parameters()
