@@ -243,10 +243,12 @@ class ModelWrapperForPretraining(ModelWrapper):
         return input_ids, labels
 
     def _setup_model(self) -> None:
-        super()._setup_model()
-
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
 
+        super()._setup_model()
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
         if self.use_padding_free_transformer:
             if not self.reset_attention_mask:
                 self.register_buffer(
@@ -261,6 +263,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                     persistent=False,
                 )
                 self.max_seqlen = self.sequence_length
+
             if self.reset_position_ids:
                 assert self.reset_attention_mask, "reset_attention_mask should be specified with reset_position_ids"
             else:
