@@ -2,9 +2,7 @@ import logging
 from argparse import ArgumentParser
 from typing import Any
 
-import torch
 import transformers
-from packaging.version import Version
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
@@ -326,16 +324,6 @@ class DistributedArgs(BaseArgs):
             ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
         if self.tensor_parallel_world_size > 1:
-            version = Version(torch.__version__).release
-            version = [str(i) for i in version]
-            version = ".".join(version)
-            version = Version(version)
-
-            assert version >= Version("2.5.0"), (
-                "the current release of pytorch doesn't support tensor parallel, switch to version >= 2.5.0 "
-                "or the latest nightly"
-            )
-
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
 
         if self.use_async_tensor_parallel:
