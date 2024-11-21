@@ -332,34 +332,5 @@ def _init_model(model: nn.Module) -> None:
 
     for module in model.modules():
         if hasattr(module, "reset_parameters"):
-            dummy_module = nn.Module()
-
             with torch.device(torch.cuda.current_device()):
-                for name, parameter in module.named_parameters():
-                    if isinstance(parameter, DTensor):
-                        setattr(dummy_module, name, parameter._local_tensor)
-                    elif isinstance(parameter, torch.Tensor):
-                        setattr(dummy_module, name, parameter)
-                    else:
-                        raise ValueError("unexpected parameter type")
-
-                dummy_module.reset_parameters = module.reset_parameters
-                dummy_module.reset_parameters()
-
-                for name, parameter in module.named_parameters():
-                    if isinstance(parameter, DTensor):
-                        device_mesh = parameter.device_mesh
-
-                        for index, placement in enumerate(parameter.placements):
-                            if placement.is_replicate():
-                                local_tensor = getattr(dummy_module, name)
-                                torch.distributed.all_reduce(local_tensor, op=ReduceOp.AVG, group=device_mesh)
-
-
-# def _init_model(model: nn.Module) -> None:
-#     model = model.to_empty(device=torch.cuda.current_device())
-
-#     for module in model.modules():
-#         if hasattr(module, "reset_parameters"):
-#             with torch.device(torch.cuda.current_device()):
-#                 module.reset_parameters()
+                module.reset_parameters()
