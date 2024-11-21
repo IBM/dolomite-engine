@@ -8,7 +8,7 @@ import numpy
 import torch
 from torch.utils.cpp_extension import load as load_cpp_extension
 
-from ....utils import log_rank_0
+from ....utils import ProcessGroupManager, log_rank_0
 
 
 class Split(Enum):
@@ -25,7 +25,7 @@ def compile_helpers() -> None:
     build_directory = os.path.join(os.path.dirname(__file__), "build")
     os.makedirs(build_directory, exist_ok=True)
 
-    if torch.cuda.current_device() == 0:
+    if ProcessGroupManager.get_global_rank() == 0:
         load_cpp_extension(
             "helpers",
             sources=os.path.join(os.path.dirname(__file__), "helpers.cpp"),
