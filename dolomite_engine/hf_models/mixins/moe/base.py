@@ -20,7 +20,6 @@ class PreTrainedMoEModelMixin(PreTrainedModelMixin):
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
         self.moe_implementation = kwargs.get("moe_implementation", "eager")
         assert self.moe_implementation in ["eager", "scattermoe"]
-
         super().__init__(config, *args, **kwargs)
 
 

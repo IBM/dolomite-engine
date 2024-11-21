@@ -45,7 +45,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 use_cache=use_cache,
                 output_attentions=output_attentions,
             )
-        
+
         transformer_outputs: MoeModelOutputWithPastAndAuxLoss = self.transformer(
             input_ids,
             past_key_values=past_key_values,
@@ -62,6 +62,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
             lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+            print("transformer_outputs", transformer_outputs.size())
 
             if self.m_width is not None:
                 lm_logits = lm_logits / self.m_width
@@ -106,29 +107,33 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         else:
             output = (transformer_outputs.last_hidden_state, aux_loss)
         return output
-                   
 
-        
-    def get_dummy_input_tensor(self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype) -> tuple[torch.Tensor] | torch.Tensor:
+    def get_dummy_input_tensor(
+        self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         dummy_input = super().get_dummy_input_tensor(micro_batch_size, sequence_length, intermediate_dtype)
 
         if self.is_first_stage:
             return dummy_input
         else:
-            aux_loss_dummy = torch.tensor(0., device=torch.cuda.current_device(), dtype=intermediate_dtype)
-            if isinstance(tuple, dummy_input):
+            aux_loss_dummy = torch.tensor(0.0, device=torch.cuda.current_device(), dtype=intermediate_dtype)
+            if isinstance(dummy_input, tuple):
                 return dummy_input + (aux_loss_dummy,)
             else:
                 return (dummy_input, aux_loss_dummy)
 
-
-
-
-    def get_dummy_output_tensor(self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype, output_parallel_lm_logits_if_possible: bool) -> tuple[int]:
-        dummy_output = super().get_dummy_output_tensor(micro_batch_size, sequence_length, intermediate_dtype, output_parallel_lm_logits_if_possible)    
-        dummy_aux_loss = torch.tensor(0., device=torch.cuda.current_device(), dtype=intermediate_dtype)
-        if isinstance(tuple, dummy_output):
+    def get_dummy_output_tensor(
+        self,
+        micro_batch_size: int,
+        sequence_length: int,
+        intermediate_dtype: torch.dtype,
+        output_parallel_lm_logits_if_possible: bool,
+    ) -> tuple[int]:
+        dummy_output = super().get_dummy_output_tensor(
+            micro_batch_size, sequence_length, intermediate_dtype, output_parallel_lm_logits_if_possible
+        )
+        dummy_aux_loss = torch.tensor(0.0, device=torch.cuda.current_device(), dtype=intermediate_dtype)
+        if isinstance(dummy_output, tuple):
             return dummy_output + (dummy_aux_loss,)
         else:
             return (dummy_output, dummy_aux_loss)
-
