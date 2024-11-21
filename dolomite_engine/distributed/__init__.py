@@ -4,10 +4,12 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
+from torch.distributed import ReduceOp
 from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
-from torch.distributed._tensor.placement_types import Shard
+from torch.distributed._tensor.api import DTensor
+from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
@@ -227,12 +229,7 @@ def wrap_model_container_for_distributed_training(
                 )
 
                 if efficient_initialization and args.model_args.model_name is None:
-                    model = model.to_empty(device=torch.cuda.current_device())
-
-                    for module in model.modules():
-                        if hasattr(module, "reset_parameters"):
-                            with torch.device(torch.cuda.current_device()):
-                                module.reset_parameters()
+                    _init_model(model)
 
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
@@ -328,3 +325,41 @@ def _get_fsdp_mixed_precision(
         mixed_precision = MixedPrecision2(param_dtype=dtype, reduce_dtype=communication_dtype)
 
     return mixed_precision
+
+
+def _init_model(model: nn.Module) -> None:
+    model = model.to_empty(device=torch.cuda.current_device())
+
+    for module in model.modules():
+        if hasattr(module, "reset_parameters"):
+            dummy_module = nn.Module()
+
+            with torch.device(torch.cuda.current_device()):
+                for name, parameter in module.named_parameters():
+                    if isinstance(parameter, DTensor):
+                        setattr(dummy_module, name, parameter._local_tensor)
+                    elif isinstance(parameter, torch.Tensor):
+                        setattr(dummy_module, name, parameter)
+                    else:
+                        raise ValueError("unexpected parameter type")
+
+                dummy_module.reset_parameters = module.reset_parameters
+                dummy_module.reset_parameters()
+
+                for name, parameter in module.named_parameters():
+                    if isinstance(parameter, DTensor):
+                        device_mesh = parameter.device_mesh
+
+                        for index, placement in enumerate(parameter.placements):
+                            if placement.is_replicate():
+                                local_tensor = getattr(dummy_module, name)
+                                torch.distributed.all_reduce(local_tensor, op=ReduceOp.AVG, group=device_mesh)
+
+
+# def _init_model(model: nn.Module) -> None:
+#     model = model.to_empty(device=torch.cuda.current_device())
+
+#     for module in model.modules():
+#         if hasattr(module, "reset_parameters"):
+#             with torch.device(torch.cuda.current_device()):
+#                 module.reset_parameters()
