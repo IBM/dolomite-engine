@@ -36,14 +36,11 @@ class RoPE(nn.Module):
 
     @torch.no_grad()
     def _set_cos_sin_cache(self, seq_len: int, dtype: torch.dtype) -> None:
+        device = self.cos_cached.device if hasattr(self, "cos_cached") else None
         self.max_seq_len_cached = seq_len
 
-        inv_freq = self._get_inv_freq()
-        t = torch.arange(
-            self.max_seq_len_cached,
-            device=self.cos_cached.device if hasattr(self, "cos_cached") else None,
-            dtype=torch.float32,
-        )
+        inv_freq = self._get_inv_freq(device)
+        t = torch.arange(self.max_seq_len_cached, device=device, dtype=torch.float32)
 
         freqs = torch.outer(t, inv_freq)
 
@@ -53,8 +50,10 @@ class RoPE(nn.Module):
         self.register_buffer("cos_cached", (emb.cos() * self.mscale).to(dtype), persistent=False)
         self.register_buffer("sin_cached", (emb.sin() * self.mscale).to(dtype), persistent=False)
 
-    def _get_inv_freq(self) -> torch.Tensor:
-        return 1.0 / (self.base ** (torch.arange(0, self.head_dim, 2, dtype=torch.float32) / self.head_dim))
+    def _get_inv_freq(self, device: torch.device) -> torch.Tensor:
+        return 1.0 / (
+            self.base ** (torch.arange(0, self.head_dim, 2, device=device, dtype=torch.float32) / self.head_dim)
+        )
 
 
 class YaRNScaledRoPE(RoPE):
