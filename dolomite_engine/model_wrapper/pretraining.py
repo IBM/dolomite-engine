@@ -263,6 +263,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                     persistent=False,
                 )
                 self.max_seqlen = self.sequence_length
+
             if self.reset_position_ids:
                 assert self.reset_attention_mask, "reset_attention_mask should be specified with reset_position_ids"
             else:
