@@ -4,7 +4,6 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
-from torch.distributed import ReduceOp
 from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
