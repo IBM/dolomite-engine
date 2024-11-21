@@ -231,7 +231,7 @@ def wrap_model_container_for_distributed_training(
 
                     for module in model.modules():
                         if hasattr(module, "reset_parameters"):
-                            with torch.cuda.current_device():
+                            with torch.device(torch.cuda.current_device()):
                                 module.reset_parameters()
 
     if torch_compile:
