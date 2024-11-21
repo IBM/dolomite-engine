@@ -39,7 +39,11 @@ class RoPE(nn.Module):
         self.max_seq_len_cached = seq_len
 
         inv_freq = self._get_inv_freq()
-        t = torch.arange(self.max_seq_len_cached, dtype=torch.float32)
+        t = torch.arange(
+            self.max_seq_len_cached,
+            device=self.cos_cached.device if hasattr(self, "cos_cached") else None,
+            dtype=torch.float32,
+        )
 
         freqs = torch.outer(t, inv_freq)
 
@@ -83,7 +87,7 @@ class YaRNScaledRoPE(RoPE):
 
         self.reset_parameters()
 
-    def _get_inv_freq(self, device: torch.device) -> torch.Tensor:
+    def _get_inv_freq(self) -> torch.Tensor:
         pos_freqs = self.base ** (torch.arange(0, self.head_dim, 2).float() / self.head_dim)
         inv_freq_extrapolation = 1.0 / pos_freqs
         inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
