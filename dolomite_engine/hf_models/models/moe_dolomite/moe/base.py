@@ -5,10 +5,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
-from .....utils import ProcessGroupManager
+from .....utils import ProcessGroupManager, is_kernel_hyperdrive_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
+
+
+if is_kernel_hyperdrive_available():
+    from khd.kernels import contiguous_count_khd
 
 
 class ParameterizedExperts(nn.Module):
@@ -176,7 +180,7 @@ class SparseMoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
+        num_experts_per_token = contiguous_count_khd(x=selected_experts, start=0, end=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -202,12 +206,15 @@ class SparseMoE(nn.Module):
 
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
-        freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+        freq = contiguous_count_khd(x=topk_idxs.flatten(), start=0, end=num_experts)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
 
-        switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
+        switch_loss = (
+            num_experts
+            * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq.to(dtype=logits.dtype), p=1, dim=0)).sum()
+        )
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
 
         loss = switch_loss + 0.1 * z_loss

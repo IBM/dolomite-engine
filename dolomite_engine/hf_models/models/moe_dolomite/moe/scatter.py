@@ -11,7 +11,8 @@ from .base import ParameterizedExperts, SparseMoE
 
 
 if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import expert_boundaries, scattered_experts
+    from khd.kernels import contiguous_count_khd
+    from khd.kernels.scattermoe.triton_implementation import scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -118,7 +119,7 @@ class ScatterMoE(SparseMoE):
     ) -> torch.Tensor:
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-            expert_offsets = expert_boundaries(sorted_expert_idxs, self.num_experts)
+            expert_offsets = contiguous_count_khd(x=sorted_expert_idxs, start=0, end=self.num_experts).cumsum(-1)
 
         hidden_states = self.c_fc(
             hidden_states,
