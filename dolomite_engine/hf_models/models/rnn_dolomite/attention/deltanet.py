@@ -205,7 +205,7 @@ class DeltaNet(nn.Module):
             else:
                 state = (recurrent_state,)
             state = (recurrent_state,)
-            past_key_values.update(state, self.layer_idx)
+            # past_key_values.update(state, self.layer_idx)
 
         o = rearrange(o, "b h l d -> b l h d")
         o = self.o_norm(o)
