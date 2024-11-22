@@ -16,6 +16,7 @@ class RNNMoEDolomiteBlock(SparseMoEBlock):
         self,
         config: RNNMoEDolomiteConfig,
         normalization_implementation: str,
+        attention_implementation: str,
         attention_pattern: str,
         use_padding_free_transformer: bool,
         moe_implementation: str,
@@ -40,9 +41,9 @@ class RNNMoEDolomiteBlock(SparseMoEBlock):
 
         self.attention_pattern = attention_pattern
 
-        if attention_pattern == "flash_attention_2":
+        if attention_pattern == "a":
             self.attn = RNNFlashAttention2(config, True, layer_idx)
-        elif attention_pattern == "deltanet":
+        elif attention_pattern == "d":
             self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         else:
             raise ValueError(f"Attention pattern {attention_pattern} not supported.")

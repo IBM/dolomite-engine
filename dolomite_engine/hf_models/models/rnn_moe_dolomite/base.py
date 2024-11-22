@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
+from fla.models.utils import Cache as FLACache
 from transformers import Cache
 
+from ....utils import is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
 from ..rnn_dolomite.base import RNNDolomiteModel, RNNDolomitePreTrainedModel
-from ..rnn_dolomite.cache import RNNCache
 from .config import RNNMoEDolomiteConfig
 from .layer import RNNMoEDolomiteBlock
 
@@ -26,8 +27,6 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
-        self.attention_pattern = self.parse_attention_pattern(config.attention_pattern)
-
         self.head_dim = divide_if_divisible(
             self.embed_dim,
             self.num_heads,
@@ -42,6 +41,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
                 self.layer_class(
                     config,
                     normalization_implementation=self.normalization_implementation,
+                    attention_implementation=self.attention_implementation,
                     attention_pattern=self.attention_pattern[i],
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     moe_implementation=self.moe_implementation,
@@ -102,7 +102,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
             output_router_logits=output_router_logits,
         )
 
-        past_key_values = RNNCache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
         total_aux_loss = 0
