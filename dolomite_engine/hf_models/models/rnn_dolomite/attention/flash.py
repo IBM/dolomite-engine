@@ -27,7 +27,7 @@ class RNNFlashAttention2(FlashAttention2):
                 past_key, past_value = past_key_values[self.layer_idx]
                 key = torch.cat([past_key, key], dim=-2)
                 value = torch.cat([past_value, value], dim=-2)
-            past_key_values.update((key, value), self.layer_idx)
+            # past_key_values.update((key, value), self.layer_idx)
 
         # TODO avoid this extra transpose
         query = query.transpose(1, 2)
