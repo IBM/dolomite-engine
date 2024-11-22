@@ -3,7 +3,6 @@ import torch.nn as nn
 from fla.models.utils import Cache as FLACache
 from transformers import Cache
 
-from ....utils import is_fla_available
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
