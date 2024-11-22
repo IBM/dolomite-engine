@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
@@ -91,7 +92,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
-    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
+    def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -105,12 +106,13 @@ class ModelWrapperForPretraining(ModelWrapper):
         # this is done because megatron's dataset returns batches of length (sequence_length + 1)
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
-
         if isinstance(batch, torch.Tensor):
             batch = {"text": batch}
-
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids)
+
+        if prev_aux_loss is not None:
+            batch["prev_aux_loss"] = prev_aux_loss
 
         output = self.model(**batch, return_dict=True)
 
@@ -121,6 +123,10 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
+        if isinstance(model_outputs, tuple):
+            # Rewrap if it is tuple
+            model_outputs = MoeCausalLMOutputWithPast(logits=model_outputs[0], aux_loss=model_outputs[1])
+
         if isinstance(model_outputs, torch.Tensor):
             logits = model_outputs
         else:
