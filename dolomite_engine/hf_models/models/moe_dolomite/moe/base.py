@@ -180,7 +180,10 @@ class SparseMoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_experts_per_token = contiguous_count_cute(x=selected_experts, start=0, end=self.num_experts)
+        if selected_experts.is_cuda:
+            num_experts_per_token = contiguous_count_cute(x=selected_experts, start=0, end=self.num_experts)
+        else:
+            num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -206,7 +209,11 @@ class SparseMoE(nn.Module):
 
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
-        freq = contiguous_count_cute(x=topk_idxs.flatten(), start=0, end=num_experts).to(dtype=logits.dtype)
+
+        if topk_idxs.is_cuda:
+            freq = contiguous_count_cute(x=topk_idxs.flatten(), start=0, end=num_experts).to(dtype=logits.dtype)
+        else:
+            freq = topk_idxs.flatten().bincount(minlength=num_experts).to(dtype=logits.dtype)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
