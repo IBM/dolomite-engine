@@ -1,4 +1,4 @@
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 from .models import (
     GPTCrossLayerConfig,
@@ -41,8 +41,8 @@ def register_model_classes() -> None:
         _CUSTOM_MODEL_CLASSES.append(auto_model_for_causal_lm_class)
 
 
-def is_custom_model(model_class: type[AutoModelForCausalLM] | type[AutoModelForSeq2SeqLM], model_type: str) -> bool:
-    return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
+def is_custom_model(model_type: str) -> bool:
+    return model_type in _CUSTOM_MODEL_TYPES
 
 
 _MODEL_PARALLEL_CLASS_MAPPING = {
