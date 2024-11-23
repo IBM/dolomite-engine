@@ -120,7 +120,7 @@ class ScatterMoE(SparseMoE):
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
-            if sorted_expert_idxs.is_cuda:
+            if sorted_expert_idxs.is_cuda and is_cute_kernels_available():
                 expert_offsets = contiguous_count_cute(x=sorted_expert_idxs, start=0, end=self.num_experts).cumsum(-1)
             else:
                 expert_offsets = sorted_expert_idxs.bincount(minlength=self.num_experts).cumsum(-1)
