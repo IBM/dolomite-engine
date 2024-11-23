@@ -3,15 +3,16 @@ import math
 import torch
 import torch.nn as nn
 
-from .....utils import is_kernel_hyperdrive_available
+from .....utils import is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 from .base import ParameterizedExperts, SparseMoE
 
 
-if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import expert_boundaries, scattered_experts
+if is_cute_kernels_available():
+    from cute_kernels.kernels import contiguous_count_cute
+    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -118,7 +119,11 @@ class ScatterMoE(SparseMoE):
     ) -> torch.Tensor:
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-            expert_offsets = expert_boundaries(sorted_expert_idxs, self.num_experts)
+
+            if sorted_expert_idxs.is_cuda and is_cute_kernels_available():
+                expert_offsets = contiguous_count_cute(x=sorted_expert_idxs, start=0, end=self.num_experts).cumsum(-1)
+            else:
+                expert_offsets = sorted_expert_idxs.bincount(minlength=self.num_experts).cumsum(-1)
 
         hidden_states = self.c_fc(
             hidden_states,

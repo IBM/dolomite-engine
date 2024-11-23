@@ -5,10 +5,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
-from .....utils import ProcessGroupManager
+from .....utils import ProcessGroupManager, is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
+
+
+if is_cute_kernels_available():
+    from cute_kernels.kernels import contiguous_count_cute
 
 
 class ParameterizedExperts(nn.Module):
@@ -176,7 +180,10 @@ class SparseMoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
+        if selected_experts.is_cuda and is_cute_kernels_available():
+            num_experts_per_token = contiguous_count_cute(x=selected_experts, start=0, end=self.num_experts)
+        else:
+            num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -202,7 +209,11 @@ class SparseMoE(nn.Module):
 
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
-        freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+
+        if topk_idxs.is_cuda and is_cute_kernels_available():
+            freq = contiguous_count_cute(x=topk_idxs.flatten(), start=0, end=num_experts).to(dtype=logits.dtype)
+        else:
+            freq = topk_idxs.flatten().bincount(minlength=num_experts).to(dtype=logits.dtype)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
