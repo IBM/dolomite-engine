@@ -11,7 +11,7 @@ from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, get_next_batch
 from .distributed import dtensor_to_tensor
 from .enums import GradientCheckpointingMethod
-from .hf_models import is_custom_model
+from .hf_models import GPTDolomiteForCausalLM, MoEDolomiteForCausalLM, is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapper
 from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics
@@ -350,8 +350,11 @@ def get_model_tflops(
     v = config.vocab_size
 
     mlp_flops = 4 * b * s * h * f
+    if isinstance(model_class, MoEDolomiteForCausalLM):
+        mlp_flops *= config.num_experts_per_tok
+
     if is_glu(config.activation_function):
-        mlp_flops += 2 * b * s * h * f
+        mlp_flops *= 1.5
 
     attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
 
