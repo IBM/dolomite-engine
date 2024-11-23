@@ -11,7 +11,6 @@ from .base import ParameterizedExperts, SparseMoE
 
 
 if is_cute_kernels_available():
-    from cute_kernels.kernels import contiguous_count_cute
     from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
 
 
@@ -119,7 +118,7 @@ class ScatterMoE(SparseMoE):
     ) -> torch.Tensor:
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-            expert_offsets = contiguous_count_cute(x=sorted_expert_idxs, start=0, end=self.num_experts).cumsum(-1)
+            expert_offsets = sorted_expert_idxs.bincount(minlength=self.num_experts).cumsum(-1)
 
         hidden_states = self.c_fc(
             hidden_states,
