@@ -349,7 +349,7 @@ def get_model_tflops(
     v = config.vocab_size
 
     mlp_flops = 4 * b * s * h * f
-    if isinstance(config.model_type == "moe_dolomite"):
+    if config.model_type == "moe_dolomite":
         mlp_flops *= config.num_experts_per_tok
 
     if is_glu(config.activation_function):
