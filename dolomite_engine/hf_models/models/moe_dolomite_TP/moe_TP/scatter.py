@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....distributed import dtensor_to_tensor, tensor_to_dtensor
-from .....utils import ProcessGroupManager, divide_if_divisible, is_kernel_hyperdrive_available
+from .....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ....modeling_utils_TP import Dropout_TP, DTensorModule
@@ -16,8 +16,8 @@ from ...moe_dolomite.moe import ScatterMoE
 from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
 
 
-if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import scattered_experts
+if is_cute_kernels_available():
+    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
 
 
 class ReplicatedLinear_TP(ParameterizedLinear, DTensorModule):

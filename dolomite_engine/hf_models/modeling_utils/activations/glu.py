@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
 
+from ....utils import is_cute_kernels_available
 from .base import get_base_activation
+
+
+if is_cute_kernels_available():
+    from cute_kernels.kernels import swiglu_cute
 
 
 _GLU_BASE_MAPPING = {
@@ -28,10 +33,18 @@ class GLUActivation(nn.Module):
         return x[0] * self.base_activation(x[1])
 
 
+class SwiGLU_Cute(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.chunk(2, dim=-1)
+        return swiglu_cute(gate=x[1], up=x[0])
+
+
 def get_glu_activation(name: str) -> nn.Module:
     # for glu and sigmoid_glu, we directly return the pytorch's GLU
     if name in ["glu", "sigmoid_glu"]:
-        activation_function = nn.modules.GLU()
+        activation_function = nn.GLU()
+    elif name in ["swiglu_cute", "swish_glu_cute"]:
+        activation_function = SwiGLU_Cute()
     else:
         if name in _GLU_BASE_MAPPING:
             name = _GLU_BASE_MAPPING[name]
