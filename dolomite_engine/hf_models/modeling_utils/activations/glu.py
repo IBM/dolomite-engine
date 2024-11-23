@@ -43,7 +43,7 @@ def get_glu_activation(name: str) -> nn.Module:
     # for glu and sigmoid_glu, we directly return the pytorch's GLU
     if name in ["glu", "sigmoid_glu"]:
         activation_function = nn.GLU()
-    elif name in ["swiglu_cute", "swish_glu_cute"]:
+    elif name in ["cute_swiglu", "cute_swish_glu"]:
         activation_function = SwiGLU_Cute()
     else:
         if name in _GLU_BASE_MAPPING:
