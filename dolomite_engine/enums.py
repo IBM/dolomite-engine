@@ -9,7 +9,7 @@ class GradientCheckpointingMethod(Enum):
     block = "block"
 
 
-class LRDecaySchedule(str, Enum):
+class LRDecaySchedule(Enum):
     constant = "constant"
     cosine = "cosine"
     exponential = "exponential"
@@ -36,7 +36,7 @@ class MoEImplementation(Enum):
     scattermoe = "scattermoe"
 
 
-class DatasetSplit(str, Enum):
+class DatasetSplit(Enum):
     """dataset split"""
 
     train = "train"
@@ -44,7 +44,7 @@ class DatasetSplit(str, Enum):
     test = "test"
 
 
-class Mode(str, Enum):
+class Mode(Enum):
     """training / inference mode"""
 
     training = "training"
@@ -53,7 +53,7 @@ class Mode(str, Enum):
     distillation = "distillation"
 
 
-class TuningMethod(str, Enum):
+class TuningMethod(Enum):
     """training method"""
 
     pretraining = "pretraining"
@@ -62,27 +62,32 @@ class TuningMethod(str, Enum):
     distillation = "distillation"
 
 
-class FP8Backend(str, Enum):
+class FP8Backend(Enum):
     msamp = "msamp"
     nvte = "nvte"
 
 
-class LossMask(str, Enum):
+class LossMask(Enum):
     """Type of loss masking method"""
 
     output_only = "output_only"
     no_mask = "no_mask"
 
 
-class KLDivergenceMethod(str, Enum):
+class KLDivergenceMethod(Enum):
     """Type of KL divergence"""
 
     forward = "forward"
     backward = "backward"
 
 
-class ExperimentsTrackerName(str, Enum):
+class ExperimentsTrackerName(Enum):
     """Experiment tracker to use"""
 
     aim = "aim"
     wandb = "wandb"
+
+
+class Kernel(Enum):
+    cute_swiglu = "cute_swiglu"
+    cute_rmsnorm = "cute_rmsnorm"
