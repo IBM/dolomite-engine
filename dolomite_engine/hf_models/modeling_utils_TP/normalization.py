@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.placement_types import Replicate
+from torch.distributed._tensor.placement_types import Partial, Replicate
+from torch.distributed.tensor.experimental import local_map
 
 from ...distributed import dtensor_to_tensor, tensor_to_dtensor
 from ...enums import Kernel
@@ -66,6 +67,7 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
             )
         )
 
+        self.sequence_parallel = sequence_parallel
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
@@ -77,7 +79,13 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
 
 class CuteRMSNorm_TP(RMSNorm_TP):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return rmsnorm_cute(x=input, weight=dtensor_to_tensor(self.weight), eps=self.eps, memory_efficient=False)
+        input = rmsnorm_cute(
+            x=input,
+            weight=dtensor_to_tensor(self.weight, grad_placement=Partial() if self.sequence_parallel else Replicate()),
+            eps=self.eps,
+            memory_efficient=False,
+        )
+        return input
 
 
 _NORMALIZATION_FUNCTIONS = {
