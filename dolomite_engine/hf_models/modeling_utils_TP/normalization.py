@@ -77,10 +77,7 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
 
 class CuteRMSNorm_TP(RMSNorm_TP):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.placement)
-        input = rmsnorm_cute(x=input, weight=self.weight, eps=self.eps, memory_efficient=False)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.placement)
-        return input
+        return rmsnorm_cute(x=input, weight=dtensor_to_tensor(self.weight), eps=self.eps, memory_efficient=False)
 
 
 _NORMALIZATION_FUNCTIONS = {
