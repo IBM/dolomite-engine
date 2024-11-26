@@ -90,3 +90,4 @@ class ExperimentsTrackerName(Enum):
 
 class Kernel(Enum):
     cute_swiglu = "cute_swiglu"
+    cute_rmsnorm = "cute_rmsnorm"

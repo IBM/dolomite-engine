@@ -35,7 +35,7 @@ class GLUActivation(nn.Module):
         return x[0] * self.base_activation(x[1])
 
 
-class SwiGLU_cute(nn.Module):
+class CuteSwiGLU(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.chunk(2, dim=-1)
         return swiglu_cute(gate=x[1], up=x[0])
@@ -46,7 +46,7 @@ def get_glu_activation(name: str) -> nn.Module:
     if name in ["glu", "sigmoid_glu"]:
         activation_function = nn.GLU()
     elif is_kernel_allowed(Kernel.cute_swiglu) and name in ["swiglu", "swish_glu"]:
-        activation_function = SwiGLU_cute()
+        activation_function = CuteSwiGLU()
     else:
         if name in _GLU_BASE_MAPPING:
             name = _GLU_BASE_MAPPING[name]
