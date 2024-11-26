@@ -11,7 +11,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
     def __init__(
         self,
         config: GPTDolomiteConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
@@ -29,7 +28,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
             config.normalization_function,
             hidden_size,
             eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
@@ -45,7 +43,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
             config.normalization_function,
             hidden_size,
             eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )

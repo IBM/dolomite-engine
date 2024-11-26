@@ -70,7 +70,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             {
                 str(i): self.layer_class(
                     config,
-                    normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
@@ -85,7 +84,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 config.normalization_function,
                 self.embed_dim,
                 eps=config.layer_norm_epsilon,
-                normalization_implementation=self.normalization_implementation,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )

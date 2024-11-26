@@ -7,7 +7,6 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import divide_if_divisible
 from ...config import CommonConfig
-from ...defaults import DEFAULT_NORMALIZATION_IMPLEMENTATION
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors
@@ -32,10 +31,6 @@ class PreTrainedModelMixin(PreTrainedModel, GenerationMixin):
         super().__init__(config, *args, **kwargs)
 
         assert self.config_class is not None
-
-        self.normalization_implementation = kwargs.get(
-            "normalization_implementation", DEFAULT_NORMALIZATION_IMPLEMENTATION
-        )
 
         self.attention_implementation = self.config._attn_implementation
         self._use_eager_attention = self.attention_implementation == "eager"
@@ -136,7 +131,6 @@ class BaseModelMixin(PreTrainedModelMixin):
             [
                 self.layer_class(
                     config,
-                    normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
@@ -145,10 +139,7 @@ class BaseModelMixin(PreTrainedModelMixin):
             ]
         )
         self.ln_f = get_normalization_function(
-            config.normalization_function,
-            self.embed_dim,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=self.normalization_implementation,
+            config.normalization_function, self.embed_dim, eps=config.layer_norm_epsilon
         )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)

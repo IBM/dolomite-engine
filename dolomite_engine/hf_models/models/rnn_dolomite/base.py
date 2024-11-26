@@ -51,7 +51,6 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
             [
                 self.layer_class(
                     config,
-                    normalization_implementation=self.normalization_implementation,
                     attention_pattern=self.attention_pattern[i],
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
@@ -60,10 +59,7 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
             ]
         )
         self.ln_f = get_normalization_function(
-            config.normalization_function,
-            self.embed_dim,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=self.normalization_implementation,
+            config.normalization_function, self.embed_dim, eps=config.layer_norm_epsilon
         )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
