@@ -1,7 +1,7 @@
 from .enums import Kernel
 
 
-_KERNELS: set[Kernel] = {}
+_KERNELS: set[Kernel] = set()
 
 
 def is_kernel_allowed(kernel: Kernel) -> bool:
