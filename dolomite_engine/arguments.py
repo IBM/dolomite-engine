@@ -457,6 +457,8 @@ class TrainingArgs(BaseArgs):
     distributed_args: DistributedArgs = DistributedArgs()
     # research args
     research_args: ResearchArgs = ResearchArgs()
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -512,6 +514,8 @@ class InferenceArgs(BaseArgs):
     logging_args: LoggingArgs = LoggingArgs()
     # output dir
     output_dir: str = None
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -540,6 +544,8 @@ class UnshardingArgs(BaseArgs):
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
@@ -548,6 +554,8 @@ class UnshardingArgs(BaseArgs):
 class DistillationArgs(TrainingArgs):
     # teacher model arguments
     teacher_args: TeacherArgs = None
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.teacher_args, "teacher_args")])
