@@ -181,7 +181,7 @@ class SparseMoE(nn.Module):
         selected_experts = selected_experts.flatten()
 
         if selected_experts.is_cuda and is_cute_kernels_available():
-            num_experts_per_token = contiguous_count_cute(x=selected_experts, start=0, end=self.num_experts)
+            num_experts_per_token = contiguous_count_cute(x=selected_experts, size=self.num_experts)
         else:
             num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
 
@@ -211,7 +211,7 @@ class SparseMoE(nn.Module):
         acc_probs = probs.sum(0)
 
         if topk_idxs.is_cuda and is_cute_kernels_available():
-            freq = contiguous_count_cute(x=topk_idxs.flatten(), start=0, end=num_experts).to(dtype=logits.dtype)
+            freq = contiguous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
         else:
             freq = topk_idxs.flatten().bincount(minlength=num_experts).to(dtype=logits.dtype)
 
