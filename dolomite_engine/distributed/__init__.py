@@ -35,6 +35,13 @@ from .dtensors import (
 from .fp8 import convert_model_to_transformer_engine
 
 
+# import torch._inductor.config
+# torch._inductor.config.reorder_for_compute_comm_overlap = True
+# torch._dynamo.config.skip_fsdp_hooks = False
+# torch._dynamo.config.cache_size_limit = 512
+# torch._dynamo.config.compiled_autograd = True
+
+
 _STAGE_FULL_SHARDING_STRATEGY_MAP = {
     2: ShardingStrategy.SHARD_GRAD_OP,
     3: ShardingStrategy.FULL_SHARD,
@@ -234,6 +241,9 @@ def wrap_model_container_for_distributed_training(
 
         for i in range(len(model_container)):
             model_container[i] = torch.compile(model_container[i])
+            # model_container[i] = torch._dynamo.explain(model_container[i])
+            # print(model_container[i]({"text": torch.zeros(2, 4097, dtype=torch.long, device=torch.cuda.current_device())}))
+            # exit()
 
     pipeline_stages = []
     pipeline_schedule = None
