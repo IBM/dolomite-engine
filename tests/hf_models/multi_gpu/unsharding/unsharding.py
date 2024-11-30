@@ -5,14 +5,11 @@ import torch
 import torch.distributed
 from torch.distributed._tensor.api import DTensor
 
+from dolomite_engine.distributed import dtensor_to_tensor
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
-    GPTEnsembleConfig,
-    GPTEnsembleForCausalLM_TP,
     MoEDolomiteConfig,
-    dtensor_to_tensor,
     fix_unsharded_state_dict,
     get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
