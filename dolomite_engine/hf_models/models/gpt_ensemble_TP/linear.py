@@ -5,15 +5,10 @@ import torch.nn.functional as F
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Shard
 
-from ....utils import ProcessGroupManager, is_dtensors_enabled
+from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ....utils import ProcessGroupManager
 from ...modeling_utils import ParameterizedLinear
-from ...modeling_utils_TP import (
-    RowParallelLinear,
-    dtensor_to_tensor,
-    reduce_from_tensor_parallel_region,
-    reduce_scatter_to_sequence_parallel_region,
-    tensor_to_dtensor,
-)
+from ...modeling_utils_TP import RowParallelLinear
 
 
 class EnsembleLinear_TP(ParameterizedLinear):
@@ -46,26 +41,10 @@ class EnsembleLinear_TP(ParameterizedLinear):
 
 class EnsembleRowParallelLinear(RowParallelLinear):
     def forward(self, input: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
-        if is_dtensors_enabled():
-            input = tensor_to_dtensor(input, current_placement=Shard(-1))
-            residual = tensor_to_dtensor(residual / self.tp_world_size, current_placement=Partial())
-
-            input = F.linear(input, self.weight, self.bias)
-            input = input + residual
-
-            input = dtensor_to_tensor(input, desired_placement=self.output_placement)
-        else:
-            input = F.linear(input, self.weight.to_local(), None)
-            input = input + residual / self.tp_world_size
-
-            if self.sequence_parallel:
-                input = reduce_scatter_to_sequence_parallel_region(
-                    input, dim=0 if self.use_padding_free_transformer else 1
-                )
-            else:
-                input = reduce_from_tensor_parallel_region(input)
-
-            if self.bias is not None:
-                input = input + self.bias.to_local()
-
+        input = tensor_to_dtensor(input, current_placement=Shard(-1))
+        input = F.linear(input, self.weight, self.bias)
+        input = input + tensor_to_dtensor(
+            residual / ProcessGroupManager.get_tensor_parallel_world_size(), current_placement=Partial()
+        )
+        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
         return input
