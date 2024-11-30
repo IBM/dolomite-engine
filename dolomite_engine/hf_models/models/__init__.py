@@ -12,6 +12,12 @@ from .gpt_dolomite_TP import (
     unshard_gpt_dolomite_tensor_parallel_state_dicts,
 )
 from .gpt_ensemble import GPTEnsembleConfig, GPTEnsembleForCausalLM, GPTEnsembleModel
+from .gpt_ensemble_TP import (
+    GPTEnsembleForCausalLM_TP,
+    GPTEnsembleModel_TP,
+    fix_gpt_ensemble_unsharded_state_dict,
+    unshard_gpt_ensemble_tensor_parallel_state_dicts,
+)
 from .gpt_ladder import GPTLadderConfig, GPTLadderForCausalLM, GPTLadderModel
 from .gpt_ladder_TP import GPTLadderForCausalLM_TP, GPTLadderModel_TP
 from .gpt_parallel import GPTParallelConfig, GPTParallelForCausalLM, GPTParallelModel
