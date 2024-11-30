@@ -119,14 +119,12 @@ def train(
         eval_steps = args.datasets[0].class_args.get("eval_steps")
         evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
 
+    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
+
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
     local_batch_size = micro_batch_size * gradient_accumulation_steps
-    global_batch_size = local_batch_size * ProcessGroupManager.get_data_parallel_world_size()
-    tokens_per_batch = global_batch_size * sequence_length
-
-    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
-    global_batch_size = micro_batch_size * gradient_accumulation_steps * dp_world_size
+    global_batch_size = local_batch_size * dp_world_size
     tokens_per_batch = global_batch_size * sequence_length
 
     # model flops per GPU
