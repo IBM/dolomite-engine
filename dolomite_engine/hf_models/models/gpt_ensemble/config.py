@@ -15,7 +15,7 @@ class GPTEnsembleConfig(CommonConfig):
 
         self.pretraining_tensor_parallel_size = pretraining_tensor_parallel_size
 
-        if self.position_embedding_type == PositionEmbeddingType.alibi:
+        if PositionEmbeddingType(self.position_embedding_type) == PositionEmbeddingType.alibi:
             raise NotImplementedError("currently GPTEnsemble doesn't support alibi")
 
         self.reduce_pattern = (
