@@ -3,34 +3,11 @@ import torch.nn as nn
 from torch.distributed._tensor.placement_types import Replicate
 from transformers import DynamicCache
 
-from ....utils import ProcessGroupManager
-from ...modeling_utils_TP import dtensor_to_tensor, tensor_to_dtensor
-from ..gpt_ladder import GPTLadderConfig
-from ..gpt_parallel_TP.layer import GPTParallelBlock_TP
-from .linear import LadderColumnParallelLinear
+from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 
 
-class GPTLadderBlock_TP(GPTParallelBlock_TP):
-    def __init__(
-        self,
-        config: GPTLadderConfig,
-        normalization_implementation: str,
-        attention_implementation: str,
-        use_padding_free_transformer: bool,
-        layer_idx: int | None = None,
-        sequence_parallel: bool = False,
-    ) -> None:
-        super().__init__(
-            config=config,
-            normalization_implementation=normalization_implementation,
-            attention_implementation=attention_implementation,
-            use_padding_free_transformer=use_padding_free_transformer,
-            layer_idx=layer_idx,
-            sequence_parallel=sequence_parallel,
-        )
-
-        self._patch_column_parallel(use_padding_free_transformer, sequence_parallel)
-
+class GPTLadderBlock_TP(GPTDolomiteBlock_TP):
     def forward(
         self,
         previous_attention_out: torch.Tensor,
@@ -84,38 +61,3 @@ class GPTLadderBlock_TP(GPTParallelBlock_TP):
             current_mlp_out = current_mlp_out * self.m_residual
 
         return current_attention_out, current_mlp_out, residual
-
-    def _patch_column_parallel(self, use_padding_free_transformer: bool, sequence_parallel: bool) -> None:
-        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-        # patch to avoid multiple communication
-        attn_c_attn = self.attn.c_attn
-        mlp_c_fc = self.mlp.c_fc
-
-        def _has_bias(l: nn.Linear) -> bool:
-            if hasattr(l, "bias"):
-                return l.bias is not None
-            return False
-
-        with torch.device("meta"):
-            self.attn.c_attn = LadderColumnParallelLinear(
-                in_features=attn_c_attn.in_features,
-                out_features=attn_c_attn.out_features_per_device * tp_world_size,
-                bias=_has_bias(attn_c_attn),
-                use_padding_free_transformer=use_padding_free_transformer,
-                sequence_parallel=sequence_parallel,
-            )
-
-            self.mlp.c_fc = LadderColumnParallelLinear(
-                in_features=mlp_c_fc.in_features,
-                out_features=mlp_c_fc.out_features_per_device * tp_world_size,
-                bias=_has_bias(mlp_c_fc),
-                use_padding_free_transformer=use_padding_free_transformer,
-                sequence_parallel=sequence_parallel,
-            )
-
-        self.attn.c_attn.weight = attn_c_attn.weight
-        self.attn.c_attn.bias = attn_c_attn.bias
-
-        self.mlp.c_fc.weight = mlp_c_fc.weight
-        self.mlp.c_fc.bias = mlp_c_fc.bias
