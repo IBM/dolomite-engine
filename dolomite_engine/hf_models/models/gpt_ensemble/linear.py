@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.profiler import record_function
 
 
 class EnsembleLinear(nn.Module):
@@ -22,7 +21,6 @@ class EnsembleLinear(nn.Module):
 
         self.reset_parameters()
 
-    @record_function("F::ensemble_linear")
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input_tp, batch_size, sequence_length, _ = input.shape
 
