@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig
 
 from ...test_common import TestCommons
 
@@ -13,18 +13,25 @@ from ...test_common import TestCommons
 class GPTDolomiteTP_Test(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
-            ["gpt_dolomite"], TestCommons.get_attention_head_types(), ["gelu", "geglu"], [False, True]
+            TestCommons.get_attention_head_types(),
+            ["gelu", "geglu"],
+            [False, True],
+            [GPTDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
-            ["gpt_ensemble"], [AttentionHeadType.mha, AttentionHeadType.gqa], ["gelu", "geglu"], [False, True]
+            [AttentionHeadType.gqa],
+            ["gelu", "geglu"],
+            [False],
+            [MoEDolomiteConfig.model_type],
         )
     )
-    def test_gpt_dolomite_tp_unsharding(
+    @TestCommons.slow_test
+    def test_unsharding(
         self,
-        model_type: str,
         attention_head_type: AttentionHeadType,
         activation_function: str,
         tensor_parallel_word_embeddings: bool,
+        model_type: str,
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
 

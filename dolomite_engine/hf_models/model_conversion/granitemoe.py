@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig, GraniteMoeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
@@ -8,12 +8,6 @@ from ..modeling_utils import (
     split_query_key_value_tensor_for_attention,
 )
 from ..models import MoEDolomiteConfig
-
-
-try:
-    from transformers import GraniteMoeConfig, GraniteMoeForCausalLM
-except:
-    GraniteMoeConfig = None
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -120,10 +114,10 @@ def _import_state_dict_from_huggingface(
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = _split_and_reorder_for_glu(
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight")
-        ).view(-1, num_heads * head_dim)
+        )
         state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
-        ).view(num_experts * num_heads * head_dim, -1)
+        )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
             safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
@@ -239,14 +233,10 @@ def _export_state_dict_to_huggingface(
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight").view(
-                num_experts, -1, num_heads * head_dim
-            )
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
         )
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight").view(
-                num_experts, num_heads * head_dim, -1
-            )
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
         )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(

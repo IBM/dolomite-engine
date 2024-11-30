@@ -1,17 +1,14 @@
 import torch
 import torch.distributed
-import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
 
-from ...utils import ProcessGroupManager
-from ..utils import divide_if_divisible
+from ...utils import ProcessGroupManager, divide_if_divisible
 
 
 def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int, int] | None = None) -> torch.Tensor:
     shape = slice.get_shape()
     dimensionality = len(shape)
-    assert dimensionality in [1, 2], f"tensor should be either 1 or 2 dimensional but {dimensionality} was found"
+    assert dimensionality <= 3, f"tensor should be <= 3 dimensional but {dimensionality} was found"
 
     tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
     tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -28,81 +25,16 @@ def tensor_parallel_split_safetensor_slice(slice, dim: int, start_end: tuple[int
         start_index = start_end[0]
         end_index = start_end[1]
 
-    if dimensionality == 1:
-        # bias tensor
-        assert dim == 0, f"dim has to 0 for a bias tensor but dim ({dim}) was passed"
-        return slice[start_index:end_index]
-    elif dimensionality == 2:
-        assert 0 <= dim <= 1, f"dim has to 0 or 1 for a weight tensor but dim ({dim}) was passed"
-        # weight tensor
-        if dim == 0:
-            return slice[start_index:end_index, :]
-        else:
-            return slice[:, start_index:end_index]
-    else:
-        raise RuntimeError("this code should not be reachable")
+    assert 0 <= dim <= dimensionality - 1, f"dim ({dim}) has to <= dimenstionality ({dimensionality})"
 
+    if dim == 0:
+        output = slice[start_index:end_index]
+    elif dim == 1:
+        output = slice[:, start_index:end_index]
+    elif dim == 2:
+        output = slice[:, :, start_index:end_index]
 
-def tensor_to_dtensor(
-    tensor: torch.Tensor,
-    current_placement: Placement,
-    desired_placement: Placement | None = None,
-    dtensor_input_allowed: bool = False,
-) -> DTensor:
-    # if already a tensor, we return as-is
-    if isinstance(tensor, DTensor):
-        if dtensor_input_allowed:
-            return tensor
-        else:
-            raise ValueError("input is already a DTensor")
-
-    tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-
-    dtensor = DTensor.from_local(tensor, device_mesh=tp_mesh, run_check=False, placements=[current_placement])
-    if desired_placement is not None:
-        dtensor = dtensor.redistribute(device_mesh=tp_mesh, placements=[desired_placement], async_op=True)
-
-    return dtensor
-
-
-def dtensor_to_tensor(
-    dtensor: DTensor,
-    desired_placement: Placement | None = None,
-    grad_placement: Placement | None = None,
-    tensor_input_allowed: bool = False,
-) -> torch.Tensor:
-    if not isinstance(dtensor, DTensor):
-        assert isinstance(dtensor, torch.Tensor), "invalid type found"
-
-        if tensor_input_allowed:
-            return dtensor
-        else:
-            raise ValueError("input is already a Tensor")
-
-    if desired_placement is not None:
-        dtensor = dtensor.redistribute(
-            device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[desired_placement], async_op=True
-        )
-
-    tensor = dtensor.to_local(grad_placements=None if grad_placement is None else [grad_placement])
-
-    return tensor
-
-
-@torch.no_grad()
-def modify_state_dict_to_dtensor_dict(module: nn.Module, state_dict: dict, prefix: str, strip_keys: bool) -> dict:
-    result = {}
-    for key, tensor in state_dict.items():
-        if isinstance(tensor, DTensor):
-            continue
-
-        if key.startswith(prefix):
-            striped_key = key.split(prefix)[1] if strip_keys else key
-
-            device_mesh = getattr(module, striped_key).device_mesh
-            placements = getattr(module, striped_key).placements
-            result[key] = DTensor.from_local(tensor, device_mesh=device_mesh, placements=placements)
-    return result
+    return output
 
 
 def get_module_placements(use_padding_free_transformer: bool, sequence_parallel: bool) -> Placement:

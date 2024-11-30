@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig, PositionEmbeddingType
 from dolomite_engine.utils import torch_dtype_to_string
 
 from ...test_common import TestCommons
@@ -21,6 +21,16 @@ class TensorParallelTest(TestCommons):
             TestCommons.get_dtypes(),
             [False, True],
             [False, True],
+            [GPTDolomiteConfig.model_type],
+        )
+        + TestCommons.make_args_matrix(
+            [AttentionHeadType.gqa],
+            [PositionEmbeddingType.rope],
+            ["sdpa"],
+            TestCommons.get_dtypes(),
+            [False, True],
+            [False, True],
+            [MoEDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
             ["gpt_ensemble"],
@@ -32,6 +42,7 @@ class TensorParallelTest(TestCommons):
             [False],
         )
     )
+    @TestCommons.slow_test
     def test_tensor_parallel_forward(
         self,
         model_type: str,
@@ -41,6 +52,7 @@ class TensorParallelTest(TestCommons):
         torch_dtype: torch.dtype,
         use_padding_free_transformer: bool,
         sequence_parallel: bool,
+        model_type: str,
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
         if attention_implementation == "flash_attention_2" and position_embedding_type == PositionEmbeddingType.alibi:
@@ -74,6 +86,8 @@ class TensorParallelTest(TestCommons):
                 torch_dtype_to_string(torch_dtype),
                 "--attention-implementation",
                 attention_implementation,
+                "--model-type",
+                model_type,
                 "--tmp-path",
                 tmp_path,
                 "--model-type",

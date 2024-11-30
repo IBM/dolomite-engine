@@ -2,19 +2,18 @@ from contextlib import nullcontext
 from functools import partial
 
 import torch
-from torch.distributed._tensor.api import DTensor
+from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
-from .distributed import set_deepspeed_config, wrap_model_for_distributed_training
-from .enums import DatasetSplit, DistributedBackend, FP8Backend, Mode, TuningMethod
-from .model_wrapper import ModelWrapperForFinetuning, get_model, log_model
-from .optimization import get_optimizer, get_scheduler, log_optimizer
+from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
+from .enums import DatasetSplit, FP8Backend, Mode, TuningMethod
+from .model_wrapper import get_model_container
+from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
 from .utils import (
     ExperimentsTracker,
@@ -33,9 +32,10 @@ if is_transformer_engine_available():
 
 def train(
     args: TrainingArgs,
-    model: ModelWrapperForFinetuning,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_container: ModelContainer,
+    pipeline_schedule: _PipelineSchedule,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
     val_dataloader: ResumableDataLoader,
     experiments_tracker: ExperimentsTracker,
@@ -45,9 +45,10 @@ def train(
 
     Args:
         args (TrainingArgs): training args
-        model (ModelWrapperForFinetuning): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LRScheduler): learning rate scheduler
+        model_container (ModelContainer): container of models
+        pipeline_schedule (_PipelineSchedule): pipeline schedule
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         val_dataloader (ResumableDataLoader): validation dataloader
         experiments_tracker (ExperimentsTracker): metrics tracker
@@ -60,17 +61,16 @@ def train(
 
     eval_during_training = args.training_parameters.eval_during_training
     eval_interval = args.training_parameters.eval_interval
-    distributed_backend = args.distributed_args.distributed_backend
     save_interval = args.save_args.save_interval
     log_interval = args.logging_args.log_interval
 
-    model.train()
+    model_container.train()
 
     # need this for iterating infinitely
     train_dataloader_infinite = custom_iterator(train_dataloader, infinite=True)
 
     if eval_during_training:
-        evaluate(val_dataloader, model, starting_iteration, experiments_tracker)
+        evaluate(val_dataloader, model_container, starting_iteration, experiments_tracker)
 
     forward_context = (
         partial(
@@ -96,16 +96,19 @@ def train(
         global_step += 1
 
         loss_step_dict = train_step(
-            model=model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            distributed_backend=distributed_backend,
+            model_container=model_container,
+            pipeline_schedule=pipeline_schedule,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
             train_dataloader=train_dataloader_infinite,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
             forward_context=forward_context,
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
+            is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
+            local_batch_size=None,
+            sequence_length=None,
         )
 
         metrics_tracker = metrics_tracker + loss_step_dict
@@ -115,12 +118,7 @@ def train(
 
         if global_step % log_interval == 0:
             metrics_tracker = metrics_tracker / log_interval
-
-            metrics_tracker["learning_rate"] = (
-                model.lr_scheduler.get_lr()[0]
-                if distributed_backend == DistributedBackend.deepspeed
-                else lr_scheduler.get_lr()[0]
-            )
+            metrics_tracker["learning_rate"] = lr_scheduler_container[0].get_lr()[0]
 
             track_metrics(
                 global_step=global_step,
@@ -132,10 +130,18 @@ def train(
             metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
-            evaluate(val_dataloader, model, global_step, experiments_tracker)
+            evaluate(val_dataloader, model_container, global_step, experiments_tracker)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
-            save_checkpoint(args, model, optimizer, lr_scheduler, train_dataloader, experiments_tracker, global_step)
+            save_checkpoint(
+                args=args,
+                model_container=model_container,
+                optimizer_container=optimizer_container,
+                lr_scheduler_container=lr_scheduler_container,
+                train_dataloader=train_dataloader,
+                experiments_tracker=experiments_tracker,
+                iteration=global_step,
+            )
 
     if torch_profiler is not None:
         torch_profiler.__exit__()
@@ -144,7 +150,7 @@ def train(
 @torch.no_grad()
 def evaluate(
     val_dataloader: ResumableDataLoader,
-    model: ModelWrapperForFinetuning,
+    model_container: ModelContainer,
     global_step: int,
     experiments_tracker: ExperimentsTracker,
 ) -> MetricsTrackingDict:
@@ -152,7 +158,7 @@ def evaluate(
 
     Args:
         val_dataloader (ResumableDataLoader): validation dataloader
-        model (ModelWrapperForFinetuning): model
+        model_container (ModelContainer): model container
         global_step (int): global step during training
         experiments_tracker (ExperimentsTracker): metrics tracker
 
@@ -160,10 +166,8 @@ def evaluate(
         MetricsTrackingDict: metrics tracker
     """
 
-    tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-
-    if tp_world_size > 1:
-        if ProcessGroupManager.get_tensor_parallel_rank() == 0:
+    if ProcessGroupManager.is_tensor_parallel_enabled():
+        if ProcessGroupManager.is_tensor_parallel_first_rank():
             num_steps = 0 if val_dataloader is None else len(val_dataloader)
         else:
             num_steps = 0
@@ -177,21 +181,20 @@ def evaluate(
     if num_steps == 0:
         return
 
-    model.eval()
+    model_container.eval()
 
     metrics_tracker = MetricsTrackingDict({})
     val_dataloader = custom_iterator(val_dataloader, infinite=False)
 
     for _ in range(num_steps):
         batch = get_next_batch(val_dataloader)
-        loss_step_dict = model(batch)
+        loss_step_dict = model_container[0](batch)
         metrics_tracker = metrics_tracker + loss_step_dict
 
     metrics_tracker = metrics_tracker / num_steps
 
     for key in metrics_tracker:
-        if isinstance(metrics_tracker[key], DTensor):
-            metrics_tracker[key] = metrics_tracker[key].to_local()
+        metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
 
     metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
@@ -202,13 +205,15 @@ def evaluate(
         context="val",
     )
 
-    model.train()
+    model_container.train()
 
     return metrics_tracker
 
 
 def main() -> None:
     """main program"""
+
+    assert False
 
     mode = Mode.training
 
@@ -219,12 +224,12 @@ def main() -> None:
     assert args.tuning_args.tuning_method in [
         TuningMethod.full_finetuning,
         TuningMethod.lora,
-        TuningMethod.prompt_tuning,
     ], f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(
-        tensor_parallel_size=args.distributed_args.tensor_parallel_size,
+        tensor_parallel_world_size=args.distributed_args.tensor_parallel_world_size,
+        pipeline_parallel_world_size=args.distributed_args.pipeline_parallel_world_size,
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
@@ -232,19 +237,19 @@ def main() -> None:
         timeout_minutes=args.distributed_args.timeout_minutes,
         use_async_tensor_parallel=args.distributed_args.use_async_tensor_parallel,
     )
+
     set_seed(args.random_args.seed)
 
-    if args.distributed_args.distributed_backend == DistributedBackend.deepspeed:
-        set_deepspeed_config(args)
+    assert args.distributed_args.num_pipeline_stages == 1, "pipeline parallel is not supported with finetuning"
 
-    model = get_model(args, mode)
+    model_container = get_model_container(args, mode)
 
     train_dataloader = get_dataloader(
         args,
         split=DatasetSplit.train,
         mode=mode,
-        tokenizer=model.tokenizer,
-        is_encoder_decoder=model.is_encoder_decoder,
+        tokenizer=model_container[0].tokenizer,
+        is_encoder_decoder=model_container[0].is_encoder_decoder,
     )
 
     val_dataloader = None
@@ -253,42 +258,37 @@ def main() -> None:
             args,
             split=DatasetSplit.val,
             mode=mode,
-            tokenizer=model.tokenizer,
-            is_encoder_decoder=model.is_encoder_decoder,
+            tokenizer=model_container[0].tokenizer,
+            is_encoder_decoder=model_container[0].is_encoder_decoder,
         )
 
-    model = wrap_model_for_distributed_training(args, model)
+    model_container, pipeline_schedule = wrap_model_container_for_distributed_training(args, model_container)
 
-    if args.distributed_args.distributed_backend == DistributedBackend.torch:
-        optimizer = get_optimizer(
-            optimizer_class_name=args.optimizer_args.class_name,
-            optimizer_class_args=args.optimizer_args.class_args,
-            model=model,
-            params_group_method=args.optimizer_args.params_group_method,
-        )
+    optimizer_container = get_optimizer_container(
+        optimizer_class_name=args.optimizer_args.class_name,
+        optimizer_class_args=args.optimizer_args.class_args,
+        model_container=model_container,
+        params_group_method=args.optimizer_args.params_group_method,
+    )
 
-        lr_scheduler = get_scheduler(
-            optimizer=optimizer,
-            num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
-            num_constant_steps=args.lr_scheduler_args.num_constant_steps,
-            num_decay_steps=args.lr_scheduler_args.num_decay_steps,
-            num_training_steps=args.training_parameters.num_training_steps,
-            lr_decay_style=args.lr_scheduler_args.lr_decay_style,
-            lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
-            extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
-        )
-    else:
-        optimizer = None
-        lr_scheduler = None
+    lr_scheduler_container = get_scheduler_container(
+        optimizer_container=optimizer_container,
+        num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
+        num_constant_steps=args.lr_scheduler_args.num_constant_steps,
+        num_decay_steps=args.lr_scheduler_args.num_decay_steps,
+        num_training_steps=args.training_parameters.num_training_steps,
+        lr_decay_style=args.lr_scheduler_args.lr_decay_style,
+        lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
+        extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+    )
 
-    log_model(model)
-    log_optimizer(optimizer)
+    log_model_optimizer_container(model_container, optimizer_container)
 
     starting_iteration = 0
     experiments_tracker_state_dict = None
     if args.load_args is not None:
         starting_iteration, _, experiments_tracker_state_dict = load_checkpoint_for_training(
-            args, model, optimizer, lr_scheduler, train_dataloader
+            args, model_container, optimizer_container, lr_scheduler_container, train_dataloader
         )
 
     experiments_tracker = ExperimentsTracker(
@@ -303,9 +303,10 @@ def main() -> None:
     # main training loop
     train(
         args,
-        model=model,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
+        model_container=model_container,
+        pipeline_schedule=pipeline_schedule,
+        optimizer_container=optimizer_container,
+        lr_scheduler_container=lr_scheduler_container,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
         experiments_tracker=experiments_tracker,

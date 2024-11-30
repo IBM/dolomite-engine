@@ -4,11 +4,10 @@ import torch
 import torch.distributed
 import torch.nn as nn
 
-from ....utils import ProcessGroupManager
+from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...modeling_utils import Attention
-from ...utils import divide_if_divisible
 from ..dropout import Dropout_TP
 from ..linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 
@@ -193,14 +192,14 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         n_layer = config.n_layer
         init_method = InitMethod(config.init_method)
 
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
         hidden_size = divide_if_divisible(
-            self.global_hidden_size, self.tp_world_size, "hidden_size should be divisible by TP world size"
+            self.global_hidden_size, tp_world_size, "hidden_size should be divisible by TP world size"
         )
 
         num_heads = divide_if_divisible(
-            global_num_heads, self.tp_world_size, "num_heads must be divisible by TP world size"
+            global_num_heads, tp_world_size, "num_heads must be divisible by TP world size"
         )
         self.head_dim = divide_if_divisible(hidden_size, num_heads, "")
 

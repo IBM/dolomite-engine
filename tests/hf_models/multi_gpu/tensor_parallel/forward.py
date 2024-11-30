@@ -11,6 +11,8 @@ from dolomite_engine.hf_models import (
     GPTDolomiteForCausalLM_TP,
     GPTEnsembleConfig,
     GPTEnsembleForCausalLM_TP,
+    MoEDolomiteConfig,
+    get_model_parallel_class,
 )
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
@@ -31,7 +33,7 @@ args = parser.parse_args()
 
 set_seed(42)
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
@@ -39,7 +41,8 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-if args.model_type == "gpt_dolomite":
+kwargs = {}
+if args.model_type == GPTDolomiteConfig.model_type:
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
@@ -49,25 +52,17 @@ if args.model_type == "gpt_dolomite":
         n_embd=128,
         n_head=16,
     )
-elif args.model_type == "gpt_ensemble":
-    config = GPTEnsembleConfig(
+elif args.model_type == MoEDolomiteConfig.model_type:
+    config = MoEDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=4,
-        position_embedding_type=args.position_embedding_type,
-        normalization_function="rmsnorm",
+        n_layer=1,
+        position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         n_embd=128,
         n_head=16,
-        pretraining_tensor_parallel_size=8,
-        resid_pdrop=0,
-        reduce_pattern=[
-            {"attention": False, "mlp": True},
-            {"attention": False, "mlp": True},
-            {"attention": False, "mlp": True},
-            {"attention": False, "mlp": True},
-        ],
     )
+    kwargs["moe_implementation"] = "scattermoe"
 
 
 if torch.distributed.get_rank() == 0:
@@ -88,22 +83,15 @@ torch.distributed.barrier()
 # use dummy tensors to avoid initializing model here
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
-    if args.model_type == "gpt_dolomite":
-        model_tp = GPTDolomiteForCausalLM_TP._from_config(
-            config,
-            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
-            attn_implementation=args.attention_implementation,
-            use_padding_free_transformer=args.use_padding_free_transformer,
-            sequence_parallel=args.sequence_parallel,
-        )
-    elif args.model_type == "gpt_ensemble":
-        model_tp = GPTEnsembleForCausalLM_TP._from_config(
-            config,
-            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
-            attn_implementation=args.attention_implementation,
-            use_padding_free_transformer=args.use_padding_free_transformer,
-            sequence_parallel=args.sequence_parallel,
-        )
+
+    model_tp = get_model_parallel_class(args.model_type)._from_config(
+        config,
+        tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+        attn_implementation=args.attention_implementation,
+        use_padding_free_transformer=args.use_padding_free_transformer,
+        sequence_parallel=args.sequence_parallel,
+        **kwargs,
+    )
 
 # copy to device without copying storage
 model_tp = model_tp.to_empty(device=torch.cuda.current_device())

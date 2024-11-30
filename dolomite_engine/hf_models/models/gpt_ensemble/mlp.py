@@ -3,9 +3,9 @@ import math
 import torch
 import torch.nn as nn
 
+from ....utils import divide_if_divisible
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
-from ...utils import divide_if_divisible
 from .config import GPTEnsembleConfig
 from .linear import EnsembleLinear
 

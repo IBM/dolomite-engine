@@ -2,14 +2,13 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 
-from ...utils import ProcessGroupManager
+from ...distributed import dtensor_to_tensor, tensor_to_dtensor
+from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedEmbedding
-from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import get_module_placements
 
 
 class Embedding_TP(ParameterizedEmbedding, DTensorModule):
@@ -22,8 +21,11 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings and self.tp_world_size > 1
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
+        if self.tensor_parallel_word_embeddings:
+            assert ProcessGroupManager.is_tensor_parallel_enabled()
+
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
 
@@ -41,17 +43,17 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
             placement = Replicate()
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[placement]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=placement
             )
         )
 
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Replicate())
+        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Replicate())
         input = super().forward(input)
-        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.output_placement)
         return input
 
 

@@ -1,22 +1,6 @@
 import torch
 
 
-def divide_if_divisible(dividend: int, divisor: int, msg: str) -> int:
-    """divide if divisible else raise an error
-
-    Args:
-        dividend (int): dividend
-        divisor (int): divisor
-        msg (str): error message
-
-    Returns:
-        int: result
-    """
-
-    assert dividend % divisor == 0, msg
-    return dividend // divisor
-
-
 def convert_padding_free_lists_to_tensors(
     input_ids: list[list[int]] | None = None,
     inputs_embeds: list[list[float]] | None = None,
@@ -37,7 +21,7 @@ def convert_padding_free_lists_to_tensors(
     # prepare inputs for the model
     seqlens = torch.tensor([0] + [len(x) for x in input_ids], device=device)
     cu_seqlens = seqlens.cumsum(dim=-1).to(torch.int32)
-    max_seqlen = seqlens.max().to(device)
+    max_seqlen = seqlens.max().item()
 
     if position_ids is None:
         position_ids = [list(range(len(x))) for x in input_ids]

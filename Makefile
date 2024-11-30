@@ -11,7 +11,10 @@ install-dev:
 	cd ..
 
 test:
-	pytest tests
+	RUN_SLOW=True pytest tests
+
+test-fast:
+	RUN_SLOW=False pytest tests
 
 update-precommit:
 	pre-commit autoupdate

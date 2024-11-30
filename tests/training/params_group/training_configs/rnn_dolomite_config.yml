@@ -50,6 +50,7 @@ model_args:
     init_method: mup
     tie_word_embeddings: true
     upcast_logits_for_loss: true
+  attention_implementation: flash_attention_2
 
 tuning_args:
   tuning_method: pretraining
@@ -86,7 +87,6 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
-  distributed_backend: torch
   fsdp_algorithm: 2
   stage: 3
-  tensor_parallel_size: 2
+  tensor_parallel_world_size: 2

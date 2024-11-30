@@ -1,15 +1,25 @@
 import torch
+from transformers import DynamicCache
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
+from ...config import CommonConfig
+from ...loss import get_autoregressive_language_modeling_loss
 from ..dense import CausalLMModelMixin
 from .base import MoeModelOutputWithPastAndAuxLoss
 
 
 class CausalLMMoEModelMixin(CausalLMModelMixin):
+    def __init__(self, config: CommonConfig, **kwargs) -> None:
+        super().__init__(config, **kwargs)
+
+        self.router_aux_loss_coef = config.router_aux_loss_coef
+        self.num_experts = config.num_experts
+        self.num_experts_per_tok = config.num_experts_per_tok
+
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
-        past_key_values: tuple[tuple[torch.Tensor]] | None = None,
+        past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | list[list[int]] | None = None,
         position_ids: torch.Tensor | list[list[int]] | None = None,
@@ -21,11 +31,9 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        reduction: str = "mean",
         output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
-        if self._use_padding_free_transformer and output_router_logits:
-            raise NotImplementedError("padding_free is not supported with load_balancing_loss_func currently")
-
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -70,7 +78,17 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         if self.m_width is not None:
             lm_logits = lm_logits / self.m_width
 
-        lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+        lm_loss = None
+        if labels is not None:
+            lm_loss = get_autoregressive_language_modeling_loss(
+                lm_logits=lm_logits,
+                labels=labels,
+                upcast_logits_for_loss=self.upcast_logits_for_loss,
+                cu_seqlens=cu_seqlens,
+                use_padding_free_transformer=self._use_padding_free_transformer,
+                reduction=reduction,
+            )
+
         aux_loss = transformer_outputs.aux_loss
 
         if lm_loss is None:

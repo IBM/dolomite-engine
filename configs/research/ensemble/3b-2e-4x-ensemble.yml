@@ -165,7 +165,6 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
-  distributed_backend: torch
   communication_dtype: fp32
   stage: 3
   fsdp_algorithm: 2

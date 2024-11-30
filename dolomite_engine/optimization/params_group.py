@@ -2,11 +2,13 @@ import logging
 
 import torch.nn as nn
 
+from ..containers import ModelContainer
 from ..enums import ParamsGroupMethod
 from ..hf_models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     MoEDolomiteForCausalLM,
+    MoEDolomiteForCausalLM_TP,
     RNNDolomiteForCausalLM,
 )
 from ..hf_models.modeling_utils import Attention
@@ -50,12 +52,17 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
             list(model.parameters())
         ), "params in groups don't sum up to total parameters"
 
-        trainable_parameters_or_param_groups = [
-            {"params": list(normal_params.values())},
-            {"params": list(no_weight_decay_params.values()), "weight_decay": 0},
-        ]
+        trainable_parameters_or_param_groups = []
+        names = {}
 
-        names = {"normal": list(normal_params.keys()), "no_weight_decay": list(no_weight_decay_params.keys())}
+        if len(normal_params) > 0:
+            trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
+            names["normal"] = list(normal_params.keys())
+        if len(no_weight_decay_params) > 0:
+            trainable_parameters_or_param_groups.append(
+                {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
+            )
+            names["no_weight_decay"] = list(no_weight_decay_params.keys())
 
     return trainable_parameters_or_param_groups, names
 
@@ -63,7 +70,13 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[dict]:
     assert isinstance(
         model.model,
-        (GPTDolomiteForCausalLM, MoEDolomiteForCausalLM, GPTDolomiteForCausalLM_TP, RNNDolomiteForCausalLM),
+        (
+            GPTDolomiteForCausalLM,
+            MoEDolomiteForCausalLM,
+            GPTDolomiteForCausalLM_TP,
+            RNNDolomiteForCausalLM,
+            MoEDolomiteForCausalLM_TP,
+        ),
     ), "mup is not supported with this model architecture"
 
     assert (
@@ -105,17 +118,22 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
-    trainable_parameters_or_param_groups = [
-        {"params": list(normal_params.values())},
-        {"params": list(no_weight_decay_params.values()), "weight_decay": 0},
-        {"params": list(mup_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width},
-    ]
+    trainable_parameters_or_param_groups = []
+    names = {}
 
-    names = {
-        "normal": list(normal_params.keys()),
-        "no_weight_decay": list(no_weight_decay_params.keys()),
-        "mup": list(mup_params.keys()),
-    }
+    if len(normal_params) > 0:
+        trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
+        names["normal"] = list(normal_params.keys())
+    if len(no_weight_decay_params) > 0:
+        trainable_parameters_or_param_groups.append(
+            {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
+        )
+        names["no_weight_decay"] = list(no_weight_decay_params.keys())
+    if len(mup_params) > 0:
+        trainable_parameters_or_param_groups.append(
+            {"params": list(mup_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width}
+        )
+        names["mup"] = list(mup_params.keys())
 
     return trainable_parameters_or_param_groups, names
 
@@ -126,10 +144,10 @@ _PARAM_GROUPS = {
 }
 
 
-def get_param_groups(
-    model: ModelWrapper, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
-) -> list[dict]:
-    if params_group_method in _PARAM_GROUPS:
-        return _PARAM_GROUPS[params_group_method](model, optimizer_class_args)[0]
+def get_param_groups_list(
+    model_container: ModelContainer, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
+) -> list[list[dict]]:
+    if params_group_method not in _PARAM_GROUPS:
+        raise ValueError(f"unexpected `params_group_method` {params_group_method}")
 
-    raise ValueError(f"unexpected `params_group_method` {params_group_method}")
+    return [_PARAM_GROUPS[params_group_method](model, optimizer_class_args)[0] for model in model_container]

@@ -1,4 +1,4 @@
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 from .models import (
     GPTCrossLayerConfig,
@@ -8,20 +8,13 @@ from .models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     GPTDolomiteModel,
-    GPTEnsembleConfig,
-    GPTEnsembleForCausalLM,
-    GPTEnsembleForCausalLM_TP,
     GPTEnsembleModel,
     GPTLadderConfig,
     GPTLadderForCausalLM,
-    GPTLadderForCausalLM_TP,
     GPTLadderModel,
-    GPTParallelConfig,
-    GPTParallelForCausalLM,
-    GPTParallelForCausalLM_TP,
-    GPTParallelModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
+    MoEDolomiteForCausalLM_TP,
     MoEDolomiteModel,
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
@@ -37,7 +30,6 @@ _CUSTOM_MODEL_REGISTRY = [
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
     (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
     (GPTLadderConfig, GPTLadderModel, GPTLadderForCausalLM),
-    (GPTParallelConfig, GPTParallelModel, GPTParallelForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
@@ -55,18 +47,18 @@ def register_model_classes() -> None:
         _CUSTOM_MODEL_CLASSES.append(auto_model_for_causal_lm_class)
 
 
-def is_custom_model(model_class: type[AutoModelForCausalLM] | type[AutoModelForSeq2SeqLM], model_type: str) -> bool:
-    return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
+def is_custom_model(model_type: str) -> bool:
+    return model_type in _CUSTOM_MODEL_TYPES
 
 
-_TENSOR_PARALLEL_CLASS_MAPPING = {
-    "gpt_dolomite": (GPTDolomiteForCausalLM, GPTDolomiteForCausalLM_TP),
-    "gpt_ensemble": (GPTEnsembleForCausalLM, GPTEnsembleForCausalLM_TP),
-    "gpt_parallel": (GPTParallelForCausalLM, GPTParallelForCausalLM_TP),
-    "gpt_ladder": (GPTLadderForCausalLM, GPTLadderForCausalLM_TP),
+_MODEL_PARALLEL_CLASS_MAPPING = {
+    GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
+    MoEDolomiteConfig.model_type: MoEDolomiteForCausalLM_TP,
 }
 
 
-def get_tensor_parallel_class(model_type: str) -> AutoModelForCausalLM:
-    assert model_type in _TENSOR_PARALLEL_CLASS_MAPPING, "tensor parallel is not supported with this model"
-    return _TENSOR_PARALLEL_CLASS_MAPPING[model_type][1]
+def get_model_parallel_class(model_type: str) -> AutoModelForCausalLM:
+    if model_type in _MODEL_PARALLEL_CLASS_MAPPING:
+        return _MODEL_PARALLEL_CLASS_MAPPING[model_type]
+
+    raise ValueError(f"model parallelism is not supported with `model_type` ({model_type})")
