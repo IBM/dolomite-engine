@@ -10,7 +10,7 @@ from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoED
 from ...test_common import TestCommons
 
 
-class GPTDolomiteTP_Test(TestCommons):
+class UnshardingTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             TestCommons.get_attention_head_types(),
