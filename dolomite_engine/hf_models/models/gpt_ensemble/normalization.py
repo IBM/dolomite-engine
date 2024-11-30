@@ -37,18 +37,12 @@ _NORMALIZATION_FUNCTIONS = {"rmsnorm": EnsembleRMSNorm}
 
 
 def get_ensemble_normalization_function(
-    name: str,
+    normalization_function: str,
     normalized_shape: int,
     tp_world_size: int,
     eps: float = 1e-5,
-    normalization_implementation: str = "torch",
 ) -> nn.LayerNorm:
-    if name in _NORMALIZATION_FUNCTIONS:
-        return _NORMALIZATION_FUNCTIONS[name](
-            normalized_shape,
-            tp_world_size=tp_world_size,
-            eps=eps,
-            normalization_implementation=normalization_implementation,
-        )
+    if normalization_function in _NORMALIZATION_FUNCTIONS:
+        return _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape, tp_world_size=tp_world_size, eps=eps)
 
-    raise ValueError(f"unexpected `normalization_function` {name}")
+    raise ValueError(f"unexpected `normalization_function` {normalization_function}")

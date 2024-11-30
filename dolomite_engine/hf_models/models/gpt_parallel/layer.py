@@ -11,7 +11,6 @@ class GPTParallelBlock(nn.Module):
     def __init__(
         self,
         config: GPTParallelConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
@@ -22,12 +21,7 @@ class GPTParallelBlock(nn.Module):
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
-        self.ln = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
-        )
+        self.ln = get_normalization_function(config.normalization_function, hidden_size, eps=config.layer_norm_epsilon)
         self.attn = get_attention_module(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )

@@ -15,7 +15,6 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
     def __init__(
         self,
         config: GPTEnsembleConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int = None,
@@ -32,10 +31,7 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
 
         if self.previous_mlp_all_reduce:
             self.ln_1 = get_normalization_function(
-                config.normalization_function,
-                hidden_size,
-                eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
+                config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
         else:
             self.ln_1 = get_ensemble_normalization_function(
@@ -43,7 +39,6 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
                 hidden_size,
                 tp_world_size=config.pretraining_tensor_parallel_size,
                 eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
             )
 
         self.attn = get_attention_module(
@@ -52,10 +47,7 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
 
         if self.current_attention_all_reduce:
             self.ln_2 = get_normalization_function(
-                config.normalization_function,
-                hidden_size,
-                eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
+                config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
         else:
             self.ln_2 = get_ensemble_normalization_function(
@@ -63,7 +55,6 @@ class GPTEnsembleBlock(GPTDolomiteBlock):
                 hidden_size,
                 tp_world_size=config.pretraining_tensor_parallel_size,
                 eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
             )
 
         self.mlp = EnsembleMLP(config, layer_idx=layer_idx)

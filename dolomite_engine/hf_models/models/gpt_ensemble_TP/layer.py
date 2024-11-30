@@ -15,7 +15,6 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
     def __init__(
         self,
         config: GPTEnsembleConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
@@ -40,16 +39,12 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
                 config.normalization_function,
                 hidden_size,
                 eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
         else:
             self.ln_1 = get_ensemble_normalization_function_TP(
-                config.normalization_function,
-                hidden_size,
-                eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
+                config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
 
         self.attn = get_attention_module(
@@ -61,16 +56,12 @@ class GPTEnsembleBlock_TP(GPTDolomiteBlock):
                 config.normalization_function,
                 hidden_size,
                 eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
         else:
             self.ln_2 = get_ensemble_normalization_function_TP(
-                config.normalization_function,
-                hidden_size,
-                eps=config.layer_norm_epsilon,
-                normalization_implementation=normalization_implementation,
+                config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
 
         self.mlp = EnsembleMLP_TP(config, layer_idx=layer_idx)
