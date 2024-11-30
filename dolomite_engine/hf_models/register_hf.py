@@ -8,6 +8,8 @@ from .models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     GPTDolomiteModel,
+    GPTEnsembleConfig,
+    GPTEnsembleForCausalLM,
     GPTEnsembleModel,
     GPTLadderConfig,
     GPTLadderForCausalLM,
