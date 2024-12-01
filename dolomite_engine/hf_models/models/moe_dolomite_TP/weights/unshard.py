@@ -178,10 +178,10 @@ def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_world_
         for layer_idx in range(config.n_layer):
             key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc.weight"
             weight = state_dict[key]
-            weight = weight.chunk(tensor_parallel_world_size, dim=0)
-            weight = [w.chunk(2, dim=0) for w in weight]
-            w0 = torch.cat([w[0] for w in weight])
-            w1 = torch.cat([w[1] for w in weight])
-            state_dict[key] = torch.cat([w0, w1], dim=0)
+            weight = weight.chunk(tensor_parallel_world_size, dim=1)
+            weight = [w.chunk(2, dim=1) for w in weight]
+            w0 = torch.cat([w[0] for w in weight], dim=1)
+            w1 = torch.cat([w[1] for w in weight], dim=1)
+            state_dict[key] = torch.cat([w0, w1], dim=1)
 
     return state_dict

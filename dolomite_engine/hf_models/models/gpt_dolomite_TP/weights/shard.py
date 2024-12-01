@@ -213,9 +213,9 @@ def _get_mlp(
         if config.add_bias:
             bias_2 = tensor_parallel_split_safetensor_slice(bias, column_parallel_shard_dim, start_end)
 
-        state_dict = {prefix + "c_fc.weight": torch.cat([weight_1, weight_2])}
+        state_dict = {prefix + "c_fc.weight": torch.cat([weight_1, weight_2], dim=column_parallel_shard_dim)}
         if config.add_bias:
-            state_dict[prefix + "c_fc.bias"] = torch.cat([bias_1, bias_2])
+            state_dict[prefix + "c_fc.bias"] = torch.cat([bias_1, bias_2], dim=column_parallel_shard_dim)
     else:
         state_dict = _get_column_parallel(
             config=config,
