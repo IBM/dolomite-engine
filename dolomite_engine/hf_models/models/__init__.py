@@ -20,7 +20,7 @@ from .gpt_ensemble_TP import (
 )
 from .gpt_ladder import GPTLadderConfig, GPTLadderForCausalLM, GPTLadderModel
 from .gpt_ladder_TP import GPTLadderForCausalLM_TP, GPTLadderModel_TP
-from .gpt_parallel import GPTParallelConfig, GPTParallelForCausalLM, GPTParallelModel
+from .gpt_palm import GPTPaLMConfig, GPTPaLMForCausalLM, GPTPaLMModel
 from .moe_dolomite import MoEDolomiteConfig, MoEDolomiteForCausalLM, MoEDolomiteModel
 from .moe_dolomite_TP import (
     MoEDolomiteForCausalLM_TP,

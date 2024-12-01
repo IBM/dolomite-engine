@@ -25,7 +25,7 @@ model_args:
     resid_pdrop: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
-    model_type: gpt_parallel
+    model_type: gpt_palm
     n_embd: 1536
     n_head: 24
     n_inner: 4096

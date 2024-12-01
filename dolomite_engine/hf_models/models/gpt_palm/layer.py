@@ -4,13 +4,13 @@ from transformers import DynamicCache
 
 from ...modeling_utils import get_attention_module, get_normalization_function
 from ..gpt_dolomite.mlp import MLP
-from .config import GPTParallelConfig
+from .config import GPTPaLMConfig
 
 
-class GPTParallelBlock(nn.Module):
+class GPTPaLMBlock(nn.Module):
     def __init__(
         self,
-        config: GPTParallelConfig,
+        config: GPTPaLMConfig,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
