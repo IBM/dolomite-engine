@@ -45,7 +45,6 @@ class TensorParallelTest(TestCommons):
     @TestCommons.slow_test
     def test_tensor_parallel_forward(
         self,
-        model_type: str,
         attention_head_type: AttentionHeadType,
         position_embedding_type: PositionEmbeddingType,
         attention_implementation: str,
@@ -77,7 +76,7 @@ class TensorParallelTest(TestCommons):
                 "--nproc_per_node",
                 str(gpus_per_node),
                 "-m",
-                "tests.hf_models.multi_gpu.tensor_parallel.forward",
+                "tests.hf_models.multi_gpu.tensor_parallel.tensor_parallel_forward",
                 "--attention-head-type",
                 attention_head_type.value,
                 "--position-embedding-type",
@@ -90,8 +89,6 @@ class TensorParallelTest(TestCommons):
                 model_type,
                 "--tmp-path",
                 tmp_path,
-                "--model-type",
-                model_type,
             ]
 
             if use_padding_free_transformer:
