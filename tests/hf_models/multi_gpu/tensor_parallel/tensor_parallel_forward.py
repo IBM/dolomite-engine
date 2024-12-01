@@ -70,6 +70,8 @@ elif args.model_type == DesyncResidualConfig.model_type:
         add_bias=False,
         n_embd=128,
         n_head=16,
+        resid_pdrop=0,
+        normalization_function="rmsnorm",
         pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
         reduce_pattern=[
             {"attention": False, "mlp": False},
