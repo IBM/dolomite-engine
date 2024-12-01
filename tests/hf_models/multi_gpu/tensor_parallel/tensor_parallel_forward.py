@@ -61,6 +61,24 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_head=16,
     )
     kwargs["moe_implementation"] = "scattermoe"
+elif args.model_type == DesyncResidualConfig.model_type:
+    config = DesyncResidualConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=4,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+        pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
+        reduce_pattern=[
+            {"attention": False, "mlp": False},
+            {"attention": False, "mlp": True},
+            {"attention": False, "mlp": False},
+            {"attention": False, "mlp": True},
+        ],
+    )
+    kwargs["moe_implementation"] = "scattermoe"
 
 
 if torch.distributed.get_rank() == 0:
