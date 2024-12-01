@@ -5,11 +5,15 @@ from ...gpt_dolomite_TP.weights.shard import _get_embeddings_or_lm_head, _get_la
 from ...gpt_ensemble import GPTEnsembleConfig
 
 
-def get_gpt_ensemble_tensor_parallel_state_dict(
+def get_gpt_ensemble_model_parallel_state_dict(
     config: GPTEnsembleConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     tensor_parallel_word_embeddings: bool,
+    num_pipeline_stages: int,
+    pipeline_stage_id: int,
 ) -> dict:
+    assert num_pipeline_stages == 1
+
     # word embeddings
     state_dict = _get_embeddings_or_lm_head(
         safetensors_weights_manager,

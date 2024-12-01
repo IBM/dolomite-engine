@@ -5,11 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import DynamicCache
 
-from .....utils import ProcessGroupManager
+from .....utils import ProcessGroupManager, divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import SDPA, apply_rotary_pos_emb, repeat_key_value
 from ....modeling_utils_TP import Attention_TP, ColumnParallelLinear
-from ....utils import divide_if_divisible
 from ...gpt_ensemble import GPTEnsembleConfig
 from ..linear import EnsembleLinear_TP, EnsembleRowParallelLinear
 

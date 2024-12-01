@@ -3,11 +3,10 @@ import math
 import torch
 import torch.nn as nn
 
-from ....utils import ProcessGroupManager
+from ....utils import ProcessGroupManager, divide_if_divisible
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
 from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP
-from ...utils import divide_if_divisible
 from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..gpt_ensemble import GPTEnsembleConfig
 from .linear import EnsembleLinear_TP, EnsembleRowParallelLinear

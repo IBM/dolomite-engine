@@ -2,8 +2,9 @@ import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
+from ....distributed import dtensor_to_tensor
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
-from ...modeling_utils_TP import dtensor_to_tensor, get_module_placements
+from ...modeling_utils_TP import get_module_placements
 from ..gpt_ladder import GPTLadderConfig
 from .layer import GPTLadderBlock_TP
 
