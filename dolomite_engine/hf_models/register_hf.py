@@ -1,6 +1,9 @@
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 from .models import (
+    DesyncResidualConfig,
+    DesyncResidualForCausalLM,
+    DesyncResidualModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
@@ -8,12 +11,9 @@ from .models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     GPTDolomiteModel,
-    GPTEnsembleConfig,
-    GPTEnsembleForCausalLM,
-    GPTEnsembleModel,
-    GPTLadderConfig,
-    GPTLadderForCausalLM,
-    GPTLadderModel,
+    LadderResidualConfig,
+    LadderResidualForCausalLM,
+    LadderResidualModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
@@ -30,8 +30,8 @@ _CUSTOM_MODEL_REGISTRY = [
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
-    (GPTEnsembleConfig, GPTEnsembleModel, GPTEnsembleForCausalLM),
-    (GPTLadderConfig, GPTLadderModel, GPTLadderForCausalLM),
+    (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
+    (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []

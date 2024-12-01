@@ -1,3 +1,10 @@
+from .desync_residual import DesyncResidualConfig, DesyncResidualForCausalLM, DesyncResidualModel
+from .desync_residual_TP import (
+    DesyncResidualForCausalLM_TP,
+    DesyncResidualModel_TP,
+    fix_desync_residual_unsharded_state_dict,
+    unshard_desync_residual_tensor_parallel_state_dicts,
+)
 from .gpt_crosslayer import (
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
@@ -11,16 +18,8 @@ from .gpt_dolomite_TP import (
     fix_gpt_dolomite_unsharded_state_dict,
     unshard_gpt_dolomite_tensor_parallel_state_dicts,
 )
-from .gpt_ensemble import GPTEnsembleConfig, GPTEnsembleForCausalLM, GPTEnsembleModel
-from .gpt_ensemble_TP import (
-    GPTEnsembleForCausalLM_TP,
-    GPTEnsembleModel_TP,
-    fix_gpt_ensemble_unsharded_state_dict,
-    unshard_gpt_ensemble_tensor_parallel_state_dicts,
-)
-from .gpt_ladder import GPTLadderConfig, GPTLadderForCausalLM, GPTLadderModel
-from .gpt_ladder_TP import GPTLadderForCausalLM_TP, GPTLadderModel_TP
-from .gpt_palm import GPTPaLMConfig, GPTPaLMForCausalLM, GPTPaLMModel
+from .ladder_residual import LadderResidualConfig, LadderResidualForCausalLM, LadderResidualModel
+from .ladder_residual_TP import LadderResidualForCausalLM_TP, LadderResidualModel_TP
 from .moe_dolomite import MoEDolomiteConfig, MoEDolomiteForCausalLM, MoEDolomiteModel
 from .moe_dolomite_TP import (
     MoEDolomiteForCausalLM_TP,
@@ -28,4 +27,5 @@ from .moe_dolomite_TP import (
     fix_moe_dolomite_unsharded_state_dict,
     unshard_moe_dolomite_tensor_parallel_state_dicts,
 )
+from .palm import PaLMConfig, PaLMForCausalLM, PaLMModel
 from .rnn_dolomite import RNNDolomiteConfig, RNNDolomiteForCausalLM, RNNDolomiteModel

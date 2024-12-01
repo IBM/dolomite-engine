@@ -7,8 +7,8 @@ from parameterized import parameterized
 
 from dolomite_engine.hf_models import (
     AttentionHeadType,
+    DesyncResidualConfig,
     GPTDolomiteConfig,
-    GPTEnsembleConfig,
     MoEDolomiteConfig,
     PositionEmbeddingType,
 )
@@ -44,7 +44,7 @@ class TensorParallelTest(TestCommons):
             [torch.float32],
             [False],
             [False],
-            [GPTEnsembleConfig.model_type],
+            [DesyncResidualConfig.model_type],
         )
     )
     @TestCommons.slow_test

@@ -7,8 +7,8 @@ from transformers import set_seed
 
 from dolomite_engine.hf_models import (
     AttentionHeadType,
+    DesyncResidualConfig,
     GPTDolomiteConfig,
-    GPTEnsembleConfig,
     MoEDolomiteConfig,
     get_model_parallel_class,
 )
