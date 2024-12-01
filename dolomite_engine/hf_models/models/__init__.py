@@ -29,4 +29,3 @@ from .moe_dolomite_TP import (
     unshard_moe_dolomite_tensor_parallel_state_dicts,
 )
 from .rnn_dolomite import RNNDolomiteConfig, RNNDolomiteForCausalLM, RNNDolomiteModel
-from .weights import fix_unsharded_state_dict, get_tensor_parallel_state_dict, unshard_tensor_parallel_state_dicts

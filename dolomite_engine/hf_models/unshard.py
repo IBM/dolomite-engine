@@ -1,16 +1,20 @@
 from .config import CommonConfig
 from .models import (
     GPTDolomiteConfig,
+    GPTEnsembleConfig,
     MoEDolomiteConfig,
     fix_gpt_dolomite_unsharded_state_dict,
+    fix_gpt_ensemble_unsharded_state_dict,
     fix_moe_dolomite_unsharded_state_dict,
     unshard_gpt_dolomite_tensor_parallel_state_dicts,
+    unshard_gpt_ensemble_tensor_parallel_state_dicts,
     unshard_moe_dolomite_tensor_parallel_state_dicts,
 )
 
 
 _UNSHARD_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: unshard_gpt_dolomite_tensor_parallel_state_dicts,
+    GPTEnsembleConfig.model_type: unshard_gpt_ensemble_tensor_parallel_state_dicts,
     MoEDolomiteConfig.model_type: unshard_moe_dolomite_tensor_parallel_state_dicts,
 }
 
@@ -36,6 +40,7 @@ def unshard_tensor_parallel_state_dicts(
 
 _FIX_UNSHARDED_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: fix_gpt_dolomite_unsharded_state_dict,
+    GPTEnsembleConfig.model_type: fix_gpt_ensemble_unsharded_state_dict,
     MoEDolomiteConfig.model_type: fix_moe_dolomite_unsharded_state_dict,
 }
 
