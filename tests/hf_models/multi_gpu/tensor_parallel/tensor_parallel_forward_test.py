@@ -5,7 +5,13 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig, PositionEmbeddingType
+from dolomite_engine.hf_models import (
+    AttentionHeadType,
+    GPTDolomiteConfig,
+    GPTEnsembleConfig,
+    MoEDolomiteConfig,
+    PositionEmbeddingType,
+)
 from dolomite_engine.utils import torch_dtype_to_string
 
 from ...test_common import TestCommons
@@ -14,7 +20,6 @@ from ...test_common import TestCommons
 class TensorParallelTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
-            ["gpt_dolomite"],
             TestCommons.get_attention_head_types(),
             TestCommons.get_position_embedding_types(),
             TestCommons.get_attention_implementations(),
@@ -33,13 +38,13 @@ class TensorParallelTest(TestCommons):
             [MoEDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
-            ["gpt_ensemble"],
             [AttentionHeadType.mha, AttentionHeadType.gqa],
             [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
             ["sdpa"],
             [torch.float32],
             [False],
             [False],
+            [GPTEnsembleConfig.model_type],
         )
     )
     @TestCommons.slow_test
