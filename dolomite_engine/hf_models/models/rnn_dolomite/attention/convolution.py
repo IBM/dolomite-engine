@@ -100,7 +100,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         if output_final_state and cache is None:
             cache = x.new_zeros(batch_size, hidden_size, self.kernel_size[0])
         if cache is not None and x.shape[1] == 1:
-            return self.step(x, cache)
+            return self.step(x, cache), cache
         x = rearrange(x, "b l d -> b d l")
         # Update state (B D W)
         if cache is not None:

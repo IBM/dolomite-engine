@@ -126,10 +126,8 @@ class RNNCache(Cache):
 
         return key_states, value_states
 
-    def get_seq_length(self, layer_idx: int | None = 0) -> int:
-        if len(self) <= layer_idx:
-            return 0
-        return len(self.attention_cache)
+    def get_seq_length(self) -> int:
+        return self.attention_cache.get_seq_length()
 
     def get_max_length(self) -> int | None:
         return None

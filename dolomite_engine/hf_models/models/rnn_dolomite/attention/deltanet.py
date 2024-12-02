@@ -120,9 +120,11 @@ class DeltaNet(nn.Module):
     ) -> torch.Tensor:
         # change to inference mode.
         mode = "fused_recurrent" if hidden_states.shape[1] < 64 else self.mode
-        use_cache = past_key_values is not None and len(past_key_values) > self.layer_idx
+        use_cache = past_key_values is not None
 
-        last_state = past_key_values[self.layer_idx] if use_cache else None
+        last_state = None
+        if use_cache and len(past_key_values) > self.layer_idx:
+            last_state = past_key_values[self.layer_idx]
 
         if attention_mask is not None:
             if attention_mask.shape[-1] != hidden_states.shape[-2]:
@@ -135,9 +137,9 @@ class DeltaNet(nn.Module):
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
                 q, k, v = self._prepare_qkv_for_forward(hidden_states)
             else:
-                conv_state_q = last_state[0] if use_cache else None
-                conv_state_k = last_state[1] if use_cache else None
-                conv_state_v = last_state[2] if use_cache else None
+                conv_state_q, conv_state_k, conv_state_v = None, None, None
+                if last_state is not None:
+                    conv_state_q, conv_state_k, conv_state_v, _ = last_state
 
                 q, k, v = self._prepare_qkv_for_forward(hidden_states)
 
@@ -178,7 +180,8 @@ class DeltaNet(nn.Module):
             beta = rearrange(self.b_proj(hidden_states), "b l h -> b h l").sigmoid()
         else:
             beta = q.new_ones(q.shape[0], q.shape[1], q.shape[2])
-        state = past_key_values[self.layer_idx][-1] if use_cache else None
+
+        state = last_state[-1] if last_state is not None else None
         if mode == "fused_recurrent":
             o, recurrent_state = fused_recurrent_delta_rule(
                 q=q, k=k, v=v, beta=beta, initial_state=state, output_final_state=use_cache
