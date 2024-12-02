@@ -26,6 +26,9 @@ from .models import (
     RNNMoEDolomiteConfig,
     RNNMoEDolomiteForCausalLM,
     RNNMoEDolomiteModel,
+    StickBreakingConfig,
+    StickBreakingForCausalLM,
+    StickBreakingModel,
 )
 
 
@@ -38,6 +41,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (RNNMoEDolomiteConfig, RNNMoEDolomiteModel, RNNMoEDolomiteForCausalLM),
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
+    (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
