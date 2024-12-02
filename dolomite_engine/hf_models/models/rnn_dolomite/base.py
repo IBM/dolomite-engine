@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from fla.models.utils import Cache as FLACache
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
@@ -8,6 +7,7 @@ from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ...utils import divide_if_divisible
+from .cache import RNNCache
 from .config import RNNDolomiteConfig
 from .layer import RNNDolomiteBlock
 
