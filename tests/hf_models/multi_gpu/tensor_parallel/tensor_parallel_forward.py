@@ -9,6 +9,7 @@ from dolomite_engine.hf_models import (
     AttentionHeadType,
     DesyncResidualConfig,
     GPTDolomiteConfig,
+    LadderResidualConfig,
     MoEDolomiteConfig,
     get_model_parallel_class,
 )
@@ -81,6 +82,16 @@ elif args.model_type == DesyncResidualConfig.model_type:
         ],
     )
     kwargs["moe_implementation"] = "scattermoe"
+elif args.model_type == LadderResidualConfig.model_type:
+    config = LadderResidualConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=2,
+        position_embedding_type=args.position_embedding_type,
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+    )
 
 
 if torch.distributed.get_rank() == 0:

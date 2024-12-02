@@ -2,6 +2,7 @@ from .config import CommonConfig
 from .models import (
     DesyncResidualConfig,
     GPTDolomiteConfig,
+    LadderResidualConfig,
     MoEDolomiteConfig,
     fix_desync_residual_unsharded_state_dict,
     fix_gpt_dolomite_unsharded_state_dict,
@@ -15,6 +16,7 @@ from .models import (
 _UNSHARD_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: unshard_gpt_dolomite_tensor_parallel_state_dicts,
     DesyncResidualConfig.model_type: unshard_desync_residual_tensor_parallel_state_dicts,
+    LadderResidualConfig.model_type: unshard_gpt_dolomite_tensor_parallel_state_dicts,
     MoEDolomiteConfig.model_type: unshard_moe_dolomite_tensor_parallel_state_dicts,
 }
 
@@ -41,6 +43,7 @@ def unshard_tensor_parallel_state_dicts(
 _FIX_UNSHARDED_STATE_DICT_FUNCTIONS = {
     GPTDolomiteConfig.model_type: fix_gpt_dolomite_unsharded_state_dict,
     DesyncResidualConfig.model_type: fix_desync_residual_unsharded_state_dict,
+    LadderResidualConfig.model_type: fix_gpt_dolomite_unsharded_state_dict,
     MoEDolomiteConfig.model_type: fix_moe_dolomite_unsharded_state_dict,
 }
 

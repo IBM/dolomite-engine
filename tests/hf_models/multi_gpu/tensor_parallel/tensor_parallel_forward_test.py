@@ -46,6 +46,15 @@ class TensorParallelTest(TestCommons):
             [False],
             [DesyncResidualConfig.model_type],
         )
+        + TestCommons.make_args_matrix(
+            [AttentionHeadType.gqa],
+            [PositionEmbeddingType.rope],
+            ["sdpa"],
+            [torch.float32],
+            [False, True],
+            [False, True],
+            [GPTDolomiteConfig.model_type],
+        )
     )
     @TestCommons.slow_test
     def test_tensor_parallel_forward(
