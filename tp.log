@@ -1,0 +1,74 @@
+DesyncResidualForCausalLM_TP(
+  (transformer): DesyncResidualModel_TP(
+    (wte): Embedding_TP(50257, 128)
+    (drop): Dropout_TP(p=0.1, inplace=False)
+    (h): ModuleDict(
+      (0): DesyncResidualBlock_TP(
+        (ln_1): RMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA_TP(
+          (c_attn): ColumnParallelLinear(in_features=128, out_features_per_device=48, bias=False)
+          (c_proj): EnsembleLinear_TP(in_features=16, out_features=128, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP_TP(
+          (c_fc): EnsembleLinear_TP(in_features=128, out_features=64, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleLinear_TP(in_features=64, out_features=128, bias=False)
+          (dropout): Identity()
+        )
+      )
+      (1): DesyncResidualBlock_TP(
+        (ln_1): EnsembleRMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA_TP(
+          (c_attn): EnsembleLinear_TP(in_features=128, out_features=48, bias=False)
+          (c_proj): EnsembleLinear_TP(in_features=16, out_features=128, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP_TP(
+          (c_fc): EnsembleLinear_TP(in_features=128, out_features=64, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleRowParallelLinear(in_features_per_device=64, out_features=128, bias=False)
+          (dropout): Identity()
+        )
+      )
+      (2): DesyncResidualBlock_TP(
+        (ln_1): RMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA_TP(
+          (c_attn): ColumnParallelLinear(in_features=128, out_features_per_device=48, bias=False)
+          (c_proj): EnsembleLinear_TP(in_features=16, out_features=128, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP_TP(
+          (c_fc): EnsembleLinear_TP(in_features=128, out_features=64, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleLinear_TP(in_features=64, out_features=128, bias=False)
+          (dropout): Identity()
+        )
+      )
+      (3): DesyncResidualBlock_TP(
+        (ln_1): EnsembleRMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA_TP(
+          (c_attn): EnsembleLinear_TP(in_features=128, out_features=48, bias=False)
+          (c_proj): EnsembleLinear_TP(in_features=16, out_features=128, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP_TP(
+          (c_fc): EnsembleLinear_TP(in_features=128, out_features=64, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleRowParallelLinear(in_features_per_device=64, out_features=128, bias=False)
+          (dropout): Identity()
+        )
+      )
+    )
+    (ln_f): RMSNorm_TP((128,), eps=1e-05, elementwise_affine=True)
+    (wpe): Embedding_TP(1024, 128)
+  )
+)

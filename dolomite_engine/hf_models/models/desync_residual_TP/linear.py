@@ -8,10 +8,10 @@ from torch.distributed._tensor.placement_types import Partial, Shard
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager
 from ...modeling_utils import ParameterizedLinear
-from ...modeling_utils_TP import RowParallelLinear
+from ...modeling_utils_TP import DTensorModule, RowParallelLinear
 
 
-class EnsembleLinear_TP(ParameterizedLinear):
+class EnsembleLinear_TP(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,

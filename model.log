@@ -1,0 +1,74 @@
+DesyncResidualForCausalLM(
+  (transformer): DesyncResidualModel(
+    (wte): ParameterizedEmbedding(50257, 128)
+    (drop): Dropout(p=0.1, inplace=False)
+    (h): ModuleList(
+      (0): DesyncResidualBlock(
+        (ln_1): RMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA(
+          (c_attn): EnsembleLinear(in_features=128, out_features=48, tensor_parallel_size=8, bias=False)
+          (c_proj): EnsembleLinear(in_features=16, out_features=128, tensor_parallel_size=8, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP(
+          (c_fc): EnsembleLinear(in_features=128, out_features=64, tensor_parallel_size=8, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleLinear(in_features=64, out_features=128, tensor_parallel_size=8, bias=False)
+          (dropout): Identity()
+        )
+      )
+      (1): DesyncResidualBlock(
+        (ln_1): EnsembleRMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA(
+          (c_attn): EnsembleLinear(in_features=128, out_features=48, tensor_parallel_size=8, bias=False)
+          (c_proj): EnsembleLinear(in_features=16, out_features=128, tensor_parallel_size=8, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP(
+          (c_fc): EnsembleLinear(in_features=128, out_features=64, tensor_parallel_size=8, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleLinear(in_features=64, out_features=128, tensor_parallel_size=8, bias=False)
+          (dropout): Identity()
+        )
+      )
+      (2): DesyncResidualBlock(
+        (ln_1): RMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA(
+          (c_attn): EnsembleLinear(in_features=128, out_features=48, tensor_parallel_size=8, bias=False)
+          (c_proj): EnsembleLinear(in_features=16, out_features=128, tensor_parallel_size=8, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP(
+          (c_fc): EnsembleLinear(in_features=128, out_features=64, tensor_parallel_size=8, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleLinear(in_features=64, out_features=128, tensor_parallel_size=8, bias=False)
+          (dropout): Identity()
+        )
+      )
+      (3): DesyncResidualBlock(
+        (ln_1): EnsembleRMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (attn): EnsembleSDPA(
+          (c_attn): EnsembleLinear(in_features=128, out_features=48, tensor_parallel_size=8, bias=False)
+          (c_proj): EnsembleLinear(in_features=16, out_features=128, tensor_parallel_size=8, bias=False)
+          (attn_dropout): Dropout(p=0.1, inplace=False)
+          (resid_dropout): Identity()
+        )
+        (ln_2): EnsembleRMSNorm((128,), eps=1e-05, elementwise_affine=True)
+        (mlp): EnsembleMLP(
+          (c_fc): EnsembleLinear(in_features=128, out_features=64, tensor_parallel_size=8, bias=False)
+          (act): GELU(approximate='tanh')
+          (c_proj): EnsembleLinear(in_features=64, out_features=128, tensor_parallel_size=8, bias=False)
+          (dropout): Identity()
+        )
+      )
+    )
+    (ln_f): RMSNorm((128,), eps=1e-05, elementwise_affine=True)
+    (wpe): ParameterizedEmbedding(1024, 128)
+  )
+)
