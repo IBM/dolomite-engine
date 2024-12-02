@@ -7,10 +7,10 @@ from ....utils import divide_if_divisible
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
 from .config import DesyncResidualConfig
-from .linear import EnsembleLinear
+from .linear import DesyncResidualLinear
 
 
-class EnsembleMLP(nn.Module):
+class DesyncResidualMLP(nn.Module):
     def __init__(self, config: DesyncResidualConfig, layer_idx: int = None) -> None:
         super().__init__()
 
@@ -33,7 +33,7 @@ class EnsembleMLP(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_fc = EnsembleLinear(
+        self.c_fc = DesyncResidualLinear(
             hidden_size,
             2 * intermediate_size if is_glu(activation_function) else intermediate_size,
             tensor_parallel_size=config.pretraining_tensor_parallel_size,
@@ -46,7 +46,7 @@ class EnsembleMLP(nn.Module):
         std = initializer_range / math.sqrt(2 * self.n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = EnsembleLinear(
+        self.c_proj = DesyncResidualLinear(
             intermediate_size,
             hidden_size,
             tensor_parallel_size=config.pretraining_tensor_parallel_size,

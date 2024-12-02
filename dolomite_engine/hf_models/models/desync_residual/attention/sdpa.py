@@ -10,10 +10,10 @@ from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
 from ..config import DesyncResidualConfig
-from ..linear import EnsembleLinear
+from ..linear import DesyncResidualLinear
 
 
-class EnsembleSDPA(Attention):
+class DesyncResidualSDPA(Attention):
     def __init__(self, config: DesyncResidualConfig, causal: bool, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
@@ -87,7 +87,7 @@ class EnsembleSDPA(Attention):
                 f"`num_key_value_heads` ({self.global_num_key_value_heads}) must be divisible by `tensor_parallel_world_size` ({self.tp_world_size})",
             )
         elif self.attention_head_type == AttentionHeadType.mqa:
-            raise ValueError("mqa is not supported with EnsembleAttention")
+            raise ValueError("mqa is not supported with DesyncResidualAttention")
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
@@ -96,7 +96,7 @@ class EnsembleSDPA(Attention):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_attn = EnsembleLinear(
+        self.c_attn = DesyncResidualLinear(
             self.global_hidden_size,
             self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
             tensor_parallel_size=self.tp_world_size,
@@ -107,7 +107,7 @@ class EnsembleSDPA(Attention):
         std = initializer_range / math.sqrt(2 * n_layer)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = EnsembleLinear(
+        self.c_proj = DesyncResidualLinear(
             self.hidden_size,
             self.global_hidden_size,
             tensor_parallel_size=self.tp_world_size,

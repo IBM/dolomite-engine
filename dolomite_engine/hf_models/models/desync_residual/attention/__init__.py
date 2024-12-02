@@ -1,8 +1,8 @@
 from ..config import DesyncResidualConfig
-from .sdpa import EnsembleSDPA
+from .sdpa import DesyncResidualSDPA
 
 
-_ATTENTION_MODULES = {"sdpa": EnsembleSDPA}
+_ATTENTION_MODULES = {"sdpa": DesyncResidualSDPA}
 
 
 def get_attention_module(
@@ -11,7 +11,7 @@ def get_attention_module(
     attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
-) -> EnsembleSDPA:
+) -> DesyncResidualSDPA:
     if use_padding_free_transformer:
         raise NotImplementedError("padding free transformer is not implemented with DesyncResidual")
 

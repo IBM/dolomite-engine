@@ -9,10 +9,10 @@ from ...modeling_utils import get_activation_function, is_glu
 from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP
 from ..desync_residual import DesyncResidualConfig
 from ..gpt_dolomite_TP.mlp import MLP_TP
-from .linear import EnsembleLinear_TP, EnsembleRowParallelLinear
+from .linear import DesyncResidualLinear_TP, DesyncResidualRowParallelLinear
 
 
-class EnsembleMLP_TP(MLP_TP):
+class DesyncResidualMLP_TP(MLP_TP):
     def __init__(self, config: DesyncResidualConfig, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
@@ -47,7 +47,7 @@ class EnsembleMLP_TP(MLP_TP):
                 std=std,
             )
         else:
-            self.c_fc = EnsembleLinear_TP(
+            self.c_fc = DesyncResidualLinear_TP(
                 hidden_size,
                 divide_if_divisible(
                     2 * intermediate_size if self.is_glu_activation else intermediate_size,
@@ -65,9 +65,9 @@ class EnsembleMLP_TP(MLP_TP):
             std /= math.sqrt(m_width)
 
         if self.current_mlp_all_reduce:
-            self.c_proj = EnsembleRowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
+            self.c_proj = DesyncResidualRowParallelLinear(intermediate_size, hidden_size, bias=self.add_bias, std=std)
         else:
-            self.c_proj = EnsembleLinear_TP(
+            self.c_proj = DesyncResidualLinear_TP(
                 divide_if_divisible(intermediate_size, tp_world_size, ""), hidden_size, bias=self.add_bias, std=std
             )
 

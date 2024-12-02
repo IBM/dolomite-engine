@@ -11,7 +11,7 @@ from ...modeling_utils import ParameterizedLinear
 from ...modeling_utils_TP import DTensorModule, RowParallelLinear
 
 
-class EnsembleLinear_TP(ParameterizedLinear, DTensorModule):
+class DesyncResidualLinear_TP(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -39,7 +39,7 @@ class EnsembleLinear_TP(ParameterizedLinear, DTensorModule):
         return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
 
 
-class EnsembleRowParallelLinear(RowParallelLinear):
+class DesyncResidualRowParallelLinear(RowParallelLinear):
     def forward(self, input: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
         input = F.linear(input, self.weight, self.bias)

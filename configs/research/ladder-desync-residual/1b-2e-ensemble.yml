@@ -131,7 +131,7 @@ tuning_args:
   tuning_method: pretraining
 
 save_args:
-  save_path: /proj/checkpoints/mayank/ensemble-experiments-mayank/1b-2e-ensemble
+  save_path: /proj/checkpoints/mayank/experiments/1b-2e-4x-desync
   save_interval: 2500
 
 logging_args:
@@ -139,7 +139,7 @@ logging_args:
   experiments_tracker_name: wandb
   wandb_args:
     project: comms
-    name: 1b-2e-ensemble
+    name: 1b-2e-desync
 
 training_parameters:
   num_training_steps: 25000

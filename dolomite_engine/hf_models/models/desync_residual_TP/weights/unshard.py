@@ -56,7 +56,7 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
             )
         else:
             output_state_dict.update(
-                _get_ensemble_layernorm(
+                _get_desync_residual_layernorm(
                     tensor_parallel_state_dicts,
                     prefix=prefix + f"transformer.h.{layer_idx}.ln_1.",
                     normalization_function=config.normalization_function,
@@ -85,7 +85,7 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
             )
         else:
             output_state_dict.update(
-                _get_ensemble_layernorm(
+                _get_desync_residual_layernorm(
                     tensor_parallel_state_dicts,
                     prefix=prefix + f"transformer.h.{layer_idx}.ln_2.",
                     normalization_function=config.normalization_function,
@@ -132,7 +132,9 @@ def fix_desync_residual_unsharded_state_dict(
     raise NotImplementedError()
 
 
-def _get_ensemble_layernorm(tensor_parallel_state_dicts: list[dict], prefix: str, normalization_function: str) -> dict:
+def _get_desync_residual_layernorm(
+    tensor_parallel_state_dicts: list[dict], prefix: str, normalization_function: str
+) -> dict:
     assert normalization_function == "rmsnorm"
 
     output = {

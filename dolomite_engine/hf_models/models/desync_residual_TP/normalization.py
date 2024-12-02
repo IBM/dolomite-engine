@@ -7,7 +7,7 @@ from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import DTensorModule
 
 
-class EnsembleRMSNorm_TP(nn.RMSNorm, DTensorModule):
+class DesyncResidualRMSNorm_TP(nn.RMSNorm, DTensorModule):
     def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
         super().__init__(normalized_shape, eps=eps)
 
@@ -27,10 +27,10 @@ class EnsembleRMSNorm_TP(nn.RMSNorm, DTensorModule):
         return self.weight.to_local() * input.to(input_dtype)
 
 
-_NORMALIZATION_FUNCTIONS = {"rmsnorm": EnsembleRMSNorm_TP}
+_NORMALIZATION_FUNCTIONS = {"rmsnorm": DesyncResidualRMSNorm_TP}
 
 
-def get_ensemble_normalization_function_TP(name: str, normalized_shape: int, eps: float = 1e-5) -> nn.LayerNorm:
+def get_desync_residual_normalization_function_TP(name: str, normalized_shape: int, eps: float = 1e-5) -> nn.LayerNorm:
     if name in _NORMALIZATION_FUNCTIONS:
         return _NORMALIZATION_FUNCTIONS[name](normalized_shape, eps=eps)
 

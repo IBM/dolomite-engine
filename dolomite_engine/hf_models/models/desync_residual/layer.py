@@ -6,8 +6,8 @@ from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from .attention import get_attention_module
 from .config import DesyncResidualConfig
-from .mlp import EnsembleMLP
-from .normalization import get_ensemble_normalization_function
+from .mlp import DesyncResidualMLP
+from .normalization import get_desync_residual_normalization_function
 
 
 class DesyncResidualBlock(nn.Module):
@@ -33,7 +33,7 @@ class DesyncResidualBlock(nn.Module):
                 config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
         else:
-            self.ln_1 = get_ensemble_normalization_function(
+            self.ln_1 = get_desync_residual_normalization_function(
                 config.normalization_function,
                 hidden_size,
                 tp_world_size=config.pretraining_tensor_parallel_size,
@@ -49,14 +49,14 @@ class DesyncResidualBlock(nn.Module):
                 config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
         else:
-            self.ln_2 = get_ensemble_normalization_function(
+            self.ln_2 = get_desync_residual_normalization_function(
                 config.normalization_function,
                 hidden_size,
                 tp_world_size=config.pretraining_tensor_parallel_size,
                 eps=config.layer_norm_epsilon,
             )
 
-        self.mlp = EnsembleMLP(config, layer_idx=layer_idx)
+        self.mlp = DesyncResidualMLP(config, layer_idx=layer_idx)
 
     def forward(
         self,

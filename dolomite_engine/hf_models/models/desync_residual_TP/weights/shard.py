@@ -39,7 +39,7 @@ def get_desync_residual_model_parallel_state_dict(
         if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
             state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
         else:
-            state_dict.update(_get_ensemble_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
+            state_dict.update(_get_desync_residual_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
 
         state_dict.update(
             _get_attention(
@@ -50,7 +50,7 @@ def get_desync_residual_model_parallel_state_dict(
         if config.reduce_pattern[layer_idx]["attention"]:
             state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
         else:
-            state_dict.update(_get_ensemble_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
+            state_dict.update(_get_desync_residual_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
 
         state_dict.update(
             _get_mlp(config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp.")
@@ -71,7 +71,7 @@ def get_desync_residual_model_parallel_state_dict(
     return state_dict
 
 
-def _get_ensemble_layernorm(safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str) -> dict:
+def _get_desync_residual_layernorm(safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str) -> dict:
     weight = safetensors_weights_manager.get_slice(prefix + "weight")
     state_dict = {prefix + "weight": tensor_parallel_split_safetensor_slice(weight, dim=0)}
 
