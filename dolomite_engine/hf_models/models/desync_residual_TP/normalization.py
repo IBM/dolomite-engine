@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Shard
 
-from .....utils import ProcessGroupManager
+from ....utils import ProcessGroupManager
 
 
 class EnsembleRMSNorm_TP(nn.RMSNorm):
