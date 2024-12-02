@@ -14,6 +14,12 @@ class LadderResidualPreTrainedModel_TP(PreTrainedModelMixin_TP):
     layer_class = LadderResidualBlock_TP
     _no_split_modules = ["LadderResidualBlock_TP"]
 
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+
+        if self.num_pipeline_stages > 1:
+            raise NotImplementedError("pipeline parallel is not supported with this model architecture")
+
 
 class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP):
     def forward(
@@ -56,11 +62,11 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
-        for block in self.h:
+        for layer_idx in range(self.layer_start_id, self.layer_end_id):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
-            previous_attention_out, previous_mlp_out, hidden_states = block(
+            previous_attention_out, previous_mlp_out, hidden_states = self.h[str(layer_idx)](
                 previous_attention_out=previous_attention_out,
                 previous_mlp_out=previous_mlp_out,
                 residual=hidden_states,
