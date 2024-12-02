@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 
-class EnsembleRMSNorm(nn.RMSNorm):
+class DesyncResidualRMSNorm(nn.RMSNorm):
     def __init__(self, normalized_shape: int, tp_world_size: int, eps: float = 1e-6) -> None:
         nn.Module.__init__(self)
 
@@ -33,10 +33,10 @@ class EnsembleRMSNorm(nn.RMSNorm):
         return input
 
 
-_NORMALIZATION_FUNCTIONS = {"rmsnorm": EnsembleRMSNorm}
+_NORMALIZATION_FUNCTIONS = {"rmsnorm": DesyncResidualRMSNorm}
 
 
-def get_ensemble_normalization_function(
+def get_desync_residual_normalization_function(
     normalization_function: str,
     normalized_shape: int,
     tp_world_size: int,

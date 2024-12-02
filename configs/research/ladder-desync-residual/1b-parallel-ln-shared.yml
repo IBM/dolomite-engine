@@ -49,7 +49,7 @@ tuning_args:
   tuning_method: pretraining
 
 save_args:
-  save_path: /proj/checkpoints/mayank/ensemble-experiments-mayank/1b-parallel-ln-shared
+  save_path: /proj/checkpoints/mayank/experiments/1b-parallel-ln-shared
   save_interval: 2500
 
 logging_args:

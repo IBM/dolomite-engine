@@ -10,10 +10,10 @@ from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import SDPA, apply_rotary_pos_emb, repeat_key_value
 from ....modeling_utils_TP import Attention_TP, ColumnParallelLinear
 from ...desync_residual import DesyncResidualConfig
-from ..linear import EnsembleLinear_TP, EnsembleRowParallelLinear
+from ..linear import DesyncResidualLinear_TP, DesyncResidualRowParallelLinear
 
 
-class EnsembleSDPA_TP(Attention_TP, SDPA):
+class DesyncResidualSDPA_TP(Attention_TP, SDPA):
     def __init__(self, config: DesyncResidualConfig, causal: bool, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
@@ -89,7 +89,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
                 f"`num_key_value_heads` ({self.global_num_key_value_heads}) must be divisible by `tensor_parallel_world_size` ({self.tp_world_size})",
             )
         elif self.attention_head_type == AttentionHeadType.mqa:
-            raise ValueError("mqa is not supported with EnsembleAttention")
+            raise ValueError("mqa is not supported with DesyncResidualAttention")
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
@@ -106,7 +106,7 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
                 std=std,
             )
         else:
-            self.c_attn = EnsembleLinear_TP(
+            self.c_attn = DesyncResidualLinear_TP(
                 self.global_hidden_size,
                 self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
@@ -118,11 +118,13 @@ class EnsembleSDPA_TP(Attention_TP, SDPA):
             std /= math.sqrt(m_width)
 
         if self.current_attention_all_reduce:
-            self.c_proj = EnsembleRowParallelLinear(
+            self.c_proj = DesyncResidualRowParallelLinear(
                 self.global_hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
             )
         else:
-            self.c_proj = EnsembleLinear_TP(self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std)
+            self.c_proj = DesyncResidualLinear_TP(
+                self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
+            )
 
         self.attn_pdrop = config.attn_pdrop
         self.resid_pdrop = config.resid_pdrop

@@ -1,8 +1,8 @@
 from ...desync_residual import DesyncResidualConfig
-from .sdpa import EnsembleSDPA_TP
+from .sdpa import DesyncResidualSDPA_TP
 
 
-_ATTENTION_MODULES = {"sdpa": EnsembleSDPA_TP}
+_ATTENTION_MODULES = {"sdpa": DesyncResidualSDPA_TP}
 
 
 def get_attention_module(
@@ -11,7 +11,7 @@ def get_attention_module(
     attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
-) -> EnsembleSDPA_TP:
+) -> DesyncResidualSDPA_TP:
     if use_padding_free_transformer:
         raise NotImplementedError("padding free transformer is not implemented with tensor parallel")
 

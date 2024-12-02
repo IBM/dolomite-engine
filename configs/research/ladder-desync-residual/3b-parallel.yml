@@ -48,7 +48,7 @@ tuning_args:
   tuning_method: pretraining
 
 save_args:
-  save_path: /proj/checkpoints/mayank/ensemble-experiments-mayank/3b-parallel
+  save_path: /proj/checkpoints/mayank/experiments/3b-parallel
   save_interval: 5000
 
 logging_args:
