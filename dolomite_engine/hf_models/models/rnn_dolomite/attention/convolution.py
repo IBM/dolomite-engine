@@ -80,7 +80,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         mask: Optional[torch.Tensor] = None,
         cache: Optional[torch.Tensor] = None,
         output_final_state: bool = False,
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor]:
         """
         Args:
             x (`torch.Tensor`):
@@ -90,7 +90,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
             cache (`Optional[torch.Tensor]`):
                 Previous cache tensor of shape `[batch_size, hidden_size, kernel_size]`,
         Returns:
-            Tensor of shape `[batch_size, seq_len, hidden_size]`. The `cache` (if provided) is updated inplace.
+            tuple of Tensor of shape `[batch_size, seq_len, hidden_size]` and cache.
         """
 
         batch_size, _, hidden_size = x.shape
@@ -115,7 +115,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         else:
             x = self._conv_forward(x, self.weight, self.bias)[..., : x.shape[-1]]
             x = self.activation(x)
-        return rearrange(x, "b d l -> b l d")
+        return rearrange(x, "b d l -> b l d"), cache
 
     def step(self, x: torch.Tensor, cache: torch.Tensor):
         assert x.shape[1] == 1, "Only support decoding with 1 token at a time for now"
