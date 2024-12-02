@@ -163,9 +163,9 @@ class SparseMoE(nn.Module):
             router_weights, selected_experts
         )
 
-        expert_inputs = hidden_states[batch_index]
+        hidden_states = hidden_states[batch_index]
 
-        hidden_states = self.c_fc(expert_inputs, num_experts_per_token)
+        hidden_states = self.c_fc(hidden_states, num_experts_per_token)
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj(hidden_states, num_experts_per_token)
 

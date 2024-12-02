@@ -1,6 +1,11 @@
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 from .models import (
+    DesyncResidualConfig,
+    DesyncResidualForCausalLM,
+    DesyncResidualForCausalLM_TP,
+    DesyncResidualModel,
+    DesyncResidualModel_TP,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
@@ -8,6 +13,11 @@ from .models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     GPTDolomiteModel,
+    LadderResidualConfig,
+    LadderResidualForCausalLM,
+    LadderResidualForCausalLM_TP,
+    LadderResidualModel,
+    LadderResidualModel_TP,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
@@ -24,6 +34,8 @@ _CUSTOM_MODEL_REGISTRY = [
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
+    (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
+    (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
@@ -47,6 +59,8 @@ def is_custom_model(model_type: str) -> bool:
 
 _MODEL_PARALLEL_CLASS_MAPPING = {
     GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
+    DesyncResidualConfig.model_type: DesyncResidualForCausalLM_TP,
+    LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
     MoEDolomiteConfig.model_type: MoEDolomiteForCausalLM_TP,
 }
 

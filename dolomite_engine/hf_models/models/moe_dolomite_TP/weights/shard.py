@@ -8,7 +8,11 @@ def get_moe_dolomite_tensor_parallel_state_dict(
     config: MoEDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     tensor_parallel_word_embeddings: bool,
+    num_pipeline_stages: int,
+    pipeline_stage_id: int,
 ) -> dict:
+    assert num_pipeline_stages == 1
+
     # word embeddings
     state_dict = _get_embeddings_or_lm_head(
         safetensors_weights_manager,

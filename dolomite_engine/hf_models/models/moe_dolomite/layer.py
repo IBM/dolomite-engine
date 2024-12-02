@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
 from ..gpt_dolomite.mlp import MLP
 from .config import MoEDolomiteConfig
@@ -23,8 +22,6 @@ class SparseMoEBlock(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 

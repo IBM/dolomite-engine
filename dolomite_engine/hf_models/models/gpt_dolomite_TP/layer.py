@@ -1,6 +1,5 @@
 import torch.nn as nn
 
-from ...enums import AttentionHeadType
 from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
 from ..gpt_dolomite import GPTDolomiteConfig
 from ..gpt_dolomite.layer import GPTDolomiteBlock
@@ -19,8 +18,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
         nn.Module.__init__(self)
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
