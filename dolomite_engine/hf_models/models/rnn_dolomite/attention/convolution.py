@@ -75,7 +75,11 @@ class ParameterizedShortConvolution(nn.Conv1d):
         return s.format(**self.__dict__)
 
     def forward(
-        self, x: torch.Tensor, mask: Optional[torch.Tensor] = None, cache: Optional[torch.Tensor] = None
+        self,
+        x: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        cache: Optional[torch.Tensor] = None,
+        output_final_state: bool = False,
     ) -> torch.Tensor:
         """
         Args:
@@ -89,8 +93,12 @@ class ParameterizedShortConvolution(nn.Conv1d):
             Tensor of shape `[batch_size, seq_len, hidden_size]`. The `cache` (if provided) is updated inplace.
         """
 
+        batch_size, _, hidden_size = x.shape
+
         if mask is not None:
             x = x.mul_(mask.unsqueeze(-1))
+        if output_final_state and cache is None:
+            cache = x.new_zeros(batch_size, hidden_size, self.kernel_size[0])
         if cache is not None and x.shape[1] == 1:
             return self.step(x, cache)
         x = rearrange(x, "b l d -> b d l")

@@ -141,9 +141,9 @@ class DeltaNet(nn.Module):
 
                 q, k, v = self._prepare_qkv_for_forward(hidden_states)
 
-                q = self.q_conv1d(q, attention_mask, conv_state_q)
-                k = self.k_conv1d(k, attention_mask, conv_state_k)
-                v = self.v_conv1d(v, attention_mask, conv_state_v)
+                q, conv_state_q = self.q_conv1d(q, attention_mask, conv_state_q, output_final_state=use_cache)
+                k, conv_state_k = self.k_conv1d(k, attention_mask, conv_state_k, output_final_state=use_cache)
+                v, conv_state_v = self.v_conv1d(v, attention_mask, conv_state_v, output_final_state=use_cache)
         else:
             q, k, v = self._prepare_qkv_for_forward(hidden_states)
             v = F.silu(v)
