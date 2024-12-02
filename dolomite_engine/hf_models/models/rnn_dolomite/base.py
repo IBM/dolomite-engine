@@ -16,18 +16,10 @@ class RNNDolomitePreTrainedModel(PreTrainedModelMixin):
     config_class = RNNDolomiteConfig
     layer_class = RNNDolomiteBlock
     _no_split_modules = ["RNNDolomiteBlock"]
-    _supports_sdpa = False
-    _supports_flash_attn_2 = True
 
     def __init__(self, config: RNNDolomiteConfig, *args, **kwargs):
         self.attention_pattern = config.attention_pattern
         super().__init__(config, *args, **kwargs)
-
-        self.attention_implementation = "flash_attention_2"
-
-        self._use_eager_attention = False
-        self._use_sdpa = False
-        self._use_flash_attention_2 = True
 
         assert not self._use_padding_free_transformer, "RNN models are not implemented with padding free transformer"
 
@@ -110,7 +102,9 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = (
+            RNNCache(self.attention_pattern) if use_cache and past_key_values is None else past_key_values
+        )
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:

@@ -1,10 +1,10 @@
 import torch.nn as nn
 
 from ...enums import AttentionHeadType
-from ...modeling_utils import get_normalization_function
+from ...modeling_utils import get_attention_module, get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_dolomite.mlp import MLP
-from .attention import DeltaNet, RNNFlashAttention2
+from .attention import DeltaNet
 from .config import RNNDolomiteConfig
 
 
@@ -38,7 +38,13 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
         self.attention_pattern = attention_pattern
 
         if attention_pattern == "a":
-            self.attn = RNNFlashAttention2(config, True, layer_idx)
+            self.attn = get_attention_module(
+                config=config,
+                causal=True,
+                attention_implementation=attention_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                layer_idx=layer_idx,
+            )
         elif attention_pattern == "d":
             self.attn = DeltaNet(config=config, layer_idx=layer_idx)
         else:

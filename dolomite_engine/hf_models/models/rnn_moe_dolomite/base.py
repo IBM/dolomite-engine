@@ -82,7 +82,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
             output_hidden_states,
             use_cache,
             hidden_states,
-            attention_mask,
+            causal_mask,
             position_ids,
             rope_cos_sin,
             past_key_values,
@@ -101,7 +101,9 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
             output_router_logits=output_router_logits,
         )
 
-        past_key_values = FLACache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = (
+            RNNCache(self.attention_pattern) if use_cache and past_key_values is None else past_key_values
+        )
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
         total_aux_loss = 0
@@ -114,6 +116,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
+                causal_mask=causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
