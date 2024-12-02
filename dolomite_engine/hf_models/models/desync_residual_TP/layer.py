@@ -5,13 +5,12 @@ from transformers import DynamicCache
 from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import get_normalization_function_TP
 from ..desync_residual import DesyncResidualConfig
-from ..gpt_dolomite.layer import GPTDolomiteBlock
 from .attention import get_attention_module
 from .mlp import EnsembleMLP_TP
 from .normalization import get_ensemble_normalization_function_TP
 
 
-class DesyncResidualBlock_TP(GPTDolomiteBlock):
+class DesyncResidualBlock_TP(nn.Module):
     def __init__(
         self,
         config: DesyncResidualConfig,
@@ -20,7 +19,7 @@ class DesyncResidualBlock_TP(GPTDolomiteBlock):
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
-        nn.Module.__init__(self)
+        super().__init__()
 
         assert not sequence_parallel
 

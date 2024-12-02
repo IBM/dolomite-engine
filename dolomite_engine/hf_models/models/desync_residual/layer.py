@@ -4,14 +4,13 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
-from ..gpt_dolomite.layer import GPTDolomiteBlock
 from .attention import get_attention_module
 from .config import DesyncResidualConfig
 from .mlp import EnsembleMLP
 from .normalization import get_ensemble_normalization_function
 
 
-class DesyncResidualBlock(GPTDolomiteBlock):
+class DesyncResidualBlock(nn.Module):
     def __init__(
         self,
         config: DesyncResidualConfig,
@@ -19,7 +18,7 @@ class DesyncResidualBlock(GPTDolomiteBlock):
         use_padding_free_transformer: bool,
         layer_idx: int = None,
     ) -> None:
-        nn.Module.__init__(self)
+        super().__init__()
 
         hidden_size = config.hidden_size
         self.inner_dim = config.n_inner
