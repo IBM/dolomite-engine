@@ -2,10 +2,7 @@ import logging
 from argparse import ArgumentParser
 from typing import Any
 
-import torch
 import transformers
-from packaging.version import Version
-from peft import PromptTuningInit
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
@@ -14,6 +11,7 @@ from .enums import (
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,
+    Kernel,
     KLDivergenceMethod,
     LossMask,
     LRDecaySchedule,
@@ -22,6 +20,7 @@ from .enums import (
     ParamsGroupMethod,
     TuningMethod,
 )
+from .kernels import add_kernel
 from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
@@ -81,27 +80,6 @@ class ModelArgs(BaseArgs):
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
 
-class PromptTuningArgs(BaseArgs):
-    # prompt tuning init method
-    prompt_tuning_init: PromptTuningInit = None
-    # prompt tuning init text
-    prompt_tuning_init_text: str | None = None
-    # number of virtual tokens for PEFT
-    num_virtual_tokens: int | None = None
-
-    def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.prompt_tuning_init, "prompt_tuning_init")])
-
-        if self.prompt_tuning_init == PromptTuningInit.RANDOM:
-            assert (
-                self.prompt_tuning_init_text is None
-            ), f"prompt_tuning_init_text '{self.prompt_tuning_init_text}' was specified with RANDOM init method"
-        elif self.prompt_tuning_init == PromptTuningInit.TEXT:
-            assert (
-                self.prompt_tuning_init_text is not None
-            ), f"prompt_tuning_init_text needs to be specified with TEXT init method"
-
-
 class LoRAArgs(BaseArgs):
     # lora rank
     lora_rank: int = None
@@ -117,8 +95,6 @@ class LoRAArgs(BaseArgs):
 class TuningArgs(BaseArgs):
     # type of tuning, full finetuning or PEFT
     tuning_method: TuningMethod = None
-    # prompt tuning related arguments
-    prompt_tuning_args: PromptTuningArgs | None = None
     # lora related arguments
     lora_args: LoRAArgs | None = None
 
@@ -127,17 +103,7 @@ class TuningArgs(BaseArgs):
 
         # check whether the arguments specified are valid
         if self.tuning_method in [TuningMethod.full_finetuning, TuningMethod.pretraining]:
-            assert (
-                self.prompt_tuning_args is None
-            ), "prompt_tuning_args should not be specified with full_finetuning or pretraining"
-            assert self.lora_args is None, "lora_args should not be specified with full_finetuning or pretraining"
-        elif self.tuning_method == TuningMethod.prompt_tuning:
-            assert self.lora_args is None, "lora_args should not be specified with promt_tuning"
-        elif self.tuning_method == TuningMethod.lora:
-            assert self.prompt_tuning_args is None, "prompt_tuning_args should not be specified with lora"
-
-    def get_num_virtual_tokens(self) -> int:
-        return self.prompt_tuning_args.num_virtual_tokens if self.tuning_method == TuningMethod.prompt_tuning else 0
+            assert self.lora_args is None, "load_args should not be specified with full_finetuning or pretraining"
 
 
 class TrainingParameters(BaseArgs):
@@ -324,11 +290,13 @@ class DistributedArgs(BaseArgs):
     # whether to use a dispatching dataloader
     dispatching_dataloader: bool = False
     # tensor parallel world size
-    tensor_parallel_size: int = 1
+    tensor_parallel_world_size: int = 1
     # tensor parallel embeddings
     tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
+    # pipeline parallel world size
+    pipeline_parallel_world_size: int = 1
     # data parallel world size
     data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes
@@ -337,6 +305,12 @@ class DistributedArgs(BaseArgs):
     fsdp_algorithm: int = 1
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
+    # total number of pipeline stages
+    num_pipeline_stages: int = 1
+    # pipeline parallel shedule to use
+    pipeline_parallel_schedule: str | None = None
+    # whether to use async-TP
+    use_async_tensor_parallel: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         # communication dtype
@@ -344,25 +318,25 @@ class DistributedArgs(BaseArgs):
             self.communication_dtype = normalize_dtype_string(self.communication_dtype)
 
         if self.sequence_parallel:
-            assert self.tensor_parallel_size > 1, "tensor parallel needs to be enabled for sequence parallel"
+            assert self.tensor_parallel_world_size > 1, "tensor parallel needs to be enabled for sequence parallel"
 
         if self.tensor_parallel_word_embeddings:
             assert (
-                self.tensor_parallel_size > 1
+                self.tensor_parallel_world_size > 1
             ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
-        if self.tensor_parallel_size > 1:
-            version = Version(torch.__version__).release
-            version = [str(i) for i in version]
-            version = ".".join(version)
-            version = Version(version)
-
-            assert version >= Version("2.5.0"), (
-                "the current release of pytorch doesn't support tensor parallel, switch to version >= 2.5.0 "
-                "or the latest nightly"
-            )
-
+        if self.tensor_parallel_world_size > 1:
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
+
+        if self.use_async_tensor_parallel:
+            assert self.sequence_parallel, "sequence parallel should be enabled for using async-TP"
+
+        assert (
+            self.num_pipeline_stages % self.pipeline_parallel_world_size == 0
+        ), "num_pipeline_stages should be a multiple of pipeline_parallel_world_size"
+
+        if self.num_pipeline_stages > 1:
+            _check_not_None([(self.pipeline_parallel_schedule, "pipeline_parallel_schedule")])
 
 
 class AimArgs(BaseArgs):
@@ -415,6 +389,17 @@ class ResearchArgs(BaseArgs):
     # Scalar of noise to inject into input embeddings
     # https://arxiv.org/abs/2310.05914
     neft_alpha: float | None = None
+
+
+class KernelArgs(BaseArgs):
+    # Scalar of noise to inject into input embeddings
+    # https://arxiv.org/abs/2310.05914
+    kernels: list[Kernel] | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.kernels is not None:
+            for kernel in self.kernels:
+                add_kernel(kernel)
 
 
 class TeacherArgs(BaseArgs):
@@ -472,6 +457,8 @@ class TrainingArgs(BaseArgs):
     distributed_args: DistributedArgs = DistributedArgs()
     # research args
     research_args: ResearchArgs = ResearchArgs()
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -485,6 +472,9 @@ class TrainingArgs(BaseArgs):
 
         # datasets
         _check_datasets(self.datasets)
+
+        if self.distributed_args.num_pipeline_stages > 1 and self.training_parameters.eval_during_training:
+            raise NotImplementedError("evaluation is not supported with pipeline parallel")
 
 
 class GenerationParameters(BaseArgs):
@@ -524,6 +514,8 @@ class InferenceArgs(BaseArgs):
     logging_args: LoggingArgs = LoggingArgs()
     # output dir
     output_dir: str = None
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -552,6 +544,8 @@ class UnshardingArgs(BaseArgs):
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
@@ -560,6 +554,8 @@ class UnshardingArgs(BaseArgs):
 class DistillationArgs(TrainingArgs):
     # teacher model arguments
     teacher_args: TeacherArgs = None
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.teacher_args, "teacher_args")])

@@ -107,13 +107,13 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
 
 
 def fix_gpt_dolomite_unsharded_state_dict(
-    config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
+    config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
         : config.vocab_size, :
     ]
     state_dict = _fix_attention(config, state_dict, prefix)
-    state_dict = _fix_mlp(config, state_dict, tensor_parallel_size, prefix)
+    state_dict = _fix_mlp(config, state_dict, tensor_parallel_world_size, prefix)
     return state_dict
 
 
@@ -173,15 +173,7 @@ def _get_attention(
             tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
         )
 
-    if attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
-        output[prefix + "c_attn.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_attn.weight", dim=0
-        )
-        if add_bias:
-            output[prefix + "c_attn.bias"] = _concatenate_tensors_from_state_dicts(
-                tensor_parallel_state_dicts, key=prefix + "c_attn.bias", dim=0
-            )
-    elif attention_head_type == AttentionHeadType.mqa:
+    if attention_head_type == AttentionHeadType.mqa:
         q_weight = _concatenate_tensors_from_state_dicts(
             tensor_parallel_state_dicts, key=prefix + "c_attn.q_attn.weight", dim=0
         )
@@ -198,7 +190,13 @@ def _get_attention(
             )
             output[prefix + "c_attn.bias"] = torch.cat([q_bias, kv_bias])
     else:
-        raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+        output[prefix + "c_attn.weight"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_attn.weight", dim=0
+        )
+        if add_bias:
+            output[prefix + "c_attn.bias"] = _concatenate_tensors_from_state_dicts(
+                tensor_parallel_state_dicts, key=prefix + "c_attn.bias", dim=0
+            )
 
     return output
 
@@ -268,11 +266,11 @@ def _fix_attention(config: GPTDolomiteConfig, state_dict: dict, prefix: str) -> 
     return state_dict
 
 
-def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str) -> dict:
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
             key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
-            weight = state_dict[key].chunk(tensor_parallel_size)
+            weight = state_dict[key].chunk(tensor_parallel_world_size)
             weight = [w.chunk(2) for w in weight]
             w0 = torch.cat([w[0] for w in weight])
             w1 = torch.cat([w[1] for w in weight])
@@ -280,7 +278,7 @@ def _fix_mlp(config: GPTDolomiteConfig, state_dict: dict, tensor_parallel_size: 
 
             if config.add_bias:
                 key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.bias"
-                weight = state_dict[key].chunk(tensor_parallel_size)
+                weight = state_dict[key].chunk(tensor_parallel_world_size)
                 weight = [w.chunk(2) for w in weight]
                 w0 = torch.cat([w[0] for w in weight])
                 w1 = torch.cat([w[1] for w in weight])

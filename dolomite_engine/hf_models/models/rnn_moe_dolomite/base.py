@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 from transformers import Cache
 
+from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ...utils import divide_if_divisible
 from ..rnn_dolomite.base import RNNDolomiteModel, RNNDolomitePreTrainedModel
 from ..rnn_dolomite.cache import RNNCache
 from .config import RNNMoEDolomiteConfig

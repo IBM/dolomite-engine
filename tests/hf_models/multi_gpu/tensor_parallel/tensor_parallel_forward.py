@@ -7,11 +7,11 @@ from transformers import set_seed
 
 from dolomite_engine.hf_models import (
     AttentionHeadType,
+    DesyncResidualConfig,
     GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
+    LadderResidualConfig,
     MoEDolomiteConfig,
-    MoEDolomiteForCausalLM_TP,
-    get_tensor_parallel_class,
+    get_model_parallel_class,
 )
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
@@ -32,7 +32,7 @@ args = parser.parse_args()
 
 set_seed(42)
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
@@ -62,6 +62,36 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_head=16,
     )
     kwargs["moe_implementation"] = "scattermoe"
+elif args.model_type == DesyncResidualConfig.model_type:
+    config = DesyncResidualConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=4,
+        position_embedding_type="learned_absolute",
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+        resid_pdrop=0,
+        normalization_function="rmsnorm",
+        pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
+        reduce_pattern=[
+            {"attention": False, "mlp": False},
+            {"attention": False, "mlp": True},
+            {"attention": False, "mlp": False},
+            {"attention": False, "mlp": True},
+        ],
+    )
+    kwargs["moe_implementation"] = "scattermoe"
+elif args.model_type == LadderResidualConfig.model_type:
+    config = LadderResidualConfig(
+        attention_head_type=args.attention_head_type,
+        n_layer=2,
+        position_embedding_type=args.position_embedding_type,
+        num_key_value_heads=num_key_value_heads,
+        add_bias=False,
+        n_embd=128,
+        n_head=16,
+    )
 
 
 if torch.distributed.get_rank() == 0:
@@ -83,7 +113,7 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
 
-    model_tp = get_tensor_parallel_class(args.model_type)._from_config(
+    model_tp = get_model_parallel_class(args.model_type)._from_config(
         config,
         tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,

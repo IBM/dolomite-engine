@@ -3,10 +3,16 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributed._functional_collectives import all_reduce
 
+from .....utils import ProcessGroupManager, is_cute_kernels_available
 from ....enums import InitMethod
-from ....modeling_utils import ParameterizedTransposedLinear, get_activation_function, is_glu
+from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
+
+
+if is_cute_kernels_available():
+    from cute_kernels.kernels import contiguous_count_cute
 
 
 class ParameterizedExperts(nn.Module):
@@ -22,11 +28,11 @@ class ParameterizedExperts(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.weight = nn.Parameter(torch.empty(out_features, num_experts, in_features, device=device, dtype=dtype))
+        self.weight = nn.Parameter(torch.empty(num_experts, out_features, in_features, device=device, dtype=dtype))
 
         self.bias = None
         if add_bias:
-            self.bias = nn.Parameter(torch.empty(out_features, num_experts, device=device, dtype=dtype))
+            self.bias = nn.Parameter(torch.empty(num_experts, out_features, device=device, dtype=dtype))
 
         self.std = std
 
@@ -37,14 +43,9 @@ class ParameterizedExperts(nn.Module):
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
-        weight = self.weight.view(self.out_features, self.num_experts, -1)
-
-        if self.bias is not None:
-            bias = self.bias.view(self.out_features, self.num_experts)
-
         input = input.split(num_experts_per_token.tolist(), dim=0)
         input = [
-            F.linear(input[i], weight[:, i], None if self.bias is None else bias[:, i])
+            F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
             for i in range(self.num_experts)
         ]
         input = torch.cat(input, dim=0)
@@ -87,7 +88,7 @@ class SparseMoE(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.gate = ParameterizedTransposedLinear(
+        self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=config.num_experts,
             bias=False,
@@ -162,9 +163,9 @@ class SparseMoE(nn.Module):
             router_weights, selected_experts
         )
 
-        expert_inputs = hidden_states[batch_index]
+        hidden_states = hidden_states[batch_index]
 
-        hidden_states = self.c_fc(expert_inputs, num_experts_per_token)
+        hidden_states = self.c_fc(hidden_states, num_experts_per_token)
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj(hidden_states, num_experts_per_token)
 
@@ -179,7 +180,10 @@ class SparseMoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
+        if selected_experts.is_cuda and is_cute_kernels_available():
+            num_experts_per_token = contiguous_count_cute(x=selected_experts, size=self.num_experts)
+        else:
+            num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -205,7 +209,14 @@ class SparseMoE(nn.Module):
 
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
-        freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+
+        if topk_idxs.is_cuda and is_cute_kernels_available():
+            freq = contiguous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
+        else:
+            freq = topk_idxs.flatten().bincount(minlength=num_experts).to(dtype=logits.dtype)
+
+        if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
+            freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
 
         switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()

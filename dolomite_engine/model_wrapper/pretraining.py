@@ -7,9 +7,9 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
+from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..hf_models.modeling_utils_TP import tensor_to_dtensor
-from ..utils import ProcessGroupManager
+from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -29,6 +29,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
@@ -51,6 +53,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             sequence_parallel (bool): whether to use sequence parallel
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
@@ -76,13 +80,19 @@ class ModelWrapperForPretraining(ModelWrapper):
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
+            num_pipeline_stages=num_pipeline_stages,
+            pipeline_stage_id=pipeline_stage_id,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
         )
 
-    def forward(self, batch: dict) -> dict:
+        if self.is_pipeline_parallel_enabled:
+            assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
+            assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
+
+    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -97,18 +107,32 @@ class ModelWrapperForPretraining(ModelWrapper):
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
 
+        if isinstance(batch, torch.Tensor):
+            batch = {"text": batch}
+
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids)
 
-        model_outputs = self.model(**batch, return_dict=True)
-        logits: torch.Tensor = model_outputs.logits
+        output = self.model(**batch, return_dict=True)
+
+        # without pipeline parallel, we compute the loss outside
+        if not self.is_pipeline_parallel_enabled:
+            output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
+
+        return output
+
+    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
+        if isinstance(model_outputs, torch.Tensor):
+            logits = model_outputs
+        else:
+            logits: torch.Tensor = model_outputs.logits
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
 
         loss_context = nullcontext
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             logits = tensor_to_dtensor(
                 logits,
                 device_mesh=self.tp_mesh,
@@ -120,7 +144,9 @@ class ModelWrapperForPretraining(ModelWrapper):
                 loss_context = loss_parallel
 
         with loss_context():
-            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
+
+        lm_loss = lm_loss * lm_loss_multiplier
 
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss
@@ -132,6 +158,20 @@ class ModelWrapperForPretraining(ModelWrapper):
             output = {"loss": loss}
 
         return output
+
+    def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
+        if ProcessGroupManager.is_tensor_parallel_first_rank():
+            tokens = tokens.to(torch.cuda.current_device())
+        else:
+            tokens = torch.empty(shape, dtype=torch.long, device=torch.cuda.current_device())
+
+        torch.distributed.broadcast(
+            tokens,
+            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
+            group=ProcessGroupManager.get_tensor_parallel_group(),
+        )
+
+        return tokens
 
     def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
         batch = {}
@@ -151,7 +191,8 @@ class ModelWrapperForPretraining(ModelWrapper):
                 cu_seqlens = cu_seqlens.to(torch.int32)
 
                 seqlen = cu_seqlens[1:] - cu_seqlens[:-1]
-                max_seqlen = seqlen.max()
+                # we move to CPU here otherwise FlashAttention will move to CPU on every invocation i.e all layers
+                max_seqlen = seqlen.max().item()
 
                 if self.reset_position_ids:
                     position_ids = torch.cat(
@@ -170,41 +211,44 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         batch["input_ids"] = input_ids
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
 
         return batch
 
-    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> torch.Tensor:
-        if self.tp_world_size > 1:
-            tp_source_rank = ProcessGroupManager.get_tensor_parallel_first_rank()
-            tp_group = ProcessGroupManager.get_tensor_parallel_group()
-
-            if self.tp_rank == 0:
-                tokens: torch.Tensor = batch["text"]
-                tokens = tokens.to(torch.cuda.current_device())
-            else:
-                tokens = torch.empty(
-                    (self.micro_batch_size, self.sequence_length + 1),
-                    dtype=torch.long,
-                    device=torch.cuda.current_device(),
-                )
-
-            torch.distributed.broadcast(tokens, src=tp_source_rank, group=tp_group)
-        else:
-            tokens: torch.Tensor = batch["text"]
+    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> tuple[torch.Tensor]:
+        if self.is_pipeline_parallel_enabled:
+            # when using pipeline parallel, we broadcast the input outside the model function
+            tokens = batch["text"]
             tokens = tokens.to(torch.cuda.current_device())
 
-        input_ids = tokens[:, :-1]
-        labels = tokens[:, 1:]
+            if self.pipeline_stage_id == 0:
+                input_ids = tokens[:, :-1]
+            else:
+                input_ids = tokens
+
+            labels = None
+        else:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
+                tokens = self.broadcast_tensor_parallel_input(
+                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
+                )
+            else:
+                tokens = batch["text"]
+                tokens = tokens.to(torch.cuda.current_device())
+
+            input_ids = tokens[:, :-1]
+            labels = tokens[:, 1:]
 
         return input_ids, labels
 
     def _setup_model(self) -> None:
-        super()._setup_model()
-
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
 
+        super()._setup_model()
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
         if self.use_padding_free_transformer:
             if not self.reset_attention_mask:
                 self.register_buffer(
@@ -218,11 +262,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                     ),
                     persistent=False,
                 )
-                self.register_buffer(
-                    "max_seqlen",
-                    torch.tensor(self.sequence_length, device=torch.cuda.current_device()),
-                    persistent=False,
-                )
+                self.max_seqlen = self.sequence_length
 
             if self.reset_position_ids:
                 assert self.reset_attention_mask, "reset_attention_mask should be specified with reset_position_ids"

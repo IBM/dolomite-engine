@@ -26,7 +26,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         self.initializer_range = config.initializer_range
         self.head_dim = self.embed_dim // self.num_heads
 
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.wte = Embedding_TP(
             config.vocab_size,
             self.embed_dim,
@@ -49,7 +48,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             [
                 self.layer_class(
                     config,
-                    normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     moe_implementation=self.moe_implementation,
@@ -63,7 +61,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             config.normalization_function,
             self.embed_dim,
             eps=config.layer_norm_epsilon,
-            normalization_implementation=self.normalization_implementation,
             use_padding_free_transformer=self._use_padding_free_transformer,
             sequence_parallel=self.sequence_parallel,
         )

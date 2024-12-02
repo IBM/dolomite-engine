@@ -12,7 +12,6 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
     def __init__(
         self,
         config: RNNDolomiteConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         attention_pattern: str,
         use_padding_free_transformer: bool,
@@ -29,10 +28,7 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
         self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
+            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
 
         self.attention_pattern = attention_pattern
@@ -51,10 +47,7 @@ class RNNDolomiteBlock(GPTDolomiteBlock):
             raise ValueError(f"Attention pattern {attention_pattern} not supported.")
 
         self.ln_2 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
+            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
 
         self.mlp = MLP(config)

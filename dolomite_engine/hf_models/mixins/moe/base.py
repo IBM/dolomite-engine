@@ -5,10 +5,10 @@ import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
+from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ...utils import divide_if_divisible
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 
@@ -46,7 +46,6 @@ class BaseMoEModelMixin(BaseModelMixin):
             [
                 self.layer_class(
                     config,
-                    normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     moe_implementation=self.moe_implementation,
@@ -56,10 +55,7 @@ class BaseMoEModelMixin(BaseModelMixin):
             ]
         )
         self.ln_f = get_normalization_function(
-            config.normalization_function,
-            self.embed_dim,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=self.normalization_implementation,
+            config.normalization_function, self.embed_dim, eps=config.layer_norm_epsilon
         )
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)

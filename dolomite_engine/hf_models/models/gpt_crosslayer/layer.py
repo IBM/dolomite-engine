@@ -13,7 +13,6 @@ class CrossLayer(nn.Module):
     def __init__(
         self,
         config: GPTCrossLayerConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
@@ -21,7 +20,6 @@ class CrossLayer(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
         self.m_residual = config.m_residual
 
         self._use_eager_attention = attention_implementation == "eager"
@@ -33,19 +31,13 @@ class CrossLayer(nn.Module):
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
         self.ln_1 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
+            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
         self.attn = get_attention_module(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
         self.ln_2 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
-            normalization_implementation=normalization_implementation,
+            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
         self.mlp = MLP(config)
 
@@ -97,7 +89,6 @@ class GPTCrossLayerBlock(nn.Module):
     def __init__(
         self,
         config: GPTCrossLayerConfig,
-        normalization_implementation: str,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_indices: list[int],
@@ -127,7 +118,6 @@ class GPTCrossLayerBlock(nn.Module):
             [
                 CrossLayer(
                     config,
-                    normalization_implementation,
                     attention_implementation,
                     use_padding_free_transformer,
                     layer_idx,

@@ -1,6 +1,3 @@
-import logging
-
-from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
 from torch.optim.adam import Adam as TorchAdam
@@ -14,10 +11,10 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
+from ..containers import ModelContainer, OptimizerContainer
 from ..enums import ParamsGroupMethod
-from ..model_wrapper import ModelWrapper
-from ..utils import is_apex_available, log_rank_0, run_rank_n
-from .params_group import get_param_groups
+from ..utils import is_apex_available
+from .params_group import get_param_groups_list
 
 
 if is_apex_available():
@@ -54,22 +51,22 @@ _OPTIMIZER_CLASSES = {
 }
 
 
-def get_optimizer(
+def get_optimizer_container(
     optimizer_class_name: str,
     optimizer_class_args: dict,
-    model: ModelWrapper,
+    model_container: ModelContainer,
     params_group_method: ParamsGroupMethod,
-) -> Optimizer:
-    """setup optimizer for the model
+) -> OptimizerContainer:
+    """setup list of optimizers for the model
 
     Args:
         optimizer_class_name (str): optimizer class name
         optimizer_class_args (dict): args for the optimizer class
-        model (ModelWrapper): model
+        model_container (ModelContainer): model container
         params_group_method (ParamsGroupMethod): the params grouping to use
 
     Returns:
-        Optimizer: an optimizer
+        OptimizerContainer: optimizer container
     """
 
     if optimizer_class_name not in _OPTIMIZER_CLASSES:
@@ -79,20 +76,7 @@ def get_optimizer(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    params_group = get_param_groups(model, optimizer_class_args, params_group_method)
-    optimizer = optimizer_class(params_group, **optimizer_class_args)
+    params_groups_list = get_param_groups_list(model_container, optimizer_class_args, params_group_method)
+    optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
 
-    return optimizer
-
-
-@run_rank_n
-def log_optimizer(optimizer: Optimizer) -> None:
-    """print optimizer
-
-    Args:
-        optimizer (Optimizer): optimizer to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ optimizer ------------------------")
-    log_rank_0(logging.INFO, optimizer)
-    log_rank_0(logging.INFO, "-------------------- end of optimizer ---------------------")
+    return OptimizerContainer(optimizer_list)

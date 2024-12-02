@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
-from ..utils import log_rank_0, string_to_torch_dtype
+from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
 
@@ -26,6 +26,8 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         teacher_model_name: str | None,
         teacher_model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         teacher_model_dtype: torch.dtype,
@@ -51,6 +53,8 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             use_padding_free_transformer (bool): whether to use padding free transformer
             tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
@@ -75,11 +79,14 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
+            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
+            num_pipeline_stages=num_pipeline_stages,
+            pipeline_stage_id=pipeline_stage_id,
             neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
@@ -88,7 +95,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             reset_position_ids=reset_position_ids,
         )
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled():
             raise NotImplementedError()
 
     def forward(self, batch: dict) -> dict:

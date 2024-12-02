@@ -132,17 +132,17 @@ def is_einops_available() -> bool:
 
 
 try:
-    import khd
+    import cute_kernels
 
-    _IS_KHD_AVAILABLE = True
+    _IS_CUTE_KERNELS_AVAILABLE = True
 except ImportError:
-    _IS_KHD_AVAILABLE = False
+    _IS_CUTE_KERNELS_AVAILABLE = False
 
-    warn_rank_0("kernel-hyperdrive is not installed, install from https://github.com/mayank31398/kernel-hyperdrive")
+    warn_rank_0("cute-kernels is not installed, install from https://github.com/mayank31398/cute-kernels")
 
 
-def is_kernel_hyperdrive_available() -> bool:
-    return _IS_KHD_AVAILABLE
+def is_cute_kernels_available() -> bool:
+    return _IS_CUTE_KERNELS_AVAILABLE
 
 
 try:

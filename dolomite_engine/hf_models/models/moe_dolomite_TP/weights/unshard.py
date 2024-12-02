@@ -114,13 +114,13 @@ def unshard_moe_dolomite_tensor_parallel_state_dicts(
 
 
 def fix_moe_dolomite_unsharded_state_dict(
-    config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str = ""
+    config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
         : config.vocab_size, :
     ]
     state_dict = _fix_attention(config, state_dict, prefix)
-    state_dict = _fix_moe(config, state_dict, tensor_parallel_size, prefix)
+    state_dict = _fix_moe(config, state_dict, tensor_parallel_world_size, prefix)
     return state_dict
 
 
@@ -146,33 +146,42 @@ def _get_moe(
         )
     }
 
+    column_parallel_shard_dim = 1
+    row_parallel_shard_dim = 2
+
     if is_glu(config.activation_function):
         # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
-        weights = [state_dict[prefix + "c_fc.weight"].chunk(2, dim=0) for state_dict in tensor_parallel_state_dicts]
-        weights = (torch.cat([w[0] for w in weights], dim=0), torch.cat([w[1] for w in weights], dim=0))
-        output[prefix + "c_fc.weight"] = torch.cat(weights, dim=0)
+        weights = [
+            state_dict[prefix + "c_fc.weight"].chunk(2, dim=column_parallel_shard_dim)
+            for state_dict in tensor_parallel_state_dicts
+        ]
+        weights = (
+            torch.cat([w[0] for w in weights], dim=column_parallel_shard_dim),
+            torch.cat([w[1] for w in weights], dim=column_parallel_shard_dim),
+        )
+        output[prefix + "c_fc.weight"] = torch.cat(weights, dim=column_parallel_shard_dim)
     else:
         output[prefix + "c_fc.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, prefix + "c_fc.weight", dim=0
+            tensor_parallel_state_dicts, prefix + "c_fc.weight", dim=column_parallel_shard_dim
         )
 
     output[prefix + "c_proj.weight"] = _concatenate_tensors_from_moe(
-        tensor_parallel_state_dicts, prefix + "c_proj.weight", dim=2
+        tensor_parallel_state_dicts, prefix + "c_proj.weight", dim=row_parallel_shard_dim
     )
     return output
 
 
-def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_size: int, prefix: str) -> dict:
+def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str) -> dict:
     assert not config.add_bias
 
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
             key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc.weight"
             weight = state_dict[key]
-            weight = weight.chunk(tensor_parallel_size, dim=0)
-            weight = [w.chunk(2, dim=0) for w in weight]
-            w0 = torch.cat([w[0] for w in weight])
-            w1 = torch.cat([w[1] for w in weight])
-            state_dict[key] = torch.cat([w0, w1], dim=0)
+            weight = weight.chunk(tensor_parallel_world_size, dim=1)
+            weight = [w.chunk(2, dim=1) for w in weight]
+            w0 = torch.cat([w[0] for w in weight], dim=1)
+            w1 = torch.cat([w[1] for w in weight], dim=1)
+            state_dict[key] = torch.cat([w0, w1], dim=1)
 
     return state_dict

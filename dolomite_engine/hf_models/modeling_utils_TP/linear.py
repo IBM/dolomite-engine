@@ -1,14 +1,13 @@
 import torch
 import torch.distributed
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ...utils import ProcessGroupManager
+from ...distributed import dtensor_to_tensor, tensor_to_dtensor, use_async_tensor_parallel
+from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedLinear
-from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import get_module_placements
 
 
 class ReplicatedLinear(ParameterizedLinear, DTensorModule):
@@ -28,18 +27,23 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Replicate()
             )
         )
         if bias:
             self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                tensor_to_dtensor(
+                    self.bias,
+                    device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                    current_placement=Replicate(),
                 )
             )
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+
+        if use_async_tensor_parallel():
+            self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
@@ -81,21 +85,26 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         )
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
             )
         )
         if bias:
             self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(0)]
+                tensor_to_dtensor(
+                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
                 )
             )
 
         self.input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
+        if use_async_tensor_parallel():
+            self.compile()
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
+        input = tensor_to_dtensor(
+            input, device_mesh=self.tp_mesh, current_placement=self.input_placement, desired_placement=Replicate()
+        )
         input = super().forward(input)
         input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
         return input
@@ -118,13 +127,13 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+        tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
         self.in_features_per_device = divide_if_divisible(
             in_features,
-            self.tp_world_size,
-            f"`in_features` ({in_features}) must be divisible by `tensor_parallel_world_size` ({self.tp_world_size})",
+            tp_world_size,
+            f"`in_features` ({in_features}) must be divisible by `tensor_parallel_world_size` ({tp_world_size})",
         )
 
         super().__init__(
@@ -137,18 +146,23 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
         )
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Shard(1)]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(1)
             )
         )
         if bias:
             self.bias = nn.Parameter(
-                DTensor.from_local(
-                    self.bias, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[Replicate()]
+                tensor_to_dtensor(
+                    self.bias,
+                    device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                    current_placement=Replicate(),
                 )
             )
 
         self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+
+        if use_async_tensor_parallel():
+            self.compile()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
