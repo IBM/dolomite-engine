@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import Cache
+from ..cache import RNNCache
 
 from .....utils import is_einops_available
 from ....config import CommonConfig
@@ -113,14 +113,14 @@ class DeltaNet(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
-        past_key_values: Cache | None = None,
+        past_key_values: RNNCache | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # change to inference mode.
         mode = "fused_recurrent" if hidden_states.shape[1] < 64 else self.mode
-        use_cache = (past_key_values is not None) and (len(past_key_values) > self.layer_idx)
+        use_cache = past_key_values is not None and len(past_key_values) > self.layer_idx
 
         last_state = past_key_values[self.layer_idx] if use_cache else None
 
@@ -129,8 +129,8 @@ class DeltaNet(nn.Module):
                 attention_mask = attention_mask[:, -1:]
 
         if self.use_short_conv:
-            conv_state = last_state[0] if use_cache else None
             if self.share_conv_kernel:
+                conv_state = last_state[0] if use_cache else None
                 # conv state is updated inplace
                 hidden_states = self.h_conv1d(hidden_states, attention_mask, conv_state)
                 q, k, v = self._prepare_qkv_for_forward(hidden_states)
@@ -204,8 +204,8 @@ class DeltaNet(nn.Module):
                     state = (conv_state_q, conv_state_k, conv_state_v, recurrent_state)
             else:
                 state = (recurrent_state,)
-            state = (recurrent_state,)
-            past_key_values.update(state, self.layer_idx)
+
+            past_key_values.update(state, None, self.layer_idx)
 
         o = rearrange(o, "b h l d -> b l h d")
         o = self.o_norm(o)
