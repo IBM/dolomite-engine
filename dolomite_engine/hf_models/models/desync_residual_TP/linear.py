@@ -44,7 +44,9 @@ class EnsembleRowParallelLinear(RowParallelLinear):
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
         input = F.linear(input, self.weight, self.bias)
         input = input + tensor_to_dtensor(
-            residual / ProcessGroupManager.get_tensor_parallel_world_size(), current_placement=Partial()
+            residual / ProcessGroupManager.get_tensor_parallel_world_size(),
+            device_mesh=self.tp_mesh,
+            current_placement=Partial(),
         )
         input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.output_placement)
         return input
