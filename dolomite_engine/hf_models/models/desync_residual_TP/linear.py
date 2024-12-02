@@ -36,15 +36,15 @@ class EnsembleLinear_TP(ParameterizedLinear, DTensorModule):
             )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return F.linear(input, self.weight.to_local(), None if self.bias is None else self.bias.to_local())
+        return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
 
 
 class EnsembleRowParallelLinear(RowParallelLinear):
     def forward(self, input: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, current_placement=Shard(-1))
+        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
         input = F.linear(input, self.weight, self.bias)
         input = input + tensor_to_dtensor(
             residual / ProcessGroupManager.get_tensor_parallel_world_size(), current_placement=Partial()
         )
-        input = dtensor_to_tensor(input, desired_placement=self.output_placement)
+        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.output_placement)
         return input
