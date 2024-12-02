@@ -9,6 +9,7 @@ from dolomite_engine.hf_models import (
     AttentionHeadType,
     DesyncResidualConfig,
     GPTDolomiteConfig,
+    LadderResidualConfig,
     MoEDolomiteConfig,
     PositionEmbeddingType,
 )
@@ -49,11 +50,11 @@ class TensorParallelTest(TestCommons):
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
             [PositionEmbeddingType.rope],
-            ["sdpa"],
-            [torch.float32],
+            ["flash_attention_2"],
+            [torch.float16],
             [False, True],
             [False, True],
-            [GPTDolomiteConfig.model_type],
+            [LadderResidualConfig.model_type],
         )
     )
     @TestCommons.slow_test
@@ -79,7 +80,6 @@ class TensorParallelTest(TestCommons):
             self.skipTest("skipping test since running all takes too long")
 
         if use_padding_free_transformer and attention_implementation != "flash_attention_2":
-            print(use_padding_free_transformer, attention_implementation)
             self.skipTest("skipping test since flash attention is needed for padding free transformer")
 
         gpus_per_node = torch.cuda.device_count()
