@@ -5,7 +5,6 @@ from .models import (
     DesyncResidualForCausalLM,
     DesyncResidualForCausalLM_TP,
     DesyncResidualModel,
-    DesyncResidualModel_TP,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
@@ -17,7 +16,6 @@ from .models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
-    LadderResidualModel_TP,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
@@ -25,9 +23,9 @@ from .models import (
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
-    StickbreakingConfig,
-    StickbreakingForCausalLM,
-    StickbreakingModel,
+    StickBreakingConfig,
+    StickBreakingForCausalLM,
+    StickBreakingModel,
 )
 
 
@@ -39,7 +37,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
-    (StickbreakingConfig, StickbreakingModel, StickbreakingForCausalLM),
+    (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []

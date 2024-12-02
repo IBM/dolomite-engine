@@ -1,4 +1,3 @@
-import gc
 import math
 
 import torch
@@ -6,8 +5,8 @@ import triton
 import triton.language as tl
 
 
-log2 = math.log(2)
-inv_log2: tl.constexpr = 1 / log2
+inv_log2: tl.constexpr = 1 / math.log(2)
+
 ALLOW_TF32: tl.constexpr = False
 DEBUG: tl.constexpr = False
 BLOCK_M = 64
