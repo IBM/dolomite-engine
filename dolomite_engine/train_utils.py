@@ -5,13 +5,13 @@ import torch
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
-from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import AutoConfig
 
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, get_next_batch
 from .distributed import dtensor_to_tensor
 from .enums import GradientCheckpointingMethod
-from .hf_models import MoEDolomiteForCausalLM, is_custom_model
+from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapper
 from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics

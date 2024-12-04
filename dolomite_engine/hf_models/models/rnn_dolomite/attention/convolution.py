@@ -23,6 +23,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         kernel_size: int,
         bias: bool = False,
         activation: nn.Module = nn.Identity(),
+        activation_string: str | None = None,
         use_fast_conv1d: bool = True,
         std: float | None = None,
     ) -> None:
@@ -39,6 +40,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
 
         self.hidden_size = hidden_size
         self.activation = activation
+        self.activation_string = activation_string
 
         if not is_causal_conv1d_available():
             if use_fast_conv1d:
@@ -73,8 +75,12 @@ class ParameterizedShortConvolution(nn.Conv1d):
         return s.format(**self.__dict__)
 
     def forward(
-        self, x: torch.Tensor, mask: Optional[torch.Tensor] = None, cache: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+        self,
+        x: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        cache: Optional[torch.Tensor] = None,
+        output_final_state: bool = False,
+    ) -> tuple[torch.Tensor]:
         """
         Args:
             x (`torch.Tensor`):
@@ -84,13 +90,17 @@ class ParameterizedShortConvolution(nn.Conv1d):
             cache (`Optional[torch.Tensor]`):
                 Previous cache tensor of shape `[batch_size, hidden_size, kernel_size]`,
         Returns:
-            Tensor of shape `[batch_size, seq_len, hidden_size]`. The `cache` (if provided) is updated inplace.
+            tuple of Tensor of shape `[batch_size, seq_len, hidden_size]` and cache.
         """
+
+        batch_size, _, hidden_size = x.shape
 
         if mask is not None:
             x = x.mul_(mask.unsqueeze(-1))
+        if output_final_state and cache is None:
+            cache = x.new_zeros(batch_size, hidden_size, self.kernel_size[0])
         if cache is not None and x.shape[1] == 1:
-            return self.step(x, cache)
+            return self.step(x, cache), cache
         x = rearrange(x, "b l d -> b d l")
         # Update state (B D W)
         if cache is not None:
@@ -100,12 +110,12 @@ class ParameterizedShortConvolution(nn.Conv1d):
                 x=x,
                 weight=rearrange(self.weight, "d 1 w -> d w"),
                 bias=self.bias,
-                activation=self.activation,
+                activation=self.activation_string,
             )
         else:
             x = self._conv_forward(x, self.weight, self.bias)[..., : x.shape[-1]]
             x = self.activation(x)
-        return rearrange(x, "b d l -> b l d")
+        return rearrange(x, "b d l -> b l d"), cache
 
     def step(self, x: torch.Tensor, cache: torch.Tensor):
         assert x.shape[1] == 1, "Only support decoding with 1 token at a time for now"
@@ -117,7 +127,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
                 conv_state=cache,
                 weight=rearrange(self.weight, "d 1 w -> d w"),
                 bias=self.bias,
-                activation=self.activation,
+                activation=self.activation_string,
             )
         else:
             dtype = x.dtype

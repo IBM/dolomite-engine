@@ -5,6 +5,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
+from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
@@ -31,13 +32,12 @@ class BaseMoEModelMixin(BaseModelMixin):
         self.num_heads = config.n_head
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
-        self.mask_value = None
 
-        assert (
-            self.embed_dim % self.num_heads == 0
-        ), f"`embed_dim` ({self.embed_dim}) must be divisible by `num_heads` ({self.num_heads})"
-
-        self.head_dim = self.embed_dim // self.num_heads
+        self.head_dim = divide_if_divisible(
+            self.embed_dim,
+            self.num_heads,
+            f"`embed_dim` ({self.embed_dim}) must be divisible by `num_heads` ({self.num_heads})",
+        )
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
@@ -79,7 +79,7 @@ class BaseMoEModelMixin(BaseModelMixin):
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,
         output_aux_loss: bool = True,
-    ) -> tuple | MoeModelOutputWithPastAndAuxLoss:
+    ) -> MoeModelOutputWithPastAndAuxLoss:
         (
             output_hidden_states,
             use_cache,

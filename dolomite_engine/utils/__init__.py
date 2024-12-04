@@ -13,7 +13,6 @@ from .packages import (
     is_causal_conv1d_available,
     is_cute_kernels_available,
     is_einops_available,
-    is_fla_available,
     is_flash_attention_available,
     is_ms_amp_available,
     is_transformer_engine_available,

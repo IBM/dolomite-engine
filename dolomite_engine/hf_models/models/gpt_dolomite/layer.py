@@ -8,10 +8,6 @@ from .mlp import MLP
 
 
 class GPTDolomiteBlock(nn.Module):
-    """
-    Layer implementation for the transformer block
-    """
-
     def __init__(
         self,
         config: GPTDolomiteConfig,

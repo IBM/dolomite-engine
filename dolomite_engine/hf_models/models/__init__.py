@@ -29,4 +29,5 @@ from .moe_dolomite_TP import (
 )
 from .palm import PaLMConfig, PaLMForCausalLM, PaLMModel
 from .rnn_dolomite import RNNDolomiteConfig, RNNDolomiteForCausalLM, RNNDolomiteModel
+from .rnn_moe_dolomite import RNNMoEDolomiteConfig, RNNMoEDolomiteForCausalLM, RNNMoEDolomiteModel
 from .stickbreaking import StickBreakingConfig, StickBreakingForCausalLM, StickBreakingModel

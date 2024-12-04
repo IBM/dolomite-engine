@@ -31,7 +31,12 @@ from .models import (
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
+    RNNMoEDolomiteConfig,
+    RNNMoEDolomiteForCausalLM,
+    RNNMoEDolomiteModel,
+    StickBreakingConfig,
     StickBreakingForCausalLM,
+    StickBreakingModel,
     convert_gpt_dolomite_to_gpt_crosslayer,
 )
 from .register_hf import get_model_parallel_class, is_custom_model, register_model_classes

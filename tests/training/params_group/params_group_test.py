@@ -18,6 +18,7 @@ class ParamsGroupTest(TestCommons):
             ("gpt_dolomite_config.yml", "gpt_dolomite_mup.json"),
             ("moe_dolomite_config.yml", "moe_dolomite_mup.json"),
             ("rnn_dolomite_config.yml", "rnn_dolomite_mup.json"),
+            ("rnn_moe_dolomite_config.yml", "rnn_moe_dolomite_mup.json"),
         ]
     )
     def test_mup_group(self, config_filename: str, expected_groups_filename: str) -> None:
@@ -25,7 +26,7 @@ class ParamsGroupTest(TestCommons):
             os.path.join("params_group/training_configs", config_filename)
         )
 
-        if "rnn_dolomite" in config_filename:
+        if "rnn_dolomite" in config_filename or "rnn_moe_dolomite" in config_filename:
             if not torch.cuda.is_available():
                 self.skipTest("skipping test because CUDA is unavailable")
 
@@ -62,6 +63,7 @@ class ParamsGroupTest(TestCommons):
             ("gpt_dolomite_config.yml", "gpt_dolomite_normal.json"),
             ("moe_dolomite_config.yml", "moe_dolomite_normal.json"),
             ("rnn_dolomite_config.yml", "rnn_dolomite_normal.json"),
+            ("rnn_moe_dolomite_config.yml", "rnn_moe_dolomite_normal.json"),
         ]
     )
     def test_normal_group(self, config_filename: str, expected_groups_filename: str) -> None:
@@ -69,7 +71,7 @@ class ParamsGroupTest(TestCommons):
             os.path.join("params_group/training_configs", config_filename)
         )
 
-        if "rnn_dolomite" in config_filename:
+        if "rnn_dolomite" in config_filename or "rnn_moe_dolomite" in config_filename:
             if not torch.cuda.is_available():
                 self.skipTest("skipping test because CUDA is unavailable")
 
