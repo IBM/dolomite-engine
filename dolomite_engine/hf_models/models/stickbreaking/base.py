@@ -5,6 +5,8 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from transformers import DynamicCache, GenerationMixin, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
+
+from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from .config import StickBreakingConfig
 from .layer import StickBreakingBlock
 from .sb_varlen import BLOCK_M, BLOCK_N, row_block_counts_and_sequence_ids
@@ -51,6 +53,7 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
+
         sb_metadata = None
         if self._use_padding_free_transformer:
             with torch.no_grad():
