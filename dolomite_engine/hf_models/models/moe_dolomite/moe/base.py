@@ -76,6 +76,7 @@ class SparseMoE(nn.Module):
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner
+        self.shared_intermediate_size = config.shared_n_inner
 
         activation_function = config.activation_function
 
@@ -105,6 +106,15 @@ class SparseMoE(nn.Module):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_fc_shared = ParameterizedLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.act = get_activation_function(activation_function)
 
@@ -118,6 +128,13 @@ class SparseMoE(nn.Module):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_proj_shared = ParameterizedLinear(
+                in_features=self.shared_intermediate_size,
+                out_features=self.hidden_size,
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
@@ -128,7 +145,14 @@ class SparseMoE(nn.Module):
         hidden_states = hidden_states.view(-1, self.hidden_size)
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
-        hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+        moe_output = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+        if self.shared_intermediate_size is None:
+            hidden_states = moe_output
+        else:
+            shared_experts_output = self._compute_shared_experts(hidden_states)
+            hidden_states = moe_output + shared_experts_output
 
         if not self.use_padding_free_transformer:
             hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
@@ -173,6 +197,12 @@ class SparseMoE(nn.Module):
         zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
         hidden_states = zeros.index_add(0, batch_index, hidden_states)
 
+        return hidden_states
+
+    def _compute_shared_experts(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.c_fc_shared(hidden_states)
+        hidden_states = self.act(hidden_states)
+        hidden_states = self.c_proj_shared(hidden_states)
         return hidden_states
 
     def _compute_expert_assignment(

@@ -1,11 +1,8 @@
-from copy import deepcopy
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
 from ...modeling_utils import get_attention_module, get_normalization_function
-from ..gpt_dolomite.mlp import MLP
 from .config import MoEDolomiteConfig
 from .moe import get_moe
 
@@ -41,13 +38,6 @@ class SparseMoEBlock(nn.Module):
             layer_idx=layer_idx,
         )
 
-        self.mlp = None
-        if config.shared_n_inner is not None:
-            shared_config = deepcopy(config)
-            shared_config.n_inner = config.shared_n_inner
-            self.mlp = MLP(shared_config)
-            del shared_config
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -80,7 +70,7 @@ class SparseMoEBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states, router_logits, aux_loss = self._compute_moe_and_mlp(hidden_states)
+        hidden_states, router_logits, aux_loss = self.moe(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
@@ -97,12 +87,3 @@ class SparseMoEBlock(nn.Module):
             outputs += (aux_loss,)
 
         return outputs
-
-    def _compute_moe_and_mlp(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
-        moe_output, router_logits, aux_loss = self.moe(hidden_states)
-
-        if self.mlp is not None:
-            mlp_output = self.mlp(hidden_states)
-            moe_output = mlp_output + moe_output
-
-        return moe_output, router_logits, aux_loss
