@@ -15,7 +15,7 @@ from ..hf_models import (
 )
 from ..hf_models.modeling_utils import Attention
 from ..hf_models.models.gpt_dolomite.layer import MLP
-from ..hf_models.models.moe_dolomite.moe import SparseMoE
+from ..hf_models.models.moe_dolomite.moe import MoE
 from ..hf_models.models.rnn_dolomite.attention import DeltaNet
 from ..model_wrapper import ModelWrapper
 from ..utils import log_rank_0
@@ -98,7 +98,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 
     # collect parameters with mup learning rate
     for module_name, module in model.named_modules():
-        if isinstance(module, (Attention, MLP, SparseMoE, DeltaNet)):
+        if isinstance(module, (Attention, MLP, MoE, DeltaNet)):
             for param_name, param in module.named_parameters():
                 # we don't add bias or norms to mup group
                 if not (param_name.endswith(".bias") or "norm" in param_name):

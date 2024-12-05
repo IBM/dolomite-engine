@@ -1,12 +1,12 @@
 from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
 from .config import MoEDolomiteConfig
-from .layer import SparseMoEBlock
+from .layer import MoEDolomiteBlock
 
 
 class MoEDolomitePreTrainedModel(PreTrainedMoEModelMixin):
     config_class = MoEDolomiteConfig
-    layer_class = SparseMoEBlock
-    _no_split_modules = ["SparseMoEBlock"]
+    layer_class = MoEDolomiteBlock
+    _no_split_modules = ["MoEDolomiteBlock"]
 
 
 class MoEDolomiteModel(MoEDolomitePreTrainedModel, BaseMoEModelMixin): ...

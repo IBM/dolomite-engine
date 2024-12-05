@@ -7,7 +7,7 @@ from .config import MoEDolomiteConfig
 from .moe import get_moe
 
 
-class SparseMoEBlock(nn.Module):
+class MoEDolomiteBlock(nn.Module):
     def __init__(
         self,
         config: MoEDolomiteConfig,

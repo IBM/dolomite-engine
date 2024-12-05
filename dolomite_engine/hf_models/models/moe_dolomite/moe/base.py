@@ -63,7 +63,7 @@ class ParameterizedExperts(nn.Module):
             self.bias.zero_()
 
 
-class SparseMoE(nn.Module):
+class MoE(nn.Module):
     def __init__(
         self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
     ) -> None:

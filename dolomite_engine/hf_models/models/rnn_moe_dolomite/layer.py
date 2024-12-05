@@ -4,13 +4,13 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
-from ..moe_dolomite.layer import SparseMoEBlock
+from ..moe_dolomite.layer import MoEDolomiteBlock
 from ..moe_dolomite.moe import get_moe
 from ..rnn_dolomite.attention import DeltaNet
 from .config import RNNMoEDolomiteConfig
 
 
-class RNNMoEDolomiteBlock(SparseMoEBlock):
+class RNNMoEDolomiteBlock(MoEDolomiteBlock):
     def __init__(
         self,
         config: RNNMoEDolomiteConfig,

@@ -7,7 +7,7 @@ from .....utils import is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
-from .base import ParameterizedExperts, SparseMoE
+from .base import MoE, ParameterizedExperts
 
 
 if is_cute_kernels_available():
@@ -56,7 +56,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         )
 
 
-class ScatterMoE(SparseMoE):
+class ScatterMoE(MoE):
     def __init__(
         self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
     ) -> None:

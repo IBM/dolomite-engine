@@ -2,11 +2,11 @@ import torch.nn as nn
 
 from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
 from ..moe_dolomite import MoEDolomiteConfig
-from ..moe_dolomite.layer import SparseMoEBlock
+from ..moe_dolomite.layer import MoEDolomiteBlock
 from .moe_TP import ScatterMoE_TP
 
 
-class SparseMoEBlock_TP(SparseMoEBlock):
+class MoEDolomiteBlock_TP(MoEDolomiteBlock):
     def __init__(
         self,
         config: MoEDolomiteConfig,
