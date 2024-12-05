@@ -691,19 +691,6 @@ def sb_bwd(do, dr, q, k, v, cu_seqlens, M, sequence_ids, cu_row_blocks, first_ro
         return dq, dk, dv
 
 
-"""
-| Tasks  |Version|Filter|n-shot|    Metric     |   | Value |   |Stderr|
-|--------|------:|------|-----:|---------------|---|------:|---|------|
-|pile_10k|      1|none  |     0|bits_per_byte  |↓  | 0.7010|±  |   N/A|
-|        |       |none  |     0|byte_perplexity|↓  | 1.6256|±  |   N/A|
-|        |       |none  |     0|word_perplexity|↓  |25.9136|±  |   N/A|
-|--------|------:|------|-----:|---------------|---|------:|---|------|
-|pile_10k|      1|none  |     0|bits_per_byte  |↓  | 0.7010|±  |   N/A|
-|        |       |none  |     0|byte_perplexity|↓  | 1.6256|±  |   N/A|
-|        |       |none  |     0|word_perplexity|↓  |25.9136|±  |   N/A|
-"""
-
-
 class StickBreakingAttention(torch.autograd.Function):
     @staticmethod
     def forward(ctx, q, k, v, cu_seqlens, cu_row_blocks, first_row_block, sequence_ids, inv_temp):
