@@ -45,6 +45,8 @@ class SBAttention(Attention):
     def __init__(self, config: StickBreakingConfig, causal: bool, layer_idx: int | None = None) -> None:
         super().__init__(config, causal, layer_idx)
         self.sb_remainder = config.sb_remainder
+        if self.sb_remainder:
+            self.head_bias = torch.nn.Parameter(torch.zeros(self.hidden_size // self.head_dim, self.head_dim))
         if config.add_qkv_bias:
             init_method = InitMethod(config.init_method)
             initializer_range = config.initializer_range
@@ -93,8 +95,6 @@ class SBAttention(Attention):
                 inv_temp=softmax_scale,
                 zero_start=True,
             )
-            if self.sb_remainder:
-                attn_output = attn_output.add_(rem[..., None] * v_)
             attn_output = attn_output.view(bsz, heads, length, hdim)
             return attn_output, rem
 
@@ -102,9 +102,10 @@ class SBAttention(Attention):
             attn_output, rem = sb_attn(q_, k_, v_)
         else:
             attn_output, rem = decoding_stickbreaking(q=q_, k=k_, v=v_, scale=softmax_scale)
-            if self.sb_remainder:
-                attn_output = attn_output + rem[..., None] * v_[..., -1:, :]
         attn_output = attn_output.permute(0, 2, 1, 3).contiguous()
+
+        if self.sb_remainder:
+            attn_output = attn_output + rem[..., None] * self.head_bias[None, :, None, :]
 
         # ==========================================================================================
         # attn_output -> (total_q, num_heads, head_dim)
@@ -152,8 +153,7 @@ class PaddingFreeSBAttention(SBAttention):
             sequence_ids=sequence_ids,
         )
         if self.sb_remainder:
-            attn_output = attn_output + rem[..., None] * value
-
+            attn_output = attn_output + rem[..., None] * self.head_bias[:, None, :]
         attn_output = attn_output.permute(1, 0, 2)
 
         attn_output = attn_output.view(-1, self.hidden_size)
