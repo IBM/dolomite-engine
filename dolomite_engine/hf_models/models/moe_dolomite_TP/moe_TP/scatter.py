@@ -142,7 +142,7 @@ class SharedExpertsColumnParallelLinear(ColumnParallelLinear):
         return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
 
 
-class SharedExpertsRowParallelLinear(ColumnParallelLinear):
+class SharedExpertsRowParallelLinear(RowParallelLinear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
 
