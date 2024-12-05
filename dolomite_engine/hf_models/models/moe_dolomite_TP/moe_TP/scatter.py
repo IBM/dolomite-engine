@@ -10,7 +10,7 @@ from .....distributed import dtensor_to_tensor, tensor_to_dtensor
 from .....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ....modeling_utils_TP import Dropout_TP, DTensorModule
+from ....modeling_utils_TP import ColumnParallelLinear, Dropout_TP, DTensorModule, RowParallelLinear
 from ...moe_dolomite import MoEDolomiteConfig
 from ...moe_dolomite.moe import ScatterMoE
 from ...moe_dolomite.moe.scatter import ParameterizedScatteredExperts
@@ -137,6 +137,16 @@ class RowParallelScatteredExperts(ColumnParallelScatteredExperts):
         )
 
 
+class SharedExpertsColumnParallelLinear(ColumnParallelLinear):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
+
+
+class SharedExpertsRowParallelLinear(ColumnParallelLinear):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
+
+
 class ScatterMoE_TP(ScatterMoE, DTensorModule):
     def __init__(
         self,
@@ -154,6 +164,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner
+        self.shared_intermediate_size = config.shared_n_inner
 
         activation_function = config.activation_function
 
@@ -185,6 +196,15 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_fc_shared = SharedExpertsColumnParallelLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.act = get_activation_function(activation_function)
 
@@ -198,9 +218,17 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_proj_shared = SharedExpertsRowParallelLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
-
         self.placement = Shard(0) if sequence_parallel else Replicate()
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
@@ -233,7 +261,13 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             hidden_states, device_mesh=self.tp_mesh, desired_placement=Replicate(), grad_placement=Partial()
         )
 
-        hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
+        moe_output = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+        if self.shared_intermediate_size is None:
+            hidden_states = moe_output
+        else:
+            shared_experts_output = self._compute_shared_experts(hidden_states)
+            hidden_states = moe_output + shared_experts_output
 
         hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=Partial())
         hidden_states = dtensor_to_tensor(

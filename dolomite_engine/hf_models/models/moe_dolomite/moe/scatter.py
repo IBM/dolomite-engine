@@ -69,6 +69,7 @@ class ScatterMoE(SparseMoE):
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner
+        self.shared_intermediate_size = config.shared_n_inner
 
         activation_function = config.activation_function
 
@@ -98,6 +99,15 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_fc_shared = ParameterizedLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.act = get_activation_function(activation_function)
 
@@ -111,6 +121,13 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_proj_shared = ParameterizedLinear(
+                in_features=self.shared_intermediate_size,
+                out_features=self.hidden_size,
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
