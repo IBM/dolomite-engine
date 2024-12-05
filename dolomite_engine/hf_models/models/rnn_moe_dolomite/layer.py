@@ -1,12 +1,9 @@
-from copy import deepcopy
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_normalization_function
-from ..gpt_dolomite.mlp import MLP
 from ..moe_dolomite.layer import SparseMoEBlock
 from ..moe_dolomite.moe import get_moe
 from ..rnn_dolomite.attention import DeltaNet
@@ -55,20 +52,12 @@ class RNNMoEDolomiteBlock(SparseMoEBlock):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-
         self.moe = get_moe(
             config,
             moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,
         )
-
-        self.mlp = None
-        if config.shared_n_inner is not None:
-            shared_config = deepcopy(config)
-            shared_config.n_inner = config.shared_n_inner
-            self.mlp = MLP(shared_config)
-            del shared_config
 
     def forward(
         self,
@@ -103,7 +92,7 @@ class RNNMoEDolomiteBlock(SparseMoEBlock):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states, router_logits, aux_loss = self._compute_moe_and_mlp(hidden_states)
+        hidden_states, router_logits, aux_loss = self.moe(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
