@@ -3,9 +3,16 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
+from transformers import DynamicCache, GenerationMixin, PreTrainedModel
+from transformers.modeling_outputs import BaseModelOutputWithPast
 from .config import StickBreakingConfig
 from .layer import StickBreakingBlock
+<<<<<<< HEAD
 from .sb_varlen import BLOCK_M, BLOCK_N, row_block_counts_and_sequence_ids
+=======
+import torch
+from . import sb_varlen
+>>>>>>> b2a624a (SB attention fix.)
 
 
 class StickBreakingPreTrainedModel(PreTrainedModelMixin):
@@ -49,12 +56,24 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
+<<<<<<< HEAD
 
         sb_metadata = None
         if self._use_padding_free_transformer:
             with torch.no_grad():
                 # cu_row_blocks, first_row_block, sequence_ids
                 sb_metadata = row_block_counts_and_sequence_ids(cu_seqlens[1:], BLOCK_M, BLOCK_N)
+=======
+        sb_metadata = sb_varlen.row_block_counts_and_sequence_ids(cu_seqlens, sb_varlen.BLOCK_M, sb_varlen.BLOCK_N)
+        # ==========================================================================================
+        # padding_free:
+        #     attention_mask -> None
+        # flash:
+        #     attention_mask -> (batch_size, key_length)
+        # else:
+        #     attention_mask -> (batch_size, 1, query_length, key_length)
+        # ==========================================================================================
+>>>>>>> b2a624a (SB attention fix.)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
@@ -69,7 +88,11 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
+<<<<<<< HEAD
                 sb_metadata=sb_metadata,
+=======
+                sb_metadata=sb_metadata
+>>>>>>> b2a624a (SB attention fix.)
             )
 
         hidden_states = self.ln_f(hidden_states)
@@ -82,3 +105,7 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
             past_key_values=past_key_values,
             hidden_states=all_hidden_states,
         )
+<<<<<<< HEAD
+=======
+
+>>>>>>> b2a624a (SB attention fix.)
