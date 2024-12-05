@@ -153,12 +153,7 @@ class PaddingFreeSBAttention(SBAttention):
             sequence_ids=sequence_ids,
         )
         if self.sb_remainder:
-<<<<<<< HEAD
             attn_output = attn_output + rem[..., None] * self.head_bias[:, None, :]
-=======
-            attn_output = attn_output + rem[..., None] * value
-
->>>>>>> b2a624a (SB attention fix.)
         attn_output = attn_output.permute(1, 0, 2)
 
         attn_output = attn_output.view(-1, self.hidden_size)
