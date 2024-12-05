@@ -5,10 +5,9 @@ import triton
 import triton.language as tl
 
 
-inv_log2: tl.constexpr = 1 / math.log(2)
+INV_LOG2: tl.constexpr = 1 / math.log(2)
 
 ALLOW_TF32: tl.constexpr = False
-DEBUG: tl.constexpr = False
 BLOCK_M = 64
 BLOCK_N = 64
 
@@ -88,7 +87,7 @@ def _forward(
     BLOCK_N: tl.constexpr,
     BLOCK_D: tl.constexpr,
     ALLOW_TF32: tl.constexpr = ALLOW_TF32,
-    inv_log2: tl.constexpr = inv_log2,
+    INV_LOG2: tl.constexpr = INV_LOG2,
     no_grad: tl.constexpr = False,
     MIN_LOG_ACC: tl.constexpr = -1.0,
 ):
@@ -96,7 +95,7 @@ def _forward(
     head_id = tl.program_id(0)
     M_block_id = tl.program_id(1)
 
-    qk_scale = inv_log2 * logit_scale
+    qk_scale = INV_LOG2 * logit_scale
     M_range = tl.arange(0, BLOCK_M)
     N_range = tl.arange(0, BLOCK_N)
     D_range = tl.arange(0, BLOCK_D)
@@ -315,12 +314,12 @@ def _backward_dq(
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
     BLOCK_D: tl.constexpr,
-    inv_log2: tl.constexpr = inv_log2,
+    INV_LOG2: tl.constexpr = INV_LOG2,
     ALLOW_TF32: tl.constexpr = ALLOW_TF32,
 ):
     head_id = tl.program_id(0)
     M_block_id = tl.program_id(1)
-    qk_scale = inv_log2 * logit_scale
+    qk_scale = INV_LOG2 * logit_scale
     M_range = tl.arange(0, BLOCK_M)
     N_range = tl.arange(0, BLOCK_N)
     D_range = tl.arange(0, BLOCK_D)
@@ -456,12 +455,12 @@ def _backward_dkdv(
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
     BLOCK_D: tl.constexpr,
-    inv_log2: tl.constexpr = inv_log2,
+    INV_LOG2: tl.constexpr = INV_LOG2,
 ):
 
     head_id = tl.program_id(0)
     N_block_id = tl.program_id(1)
-    qk_scale = inv_log2 * logit_scale
+    qk_scale = INV_LOG2 * logit_scale
     M_range = tl.arange(0, BLOCK_M)
     N_range = tl.arange(0, BLOCK_N)
     D_range = tl.arange(0, BLOCK_D)
@@ -689,19 +688,6 @@ def sb_bwd(do, dr, q, k, v, cu_seqlens, M, sequence_ids, cu_row_blocks, first_ro
         # assert all(unique_idxs == correct_idxs)
         # assert M.size(1) - 1 == M_idxs[-1, -1], (M.size(1), M_idxs[-1, -1])
         return dq, dk, dv
-
-
-"""
-| Tasks  |Version|Filter|n-shot|    Metric     |   | Value |   |Stderr|
-|--------|------:|------|-----:|---------------|---|------:|---|------|
-|pile_10k|      1|none  |     0|bits_per_byte  |↓  | 0.7010|±  |   N/A|
-|        |       |none  |     0|byte_perplexity|↓  | 1.6256|±  |   N/A|
-|        |       |none  |     0|word_perplexity|↓  |25.9136|±  |   N/A|
-|--------|------:|------|-----:|---------------|---|------:|---|------|
-|pile_10k|      1|none  |     0|bits_per_byte  |↓  | 0.7010|±  |   N/A|
-|        |       |none  |     0|byte_perplexity|↓  | 1.6256|±  |   N/A|
-|        |       |none  |     0|word_perplexity|↓  |25.9136|±  |   N/A|
-"""
 
 
 class StickBreakingAttention(torch.autograd.Function):
