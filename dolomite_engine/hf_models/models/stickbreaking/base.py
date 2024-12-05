@@ -48,7 +48,13 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
-        sb_metadata = sb_varlen.row_block_counts_and_sequence_ids(cu_seqlens, sb_varlen.BLOCK_M, sb_varlen.BLOCK_N)
+        sb_metadata = None
+        if self._use_padding_free_transformer:
+            with torch.no_grad():
+                # cu_row_blocks, first_row_block, sequence_ids
+                sb_metadata = sb_varlen.row_block_counts_and_sequence_ids(
+                    cu_seqlens[1:], sb_varlen.BLOCK_M, sb_varlen.BLOCK_N)
+    
         # ==========================================================================================
         # padding_free:
         #     attention_mask -> None
