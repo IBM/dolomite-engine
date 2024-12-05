@@ -102,6 +102,12 @@ class ProcessGroupManager:
             enable_symm_mem_for_group(ProcessGroupManager.get_tensor_parallel_group().group_name)
             torch._inductor.config._micro_pipeline_tp = True
 
+        group = ProcessGroupManager.get_tensor_parallel_group()
+        ranks = torch.distributed.get_process_group_ranks(group)
+
+        global _TENSOR_PARALLEL_FIRST_RANK
+        _TENSOR_PARALLEL_FIRST_RANK = ranks[0]
+
     @staticmethod
     def is_initialized() -> bool:
         return torch.distributed.is_initialized()
@@ -195,11 +201,6 @@ class ProcessGroupManager:
     @staticmethod
     def get_tensor_parallel_first_rank() -> int:
         global _TENSOR_PARALLEL_FIRST_RANK
-
-        if _TENSOR_PARALLEL_FIRST_RANK is None:
-            group = ProcessGroupManager.get_tensor_parallel_group()
-            ranks = torch.distributed.get_process_group_ranks(group)
-            _TENSOR_PARALLEL_FIRST_RANK = ranks[0]
         return _TENSOR_PARALLEL_FIRST_RANK
 
     @contextmanager
