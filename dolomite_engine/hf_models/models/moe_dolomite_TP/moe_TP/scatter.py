@@ -220,10 +220,8 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         )
         if self.shared_intermediate_size is not None:
             self.c_proj_shared = SharedExpertsRowParallelLinear(
-                in_features=self.hidden_size,
-                out_features=(
-                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
-                ),
+                in_features=self.shared_intermediate_size,
+                out_features=self.hidden_size,
                 bias=config.add_bias,
                 std=std,
             )
