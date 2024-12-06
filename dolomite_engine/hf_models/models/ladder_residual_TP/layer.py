@@ -85,7 +85,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
                 desired_placement=Replicate(),
             )
         )
-        current_attention_out = self.mlp(current_attention_out)
+        current_attention_out = self.attn(current_attention_out)
         # attention reduce scatter
         current_attention_out = dtensor_to_tensor(
             tensor_to_dtensor(
