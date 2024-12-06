@@ -16,7 +16,12 @@ class LadderResidualBlock(GPTDolomiteBlock):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
-        residual = residual + previous_attention_out
+        # first layer can be avoided, saves time
+        if self.layer_idx > 0:
+            if self.m_residual is not None:
+                previous_attention_out = previous_attention_out * self.m_residual
+
+            residual = residual + previous_attention_out
 
         current_attention_out = self.ln_1(residual)
         current_attention_out = self.attn(
@@ -28,15 +33,13 @@ class LadderResidualBlock(GPTDolomiteBlock):
             max_seqlen=max_seqlen,
         )
 
-        if self.m_residual is not None:
-            current_attention_out = current_attention_out * self.m_residual
+        if self.layer_idx > 0:
+            if self.m_residual is not None:
+                previous_mlp_out = previous_mlp_out * self.m_residual
 
-        residual = residual + previous_mlp_out
+            residual = residual + previous_mlp_out
 
         current_mlp_out = self.ln_2(residual)
         current_mlp_out = self.mlp(current_mlp_out)
-
-        if self.m_residual is not None:
-            current_mlp_out = current_mlp_out * self.m_residual
 
         return current_attention_out, current_mlp_out, residual
