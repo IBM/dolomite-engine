@@ -7,6 +7,8 @@ from ..enums import ParamsGroupMethod
 from ..hf_models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
+    LadderResidualForCausalLM,
+    LadderResidualForCausalLM_TP,
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
     RNNDolomiteForCausalLM,
@@ -80,6 +82,8 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             RNNMoEDolomiteForCausalLM,
             MoEDolomiteForCausalLM_TP,
             StickBreakingForCausalLM,
+            LadderResidualForCausalLM,
+            LadderResidualForCausalLM_TP,
         ),
     ), "mup is not supported with this model architecture"
 
