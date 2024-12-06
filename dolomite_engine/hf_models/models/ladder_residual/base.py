@@ -40,7 +40,6 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
             position_ids,
             rope_cos_sin,
             past_key_values,
-            output_router_logits,
         ) = self._prepare_a_bunch_of_stuff(
             input_ids=input_ids,
             past_key_values=past_key_values,
@@ -52,7 +51,6 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
             output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            output_router_logits=output_router_logits,
         )
 
         previous_attention_out = None
@@ -75,12 +73,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
                 max_seqlen=max_seqlen,
             )
 
-        if self.m_residual is not None:
-            previous_attention_out = previous_attention_out * self.m_residual
-            previous_mlp_out = previous_mlp_out * self.m_residual
-
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
-
         hidden_states = self.ln_f(hidden_states)
 
         # Add last hidden state
