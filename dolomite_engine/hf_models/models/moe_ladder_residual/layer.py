@@ -1,10 +1,10 @@
 import torch
 from transformers import DynamicCache
 
-from ..moe_dolomite.layer import SparseMoEBlock
+from ..moe_dolomite.layer import MoEDolomiteBlock
 
 
-class MoELadderResidualBlock(SparseMoEBlock):
+class MoELadderResidualBlock(MoEDolomiteBlock):
     def forward(
         self,
         previous_attention_out: torch.Tensor,
@@ -18,7 +18,9 @@ class MoELadderResidualBlock(SparseMoEBlock):
         output_router_logits: bool = False,
         output_aux_loss: bool = True,
     ) -> tuple[torch.Tensor]:
-        residual = residual + previous_attention_out
+        # previous_attention_out on first layer is None
+        if previous_attention_out is not None:
+            residual = residual + previous_attention_out
 
         current_attention_out = self.ln_1(residual)
         current_attention_out = self.attn(
@@ -33,10 +35,12 @@ class MoELadderResidualBlock(SparseMoEBlock):
         if self.m_residual is not None:
             current_attention_out = current_attention_out * self.m_residual
 
-        residual = residual + previous_mlp_out
+        # previous_mlp_out on first layer is None
+        if previous_mlp_out is not None:
+            residual = residual + previous_mlp_out
 
         current_mlp_out = self.ln_2(residual)
-        current_mlp_out, router_logits, aux_loss = self._compute_moe_and_mlp(current_mlp_out)
+        current_mlp_out, router_logits, aux_loss = self.moe(current_mlp_out)
 
         if self.m_residual is not None:
             current_mlp_out = current_mlp_out * self.m_residual
