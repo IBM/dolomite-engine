@@ -10,16 +10,7 @@ from .dtensor_module import DTensorModule
 from .TP import get_module_placements
 
 
-class Linear_TP(ParameterizedLinear, DTensorModule):
-    def __init__(self, in_features, out_features, bias=True, device=None, dtype=None, std=None):
-        super().__init__(in_features, out_features, bias, device, dtype, std)
-        self.enable_output_redistribute()
-
-    def enable_output_redistribute(self, enable: bool = True) -> None:
-        self.redistribute_output = enable
-
-
-class ReplicatedLinear(Linear_TP):
+class ReplicatedLinear(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -64,7 +55,7 @@ class ReplicatedLinear(Linear_TP):
         return input
 
 
-class ColumnParallelLinear(Linear_TP):
+class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,
@@ -126,7 +117,7 @@ class ColumnParallelLinear(Linear_TP):
         )
 
 
-class RowParallelLinear(Linear_TP):
+class RowParallelLinear(ParameterizedLinear, DTensorModule):
     def __init__(
         self,
         in_features: int,

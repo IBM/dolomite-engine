@@ -31,9 +31,6 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             sequence_parallel=sequence_parallel,
         )
 
-        # self.attn.c_proj.enable_output_redistribute(False)
-        # self.mlp.c_proj.enable_output_redistribute(False)
-
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
