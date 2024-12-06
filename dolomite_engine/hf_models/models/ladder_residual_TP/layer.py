@@ -76,6 +76,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             residual = residual + previous_attention_out
 
         current_attention_out = self.ln_1(residual)
+        # attention all gather
         current_attention_out = dtensor_to_tensor(
             tensor_to_dtensor(
                 current_attention_out,
@@ -85,6 +86,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             )
         )
         current_attention_out = self.mlp(current_attention_out)
+        # attention reduce scatter
         current_attention_out = dtensor_to_tensor(
             tensor_to_dtensor(
                 current_attention_out,
@@ -101,6 +103,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             residual = residual + previous_mlp_out
 
         current_mlp_out = self.ln_2(residual)
+        # mlp all gather
         current_mlp_out = dtensor_to_tensor(
             tensor_to_dtensor(
                 current_mlp_out,
@@ -110,6 +113,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             )
         )
         current_mlp_out = self.mlp(current_mlp_out)
+        # mlp reduce scatter
         current_mlp_out = dtensor_to_tensor(
             tensor_to_dtensor(
                 current_mlp_out,
