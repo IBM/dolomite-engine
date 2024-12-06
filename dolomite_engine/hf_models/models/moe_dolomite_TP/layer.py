@@ -1,16 +1,12 @@
-from copy import deepcopy
-
 import torch.nn as nn
 
-from ...enums import AttentionHeadType
 from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
-from ..gpt_dolomite_TP.layer import MLP_TP
 from ..moe_dolomite import MoEDolomiteConfig
-from ..moe_dolomite.layer import SparseMoEBlock
+from ..moe_dolomite.layer import MoEDolomiteBlock
 from .moe_TP import ScatterMoE_TP
 
 
-class SparseMoEBlock_TP(SparseMoEBlock):
+class MoEDolomiteBlock_TP(MoEDolomiteBlock):
     def __init__(
         self,
         config: MoEDolomiteConfig,
@@ -23,8 +19,6 @@ class SparseMoEBlock_TP(SparseMoEBlock):
         nn.Module.__init__(self)
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
@@ -58,10 +52,3 @@ class SparseMoEBlock_TP(SparseMoEBlock):
             sequence_parallel=sequence_parallel,
             layer_idx=layer_idx,
         )
-
-        self.mlp = None
-        if config.shared_n_inner is not None:
-            shared_config = deepcopy(config)
-            shared_config.n_inner = config.shared_n_inner
-            self.mlp = MLP_TP(shared_config)
-            del shared_config

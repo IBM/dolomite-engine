@@ -7,7 +7,7 @@ from .....utils import is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
-from .base import ParameterizedExperts, SparseMoE
+from .base import MoE, ParameterizedExperts
 
 
 if is_cute_kernels_available():
@@ -56,7 +56,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         )
 
 
-class ScatterMoE(SparseMoE):
+class ScatterMoE(MoE):
     def __init__(
         self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
     ) -> None:
@@ -69,6 +69,7 @@ class ScatterMoE(SparseMoE):
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner
+        self.shared_intermediate_size = config.shared_n_inner
 
         activation_function = config.activation_function
 
@@ -98,6 +99,15 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_fc_shared = ParameterizedLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.act = get_activation_function(activation_function)
 
@@ -111,6 +121,13 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_proj_shared = ParameterizedLinear(
+                in_features=self.shared_intermediate_size,
+                out_features=self.hidden_size,
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 

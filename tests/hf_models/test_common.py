@@ -259,10 +259,10 @@ class TestCommons(TestCase):
             else:
                 assert "FlashAttention2" in str(model)
 
-        if moe_implementation == "eager":
-            assert "SparseMoE" in str(model)
-        elif moe_implementation == "scattermoe":
+        if moe_implementation == "scattermoe":
             assert "ScatterMoE" in str(model)
+        elif moe_implementation == "eager":
+            assert "MoE" in str(model)
 
         kwargs.pop("torch_dtype", None)
         assert len(kwargs) == 0
