@@ -1,17 +1,9 @@
-import torch
 import torch.nn as nn
-from torch.distributed._tensor.placement_types import Partial, Replicate
-from transformers import DynamicCache
 
-from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import get_attention_module_TP, get_module_placements, get_normalization_function_TP
 from ..ladder_residual import LadderResidualConfig
 from ..ladder_residual.layer import LadderResidualBlock
-from .mlp import LadderMLP_TP
-
-
-torch._inductor.config.reorder_for_compute_comm_overlap = True
 
 
 class LadderResidualBlock_TP(LadderResidualBlock):
@@ -57,70 +49,3 @@ class LadderResidualBlock_TP(LadderResidualBlock):
 
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
-
-    def forward(
-        self,
-        previous_attention_out: torch.Tensor,
-        previous_mlp_out: torch.Tensor,
-        residual: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor]:
-        if self.layer_idx > 0:
-            if self.m_residual is not None:
-                previous_attention_out = previous_attention_out * self.m_residual
-
-            residual = residual + previous_attention_out
-
-        current_attention_out = self.ln_1(residual)
-        # attention all gather
-        current_attention_out = dtensor_to_tensor(
-            tensor_to_dtensor(
-                current_attention_out,
-                device_mesh=self.tp_mesh,
-                current_placement=self.placement,
-                desired_placement=Replicate(),
-            )
-        )
-        current_attention_out = self.attn(current_attention_out)
-        # attention reduce scatter
-        current_attention_out = dtensor_to_tensor(
-            tensor_to_dtensor(
-                current_attention_out,
-                device_mesh=self.tp_mesh,
-                current_placement=Partial(),
-                desired_placement=self.placement,
-            )
-        )
-
-        if self.layer_idx > 0:
-            if self.m_residual is not None:
-                previous_mlp_out = previous_mlp_out * self.m_residual
-
-            residual = residual + previous_mlp_out
-
-        current_mlp_out = self.ln_2(residual)
-        # mlp all gather
-        current_mlp_out = dtensor_to_tensor(
-            tensor_to_dtensor(
-                current_mlp_out,
-                device_mesh=self.tp_mesh,
-                current_placement=self.placement,
-                desired_placement=Replicate(),
-            )
-        )
-        current_mlp_out = self.mlp(current_mlp_out)
-        # mlp reduce scatter
-        current_mlp_out = dtensor_to_tensor(
-            tensor_to_dtensor(
-                current_mlp_out,
-                device_mesh=self.tp_mesh,
-                current_placement=Partial(),
-                desired_placement=self.placement,
-            )
-        )
-
-        return current_attention_out, current_mlp_out, residual
