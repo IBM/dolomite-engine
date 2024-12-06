@@ -109,7 +109,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
                 current_mlp_out,
                 device_mesh=self.tp_mesh,
                 current_placement=Partial(),
-                desired_placement=self.placement(),
+                desired_placement=self.placement,
             )
         )
 
