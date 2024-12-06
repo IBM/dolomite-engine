@@ -50,10 +50,20 @@ class LMHead_TP(Embedding_TP):
         sequence_parallel: bool,
         tp_mesh: DeviceMesh,
     ) -> torch.Tensor:
+        input_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+        if sequence_parallel:
+            if tensor_parallel_word_embeddings:
+                desired_placement = Replicate()
+            else:
+                desired_placement = None
+        else:
+            desired_placement = Replicate()
+
         input = tensor_to_dtensor(
             input,
             device_mesh=tp_mesh,
-            current_placement=get_module_placements(use_padding_free_transformer, sequence_parallel),
+            current_placement=input_placement,
+            desired_placement=desired_placement,
         )
         input = F.linear(input, weight)
         input = dtensor_to_tensor(
