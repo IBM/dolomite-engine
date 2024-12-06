@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torch.distributed._tensor.placement_types import Partial, Replicate
-from torch.distributed.tensor.experimental import local_map
 
 from ...distributed import dtensor_to_tensor, tensor_to_dtensor
 from ...enums import Kernel
