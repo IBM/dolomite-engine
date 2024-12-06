@@ -32,7 +32,7 @@ class LadderResidualBlock_TP(LadderResidualBlock):
         self.mlp.c_proj.enable_output_redistribute(False)
 
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-        self.output_placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
+        self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(
         self,
@@ -55,11 +55,14 @@ class LadderResidualBlock_TP(LadderResidualBlock):
 
         # all gather
         current_attention_out = tensor_to_dtensor(
-            current_attention_out, device_mesh=self.tp_mesh, desired_placement=Replicate()
+            current_attention_out,
+            device_mesh=self.tp_mesh,
+            current_placement=self.placement,
+            desired_placement=Replicate(),
         )
         # reduce scatter
         current_mlp_out = dtensor_to_tensor(
-            current_mlp_out, device_mesh=self.tp_mesh, desired_placement=self.output_placement
+            current_mlp_out, device_mesh=self.tp_mesh, desired_placement=self.placement
         )
 
         current_attention_out = self.attn(
@@ -80,10 +83,15 @@ class LadderResidualBlock_TP(LadderResidualBlock):
         current_mlp_out = self.ln_2(residual)
 
         # all gather
-        current_mlp_out = tensor_to_dtensor(current_mlp_out, device_mesh=self.tp_mesh, desired_placement=Replicate())
+        current_mlp_out = tensor_to_dtensor(
+            current_mlp_out,
+            device_mesh=self.tp_mesh,
+            current_placement=self.placement,
+            desired_placement=Replicate(),
+        )
         # reduce scatter
         current_attention_out = dtensor_to_tensor(
-            current_attention_out, device_mesh=self.tp_mesh, desired_placement=self.output_placement
+            current_attention_out, device_mesh=self.tp_mesh, desired_placement=self.placement
         )
 
         current_mlp_out = self.mlp(current_mlp_out)
