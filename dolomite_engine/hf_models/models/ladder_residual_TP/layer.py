@@ -76,13 +76,22 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             residual = residual + previous_attention_out
 
         current_attention_out = self.ln_1(residual)
-        current_attention_out = self.attn(
-            current_attention_out,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
+        current_attention_out = dtensor_to_tensor(
+            tensor_to_dtensor(
+                current_attention_out,
+                device_mesh=self.tp_mesh,
+                current_placement=self.placement,
+                desired_placement=Replicate(),
+            )
+        )
+        current_attention_out = self.mlp(current_attention_out)
+        current_attention_out = dtensor_to_tensor(
+            tensor_to_dtensor(
+                current_attention_out,
+                device_mesh=self.tp_mesh,
+                current_placement=Partial(),
+                desired_placement=self.placement,
+            )
         )
 
         if self.layer_idx > 0:
