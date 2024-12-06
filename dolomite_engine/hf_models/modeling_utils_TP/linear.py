@@ -10,7 +10,16 @@ from .dtensor_module import DTensorModule
 from .TP import get_module_placements
 
 
-class ReplicatedLinear(ParameterizedLinear, DTensorModule):
+class Linear_TP(ParameterizedLinear, DTensorModule):
+    def __init__(self, in_features, out_features, bias=True, device=None, dtype=None, std=None):
+        super().__init__(in_features, out_features, bias, device, dtype, std)
+        self.enable_output_redistribute()
+
+    def enable_output_redistribute(self, enable: bool = True) -> None:
+        self.redistribute_output = enable
+
+
+class ReplicatedLinear(Linear_TP):
     def __init__(
         self,
         in_features: int,
@@ -48,13 +57,14 @@ class ReplicatedLinear(ParameterizedLinear, DTensorModule):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.input_placement)
         input = super().forward(input)
-        input = dtensor_to_tensor(
-            input, device_mesh=self.tp_mesh, desired_placement=Replicate(), grad_placement=Partial()
-        )
+        if self.redistribute_output:
+            input = dtensor_to_tensor(
+                input, device_mesh=self.tp_mesh, desired_placement=Replicate(), grad_placement=Partial()
+            )
         return input
 
 
-class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
+class ColumnParallelLinear(Linear_TP):
     def __init__(
         self,
         in_features: int,
@@ -106,7 +116,8 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
             input, device_mesh=self.tp_mesh, current_placement=self.input_placement, desired_placement=Replicate()
         )
         input = super().forward(input)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
+        if self.redistribute_output:
+            input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=Shard(-1))
         return input
 
     def extra_repr(self) -> str:
@@ -115,7 +126,7 @@ class ColumnParallelLinear(ParameterizedLinear, DTensorModule):
         )
 
 
-class RowParallelLinear(ParameterizedLinear, DTensorModule):
+class RowParallelLinear(Linear_TP):
     def __init__(
         self,
         in_features: int,
@@ -167,7 +178,8 @@ class RowParallelLinear(ParameterizedLinear, DTensorModule):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=Shard(-1))
         input = super().forward(input)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.output_placement)
+        if self.redistribute_output:
+            input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.output_placement)
         return input
 
     def extra_repr(self) -> str:
