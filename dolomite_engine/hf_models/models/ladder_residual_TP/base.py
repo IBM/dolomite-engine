@@ -3,6 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....distributed import dtensor_to_tensor
+from ....utils import ProcessGroupManager
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
 from ...modeling_utils_TP import get_module_placements
 from ..ladder_residual import LadderResidualConfig
@@ -22,6 +23,13 @@ class LadderResidualPreTrainedModel_TP(PreTrainedModelMixin_TP):
 
 
 class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP):
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+        self.placement = get_module_placements(self._use_padding_free_transformer, self.sequence_parallel)
+        self.m_residual = config.m_residual
+
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
@@ -78,9 +86,12 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
             )
 
         previous_mlp_out = dtensor_to_tensor(
-            previous_mlp_out,
-            desired_placement=get_module_placements(self._use_padding_free_transformer, self.sequence_parallel),
+            previous_mlp_out, device_mesh=self.tp_mesh, desired_placement=self.placement
         )
+        if self.m_residual is not None:
+            previous_attention_out = previous_attention_out * self.m_residual
+            previous_mlp_out = previous_mlp_out * self.m_residual
+
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
 
         hidden_states = self.ln_f(hidden_states)
