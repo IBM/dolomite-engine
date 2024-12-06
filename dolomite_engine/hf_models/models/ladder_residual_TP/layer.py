@@ -61,8 +61,8 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             desired_placement=Replicate(),
         )
         # reduce scatter
-        current_mlp_out = dtensor_to_tensor(
-            current_mlp_out, device_mesh=self.tp_mesh, desired_placement=self.placement
+        previous_mlp_out = dtensor_to_tensor(
+            previous_mlp_out, device_mesh=self.tp_mesh, desired_placement=self.placement
         )
 
         current_attention_out = self.attn(
