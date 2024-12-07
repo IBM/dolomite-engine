@@ -1,5 +1,5 @@
 import torch
-from transformers import DynamicCache, GenerationMixin, PreTrainedModel
+from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
@@ -55,14 +55,6 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
             with torch.no_grad():
                 # cu_row_blocks, first_row_block, sequence_ids
                 sb_metadata = row_block_counts_and_sequence_ids(cu_seqlens[1:], BLOCK_M, BLOCK_N)
-        # ==========================================================================================
-        # padding_free:
-        #     attention_mask -> None
-        # flash:
-        #     attention_mask -> (batch_size, key_length)
-        # else:
-        #     attention_mask -> (batch_size, 1, query_length, key_length)
-        # ==========================================================================================
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
