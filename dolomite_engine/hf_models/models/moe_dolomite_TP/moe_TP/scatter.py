@@ -4,6 +4,7 @@ import torch
 import torch.distributed
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributed._functional_collectives import AsyncCollectiveTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....distributed import dtensor_to_tensor, tensor_to_dtensor
@@ -87,6 +88,9 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
         grouped_in: bool = False,
         grouped_out: bool = False,
     ) -> torch.Tensor:
+        if isinstance(input, AsyncCollectiveTensor):
+            input = input.wait()
+
         return scattered_experts(
             inputs=input,
             expert_weights=dtensor_to_tensor(self.weight).permute(0, 2, 1),
