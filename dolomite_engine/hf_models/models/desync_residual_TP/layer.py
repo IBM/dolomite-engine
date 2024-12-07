@@ -5,7 +5,7 @@ from transformers import DynamicCache
 from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import get_normalization_function_TP
 from ..desync_residual import DesyncResidualConfig
-from .attention import get_attention_module
+from .attention import get_attention_module_TP
 from .mlp import DesyncResidualMLP_TP
 from .normalization import get_desync_residual_normalization_function_TP
 
@@ -46,7 +46,7 @@ class DesyncResidualBlock_TP(nn.Module):
                 config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
 
-        self.attn = get_attention_module(
+        self.attn = get_attention_module_TP(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
 

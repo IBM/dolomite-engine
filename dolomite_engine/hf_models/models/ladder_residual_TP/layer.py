@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
+from ...modeling_utils_TP import get_normalization_function_TP
 from ..ladder_residual import LadderResidualConfig
+from .attention import get_attention_module_TP
 from .mlp import LadderMLP_TP
 
 
