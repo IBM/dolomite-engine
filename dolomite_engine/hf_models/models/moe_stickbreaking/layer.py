@@ -21,15 +21,11 @@ class MoEStickBreakingBlock(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
+            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
 
         if use_padding_free_transformer:
@@ -38,11 +34,8 @@ class MoEStickBreakingBlock(nn.Module):
             self.attn = SBAttention(config, causal=True, layer_idx=layer_idx)
 
         self.ln_2 = get_normalization_function(
-            config.normalization_function,
-            hidden_size,
-            eps=config.layer_norm_epsilon,
+            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-
         self.moe = get_moe(
             config,
             moe_implementation=moe_implementation,
@@ -62,7 +55,6 @@ class MoEStickBreakingBlock(nn.Module):
         output_aux_loss: bool = True,
         sb_metadata=None,
     ) -> tuple[torch.Tensor]:
-
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
