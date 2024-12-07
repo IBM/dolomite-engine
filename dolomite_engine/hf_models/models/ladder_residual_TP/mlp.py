@@ -29,7 +29,7 @@ class LadderMLP_TP(MLP_TP):
         current_mlp_out = F.linear(
             current_mlp_out, dtensor_to_tensor(self.c_fc.weight), dtensor_to_tensor(self.c_fc.bias)
         )
-        current_mlp_out = self.c_fc(current_mlp_out)
+        current_mlp_out = self.act(current_mlp_out)
         current_mlp_out = F.linear(
             current_mlp_out, dtensor_to_tensor(self.c_proj.weight), dtensor_to_tensor(self.c_proj.bias)
         )
