@@ -4,9 +4,9 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
+from ..moe_dolomite.moe import get_moe
 from ..stickbreaking.attention import PaddingFreeSBAttention, SBAttention
 from .config import MoEStickBreakingConfig
-from ..moe_dolomite.moe import get_moe
 
 
 class MoEStickBreakingBlock(nn.Module):
@@ -100,6 +100,5 @@ class MoEStickBreakingBlock(nn.Module):
 
         if output_aux_loss:
             outputs += (aux_loss,)
-
 
         return outputs

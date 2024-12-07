@@ -20,6 +20,9 @@ from .models import (
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
     MoEDolomiteModel,
+    MoEStickBreakingConfig,
+    MoEStickBreakingForCausalLM,
+    MoEStickBreakingModel,
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
@@ -29,9 +32,6 @@ from .models import (
     StickBreakingConfig,
     StickBreakingForCausalLM,
     StickBreakingModel,
-    MoEStickBreakingConfig,
-    MoEStickBreakingForCausalLM,
-    MoEStickBreakingModel,
 )
 
 

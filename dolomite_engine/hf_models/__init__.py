@@ -25,6 +25,9 @@ from .models import (
     MoEDolomiteForCausalLM_TP,
     MoEDolomiteModel,
     MoEDolomiteModel_TP,
+    MoEStickBreakingConfig,
+    MoEStickBreakingForCausalLM,
+    MoEStickBreakingModel,
     PaLMConfig,
     PaLMForCausalLM,
     PaLMModel,
@@ -37,9 +40,6 @@ from .models import (
     StickBreakingConfig,
     StickBreakingForCausalLM,
     StickBreakingModel,
-    MoEStickBreakingConfig,
-    MoEStickBreakingForCausalLM,
-    MoEStickBreakingModel,
     convert_gpt_dolomite_to_gpt_crosslayer,
 )
 from .register_hf import get_model_parallel_class, is_custom_model, register_model_classes

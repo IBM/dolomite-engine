@@ -1,13 +1,11 @@
 import torch
-
 from transformers import DynamicCache, GenerationMixin, PreTrainedModel
 
-
-from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin, MoeModelOutputWithPastAndAuxLoss
+from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
+from ..stickbreaking.sb_varlen import BLOCK_M, BLOCK_N, row_block_counts_and_sequence_ids
 from .config import MoEStickBreakingConfig
 from .layer import MoEStickBreakingBlock
 
-from ..stickbreaking.sb_varlen import BLOCK_M, BLOCK_N, row_block_counts_and_sequence_ids
 
 class MoEStickBreakingPreTrainedModel(PreTrainedMoEModelMixin):
     config_class = MoEStickBreakingConfig
@@ -87,7 +85,7 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
                 max_seqlen=max_seqlen,
                 output_router_logits=output_router_logits,
                 output_aux_loss=output_aux_loss,
-                sb_metadata=sb_metadata
+                sb_metadata=sb_metadata,
             )
 
             hidden_states = outputs[0]
