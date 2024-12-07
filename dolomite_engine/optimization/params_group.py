@@ -11,6 +11,7 @@ from ..hf_models import (
     LadderResidualForCausalLM_TP,
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
+    MoEStickBreakingForCausalLM,
     RNNDolomiteForCausalLM,
     RNNMoEDolomiteForCausalLM,
     StickBreakingForCausalLM,
@@ -84,6 +85,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             StickBreakingForCausalLM,
             LadderResidualForCausalLM,
             LadderResidualForCausalLM_TP,
+            MoEStickBreakingForCausalLM,
         ),
     ), "mup is not supported with this model architecture"
 
