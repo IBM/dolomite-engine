@@ -1,13 +1,17 @@
 import torch
-import torch.nn.functional as F
 from transformers import DynamicCache
 
+from .....utils import is_flash_attention_available
 from ....enums import PositionEmbeddingType
-from ....modeling_utils import apply_rotary_pos_emb, repeat_key_value
-from ....modeling_utils_TP.attention import SDPA_TP
+from ....modeling_utils import apply_rotary_pos_emb
+from ....modeling_utils_TP.attention import PaddingFreeAttention_TP
 
 
-class LadderResidualSDPA_TP(SDPA_TP):
+if is_flash_attention_available():
+    from flash_attn.flash_attn_interface import flash_attn_varlen_func
+
+
+class LadderResidualPaddingFreeAttention_TP(PaddingFreeAttention_TP):
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -17,34 +21,31 @@ class LadderResidualSDPA_TP(SDPA_TP):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        assert past_key_values is None
+
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
-        if past_key_values is not None:
-            key, value = past_key_values.update(key, value, self.layer_idx)
-
-        key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
-        value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
-
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
-        attn_output = F.scaled_dot_product_attention(
+        attn_output = flash_attn_varlen_func(
             query,
             key,
             value,
-            attn_mask=attention_mask,
+            cu_seqlens_q=cu_seqlens,
+            cu_seqlens_k=cu_seqlens,
+            max_seqlen_q=max_seqlen,
+            max_seqlen_k=max_seqlen,
             dropout_p=dropout_p,
-            is_causal=self.causal if attention_mask is None else False,
-            scale=softmax_scale,
+            softmax_scale=softmax_scale,
+            causal=self.causal,
         )
 
-        batch_size = attn_output.shape[0]
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
+        attn_output = attn_output.view(-1, self.hidden_size)
 
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
