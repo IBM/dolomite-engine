@@ -1,11 +1,16 @@
 import torch
 import torch.nn as nn
+from torch.distributed._tensor.placement_types import Partial, Replicate
 from transformers import DynamicCache
 
+from ....distributed import ProcessGroupManager
+from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import get_normalization_function_TP
+from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..ladder_residual import LadderResidualConfig
 from .attention import get_attention_module_TP
 from .mlp import LadderMLP_TP
+from .redistribute import backward_redistribute, forward_redistribute
 
 
 class LadderResidualBlock_TP(nn.Module):
@@ -49,6 +54,8 @@ class LadderResidualBlock_TP(nn.Module):
             config, use_padding_free_transformer=use_padding_free_transformer, sequence_parallel=sequence_parallel
         )
 
+        self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
+
     def forward(
         self,
         previous_attention_out: torch.Tensor,
@@ -83,6 +90,15 @@ class LadderResidualBlock_TP(nn.Module):
             residual = residual + previous_mlp_out
 
         current_mlp_out = self.ln_2(residual)
+        current_mlp_out = backward_redistribute(
+            current_mlp_out,
+            device_mesh=self.tp_mesh,
+            current_backward_placement=Partial(),
+            desired_backward_placement=Replicate(),
+        )
         current_attention_out, current_mlp_out = self.mlp(current_attention_out, current_mlp_out)
+        current_mlp_out = forward_redistribute(
+            current_mlp_out, device_mesh=self.tp_mesh, current_placement=Partial(), desired_placement=Replicate()
+        )
 
         return current_attention_out, current_mlp_out, residual
