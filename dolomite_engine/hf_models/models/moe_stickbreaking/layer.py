@@ -4,9 +4,9 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
-from ..gpt_dolomite.mlp import MLP
 from ..stickbreaking.attention import PaddingFreeSBAttention, SBAttention
 from .config import MoEStickBreakingConfig
+from ..moe_dolomite.moe import get_moe
 
 
 class MoEStickBreakingBlock(nn.Module):
@@ -15,6 +15,7 @@ class MoEStickBreakingBlock(nn.Module):
         config: MoEStickBreakingConfig,
         attention_implementation: str,
         use_padding_free_transformer: bool,
+        moe_implementation: str,
         layer_idx: int | None = None,
     ) -> None:
         super().__init__()
@@ -42,7 +43,12 @@ class MoEStickBreakingBlock(nn.Module):
             eps=config.layer_norm_epsilon,
         )
 
-        self.mlp = MLP(config)
+        self.moe = get_moe(
+            config,
+            moe_implementation=moe_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            layer_idx=layer_idx,
+        )
 
     def forward(
         self,
@@ -52,12 +58,15 @@ class MoEStickBreakingBlock(nn.Module):
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        output_router_logits: bool = False,
+        output_aux_loss: bool = True,
         sb_metadata=None,
     ) -> tuple[torch.Tensor]:
+
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        attn_output = self.attn(
+        hidden_states = self.attn(
             hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -68,20 +77,29 @@ class MoEStickBreakingBlock(nn.Module):
         )
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = attn_output + residual
-        residual = hidden_states
+        hidden_states = hidden_states + residual
 
+        residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        feed_forward_hidden_states = self.mlp(hidden_states)
+        hidden_states, router_logits, aux_loss = self.moe(hidden_states)
 
         if self.m_residual is not None:
-            feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = residual + feed_forward_hidden_states
+        hidden_states = hidden_states + residual
 
-        return hidden_states
+        outputs = (hidden_states,)
+
+        if output_router_logits:
+            outputs += (router_logits,)
+
+        if output_aux_loss:
+            outputs += (aux_loss,)
+
+
+        return outputs

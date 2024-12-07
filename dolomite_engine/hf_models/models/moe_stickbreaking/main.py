@@ -1,6 +1,6 @@
 from ...mixins import CausalLMModelMixin
-from .base import StickBreakingModel, StickBreakingPreTrainedModel
+from .base import MoEStickBreakingModel, MoEStickBreakingPreTrainedModel
 
 
-class StickBreakingForCausalLM(StickBreakingPreTrainedModel, CausalLMModelMixin):
-    base_model_class = StickBreakingModel
+class MoEStickBreakingForCausalLM(MoEStickBreakingPreTrainedModel, CausalLMModelMixin):
+    base_model_class = MoEStickBreakingModel

@@ -29,6 +29,9 @@ from .models import (
     StickBreakingConfig,
     StickBreakingForCausalLM,
     StickBreakingModel,
+    MoEStickBreakingConfig,
+    MoEStickBreakingForCausalLM,
+    MoEStickBreakingModel,
 )
 
 
@@ -42,6 +45,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
     (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
+    (MoEStickBreakingConfig, MoEStickBreakingModel, MoEStickBreakingForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
