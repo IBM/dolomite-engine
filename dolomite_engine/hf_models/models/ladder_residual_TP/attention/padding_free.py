@@ -27,6 +27,8 @@ class LadderResidualPaddingFreeAttention_TP(PaddingFreeAttention_TP):
     def forward(
         self,
         current_attention_out: torch.Tensor,
+        current_mlp_out: torch.Tensor,
+        residual: torch.Tensor,
         past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
@@ -72,7 +74,7 @@ class LadderResidualPaddingFreeAttention_TP(PaddingFreeAttention_TP):
         )
         current_attention_out = self.resid_dropout(current_attention_out)
 
-        return current_attention_out
+        return current_attention_out, current_mlp_out, residual
 
     def _prepare_qkv_for_forward(
         self, current_attention_out: torch.Tensor

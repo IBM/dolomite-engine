@@ -73,8 +73,10 @@ class LadderResidualBlock_TP(nn.Module):
             residual = residual + current_attention_out
 
         current_attention_out = self.ln_1(residual)
-        current_attention_out = self.attn(
+        current_attention_out, current_mlp_out, residual = self.attn(
             current_attention_out,
+            current_mlp_out,
+            residual,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             rope_cos_sin=rope_cos_sin,
@@ -95,7 +97,7 @@ class LadderResidualBlock_TP(nn.Module):
             current_backward_placement=Partial(),
             desired_backward_placement=Replicate(),
         )
-        current_attention_out, current_mlp_out = self.mlp(current_attention_out, current_mlp_out)
+        current_attention_out, current_mlp_out, residual = self.mlp(current_attention_out, current_mlp_out, residual)
         current_mlp_out = forward_redistribute(
             current_mlp_out, device_mesh=self.tp_mesh, current_placement=Partial(), desired_placement=Replicate()
         )

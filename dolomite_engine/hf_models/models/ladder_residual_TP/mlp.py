@@ -17,7 +17,9 @@ class LadderMLP_TP(MLP_TP):
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
         assert config.resid_pdrop == 0
 
-    def forward(self, current_attention_out: torch.Tensor, current_mlp_out: torch.Tensor) -> tuple[torch.Tensor]:
+    def forward(
+        self, current_attention_out: torch.Tensor, current_mlp_out: torch.Tensor, residual: torch.Tensor
+    ) -> tuple[torch.Tensor]:
         current_mlp_out = F.linear(
             current_mlp_out, dtensor_to_tensor(self.c_fc.weight), dtensor_to_tensor(self.c_fc.bias)
         )
@@ -25,4 +27,4 @@ class LadderMLP_TP(MLP_TP):
         current_mlp_out = F.linear(
             current_mlp_out, dtensor_to_tensor(self.c_proj.weight), dtensor_to_tensor(self.c_proj.bias)
         )
-        return current_attention_out, current_mlp_out
+        return current_attention_out, current_mlp_out, residual
