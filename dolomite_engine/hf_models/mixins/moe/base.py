@@ -147,7 +147,7 @@ class BaseMoEModelMixin(BaseModelMixin):
 
         # Add last hidden state
         if output_hidden_states:
-            all_hidden_states = all_hidden_states + (hidden_states,)
+            all_hidden_states += (hidden_states,)
 
         return MoeModelOutputWithPastAndAuxLoss(
             last_hidden_state=hidden_states,

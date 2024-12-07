@@ -2,9 +2,7 @@ import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ....distributed import dtensor_to_tensor
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
-from ...modeling_utils_TP import get_module_placements
 from ..ladder_residual import LadderResidualConfig
 from .layer import LadderResidualBlock_TP
 
@@ -35,7 +33,7 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple | BaseModelOutputWithPast:
+    ) -> BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,
@@ -77,12 +75,7 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
                 max_seqlen=max_seqlen,
             )
 
-        previous_mlp_out = dtensor_to_tensor(
-            previous_mlp_out,
-            desired_placement=get_module_placements(self._use_padding_free_transformer, self.sequence_parallel),
-        )
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
-
         hidden_states = self.ln_f(hidden_states)
 
         # Add last hidden state

@@ -4,9 +4,11 @@ import torch
 import torch.distributed
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributed._functional_collectives import AsyncCollectiveTensor
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from .....distributed import dtensor_to_tensor, tensor_to_dtensor
+from .....kernels import wait_for_ACT
 from .....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
@@ -87,8 +89,8 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
         grouped_in: bool = False,
         grouped_out: bool = False,
     ) -> torch.Tensor:
-        return scattered_experts(
-            inputs=input,
+        input = scattered_experts(
+            inputs=wait_for_ACT(input, wait_in_forward=True, wait_in_backward=False),
             expert_weights=dtensor_to_tensor(self.weight).permute(0, 2, 1),
             k=k,
             sorted_expert_idxs=sorted_expert_idxs,
@@ -98,6 +100,10 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
             grouped_in=grouped_in,
             grouped_out=grouped_out,
         )
+
+        input = wait_for_ACT(input, wait_in_forward=False, wait_in_backward=True)
+
+        return input
 
 
 class RowParallelScatteredExperts(ColumnParallelScatteredExperts):

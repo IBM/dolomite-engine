@@ -1,19 +1,18 @@
 import torch
 from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPast
 
-from ...mixins import BaseModelMixin, PreTrainedModelMixin
-from .config import LadderResidualConfig
-from .layer import LadderResidualBlock
-
-
-class LadderResidualPreTrainedModel(PreTrainedModelMixin):
-    config_class = LadderResidualConfig
-    layer_class = LadderResidualBlock
-    _no_split_modules = ["LadderResidualBlock"]
+from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
+from .config import MoELadderResidualConfig
+from .layer import MoELadderResidualBlock
 
 
-class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
+class MoELadderResidualPreTrainedModel(PreTrainedMoEModelMixin):
+    config_class = MoELadderResidualConfig
+    layer_class = MoELadderResidualBlock
+    _no_split_modules = ["MoELadderResidualBlock"]
+
+
+class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
@@ -27,7 +26,9 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> BaseModelOutputWithPast:
+        output_router_logits: bool | None = None,
+        output_aux_loss: bool = True,
+    ) -> MoeModelOutputWithPastAndAuxLoss:
         (
             output_hidden_states,
             use_cache,
@@ -36,6 +37,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
             position_ids,
             rope_cos_sin,
             past_key_values,
+            output_router_logits,
         ) = self._prepare_a_bunch_of_stuff(
             input_ids=input_ids,
             past_key_values=past_key_values,
@@ -47,6 +49,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
             output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
+            output_router_logits=output_router_logits,
         )
 
         previous_attention_out = None
@@ -54,11 +57,14 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
+        all_router_logits = () if output_router_logits else None
+        total_aux_loss = 0
+
         for block in self.h:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
-            previous_attention_out, previous_mlp_out, hidden_states = block(
+            outputs = block(
                 previous_attention_out=previous_attention_out,
                 previous_mlp_out=previous_mlp_out,
                 residual=hidden_states,
@@ -67,7 +73,20 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
+                output_router_logits=output_router_logits,
+                output_aux_loss=output_aux_loss,
             )
+
+            previous_attention_out, previous_mlp_out, hidden_states = outputs[:3]
+            outputs = outputs[3:]
+
+            if output_router_logits:
+                all_router_logits += (outputs[0],)
+                outputs = outputs[1:]
+
+            if output_aux_loss:
+                aux_loss = outputs[0]
+                total_aux_loss = total_aux_loss + aux_loss
 
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
         hidden_states = self.ln_f(hidden_states)
@@ -76,8 +95,10 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
 
-        return BaseModelOutputWithPast(
+        return MoeModelOutputWithPastAndAuxLoss(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
             hidden_states=all_hidden_states,
+            router_logits=all_router_logits,
+            aux_loss=total_aux_loss,
         )
