@@ -55,15 +55,9 @@ class _ModelSaver(Stateful):
 
     def load_state_dict(self, state_dict: dict) -> None:
         for model in self.model_container:
-            model_state_dict = get_model_state_dict(model)
             set_model_state_dict(
                 model, model_state_dict=state_dict, options=StateDictOptions(strict=not model.has_teacher_model())
             )
-
-            for key in model_state_dict:
-                del state_dict[key]
-
-        assert len(state_dict) == 0, "unused keys found in the state dict"
 
     def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
         result = {}
