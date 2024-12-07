@@ -51,3 +51,19 @@ class LadderResidualPaddingFreeAttention_TP(PaddingFreeAttention_TP):
         attn_output = self.resid_dropout(attn_output)
 
         return attn_output
+
+    def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # the output of following is a tuple if using MQA with tensor parallel
+        hidden_states = self.c_attn(hidden_states)
+
+        # for MHA, we can get away with doing just 1 transpose which is not true for GQA
+        if self.attention_head_type == AttentionHeadType.mha:
+            query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
+        elif self.attention_head_type == AttentionHeadType.gqa:
+            query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
+        elif self.attention_head_type == AttentionHeadType.mqa:
+            query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
+        else:
+            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
+
+        return query, key, value
