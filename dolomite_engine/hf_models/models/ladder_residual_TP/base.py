@@ -20,6 +20,10 @@ class LadderResidualPreTrainedModel_TP(PreTrainedModelMixin_TP):
 
 
 class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP):
+    def __init__(self, config: LadderResidualConfig, *args, **kwargs) -> None:
+        super().__init__(config, *args, **kwargs)
+        self.m_residual = config.m_residual
+
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
@@ -74,6 +78,10 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
+
+        if self.m_residual is not None:
+            previous_attention_out = previous_attention_out * self.m_residual
+            previous_mlp_out = previous_mlp_out * self.m_residual
 
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
         hidden_states = self.ln_f(hidden_states)
