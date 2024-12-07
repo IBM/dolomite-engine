@@ -59,8 +59,8 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
             max_seqlen=max_seqlen,
         )
 
-        previous_attention_out = None
-        previous_mlp_out = None
+        current_attention_out = None
+        current_mlp_out = None
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
@@ -68,9 +68,9 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
-            previous_attention_out, previous_mlp_out, hidden_states = self.h[str(layer_idx)](
-                previous_attention_out=previous_attention_out,
-                previous_mlp_out=previous_mlp_out,
+            current_attention_out, current_mlp_out, hidden_states = self.h[str(layer_idx)](
+                current_attention_out=current_attention_out,
+                current_mlp_out=current_mlp_out,
                 residual=hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
@@ -80,10 +80,10 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
             )
 
         if self.m_residual is not None:
-            previous_attention_out = previous_attention_out * self.m_residual
-            previous_mlp_out = previous_mlp_out * self.m_residual
+            current_attention_out = current_attention_out * self.m_residual
+            current_mlp_out = current_mlp_out * self.m_residual
 
-        hidden_states = hidden_states + previous_attention_out + previous_mlp_out
+        hidden_states = hidden_states + current_attention_out + current_mlp_out
         hidden_states = self.ln_f(hidden_states)
 
         # Add last hidden state
