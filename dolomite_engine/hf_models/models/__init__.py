@@ -27,6 +27,7 @@ from .moe_dolomite_TP import (
     fix_moe_dolomite_unsharded_state_dict,
     unshard_moe_dolomite_tensor_parallel_state_dicts,
 )
+from .moe_stickbreaking import MoEStickBreakingConfig, MoEStickBreakingForCausalLM, MoEStickBreakingModel
 from .palm import PaLMConfig, PaLMForCausalLM, PaLMModel
 from .rnn_dolomite import RNNDolomiteConfig, RNNDolomiteForCausalLM, RNNDolomiteModel
 from .rnn_moe_dolomite import RNNMoEDolomiteConfig, RNNMoEDolomiteForCausalLM, RNNMoEDolomiteModel
