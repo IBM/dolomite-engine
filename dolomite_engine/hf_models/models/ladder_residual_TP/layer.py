@@ -57,8 +57,8 @@ class LadderResidualBlock_TP(nn.Module):
 
     def forward(
         self,
-        previous_attention_out: torch.Tensor,
-        previous_mlp_out: torch.Tensor,
+        current_attention_out: torch.Tensor,
+        current_mlp_out: torch.Tensor,
         residual: torch.Tensor,
         past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
@@ -66,11 +66,11 @@ class LadderResidualBlock_TP(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
-        if previous_attention_out is not None:
+        if current_attention_out is not None:
             if self.m_residual is not None:
-                previous_attention_out = previous_attention_out * self.m_residual
+                current_attention_out = current_attention_out * self.m_residual
 
-            residual = residual + previous_attention_out
+            residual = residual + current_attention_out
 
         current_attention_out = self.ln_1(residual)
         current_attention_out = self.attn(
@@ -82,11 +82,11 @@ class LadderResidualBlock_TP(nn.Module):
             max_seqlen=max_seqlen,
         )
 
-        if previous_mlp_out is not None:
+        if current_mlp_out is not None:
             if self.m_residual is not None:
-                previous_mlp_out = previous_mlp_out * self.m_residual
+                current_mlp_out = current_mlp_out * self.m_residual
 
-            residual = residual + previous_mlp_out
+            residual = residual + current_mlp_out
 
         current_mlp_out = self.ln_2(residual)
         current_mlp_out = backward_redistribute(
