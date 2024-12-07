@@ -1,5 +1,5 @@
 import torch
-from transformers import DynamicCache, GenerationMixin, PreTrainedModel
+from transformers import DynamicCache
 
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from ..stickbreaking.sb_varlen import BLOCK_M, BLOCK_N, row_block_counts_and_sequence_ids
