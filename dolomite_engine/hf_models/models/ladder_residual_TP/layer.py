@@ -6,7 +6,6 @@ from transformers import DynamicCache
 from ....distributed import ProcessGroupManager
 from ....utils import ProcessGroupManager
 from ...modeling_utils_TP import get_normalization_function_TP
-from ..gpt_dolomite_TP.mlp import MLP_TP
 from ..ladder_residual import LadderResidualConfig
 from .attention import get_attention_module_TP
 from .mlp import LadderMLP_TP

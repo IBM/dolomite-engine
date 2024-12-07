@@ -16,7 +16,7 @@ class _ForwardRedistribute(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, x_grad: torch.Tensor) -> torch.Tensor:
-        return x_grad
+        return x_grad, None, None, None
 
 
 class _BackwardRedistribute(torch.autograd.Function):
@@ -41,7 +41,7 @@ class _BackwardRedistribute(torch.autograd.Function):
 
         x_grad = tensor_to_dtensor(x_grad, device_mesh=device_mesh, current_placement=current_placement)
         x_grad = dtensor_to_tensor(x_grad, device_mesh=device_mesh, desired_placement=desired_placement)
-        return x_grad
+        return x_grad, None, None, None
 
 
 def forward_redistribute(
