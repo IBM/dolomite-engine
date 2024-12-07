@@ -14,7 +14,6 @@ class MoEStickBreakingPreTrainedModel(PreTrainedMoEModelMixin):
 
 
 class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
-
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
@@ -54,14 +53,6 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
             output_router_logits=output_router_logits,
         )
 
-        # ==========================================================================================
-        # padding_free:
-        #     attention_mask -> None
-        # flash:
-        #     attention_mask -> (batch_size, key_length)
-        # else:
-        #     attention_mask -> (batch_size, 1, query_length, key_length)
-        # ==========================================================================================
         sb_metadata = None
         if self._use_padding_free_transformer:
             with torch.no_grad():
@@ -76,6 +67,7 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
         for block in self.h:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
+
             outputs = block(
                 hidden_states,
                 past_key_values=past_key_values,
