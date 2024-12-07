@@ -2,7 +2,7 @@ import torch
 from transformers import DynamicCache
 
 from .....utils import is_flash_attention_available
-from ....enums import PositionEmbeddingType
+from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import apply_rotary_pos_emb
 from ....modeling_utils_TP.attention import PaddingFreeAttention_TP
 
