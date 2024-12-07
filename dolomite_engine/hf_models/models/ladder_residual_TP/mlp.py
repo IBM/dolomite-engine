@@ -1,3 +1,4 @@
+import torch
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Partial, Replicate
 
@@ -16,27 +17,29 @@ class LadderMLP_TP(MLP_TP):
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
-    def forward(self, hidden_states):
-        hidden_states = dtensor_to_tensor(
+    def forward(self, current_attention_out: torch.Tensor, current_mlp_out: torch.Tensor) -> tuple[torch.Tensor]:
+        current_mlp_out = dtensor_to_tensor(
             tensor_to_dtensor(
-                hidden_states,
+                current_mlp_out,
                 device_mesh=self.tp_mesh,
                 current_placement=self.placement,
                 desired_placement=Replicate(),
             )
         )
-        hidden_states = F.linear(hidden_states, dtensor_to_tensor(self.c_fc.weight), dtensor_to_tensor(self.c_fc.bias))
-        hidden_states = self.c_fc(hidden_states)
-        hidden_states = F.linear(
-            hidden_states, dtensor_to_tensor(self.c_proj.weight), dtensor_to_tensor(self.c_proj.bias)
+        current_mlp_out = F.linear(
+            current_mlp_out, dtensor_to_tensor(self.c_fc.weight), dtensor_to_tensor(self.c_fc.bias)
         )
-        hidden_states = dtensor_to_tensor(
+        current_mlp_out = self.c_fc(current_mlp_out)
+        current_mlp_out = F.linear(
+            current_mlp_out, dtensor_to_tensor(self.c_proj.weight), dtensor_to_tensor(self.c_proj.bias)
+        )
+        current_mlp_out = dtensor_to_tensor(
             tensor_to_dtensor(
-                hidden_states,
+                current_mlp_out,
                 device_mesh=self.tp_mesh,
                 current_placement=Partial(),
                 desired_placement=self.placement,
             )
         )
-        hidden_states = self.dropout(hidden_states)
-        return hidden_states
+        current_mlp_out = self.dropout(current_mlp_out)
+        return current_attention_out, current_mlp_out

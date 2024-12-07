@@ -58,6 +58,6 @@ class LadderResidualBlock_TP(LadderResidualBlock):
             residual = residual + previous_mlp_out
 
         current_mlp_out = self.ln_2(residual)
-        current_mlp_out = self.mlp(current_mlp_out)
+        current_attention_out, current_mlp_out = self.mlp(current_attention_out, current_mlp_out)
 
         return current_attention_out, current_mlp_out, residual
