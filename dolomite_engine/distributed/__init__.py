@@ -25,6 +25,7 @@ from ..arguments import TrainingArgs
 from ..containers import ModelContainer
 from ..enums import FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
+from ..hf_models.models.ladder_residual_TP.compiler import aot_backend
 from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
 from .dtensors import (
     dtensor_to_tensor,
@@ -36,7 +37,7 @@ from .fp8 import convert_model_to_transformer_engine
 
 
 # import torch._inductor.config
-# torch._inductor.config.reorder_for_compute_comm_overlap = True
+torch._inductor.config.reorder_for_compute_comm_overlap = True
 # torch._dynamo.config.skip_fsdp_hooks = False
 # torch._dynamo.config.cache_size_limit = 512
 # torch._dynamo.config.compiled_autograd = True
@@ -240,7 +241,7 @@ def wrap_model_container_for_distributed_training(
         log_rank_0(logging.INFO, "using torch compile")
 
         for i in range(len(model_container)):
-            model_container[i] = torch.compile(model_container[i])
+            model_container[i] = torch.compile(model_container[i], backend=aot_backend)
             # model_container[i] = torch._dynamo.explain(model_container[i])
             # print(model_container[i]({"text": torch.zeros(2, 4097, dtype=torch.long, device=torch.cuda.current_device())}))
             # exit()
