@@ -1,9 +1,10 @@
 from ..config import MoEDolomiteConfig
+from .auxfree import AuxFreeMoE
 from .base import MoE
 from .scatter import ScatterMoE
 
 
-_MOE_MODULES = {"eager": MoE, "scattermoe": ScatterMoE}
+_MOE_MODULES = {"eager": MoE, "scattermoe": ScatterMoE, "auxfreemoe": AuxFreeMoE}
 
 
 def get_moe(
