@@ -45,9 +45,7 @@ class MoEDolomiteBlock_TP(MoEDolomiteBlock):
             sequence_parallel=sequence_parallel,
         )
 
-        assert (
-            moe_implementation == "scattermoe"
-        ), f"moe_implementation = {moe_implementation} TP for MoE is only implemented with scattermoe"
+        assert moe_implementation == "scattermoe", "TP for MoE is only implemented with scattermoe"
         self.moe = ScatterMoE_TP(
             config,
             use_padding_free_transformer=use_padding_free_transformer,
