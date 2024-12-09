@@ -186,6 +186,8 @@ class PaddingFreeSBAttention(SBAttention):
 
         # this needs to be a reshape instead of view sadly
         query = query.reshape(total_q, -1, self.head_dim)
+        key = key.repeat(1, self.num_heads // self.num_key_value_heads, 1)
+        value = value.repeat(1, self.num_heads // self.num_key_value_heads, 1)
 
         return query, key, value
 
