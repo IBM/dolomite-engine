@@ -1,6 +1,10 @@
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 from .models import (
+    DesyncResidualConfig,
+    DesyncResidualForCausalLM,
+    DesyncResidualForCausalLM_TP,
+    DesyncResidualModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
@@ -8,13 +12,29 @@ from .models import (
     GPTDolomiteForCausalLM,
     GPTDolomiteForCausalLM_TP,
     GPTDolomiteModel,
+    LadderResidualConfig,
+    LadderResidualForCausalLM,
+    LadderResidualForCausalLM_TP,
+    LadderResidualModel,
     MoEDolomiteConfig,
     MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
     MoEDolomiteModel,
+    MoELadderResidualConfig,
+    MoELadderResidualForCausalLM,
+    MoELadderResidualModel,
+    MoEStickBreakingConfig,
+    MoEStickBreakingForCausalLM,
+    MoEStickBreakingModel,
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
+    RNNMoEDolomiteConfig,
+    RNNMoEDolomiteForCausalLM,
+    RNNMoEDolomiteModel,
+    StickBreakingConfig,
+    StickBreakingForCausalLM,
+    StickBreakingModel,
 )
 
 
@@ -24,6 +44,12 @@ _CUSTOM_MODEL_REGISTRY = [
     (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
+    (RNNMoEDolomiteConfig, RNNMoEDolomiteModel, RNNMoEDolomiteForCausalLM),
+    (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
+    (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
+    (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
+    (MoEStickBreakingConfig, MoEStickBreakingModel, MoEStickBreakingForCausalLM),
+    (MoELadderResidualConfig, MoELadderResidualModel, MoELadderResidualForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
@@ -41,12 +67,14 @@ def register_model_classes() -> None:
         _CUSTOM_MODEL_CLASSES.append(auto_model_for_causal_lm_class)
 
 
-def is_custom_model(model_class: type[AutoModelForCausalLM] | type[AutoModelForSeq2SeqLM], model_type: str) -> bool:
-    return model_class.__name__ in _CUSTOM_MODEL_CLASSES or model_type in _CUSTOM_MODEL_TYPES
+def is_custom_model(model_type: str) -> bool:
+    return model_type in _CUSTOM_MODEL_TYPES
 
 
 _MODEL_PARALLEL_CLASS_MAPPING = {
     GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
+    DesyncResidualConfig.model_type: DesyncResidualForCausalLM_TP,
+    LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
     MoEDolomiteConfig.model_type: MoEDolomiteForCausalLM_TP,
 }
 

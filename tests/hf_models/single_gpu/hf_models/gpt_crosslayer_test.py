@@ -11,7 +11,7 @@ from ...test_common import TestCommons
 SEED = 42
 
 
-class CrossLayerAttentionTest(TestCommons):
+class GPTCrossLayerAttentionTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             TestCommons.get_all_devices(),

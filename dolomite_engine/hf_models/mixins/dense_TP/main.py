@@ -93,15 +93,17 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 lm_logits = lm_logits / self.m_width
 
         if not self.is_pipeline_parallel_enabled:
-            loss = get_autoregressive_language_modeling_loss(
-                lm_logits=lm_logits,
-                labels=labels,
-                upcast_logits_for_loss=self.upcast_logits_for_loss,
-                cu_seqlens=cu_seqlens,
-                use_padding_free_transformer=self._use_padding_free_transformer,
-                reduction=reduction,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
-            )
+            loss = None
+            if labels is not None:
+                loss = get_autoregressive_language_modeling_loss(
+                    lm_logits=lm_logits,
+                    labels=labels,
+                    upcast_logits_for_loss=self.upcast_logits_for_loss,
+                    cu_seqlens=cu_seqlens,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    reduction=reduction,
+                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
             if output_parallel_lm_logits:

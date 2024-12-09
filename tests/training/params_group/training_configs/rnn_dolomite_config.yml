@@ -17,7 +17,7 @@ model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
     activation_function: swiglu
-    add_bias: false
+    add_bias: true
     attn_pdrop: 0
     embd_pdrop: 0
     resid_pdrop: 0
@@ -50,7 +50,7 @@ model_args:
     init_method: mup
     tie_word_embeddings: true
     upcast_logits_for_loss: true
-  attention_implementation: flash_attention_2
+  attention_implementation: sdpa
 
 tuning_args:
   tuning_method: pretraining

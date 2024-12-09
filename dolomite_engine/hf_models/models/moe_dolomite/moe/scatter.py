@@ -3,15 +3,16 @@ import math
 import torch
 import torch.nn as nn
 
-from .....utils import is_kernel_hyperdrive_available
+from .....utils import is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
-from .base import ParameterizedExperts, SparseMoE
+from .base import MoE, ParameterizedExperts
 
 
-if is_kernel_hyperdrive_available():
-    from khd.kernels.scattermoe.triton_implementation import expert_boundaries, scattered_experts
+if is_cute_kernels_available():
+    from cute_kernels.kernels import contiguous_count_cute
+    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -55,7 +56,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
         )
 
 
-class ScatterMoE(SparseMoE):
+class ScatterMoE(MoE):
     def __init__(
         self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
     ) -> None:
@@ -68,6 +69,7 @@ class ScatterMoE(SparseMoE):
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner
+        self.shared_intermediate_size = config.shared_n_inner
 
         activation_function = config.activation_function
 
@@ -97,6 +99,15 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_fc_shared = ParameterizedLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.act = get_activation_function(activation_function)
 
@@ -110,6 +121,13 @@ class ScatterMoE(SparseMoE):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_proj_shared = ParameterizedLinear(
+                in_features=self.shared_intermediate_size,
+                out_features=self.hidden_size,
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
@@ -118,7 +136,11 @@ class ScatterMoE(SparseMoE):
     ) -> torch.Tensor:
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-            expert_offsets = expert_boundaries(sorted_expert_idxs, self.num_experts)
+
+            if sorted_expert_idxs.is_cuda and is_cute_kernels_available():
+                expert_offsets = contiguous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
+            else:
+                expert_offsets = sorted_expert_idxs.bincount(minlength=self.num_experts).cumsum(-1)
 
         hidden_states = self.c_fc(
             hidden_states,

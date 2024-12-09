@@ -5,10 +5,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
-from .....utils import ProcessGroupManager
+from .....utils import ProcessGroupManager, is_cute_kernels_available
 from ....enums import InitMethod
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
+
+
+if is_cute_kernels_available():
+    from cute_kernels.kernels import contiguous_count_cute
 
 
 class ParameterizedExperts(nn.Module):
@@ -59,7 +63,7 @@ class ParameterizedExperts(nn.Module):
             self.bias.zero_()
 
 
-class SparseMoE(nn.Module):
+class MoE(nn.Module):
     def __init__(
         self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
     ) -> None:
@@ -72,6 +76,7 @@ class SparseMoE(nn.Module):
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner
+        self.shared_intermediate_size = config.shared_n_inner
 
         activation_function = config.activation_function
 
@@ -101,6 +106,15 @@ class SparseMoE(nn.Module):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_fc_shared = ParameterizedLinear(
+                in_features=self.hidden_size,
+                out_features=(
+                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
+                ),
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.act = get_activation_function(activation_function)
 
@@ -114,6 +128,13 @@ class SparseMoE(nn.Module):
             add_bias=config.add_bias,
             std=std,
         )
+        if self.shared_intermediate_size is not None:
+            self.c_proj_shared = ParameterizedLinear(
+                in_features=self.shared_intermediate_size,
+                out_features=self.hidden_size,
+                bias=config.add_bias,
+                std=std,
+            )
 
         self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
 
@@ -124,7 +145,14 @@ class SparseMoE(nn.Module):
         hidden_states = hidden_states.view(-1, self.hidden_size)
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
-        hidden_states = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+        moe_output = self._compute_experts(hidden_states, router_weights, selected_experts)
+
+        if self.shared_intermediate_size is None:
+            hidden_states = moe_output
+        else:
+            shared_experts_output = self._compute_shared_experts(hidden_states)
+            hidden_states = moe_output + shared_experts_output
 
         if not self.use_padding_free_transformer:
             hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
@@ -159,9 +187,9 @@ class SparseMoE(nn.Module):
             router_weights, selected_experts
         )
 
-        expert_inputs = hidden_states[batch_index]
+        hidden_states = hidden_states[batch_index]
 
-        hidden_states = self.c_fc(expert_inputs, num_experts_per_token)
+        hidden_states = self.c_fc(hidden_states, num_experts_per_token)
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj(hidden_states, num_experts_per_token)
 
@@ -171,12 +199,21 @@ class SparseMoE(nn.Module):
 
         return hidden_states
 
+    def _compute_shared_experts(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.c_fc_shared(hidden_states)
+        hidden_states = self.act(hidden_states)
+        hidden_states = self.c_proj_shared(hidden_states)
+        return hidden_states
+
     def _compute_expert_assignment(
         self, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
+        if selected_experts.is_cuda and is_cute_kernels_available():
+            num_experts_per_token = contiguous_count_cute(x=selected_experts, size=self.num_experts)
+        else:
+            num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -202,7 +239,11 @@ class SparseMoE(nn.Module):
 
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
-        freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+
+        if topk_idxs.is_cuda and is_cute_kernels_available():
+            freq = contiguous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
+        else:
+            freq = topk_idxs.flatten().bincount(minlength=num_experts).to(dtype=logits.dtype)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())

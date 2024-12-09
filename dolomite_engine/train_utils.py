@@ -5,7 +5,7 @@ import torch
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
-from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import AutoConfig
 
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, get_next_batch
@@ -330,14 +330,13 @@ def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile
 
 
 def get_model_tflops(
-    model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
     config: AutoConfig,
     batch_size: int,
     sequence_length: int,
     gradient_checkpointing_method: GradientCheckpointingMethod | None,
     gradient_checkpointing_args: dict,
 ) -> None:
-    if not is_custom_model(model_class, config.model_type):
+    if not is_custom_model(config.model_type):
         return 0
 
     b = batch_size
@@ -350,8 +349,11 @@ def get_model_tflops(
     v = config.vocab_size
 
     mlp_flops = 4 * b * s * h * f
+    if config.model_type == "moe_dolomite":
+        mlp_flops *= config.num_experts_per_tok
+
     if is_glu(config.activation_function):
-        mlp_flops += 2 * b * s * h * f
+        mlp_flops *= 1.5
 
     attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
 

@@ -31,7 +31,7 @@ class GLUActivation(nn.Module):
 def get_glu_activation(name: str) -> nn.Module:
     # for glu and sigmoid_glu, we directly return the pytorch's GLU
     if name in ["glu", "sigmoid_glu"]:
-        activation_function = nn.modules.GLU()
+        activation_function = nn.GLU()
     else:
         if name in _GLU_BASE_MAPPING:
             name = _GLU_BASE_MAPPING[name]

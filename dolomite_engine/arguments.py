@@ -11,6 +11,7 @@ from .enums import (
     ExperimentsTrackerName,
     FP8Backend,
     GradientCheckpointingMethod,
+    Kernel,
     KLDivergenceMethod,
     LossMask,
     LRDecaySchedule,
@@ -19,6 +20,7 @@ from .enums import (
     ParamsGroupMethod,
     TuningMethod,
 )
+from .kernels import add_kernel
 from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
@@ -389,6 +391,17 @@ class ResearchArgs(BaseArgs):
     neft_alpha: float | None = None
 
 
+class KernelArgs(BaseArgs):
+    # Scalar of noise to inject into input embeddings
+    # https://arxiv.org/abs/2310.05914
+    kernels: list[Kernel] | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.kernels is not None:
+            for kernel in self.kernels:
+                add_kernel(kernel)
+
+
 class TeacherArgs(BaseArgs):
     # model class on huggingface hub, for example: AutoModelForCausalLM, AutoModelForSeq2SeqLM
     model_class: str = None
@@ -444,6 +457,8 @@ class TrainingArgs(BaseArgs):
     distributed_args: DistributedArgs = DistributedArgs()
     # research args
     research_args: ResearchArgs = ResearchArgs()
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -499,6 +514,8 @@ class InferenceArgs(BaseArgs):
     logging_args: LoggingArgs = LoggingArgs()
     # output dir
     output_dir: str = None
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None(
@@ -527,6 +544,8 @@ class UnshardingArgs(BaseArgs):
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # logging related arguments
     logging_args: LoggingArgs = LoggingArgs()
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.load_args, "load_args"), (self.unsharded_path, "unsharded_path")])
@@ -535,6 +554,8 @@ class UnshardingArgs(BaseArgs):
 class DistillationArgs(TrainingArgs):
     # teacher model arguments
     teacher_args: TeacherArgs = None
+    # kernel args
+    kernel_args: KernelArgs = KernelArgs()
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.teacher_args, "teacher_args")])

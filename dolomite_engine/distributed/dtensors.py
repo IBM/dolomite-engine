@@ -25,7 +25,7 @@ def tensor_to_dtensor(
         if isinstance(desired_placement, Placement):
             desired_placement = [desired_placement]
 
-        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement, async_op=False)
+        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement, async_op=True)
 
     return dtensor
 
@@ -45,7 +45,7 @@ def dtensor_to_tensor(
 
         assert device_mesh is not None
 
-        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement, async_op=False)
+        dtensor = dtensor.redistribute(device_mesh=device_mesh, placements=desired_placement, async_op=True)
 
     if grad_placement is not None and isinstance(grad_placement, Placement):
         grad_placement = [grad_placement]

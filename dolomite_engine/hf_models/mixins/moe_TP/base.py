@@ -60,7 +60,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             {
                 str(i): self.layer_class(
                     config,
-                    normalization_implementation=self.normalization_implementation,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     moe_implementation=self.moe_implementation,

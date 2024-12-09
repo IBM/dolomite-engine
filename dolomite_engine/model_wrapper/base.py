@@ -85,7 +85,7 @@ class ModelWrapper(nn.Module):
 
         if self.use_padding_free_transformer:
             assert is_custom_model(
-                self.model_class, self.config.model_type
+                self.config.model_type
             ), "padding free transformer is not supported with the specified model"
 
             assert (

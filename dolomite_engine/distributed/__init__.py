@@ -35,6 +35,13 @@ from .dtensors import (
 from .fp8 import convert_model_to_transformer_engine
 
 
+# import torch._inductor.config
+# torch._inductor.config.reorder_for_compute_comm_overlap = True
+# torch._dynamo.config.skip_fsdp_hooks = False
+# torch._dynamo.config.cache_size_limit = 512
+# torch._dynamo.config.compiled_autograd = True
+
+
 _STAGE_FULL_SHARDING_STRATEGY_MAP = {
     2: ShardingStrategy.SHARD_GRAD_OP,
     3: ShardingStrategy.FULL_SHARD,
@@ -198,7 +205,7 @@ def wrap_model_container_for_distributed_training(
                 if parameter.size(0) > dps or parameter.dim() == 1:
                     return Shard(0)
                 else:
-                    for dim in range(1, parameter.dim() + 1):
+                    for dim in range(1, parameter.dim()):
                         if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
                             return Shard(dim)
 
@@ -227,18 +234,16 @@ def wrap_model_container_for_distributed_training(
                 )
 
                 if efficient_initialization and args.model_args.model_name is None:
-                    model = model.to_empty(device=torch.cuda.current_device())
-
-                    for module in model.modules():
-                        if hasattr(module, "reset_parameters"):
-                            with torch.device(torch.cuda.current_device()):
-                                module.reset_parameters()
+                    _init_model(model)
 
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
 
         for i in range(len(model_container)):
             model_container[i] = torch.compile(model_container[i])
+            # model_container[i] = torch._dynamo.explain(model_container[i])
+            # print(model_container[i]({"text": torch.zeros(2, 4097, dtype=torch.long, device=torch.cuda.current_device())}))
+            # exit()
 
     pipeline_stages = []
     pipeline_schedule = None
@@ -328,3 +333,12 @@ def _get_fsdp_mixed_precision(
         mixed_precision = MixedPrecision2(param_dtype=dtype, reduce_dtype=communication_dtype)
 
     return mixed_precision
+
+
+def _init_model(model: nn.Module) -> None:
+    model = model.to_empty(device=torch.cuda.current_device())
+
+    for module in model.modules():
+        if hasattr(module, "reset_parameters"):
+            with torch.device(torch.cuda.current_device()):
+                module.reset_parameters()

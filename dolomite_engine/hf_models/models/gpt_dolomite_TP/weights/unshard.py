@@ -173,15 +173,7 @@ def _get_attention(
             tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
         )
 
-    if attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
-        output[prefix + "c_attn.weight"] = _concatenate_tensors_from_state_dicts(
-            tensor_parallel_state_dicts, key=prefix + "c_attn.weight", dim=0
-        )
-        if add_bias:
-            output[prefix + "c_attn.bias"] = _concatenate_tensors_from_state_dicts(
-                tensor_parallel_state_dicts, key=prefix + "c_attn.bias", dim=0
-            )
-    elif attention_head_type == AttentionHeadType.mqa:
+    if attention_head_type == AttentionHeadType.mqa:
         q_weight = _concatenate_tensors_from_state_dicts(
             tensor_parallel_state_dicts, key=prefix + "c_attn.q_attn.weight", dim=0
         )
@@ -198,7 +190,13 @@ def _get_attention(
             )
             output[prefix + "c_attn.bias"] = torch.cat([q_bias, kv_bias])
     else:
-        raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+        output[prefix + "c_attn.weight"] = _concatenate_tensors_from_state_dicts(
+            tensor_parallel_state_dicts, key=prefix + "c_attn.weight", dim=0
+        )
+        if add_bias:
+            output[prefix + "c_attn.bias"] = _concatenate_tensors_from_state_dicts(
+                tensor_parallel_state_dicts, key=prefix + "c_attn.bias", dim=0
+            )
 
     return output
 
