@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
-from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
@@ -93,6 +92,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
+            self._extra_metrics = {}
+
     def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
@@ -154,6 +155,8 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss
+            self._extra_metrics["aux_loss"] += aux_loss
+
             if is_tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(
                     aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate()
@@ -167,6 +170,12 @@ class ModelWrapperForPretraining(ModelWrapper):
             output = {"loss": loss}
 
         return output
+
+    def get_extra_metrics(self) -> dict:
+        return self._extra_metrics
+
+    def reset_extra_metrics(self) -> None:
+        self._extra_metrics = {}
 
     def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
         if ProcessGroupManager.is_tensor_parallel_first_rank():
