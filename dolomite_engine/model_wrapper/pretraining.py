@@ -109,10 +109,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         if isinstance(batch, torch.Tensor):
             batch = {"text": batch}
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids)
-
-        if prev_aux_loss is not None:
-            batch["prev_aux_loss"] = prev_aux_loss
+        batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
 
         output = self.model(**batch, return_dict=True)
 
@@ -182,7 +179,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return tokens
 
-    def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
+    def _prepare_model_inputs(self, input_ids: torch.Tensor, prev_aux_loss: torch.Tensor | None = None) -> dict:
         batch = {}
 
         if self.use_padding_free_transformer:
@@ -222,6 +219,10 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if ProcessGroupManager.is_tensor_parallel_enabled():
             batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
+
+        if prev_aux_loss is not None:
+            # past_key_values is used to send prev_aux_loss
+            batch["past_key_values"] = prev_aux_loss
 
         return batch
 

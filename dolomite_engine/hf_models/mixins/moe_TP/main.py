@@ -29,8 +29,11 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
         output_router_logits: bool | None = None,
-        prev_aux_loss: torch.Tensor | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
+        if self.is_pipeline_parallel_enabled:
+            prev_aux_loss = past_key_values
+            past_key_values = None
+
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
