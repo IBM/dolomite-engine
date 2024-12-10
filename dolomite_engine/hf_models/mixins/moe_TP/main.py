@@ -95,7 +95,14 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                     lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
                     lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-        if not self.is_pipeline_parallel_enabled:
+        if self.is_pipeline_parallel_enabled:
+            aux_loss = aux_loss.unsqueeze(0)
+
+            if self.is_last_stage:
+                output = (lm_logits, aux_loss)
+            else:
+                output = (transformer_outputs.last_hidden_state, aux_loss)
+        else:
             if lm_loss is None:
                 loss = None
             else:
@@ -110,10 +117,6 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 attentions=transformer_outputs.attentions,
                 router_logits=transformer_outputs.router_logits,
             )
-        elif self.is_last_stage:
-            output = (lm_logits, aux_loss)
-        else:
-            output = (transformer_outputs.last_hidden_state, aux_loss)
 
         return output
 
@@ -138,5 +141,5 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         dummy_output = super().get_dummy_output_tensor(
             micro_batch_size, sequence_length, intermediate_dtype, output_parallel_lm_logits_if_possible
         )
-        aux_loss_dummy = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype).squeeze(0)
+        aux_loss_dummy = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype)
         return dummy_output, aux_loss_dummy

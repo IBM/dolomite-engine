@@ -9,7 +9,7 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..utils import ProcessGroupManager
+from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -92,7 +92,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
-            self._extra_metrics = {}
+            self._extra_metrics = MetricsTrackingDict({})
 
     def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
@@ -126,10 +126,13 @@ class ModelWrapperForPretraining(ModelWrapper):
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
         if isinstance(model_outputs, torch.Tensor):
             logits = model_outputs
+            aux_loss = None
         elif isinstance(model_outputs, tuple):
             logits, aux_loss = model_outputs
+            aux_loss = aux_loss.squeeze(0)
         else:
             logits: torch.Tensor = model_outputs.logits
+            aux_loss = None
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
@@ -153,21 +156,17 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         lm_loss = lm_loss * lm_loss_multiplier
 
-        if hasattr(model_outputs, "aux_loss"):
-            aux_loss = model_outputs.aux_loss
-            self._extra_metrics["aux_loss"] += aux_loss
-
-            if is_tensor_parallel_enabled:
-                aux_loss = tensor_to_dtensor(
-                    aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate()
-                ).unsqueeze(0)
-
-            loss = lm_loss + self.router_aux_loss_coef * aux_loss
-
-            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
-        else:
+        if aux_loss is None:
             loss = lm_loss
             output = {"loss": loss}
+        else:
+            self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
+
+            if is_tensor_parallel_enabled:
+                aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
+
+            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
 
         return output
 
@@ -175,7 +174,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         return self._extra_metrics
 
     def reset_extra_metrics(self) -> None:
-        self._extra_metrics = {}
+        self._extra_metrics = MetricsTrackingDict({})
 
     def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
         if ProcessGroupManager.is_tensor_parallel_first_rank():

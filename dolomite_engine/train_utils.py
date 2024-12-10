@@ -163,6 +163,9 @@ def _train_step_with_pipeline_parallel(
             losses = sum(losses)
 
             metrics_tracker = metrics_tracker + {"loss": losses, "grad_norm": grad_norm}
+            metrics_tracker = metrics_tracker + model.get_extra_metrics()
+            model.reset_extra_metrics()
+
             metrics_tracker = metrics_tracker / gradient_accumulation_steps
 
             metrics_tracker["grad_norm"] = grad_norm
