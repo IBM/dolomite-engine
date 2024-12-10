@@ -31,8 +31,6 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         output_router_logits: bool | None = None,
         prev_aux_loss: torch.Tensor | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
-        # Note: `past_key_values` contains aux_loss in non-stage-one PP
-
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
@@ -69,7 +67,17 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 lm_logits = lm_logits / self.m_width
 
         if not self.is_pipeline_parallel_enabled:
-            lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
+            lm_loss = None
+            if labels is not None:
+                lm_loss = get_autoregressive_language_modeling_loss(
+                    lm_logits=lm_logits,
+                    labels=labels,
+                    upcast_logits_for_loss=self.upcast_logits_for_loss,
+                    cu_seqlens=cu_seqlens,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    reduction=reduction,
+                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                )
 
         aux_loss = transformer_outputs.aux_loss
         if self.is_pipeline_parallel_enabled and not self.is_first_stage:
