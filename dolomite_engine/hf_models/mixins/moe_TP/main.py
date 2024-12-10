@@ -72,11 +72,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             lm_loss = self.get_autoregressive_language_modeling_loss(lm_logits, labels, cu_seqlens)
 
         aux_loss = transformer_outputs.aux_loss
-        # aux_loss = tensor_to_dtensor(transformer_outputs.aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
-        # aux_loss = dtensor_to_tensor(aux_loss, device_mesh=self.tp_mesh, desired_placement=Replicate())
         if self.is_pipeline_parallel_enabled and not self.is_first_stage:
-            # Non-first-stage PP will have aux loss as `past_key_values` due to the way pipeline works
-            # So accumulate aux_loss
             aux_loss = aux_loss + prev_aux_loss
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
@@ -93,6 +89,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 loss = None
             else:
                 loss = lm_loss + self.router_aux_loss_coef * aux_loss
+
             output = MoeCausalLMOutputWithPast(
                 loss=loss,
                 aux_loss=aux_loss,
@@ -112,20 +109,13 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
     def get_dummy_input_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
     ) -> tuple[torch.Tensor] | torch.Tensor:
+        dummy_input = super().get_dummy_input_tensor(micro_batch_size, sequence_length, intermediate_dtype)
 
-        if self.is_first_stage:
-            # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
-            dummy_input = torch.empty(
-                micro_batch_size, sequence_length + 1, device=torch.cuda.current_device(), dtype=torch.long
-            )
-            return dummy_input
-        else:
-            dummy_input = super().get_dummy_input_tensor(micro_batch_size, sequence_length, intermediate_dtype)
-            aux_loss_dummy = torch.tensor(0.0, device=torch.cuda.current_device(), dtype=intermediate_dtype)
-            if isinstance(dummy_input, tuple):
-                return dummy_input + (aux_loss_dummy,)
-            else:
-                return (dummy_input, aux_loss_dummy)
+        if not self.is_first_stage:
+            aux_loss_dummy = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype).squeeze(0)
+            dummy_input = (dummy_input, aux_loss_dummy)
+
+        return dummy_input
 
     def get_dummy_output_tensor(
         self,
@@ -137,9 +127,5 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         dummy_output = super().get_dummy_output_tensor(
             micro_batch_size, sequence_length, intermediate_dtype, output_parallel_lm_logits_if_possible
         )
-        dummy_aux_loss = torch.tensor(0.0, device=torch.cuda.current_device(), dtype=intermediate_dtype)
-        if isinstance(dummy_output, tuple):
-            dummy_output = dummy_output + (dummy_aux_loss,)
-        else:
-            dummy_output = (dummy_output, dummy_aux_loss)
-        return dummy_output
+        aux_loss_dummy = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype).squeeze(0)
+        return dummy_output, aux_loss_dummy
