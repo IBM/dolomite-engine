@@ -252,6 +252,14 @@ def wrap_model_container_for_distributed_training(
         micro_batch_size = args.training_parameters.micro_batch_size
         sequence_length = args.datasets[0].class_args.get("sequence_length")
 
+        pipeline_parallel_schedule = args.distributed_args.pipeline_parallel_schedule
+        gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
+
+        if pipeline_parallel_schedule == "1F1B":
+            assert (
+                gradient_accumulation_steps % num_pipeline_stages == 0
+            ), f"gradient_accumulation_steps ({gradient_accumulation_steps}) should be divisible by num_pipeline_stages ({num_pipeline_stages})"
+
         for model in model_container:
             intermediate_dtype = string_to_torch_dtype(args.mixed_precision_args.dtype)
 
