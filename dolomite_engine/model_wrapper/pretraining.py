@@ -88,6 +88,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
         )
+
         if self.is_pipeline_parallel_enabled:
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
