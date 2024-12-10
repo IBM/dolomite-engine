@@ -10,7 +10,7 @@ from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..utils import MetricsTrackingDict, ProcessGroupManager
+from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -136,8 +136,9 @@ class ModelWrapperForPretraining(ModelWrapper):
             logits = logits.float()
 
         loss_context = nullcontext
+        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
 
-        if ProcessGroupManager.is_tensor_parallel_enabled():
+        if is_tensor_parallel_enabled:
             logits = tensor_to_dtensor(
                 logits,
                 device_mesh=self.tp_mesh,
@@ -155,6 +156,9 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss
+            if is_tensor_parallel_enabled:
+                aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
+
             loss = lm_loss + self.router_aux_loss_coef * aux_loss
 
             output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
