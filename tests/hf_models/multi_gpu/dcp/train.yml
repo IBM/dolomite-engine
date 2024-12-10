@@ -52,7 +52,7 @@ training_parameters:
   num_training_steps: 25000
   eval_interval: 2500000
   micro_batch_size: 128
-  gradient_accumulation_steps: 1
+  gradient_accumulation_steps: 2
   eval_during_training: false
 
 optimizer_args:
