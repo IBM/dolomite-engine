@@ -75,7 +75,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 config.normalization_function,
                 self.embed_dim,
                 eps=config.layer_norm_epsilon,
-                normalization_implementation=self.normalization_implementation,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
