@@ -154,7 +154,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss
             if is_tensor_parallel_enabled:
-                aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
+                aux_loss = tensor_to_dtensor(
+                    aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate()
+                ).unsqueeze(0)
 
             loss = lm_loss + self.router_aux_loss_coef * aux_loss
 
