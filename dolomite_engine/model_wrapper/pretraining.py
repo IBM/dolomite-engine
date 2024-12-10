@@ -106,8 +106,10 @@ class ModelWrapperForPretraining(ModelWrapper):
         # this is done because megatron's dataset returns batches of length (sequence_length + 1)
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
+
         if isinstance(batch, torch.Tensor):
             batch = {"text": batch}
+
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
 
