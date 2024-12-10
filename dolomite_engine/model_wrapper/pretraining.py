@@ -123,12 +123,10 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
-        if isinstance(model_outputs, tuple):
-            # Rewrap if it is tuple
-            model_outputs = MoeCausalLMOutputWithPast(logits=model_outputs[0], aux_loss=model_outputs[1])
-
         if isinstance(model_outputs, torch.Tensor):
             logits = model_outputs
+        elif isinstance(model_outputs, tuple):
+            logits, aux_loss = model_outputs
         else:
             logits: torch.Tensor = model_outputs.logits
 
