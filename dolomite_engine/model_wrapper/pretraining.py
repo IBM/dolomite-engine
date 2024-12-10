@@ -6,10 +6,11 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..utils import MetricsTrackingDict, ProcessGroupManager
+from ..utils import ProcessGroupManager
 from .base import ModelWrapper
 
 
@@ -92,7 +93,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
-    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
+    def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -111,7 +112,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"text": batch}
 
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids)
+        batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
 
         output = self.model(**batch, return_dict=True)
 
@@ -122,6 +123,10 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
+        if isinstance(model_outputs, tuple):
+            # Rewrap if it is tuple
+            model_outputs = MoeCausalLMOutputWithPast(logits=model_outputs[0], aux_loss=model_outputs[1])
+
         if isinstance(model_outputs, torch.Tensor):
             logits = model_outputs
         else:
@@ -131,8 +136,9 @@ class ModelWrapperForPretraining(ModelWrapper):
             logits = logits.float()
 
         loss_context = nullcontext
+        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
 
-        if ProcessGroupManager.is_tensor_parallel_enabled():
+        if is_tensor_parallel_enabled:
             logits = tensor_to_dtensor(
                 logits,
                 device_mesh=self.tp_mesh,
@@ -150,6 +156,11 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if hasattr(model_outputs, "aux_loss"):
             aux_loss = model_outputs.aux_loss
+            if is_tensor_parallel_enabled:
+                aux_loss = tensor_to_dtensor(
+                    aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate()
+                ).unsqueeze(0)
+
             loss = lm_loss + self.router_aux_loss_coef * aux_loss
 
             output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
@@ -173,7 +184,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return tokens
 
-    def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
+    def _prepare_model_inputs(self, input_ids: torch.Tensor, prev_aux_loss: torch.Tensor | None = None) -> dict:
         batch = {}
 
         if self.use_padding_free_transformer:
@@ -213,6 +224,10 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if ProcessGroupManager.is_tensor_parallel_enabled():
             batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
+
+        if prev_aux_loss is not None:
+            # past_key_values is used to send prev_aux_loss
+            batch["past_key_values"] = prev_aux_loss
 
         return batch
 
