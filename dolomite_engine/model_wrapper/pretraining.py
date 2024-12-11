@@ -132,7 +132,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             aux_loss = aux_loss.squeeze(0)
         else:
             logits: torch.Tensor = model_outputs.logits
-            aux_loss = None
+            aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
