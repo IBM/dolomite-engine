@@ -34,6 +34,7 @@ class MoEDolomiteBlock(nn.Module):
         self.moe = get_moe(
             config,
             moe_implementation=moe_implementation,
+            use_aux_free_moe=config.use_aux_free_moe,
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,
         )
