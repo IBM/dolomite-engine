@@ -261,9 +261,11 @@ class ModelWrapper(nn.Module):
     def calculate_num_parameters(self) -> int:
         with torch.device("meta"):
             if self.model_name is None:
-                model = self.model_class.from_config(config=self.config)
+                model = self.model_class.from_config(config=self.config, moe_implementation="scattermoe")
             else:
-                model = self.model_class.from_pretrained(pretrained_model_name_or_path=self.model_name)
+                model = self.model_class.from_pretrained(
+                    pretrained_model_name_or_path=self.model_name, moe_implementation="scattermoe"
+                )
 
             num_parameters = 0
             for param in model.parameters():
