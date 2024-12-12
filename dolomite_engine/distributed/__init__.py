@@ -20,6 +20,14 @@ from torch.distributed.pipelining.schedules import (
     _PipelineSchedule,
     get_schedule_class,
 )
+from torchao.float8 import (
+    CastConfig,
+    Float8LinearConfig,
+    ScalingType,
+    convert_to_float8_training,
+    precompute_float8_dynamic_scale_for_fsdp,
+    sync_float8_amax_and_scale_history,
+)
 
 from ..arguments import TrainingArgs
 from ..containers import ModelContainer
