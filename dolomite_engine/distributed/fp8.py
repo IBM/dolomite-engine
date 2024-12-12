@@ -13,23 +13,21 @@
 # Note: Performance
 # Float8 experimental is intended to be ran under `torch.compile`` for competitive performance
 
-from typing import List, Union
-
 import torch
-import torch.nn as nn
 from torchao.float8 import (
     CastConfig,
     Float8LinearConfig,
     ScalingType,
     convert_to_float8_training,
+    precompute_float8_dynamic_scale_for_fsdp,
     sync_float8_amax_and_scale_history,
 )
 
+from ..containers import ModelContainer
+
 
 class Float8Handler:
-    def __init__(self, job_config: JobConfig, parallel_dims: ParallelDims):
-        self.enabled = False
-
+    def __init__(self, job_config: JobConfig, parallel_dims: ParallelDims) -> None:
         float8_config = job_config.float8
 
         enable_fsdp_float8_all_gather = parallel_dims.dp_shard_enabled and float8_config.enable_fsdp_float8_all_gather
@@ -43,8 +41,6 @@ class Float8Handler:
             cast_config_grad_output=CastConfig(scaling_type=scaling_type_grad_output),
         )
 
-        self.enabled = True
-
         self.precompute_scale = (
             enable_fsdp_float8_all_gather and float8_config.precompute_float8_dynamic_scale_for_fsdp
         )
@@ -57,33 +53,22 @@ class Float8Handler:
         self._sync_float8_amax_and_scale_history = None
         self.compile = job_config.training.compile
 
-    def convert_to_float8_training(self, model: nn.Module):
-        if not self.enabled:
-            return
+    def convert_to_float8_training(self, model_container: ModelContainer) -> None:
+        for model in model_container:
+            convert_to_float8_training(
+                model,
+                config=self.config,
+                module_filter_fn=lambda mod, fqn: fqn != "output",
+            )
 
-        convert_to_float8_training(
-            model,
-            config=self.config,
-            module_filter_fn=lambda mod, fqn: fqn != "output",
-        )
-
-    def precompute_float8_dynamic_scale_for_fsdp(self, model: Union[nn.Module, List[nn.Module]]):
-        if not self.enabled:
-            return
-
+    def precompute_float8_dynamic_scale_for_fsdp(self, model_container: ModelContainer) -> None:
         if not self.precompute_scale:
             return
 
-        from torchao.float8 import precompute_float8_dynamic_scale_for_fsdp
+        for model in model_container:
+            precompute_float8_dynamic_scale_for_fsdp(model)
 
-        models = [model] if isinstance(model, nn.Module) else model
-        for m in models:
-            precompute_float8_dynamic_scale_for_fsdp(m)
-
-    def sync_float8_amax_and_scale_history(self, model: Union[nn.Module, List[nn.Module]]):
-        if not self.enabled:
-            return
-
+    def sync_float8_amax_and_scale_history(self, model_container: ModelContainer) -> None:
         if not self.delayed_scaling:
             return
 
@@ -93,6 +78,5 @@ class Float8Handler:
             else:
                 self._sync_float8_amax_and_scale_history = sync_float8_amax_and_scale_history
 
-        models = [model] if isinstance(model, nn.Module) else model
-        for m in models:
-            self._sync_float8_amax_and_scale_history(m)
+        for model in model_container:
+            self._sync_float8_amax_and_scale_history(model)
