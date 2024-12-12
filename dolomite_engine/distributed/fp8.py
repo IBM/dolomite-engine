@@ -54,6 +54,7 @@ if is_torchao_available():
                         cast_config_input=CastConfig(scaling_type=scaling_type_input),
                         cast_config_weight=CastConfig(scaling_type=scaling_type_weight),
                         cast_config_grad_output=CastConfig(scaling_type=scaling_type_grad_output),
+                        force_recompute_fp8_weight_in_bwd=True,
                     ),
                     module_filter_fn=lambda mod, fqn: fqn != "output",
                 )
