@@ -342,6 +342,7 @@ class ProcessGroupManager:
 
     @staticmethod
     def destroy_process_groups() -> None:
+        return
         if ProcessGroupManager.is_initialized():
             torch.distributed.barrier()
             torch.distributed.destroy_process_group()
