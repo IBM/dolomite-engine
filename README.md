@@ -186,15 +186,7 @@ SST2Dataset
 This repository implements the dataloader from Megatron-LM for efficient pretraining. If for some reason you need to use that dataloader outside this repository, take a look at [this example](tools/megatron_dataset/megatron_dataloader.py).
 
 ## Supported optimizers
-We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.
-
 ```python
-# https://nvidia.github.io/apex/optimizers.html
-from apex.optimizers import FusedAdam as ApexFusedAdam
-from apex.optimizers import FusedLAMB as ApexFusedLAMB
-from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
-from apex.optimizers import FusedSGD as ApexFusedSGD
-
 # https://pytorch.org/docs/stable/optim.html
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad

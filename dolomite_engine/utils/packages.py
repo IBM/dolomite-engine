@@ -6,20 +6,6 @@ from .parallel import run_rank_n
 
 
 try:
-    import apex
-
-    _IS_APEX_AVAILABLE = True
-except ImportError:
-    _IS_APEX_AVAILABLE = False
-
-    warn_rank_0("Apex is not installed")
-
-
-def is_apex_available() -> bool:
-    return _IS_APEX_AVAILABLE
-
-
-try:
     import flash_attn
 
     _IS_FLASH_ATTENTION_AVAILABLE = True

@@ -13,29 +13,11 @@ from torch.optim.sgd import SGD as TorchSGD
 
 from ..containers import ModelContainer, OptimizerContainer
 from ..enums import ParamsGroupMethod
-from ..utils import is_apex_available
 from .params_group import get_param_groups_list
 
 
-if is_apex_available():
-    from apex.optimizers import FusedAdam as ApexFusedAdam
-    from apex.optimizers import FusedLAMB as ApexFusedLAMB
-    from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
-    from apex.optimizers import FusedSGD as ApexFusedSGD
-else:
-    ApexFusedAdam = None
-    ApexFusedLAMB = None
-    ApexFusedNovoGrad = None
-    ApexFusedSGD = None
-
-
+# https://pytorch.org/docs/stable/optim.html
 _OPTIMIZER_CLASSES = {
-    # https://nvidia.github.io/apex/optimizers.html
-    "ApexFusedAdam": ApexFusedAdam,
-    "ApexFusedLAMB": ApexFusedLAMB,
-    "ApexFusedNovoGrad": ApexFusedNovoGrad,
-    "ApexFusedSGD": ApexFusedSGD,
-    # https://pytorch.org/docs/stable/optim.html
     "TorchAdadelta": TorchAdadelta,
     "TorchAdagrad": TorchAdagrad,
     "TorchAdam": TorchAdam,
