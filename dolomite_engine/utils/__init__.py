@@ -15,6 +15,7 @@ from .packages import (
     is_einops_available,
     is_flash_attention_available,
     is_ms_amp_available,
+    is_torchao_available,
     is_transformer_engine_available,
     is_triton_available,
     log_environment,

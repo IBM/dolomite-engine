@@ -20,19 +20,17 @@ from torch.distributed.pipelining.schedules import (
     _PipelineSchedule,
     get_schedule_class,
 )
-from torchao.float8 import (
-    CastConfig,
-    Float8LinearConfig,
-    ScalingType,
-    convert_to_float8_training,
-    precompute_float8_dynamic_scale_for_fsdp,
-    sync_float8_amax_and_scale_history,
-)
 
 from ..arguments import TrainingArgs
 from ..containers import ModelContainer
 from ..gradient_checkpointing import apply_gradient_checkpointing
-from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from ..utils import (
+    ProcessGroupManager,
+    get_module_class_from_name,
+    is_torchao_available,
+    log_rank_0,
+    string_to_torch_dtype,
+)
 from .dtensors import (
     dtensor_to_tensor,
     modify_state_dict_to_dtensor_dict,
@@ -40,6 +38,9 @@ from .dtensors import (
     use_async_tensor_parallel,
 )
 
+
+if is_torchao_available():
+    from .fp8 import FP8Manager
 
 # import torch._inductor.config
 # torch._inductor.config.reorder_for_compute_comm_overlap = True
@@ -90,6 +91,7 @@ def wrap_model_container_for_distributed_training(
             )
 
     if dtype == "fp8":
+        FP8Manager(model_container)
         dtype = "bf16"
 
     block_names = model_container[0].model._no_split_modules

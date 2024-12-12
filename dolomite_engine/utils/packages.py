@@ -159,6 +159,20 @@ def is_causal_conv1d_available() -> bool:
     return _IS_CAUSAL_CONV1D_AVAILABLE
 
 
+try:
+    import torchao
+
+    _IS_TORCHAO_AVAILABLE = True
+except ImportError:
+    _IS_TORCHAO_AVAILABLE = False
+
+    warn_rank_0("torchao is not installed")
+
+
+def is_torchao_available() -> bool:
+    return _IS_TORCHAO_AVAILABLE
+
+
 @run_rank_n
 def log_environment() -> None:
     packages = sorted(["{}=={}".format(d.metadata["Name"], d.version) for d in distributions()])
