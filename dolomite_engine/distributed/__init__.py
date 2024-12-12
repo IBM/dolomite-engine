@@ -69,7 +69,6 @@ def wrap_model_container_for_distributed_training(
     torch_compile = args.distributed_args.torch_compile
     dtype = args.mixed_precision_args.dtype
     communication_dtype = args.distributed_args.communication_dtype
-    args.mixed_precision_args.fp8_backend
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
