@@ -1,5 +1,4 @@
 from contextlib import nullcontext
-from functools import partial
 
 import torch
 from torch.distributed.pipelining.schedules import _PipelineSchedule
@@ -11,7 +10,7 @@ from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
-from .enums import DatasetSplit, FP8Backend, Mode, TuningMethod
+from .enums import DatasetSplit, Mode, TuningMethod
 from .model_wrapper import get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
@@ -72,16 +71,7 @@ def train(
     if eval_during_training:
         evaluate(val_dataloader, model_container, starting_iteration, experiments_tracker)
 
-    forward_context = (
-        partial(
-            te.fp8_autocast,
-            enabled=True,
-            fp8_recipe=DelayedScaling(fp8_format=Format.HYBRID, amax_history_len=16, amax_compute_algo="max"),
-        )
-        if args.mixed_precision_args.dtype == "fp8" and args.mixed_precision_args.fp8_backend == FP8Backend.nvte
-        else nullcontext
-    )
-
+    forward_context = nullcontext
     backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
 
     torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)

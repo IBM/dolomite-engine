@@ -23,7 +23,6 @@ from torch.distributed.pipelining.schedules import (
 
 from ..arguments import TrainingArgs
 from ..containers import ModelContainer
-from ..enums import FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
 from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
 from .dtensors import (
@@ -71,7 +70,7 @@ def wrap_model_container_for_distributed_training(
     torch_compile = args.distributed_args.torch_compile
     dtype = args.mixed_precision_args.dtype
     communication_dtype = args.distributed_args.communication_dtype
-    fp8_backend = args.mixed_precision_args.fp8_backend
+    args.mixed_precision_args.fp8_backend
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
@@ -84,9 +83,7 @@ def wrap_model_container_for_distributed_training(
                 f"using ({communication_dtype}) with mixed precision training in ({dtype}), recommended is to use ({torch.float32})",
             )
 
-    if dtype == "fp8" and fp8_backend == FP8Backend.nvte:
-        # FIXME this wont work
-        convert_model_to_transformer_engine(model)
+    if dtype == "fp8":
         dtype = "bf16"
 
     block_names = model_container[0].model._no_split_modules
