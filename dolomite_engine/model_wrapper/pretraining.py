@@ -132,7 +132,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             aux_loss = aux_loss.squeeze(0)
         else:
             logits: torch.Tensor = model_outputs.logits
-            aux_loss = None
+            aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
@@ -160,7 +160,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             loss = lm_loss
             output = {"loss": loss}
         else:
-            self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
+            if self.is_pipeline_parallel_enabled:
+                self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
 
             if is_tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
