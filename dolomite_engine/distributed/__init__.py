@@ -91,8 +91,7 @@ def wrap_model_container_for_distributed_training(
                 logging.WARN,
                 f"using ({communication_dtype}) with mixed precision training in ({dtype}), recommended is to use ({torch.float32})",
             )
-
-    if dtype == "fp8":
+    elif dtype == "fp8":
         FP8Manager(
             model_container,
             enable_fsdp_fp8_all_gather=True,
