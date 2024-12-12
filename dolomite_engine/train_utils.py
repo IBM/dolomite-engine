@@ -14,7 +14,11 @@ from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapper
-from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics
+from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, is_torchao_available, log_metrics
+
+
+if is_torchao_available():
+    from .distributed import FP8Manager
 
 
 def train_step(
@@ -150,8 +154,14 @@ def _train_step_with_pipeline_parallel(
             else:
                 grad_norm.append(torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping))
 
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history(model_container)
+
     optimizer_container.step()
     lr_scheduler_container.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp(model_container)
 
     metrics_tracker = MetricsTrackingDict({})
 
@@ -260,8 +270,14 @@ def _train_step_without_pipeline_parallel(
         else:
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
 
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history([model])
+
     optimizer.step()
     lr_scheduler.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker / gradient_accumulation_steps

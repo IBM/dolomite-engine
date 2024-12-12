@@ -13,6 +13,8 @@
 # Note: Performance
 # Float8 experimental is intended to be ran under `torch.compile`` for competitive performance
 
+from typing import Callable
+
 import torch
 
 from ..containers import ModelContainer
@@ -28,6 +30,10 @@ if is_torchao_available():
         precompute_float8_dynamic_scale_for_fsdp,
         sync_float8_amax_and_scale_history,
     )
+
+    _PRECOMPUTE_SCALE: bool = False
+    _DELAYED_SCALING: bool = False
+    _SYNC_FP8_AMAX_AND_SCALE_HISTORY: Callable = sync_float8_amax_and_scale_history
 
     class FP8Manager:
         def __init__(
@@ -52,23 +58,21 @@ if is_torchao_available():
                     module_filter_fn=lambda mod, fqn: fqn != "output",
                 )
 
-            self.precompute_scale = enable_fsdp_fp8_all_gather and precompute_fp8_dynamic_scale_for_fsdp
+            global _PRECOMPUTE_SCALE, _DELAYED_SCALING, _SYNC_FP8_AMAX_AND_SCALE_HISTORY
 
-            self.delayed_scaling = (
+            _PRECOMPUTE_SCALE = enable_fsdp_fp8_all_gather and precompute_fp8_dynamic_scale_for_fsdp
+            _DELAYED_SCALING = (
                 scaling_type_input is ScalingType.DELAYED
                 or scaling_type_weight is ScalingType.DELAYED
                 or scaling_type_grad_output is ScalingType.DELAYED
             )
 
-            self._sync_float8_amax_and_scale_history = (
-                torch.compile(sync_float8_amax_and_scale_history)
-                if torch_compile
-                else sync_float8_amax_and_scale_history
-            )
+            if torch_compile:
+                _SYNC_FP8_AMAX_AND_SCALE_HISTORY = torch.compile(sync_float8_amax_and_scale_history)
 
         @staticmethod
         def precompute_float8_dynamic_scale_for_fsdp(model_container: ModelContainer) -> None:
-            if not self.precompute_scale:
+            if not _PRECOMPUTE_SCALE:
                 return
 
             for model in model_container:
@@ -76,8 +80,8 @@ if is_torchao_available():
 
         @staticmethod
         def sync_float8_amax_and_scale_history(model_container: ModelContainer) -> None:
-            if not self.delayed_scaling:
+            if not _DELAYED_SCALING:
                 return
 
             for model in model_container:
-                self._sync_float8_amax_and_scale_history(model)
+                _SYNC_FP8_AMAX_AND_SCALE_HISTORY(model)

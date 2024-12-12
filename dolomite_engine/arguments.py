@@ -238,6 +238,10 @@ class LRSchedulerArgs(BaseArgs):
 class MixedPrecisionArgs(BaseArgs):
     # dtype to use for training / inference
     dtype: str = "fp32"
+    # fp8
+    scaling_type_input: str | None = None
+    scaling_type_weight: str | None = None
+    scaling_type_grad_output: str | None = None
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
