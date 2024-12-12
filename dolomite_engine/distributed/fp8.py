@@ -26,14 +26,15 @@ from torchao.float8 import (
 from ..containers import ModelContainer
 
 
-class Float8Handler:
-    def __init__(self, job_config: JobConfig, parallel_dims: ParallelDims) -> None:
+class FP8Manager:
+    def __init__(self, job_config: JobConfig, parallel_dims: ParallelDims, torch_compile: bool) -> None:
         float8_config = job_config.float8
 
         enable_fsdp_float8_all_gather = parallel_dims.dp_shard_enabled and float8_config.enable_fsdp_float8_all_gather
         scaling_type_input = ScalingType(float8_config.scaling_type_input)
         scaling_type_weight = ScalingType(float8_config.scaling_type_weight)
         scaling_type_grad_output = ScalingType(float8_config.scaling_type_grad_output)
+
         self.config = Float8LinearConfig(
             enable_fsdp_float8_all_gather=enable_fsdp_float8_all_gather,
             cast_config_input=CastConfig(scaling_type=scaling_type_input),
@@ -50,8 +51,10 @@ class Float8Handler:
             or scaling_type_weight is ScalingType.DELAYED
             or scaling_type_grad_output is ScalingType.DELAYED
         )
-        self._sync_float8_amax_and_scale_history = None
-        self.compile = job_config.training.compile
+
+        self._sync_float8_amax_and_scale_history = (
+            torch.compile(sync_float8_amax_and_scale_history) if torch_compile else sync_float8_amax_and_scale_history
+        )
 
     def convert_to_float8_training(self, model_container: ModelContainer) -> None:
         for model in model_container:
@@ -71,12 +74,6 @@ class Float8Handler:
     def sync_float8_amax_and_scale_history(self, model_container: ModelContainer) -> None:
         if not self.delayed_scaling:
             return
-
-        if self._sync_float8_amax_and_scale_history is None:
-            if self.compile:
-                self._sync_float8_amax_and_scale_history = torch.compile(sync_float8_amax_and_scale_history)
-            else:
-                self._sync_float8_amax_and_scale_history = sync_float8_amax_and_scale_history
 
         for model in model_container:
             self._sync_float8_amax_and_scale_history(model)
