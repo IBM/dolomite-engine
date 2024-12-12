@@ -9,7 +9,6 @@ from .loss_dict import MetricsTrackingDict
 from .miscellaneous import divide_if_divisible
 from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torch_dtype_to_string
 from .packages import (
-    is_apex_available,
     is_causal_conv1d_available,
     is_cute_kernels_available,
     is_einops_available,
