@@ -31,7 +31,6 @@ from .dtensors import (
     tensor_to_dtensor,
     use_async_tensor_parallel,
 )
-from .fp8 import convert_model_to_transformer_engine
 
 
 # import torch._inductor.config
