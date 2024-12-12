@@ -2,6 +2,7 @@ import logging
 from contextlib import AbstractContextManager, nullcontext
 
 import torch
+from torch.distributed import ReduceOp
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -296,11 +297,12 @@ def _train_step_without_pipeline_parallel(
 
 def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsTrackingDict:
     tensor = [metrics_tracker[key] for key in metrics_tracker]
-    tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
+    tensor = torch.stack(tensor)
     # NOTE the cpu() call was to save memory but might not be needed anymore
+    # tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
     # tensor = tensor.cpu()
     # gloo op doesn't support averaging so we do sum and divide by world size above
-    torch.distributed.all_reduce(tensor, group=ProcessGroupManager.get_data_parallel_group())
+    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
     tensor = tensor.tolist()
 
     for i, key in enumerate(metrics_tracker):
