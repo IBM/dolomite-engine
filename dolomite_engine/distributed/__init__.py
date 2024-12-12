@@ -40,6 +40,8 @@ from .dtensors import (
 
 
 if is_torchao_available():
+    from torchao.float8 import ScalingType
+
     from .fp8 import FP8Manager
 
 # import torch._inductor.config
@@ -91,7 +93,16 @@ def wrap_model_container_for_distributed_training(
             )
 
     if dtype == "fp8":
-        FP8Manager(model_container)
+        FP8Manager(
+            model_container,
+            enable_fsdp_fp8_all_gather=True,
+            precompute_fp8_dynamic_scale_for_fsdp=True,
+            torch_compile=torch_compile,
+            scaling_type_input=ScalingType(args.mixed_precision_args.scaling_type_input),
+            scaling_type_weight=ScalingType(args.mixed_precision_args.scaling_type_weight),
+            scaling_type_grad_output=ScalingType(args.mixed_precision_args.scaling_type_grad_output),
+        )
+
         dtype = "bf16"
 
     block_names = model_container[0].model._no_split_modules
