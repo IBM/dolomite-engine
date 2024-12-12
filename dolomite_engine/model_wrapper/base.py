@@ -170,7 +170,7 @@ class ModelWrapper(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
         self.eos_token_id = self.tokenizer.eos_token_id
 
-    def _setup_model(self) -> None:
+    def _get_model_kwargs(self) -> dict:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:
@@ -191,6 +191,11 @@ class ModelWrapper(nn.Module):
         if self.is_pipeline_parallel_enabled:
             model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
             model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
+
+        return model_kwargs
+
+    def _setup_model(self) -> None:
+        model_kwargs = self._get_model_kwargs()
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:
@@ -259,13 +264,13 @@ class ModelWrapper(nn.Module):
         self.model.get_input_embeddings().forward = _noisy_forward
 
     def calculate_num_parameters(self) -> int:
+        model_kwargs = self._get_model_kwargs()
+
         with torch.device("meta"):
             if self.model_name is None:
-                model = self.model_class.from_config(config=self.config, moe_implementation="scattermoe")
+                model = self.model_class.from_config(**model_kwargs)
             else:
-                model = self.model_class.from_pretrained(
-                    pretrained_model_name_or_path=self.model_name, moe_implementation="scattermoe"
-                )
+                model = self.model_class.from_pretrained(**model_kwargs)
 
             num_parameters = 0
             for param in model.parameters():
