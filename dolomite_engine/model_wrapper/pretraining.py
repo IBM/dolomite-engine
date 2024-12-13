@@ -31,7 +31,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         sequence_length: int,
         num_pipeline_stages: int,
         pipeline_stage_id: int,
-        neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
@@ -55,7 +54,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             sequence_length (int): sequence length for pretraining
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
-            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
@@ -82,7 +80,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             sequence_parallel=sequence_parallel,
             num_pipeline_stages=num_pipeline_stages,
             pipeline_stage_id=pipeline_stage_id,
-            neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
