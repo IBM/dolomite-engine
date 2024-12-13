@@ -14,19 +14,7 @@ from .enums import DatasetSplit, Mode, TuningMethod
 from .model_wrapper import get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
-from .utils import (
-    ExperimentsTracker,
-    MetricsTrackingDict,
-    ProcessGroupManager,
-    init_distributed,
-    is_transformer_engine_available,
-    setup_tf32,
-)
-
-
-if is_transformer_engine_available():
-    import transformer_engine.pytorch as te
-    from transformer_engine.common.recipe import DelayedScaling, Format
+from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, init_distributed, setup_tf32
 
 
 def train(

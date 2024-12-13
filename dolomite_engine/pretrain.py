@@ -24,15 +24,9 @@ from .utils import (
     ProcessGroupManager,
     StepTracker,
     init_distributed,
-    is_transformer_engine_available,
     log_rank_0,
     setup_tf32,
 )
-
-
-if is_transformer_engine_available():
-    import transformer_engine.pytorch as te
-    from transformer_engine.common.recipe import DelayedScaling, Format
 
 
 def track_val_metrics(
