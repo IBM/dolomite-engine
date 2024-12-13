@@ -110,7 +110,6 @@ class ProcessGroupManager:
         group = ProcessGroupManager.get_tensor_parallel_group()
         ranks = torch.distributed.get_process_group_ranks(group)
 
-        global _TENSOR_PARALLEL_FIRST_RANK
         _TENSOR_PARALLEL_FIRST_RANK = ranks[0]
 
     @staticmethod
