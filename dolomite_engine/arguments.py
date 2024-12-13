@@ -382,12 +382,6 @@ class LoggingArgs(BaseArgs):
             _check_not_None([(self.wandb_args, "wandb_args")])
 
 
-class ResearchArgs(BaseArgs):
-    # Scalar of noise to inject into input embeddings
-    # https://arxiv.org/abs/2310.05914
-    neft_alpha: float | None = None
-
-
 class KernelArgs(BaseArgs):
     # Scalar of noise to inject into input embeddings
     # https://arxiv.org/abs/2310.05914
@@ -452,8 +446,6 @@ class TrainingArgs(BaseArgs):
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # distributed training related arguments
     distributed_args: DistributedArgs = DistributedArgs()
-    # research args
-    research_args: ResearchArgs = ResearchArgs()
     # kernel args
     kernel_args: KernelArgs = KernelArgs()
 
