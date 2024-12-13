@@ -62,11 +62,6 @@ class TuningMethod(Enum):
     distillation = "distillation"
 
 
-class FP8Backend(Enum):
-    msamp = "msamp"
-    nvte = "nvte"
-
-
 class LossMask(Enum):
     """Type of loss masking method"""
 

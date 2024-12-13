@@ -2,6 +2,7 @@ import logging
 from contextlib import AbstractContextManager, nullcontext
 
 import torch
+from torch.distributed import ReduceOp
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -14,7 +15,11 @@ from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapper
-from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics
+from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, is_torchao_available, log_metrics
+
+
+if is_torchao_available():
+    from .distributed import FP8Manager
 
 
 def train_step(
@@ -150,8 +155,14 @@ def _train_step_with_pipeline_parallel(
             else:
                 grad_norm.append(torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping))
 
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history(model_container)
+
     optimizer_container.step()
     lr_scheduler_container.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp(model_container)
 
     metrics_tracker = MetricsTrackingDict({})
 
@@ -260,8 +271,14 @@ def _train_step_without_pipeline_parallel(
         else:
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
 
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history([model])
+
     optimizer.step()
     lr_scheduler.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker / gradient_accumulation_steps
@@ -280,11 +297,12 @@ def _train_step_without_pipeline_parallel(
 
 def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsTrackingDict:
     tensor = [metrics_tracker[key] for key in metrics_tracker]
-    tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
+    tensor = torch.stack(tensor)
     # NOTE the cpu() call was to save memory but might not be needed anymore
+    # tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
     # tensor = tensor.cpu()
     # gloo op doesn't support averaging so we do sum and divide by world size above
-    torch.distributed.all_reduce(tensor, group=ProcessGroupManager.get_data_parallel_group())
+    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
     tensor = tensor.tolist()
 
     for i, key in enumerate(metrics_tracker):
