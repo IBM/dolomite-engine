@@ -1,3 +1,4 @@
+import os
 import logging
 import time
 from contextlib import nullcontext
@@ -12,6 +13,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
+from .data.fsdp_dataloader import get_fsdp_dataloaders
 from .data import get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import Mode, TuningMethod
@@ -27,7 +29,6 @@ from .utils import (
     log_rank_0,
     setup_tf32,
 )
-
 
 def track_val_metrics(
     global_step: int,
@@ -113,7 +114,6 @@ def train(
         evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
 
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
-
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
     local_batch_size = micro_batch_size * gradient_accumulation_steps
@@ -133,6 +133,7 @@ def train(
     )
 
     forward_context = nullcontext
+
     backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
 
     torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
@@ -145,10 +146,10 @@ def train(
     metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
+    print(f"*****Starting at {global_step}")
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
-
         loss_step_dict = train_step(
             model_container=model_container,
             pipeline_schedule=pipeline_schedule,
@@ -298,7 +299,6 @@ def evaluate(
 
 def main(mode: Mode = Mode.training) -> None:
     """main program"""
-
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
@@ -362,7 +362,7 @@ def main(mode: Mode = Mode.training) -> None:
     starting_iteration = 0
     metadata = None
     experiments_tracker_state_dict = None
-    if args.load_args is not None:
+    if args.load_args is not None and args.load_args.load_path is not None and os.path.isdir(args.load_args.load_path):
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
             args, model_container, optimizer_container, lr_scheduler_container, None
         )
@@ -370,10 +370,17 @@ def main(mode: Mode = Mode.training) -> None:
         # metadata field contains the dataloader state so we need to reset it here
         if not args.load_args.load_dataloader_state and metadata is not None:
             metadata["consumed_samples"] = 0
-
-    train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
-        args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
-    )
+    global_rank = ProcessGroupManager.get_global_rank()
+    world_size = ProcessGroupManager.get_world_size()
+    if args.datasets[0].class_name!="FSDPDataset":
+        train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
+            args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
+        )
+    else:
+        # Todo: use args.load_args.load_dataloader_state
+        train_dataloader,val_dataloaders,test_dataloaders = get_fsdp_dataloaders(
+            args, global_rank, world_size, model_container[0].tokenizer
+        )
 
     experiments_tracker = ExperimentsTracker(
         args.logging_args.experiments_tracker_name,
