@@ -1,5 +1,5 @@
 import torch
-from transformers import DynamicCache
+from transformers import DynamicCache, GenerationMixin, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin

@@ -6,9 +6,6 @@ from . import ALLOW_TF32, inv_log2, log2
 from .softplus import softplus
 
 
-# torch._dynamo.config.cache_size_limit = 64
-
-
 @triton.jit
 def load_kv(KT_blk_ptrs, V_blk_ptrs, N_mask, NO_N_MASK, D_mask, NO_D_MASK: tl.constexpr):
     if NO_D_MASK:
