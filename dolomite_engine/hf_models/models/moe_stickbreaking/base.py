@@ -2,7 +2,6 @@ import torch
 from transformers import DynamicCache
 
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
-from ..stickbreaking.sb_varlen import BLOCK_M, BLOCK_N, row_block_counts_and_sequence_ids
 from .config import MoEStickBreakingConfig
 from .layer import MoEStickBreakingBlock
 
@@ -54,11 +53,6 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
         )
 
         sb_metadata = None
-        if self._use_padding_free_transformer:
-            with torch.no_grad():
-                # cu_row_blocks, first_row_block, sequence_ids
-                sb_metadata = row_block_counts_and_sequence_ids(cu_seqlens[1:], BLOCK_M, BLOCK_N)
-
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
