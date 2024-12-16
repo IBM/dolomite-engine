@@ -6,7 +6,7 @@ from . import ALLOW_TF32, inv_log2, log2
 from .softplus import softplus
 
 
-torch._dynamo.config.cache_size_limit = 64
+# torch._dynamo.config.cache_size_limit = 64
 
 
 @triton.jit

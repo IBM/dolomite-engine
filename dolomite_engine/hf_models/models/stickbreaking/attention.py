@@ -11,7 +11,7 @@ from .config import StickBreakingConfig
 from .stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
-torch._dynamo.config.cache_size_limit = 16
+# torch._dynamo.config.cache_size_limit = 16
 
 
 @torch.compile
