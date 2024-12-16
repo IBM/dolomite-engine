@@ -61,6 +61,7 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
         for block in self.h:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
+
             outputs = block(
                 hidden_states,
                 past_key_values=past_key_values,
