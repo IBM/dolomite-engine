@@ -1,5 +1,5 @@
 import torch
-from transformers import DynamicCache, GenerationMixin, PreTrainedModel
+from transformers import DynamicCache
 
 from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
 from .config import MoEStickBreakingConfig
@@ -52,14 +52,6 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
             output_router_logits=output_router_logits,
         )
 
-        # ==========================================================================================
-        # padding_free:
-        #     attention_mask -> None
-        # flash:
-        #     attention_mask -> (batch_size, key_length)
-        # else:
-        #     attention_mask -> (batch_size, 1, query_length, key_length)
-        # ==========================================================================================
         sb_metadata = None
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
