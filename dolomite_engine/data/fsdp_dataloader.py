@@ -1403,15 +1403,16 @@ class SamplingDataset(_WrapperDataset):
                 self.weights = [1] * len(self.datasets)
             else:
                 tokens={}
-                for dataset in datasets:
-                    with open(countpath, "r") as csvfile:
-                        reader = csv.DictReader(csvfile)
-                        for row in reader:
+                with open(countpath, "r") as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        for dataset in datasets:
                             fullpath = row["dataset/filename"]
                             prefix = fullpath.rfind("/" + dataset + "/")
                             #print(f"Looking for {dataset} in {fullpath}")
                             if prefix >= 0:
                                 tokens[dataset] = tokens.get(dataset,0)+int(row["tokens"])
+                                break
                 self.datasets = tokens.keys()
                 self.weights = tokens.values()
         else:
