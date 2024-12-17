@@ -13,34 +13,38 @@ from .sb_varlen_fwd import compute_block, load_kv
 def locked_add(Lock_ptr, Count_ptr, A_ptrs, a, B_ptrs, b, N_mask, NO_N_MASK, D_mask, NO_D_MASK: tl.constexpr):
     while tl.atomic_cas(Lock_ptr, 0, 1) == 1:
         pass
-    count = tl.load(Count_ptr)
+    count = tl.load(Count_ptr, eviction_policy='evict_last')
     if NO_D_MASK:
         if NO_N_MASK:
-            if count == 0:
-                tl.store(A_ptrs, a)
-                tl.store(B_ptrs, b)
-                tl.store(Count_ptr, True)
+            if count:
+                tl.store(A_ptrs, a, eviction_policy='evict_last')
+                tl.store(B_ptrs, b, eviction_policy='evict_last')
+                tl.store(Count_ptr, True, eviction_policy='evict_last')
             else:
-                tl.store(A_ptrs, a + tl.load(A_ptrs))
-                tl.store(B_ptrs, b + tl.load(B_ptrs))
+                tl.store(A_ptrs, a + tl.load(A_ptrs, eviction_policy='evict_last'), eviction_policy='evict_last')
+                tl.store(B_ptrs, b + tl.load(B_ptrs, eviction_policy='evict_last'), eviction_policy='evict_last')
         else:
-            if count == 0:
-                tl.store(A_ptrs, a, mask=N_mask[:, None])
-                tl.store(B_ptrs, b, mask=N_mask[:, None])
-                tl.store(Count_ptr, True)
+            if count:
+                tl.store(A_ptrs, a, mask=N_mask[:, None], eviction_policy='evict_last')
+                tl.store(B_ptrs, b, mask=N_mask[:, None], eviction_policy='evict_last')
+                tl.store(Count_ptr, True, eviction_policy='evict_last')
             else:
-                tl.store(A_ptrs, a + tl.load(A_ptrs, mask=N_mask[:, None]), mask=N_mask[:, None])
-                tl.store(B_ptrs, b + tl.load(B_ptrs, mask=N_mask[:, None]), mask=N_mask[:, None])
+                tl.store(A_ptrs, a + tl.load(A_ptrs, mask=N_mask[:, None], eviction_policy='evict_last'),
+                         mask=N_mask[:, None], eviction_policy='evict_last')
+                tl.store(B_ptrs, b + tl.load(B_ptrs, mask=N_mask[:, None], eviction_policy='evict_last'),
+                         mask=N_mask[:, None], eviction_policy='evict_last')
 
     else:
         mask = N_mask[:, None] & D_mask[None, :]
-        if count == 0:
-            tl.store(A_ptrs, a, mask=mask)
-            tl.store(B_ptrs, b, mask=mask)
-            tl.store(Count_ptr, True)
+        if count:
+            tl.store(A_ptrs, a, mask=mask, eviction_policy='evict_last')
+            tl.store(B_ptrs, b, mask=mask, eviction_policy='evict_last')
+            tl.store(Count_ptr, True, eviction_policy='evict_last')
         else:
-            tl.store(A_ptrs, a + tl.load(A_ptrs, mask=mask), mask=mask)
-            tl.store(B_ptrs, b + tl.load(B_ptrs, mask=mask), mask=mask)
+            tl.store(A_ptrs, a + tl.load(A_ptrs, mask=mask, eviction_policy='evict_last'),
+                     mask=mask, eviction_policy='evict_last')
+            tl.store(B_ptrs, b + tl.load(B_ptrs, mask=mask, eviction_policy='evict_last'), mask=mask,
+                     eviction_policy='evict_last')
     tl.atomic_xchg(Lock_ptr, 0)
 
 
@@ -262,11 +266,11 @@ def _backward_one_row(
     cm,
     DO_head_seq_ptr,
     stride_dom,
-    stride_dod,
+    stride_dod: tl.constexpr,
     DR_head_seq_ptr,
     stride_drm,
     A_head_seq_ptr,
-    stride_am,
+    stride_am: tl.constexpr,
     Q_head_seq_ptr,
     stride_qm,
     stride_qd: tl.constexpr,
@@ -308,16 +312,16 @@ def _backward_one_row(
 
     # Init pointers
     # Inputs
-    DO_blk_ptrs = DO_head_seq_ptr + stride_dom * M_blk_idxs[:, None] + stride_dod * D_range[None, :]
+    DO_blk_ptrs = DO_head_seq_ptr + (stride_dom * M_blk_idxs[:, None] + stride_dod * D_range[None, :])
 
-    KT_blk_ptrs = K_head_seq_ptr + stride_kn * N_blk_idxs[None, :] + stride_kd * D_range[:, None]
-    Q_blk_ptrs = Q_head_seq_ptr + stride_qm * M_blk_idxs[:, None] + stride_qd * D_range[None, :]
-    V_blk_ptrs = V_head_seq_ptr + stride_vn * N_blk_idxs[:, None] + stride_vd * D_range[None, :]
+    KT_blk_ptrs = K_head_seq_ptr + (stride_kn * N_blk_idxs[None, :] + stride_kd * D_range[:, None])
+    Q_blk_ptrs = Q_head_seq_ptr + (stride_qm * M_blk_idxs[:, None] + stride_qd * D_range[None, :])
+    V_blk_ptrs = V_head_seq_ptr + (stride_vn * N_blk_idxs[:, None] + stride_vd * D_range[None, :])
     A_blk_ptrs = A_head_seq_ptr + stride_am * M_blk_idxs
     # Outputs
-    DQ_blk_ptrs = DQ_head_seq_ptr + stride_dqm * M_blk_idxs[:, None] + stride_dqd * D_range[None, :]
-    DK_blk_ptrs = DK_head_seq_ptr + stride_dkn * N_blk_idxs[:, None] + stride_dkd * D_range[None, :]
-    DV_blk_ptrs = DV_head_seq_ptr + stride_dvn * N_blk_idxs[:, None] + stride_dvd * D_range[None, :]
+    DQ_blk_ptrs = DQ_head_seq_ptr + (stride_dqm * M_blk_idxs[:, None] + stride_dqd * D_range[None, :])
+    DK_blk_ptrs = DK_head_seq_ptr + (stride_dkn * N_blk_idxs[:, None] + stride_dkd * D_range[None, :])
+    DV_blk_ptrs = DV_head_seq_ptr + (stride_dvn * N_blk_idxs[:, None] + stride_dvd * D_range[None, :])
     DR_blk_ptrs = DR_head_seq_ptr + stride_drm * M_blk_idxs
 
     # --- Load band vectors ---
