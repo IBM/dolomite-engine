@@ -108,6 +108,7 @@ class ScatterMoE(MoE):
                 bias=config.add_bias,
                 std=std,
             )
+            self.shared_experts_weight = self.shared_intermediate_size / (self.intermediate_size * self.top_k + self.shared_intermediate_size)
 
         self.act = get_activation_function(activation_function)
 

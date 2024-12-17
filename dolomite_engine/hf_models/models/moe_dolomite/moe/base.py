@@ -115,6 +115,7 @@ class MoE(nn.Module):
                 bias=config.add_bias,
                 std=std,
             )
+            self.shared_experts_weight = self.shared_intermediate_size / (self.intermediate_size * self.top_k + self.shared_intermediate_size)
 
         self.act = get_activation_function(activation_function)
 
@@ -152,7 +153,7 @@ class MoE(nn.Module):
             hidden_states = moe_output
         else:
             shared_experts_output = self._compute_shared_experts(hidden_states)
-            hidden_states = moe_output + shared_experts_output
+            hidden_states = moe_output * (1. - self.shared_experts_weight) + shared_experts_output * self.shared_experts_weight
 
         if not self.use_padding_free_transformer:
             hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
