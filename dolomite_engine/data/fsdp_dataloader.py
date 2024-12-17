@@ -255,7 +255,7 @@ class _StatefulDataset(data.IterableDataset):
         self.load_worldsize = len(fileshards)
         # Grab only the shard files holding data we currently own
         my_fileshards = _shard_inclusive(fileshards, self.rank, self.worldsize)
-        print(f"load_from_path my_fileshards={my_fileshards}")
+        #print(f"load_from_path my_fileshards={my_fileshards}")
         states = [torch.load(os.path.join(path, x),weights_only=False) for x in my_fileshards]
         self.load_state_dict(states, True)
 
@@ -994,35 +994,36 @@ class StreamingDocDataset(_StatefulDataset):
                     for x in os.listdir(os.path.join(pardir, "meta"))
                     if "counts" in x and "csv" in x
                 ]
+            sizes_in_countpath=False
             if len(countfiles) > 0:
                 # Count file exists, use it
                 countpath = os.path.join(pardir, "meta", countfiles[0])
+                with open(countpath, "r") as file:
+                    first_line = file.readline().rstrip('\n')
+                if first_line.find(",size")>0: sizes_in_countpath=True
+                #else: print(f"size not found in {first_line}, will use os.path.getsize")
             else:
                 countpath = ""
-            #print(countfiles)
 
             # Use shard file sizes to perform partitioning
             # Create shardlist of form shardid -> [start%, end%]
-            #if len(countfiles) > 0:
-            #    sizes = {}
-            #    with open(countpath, "r") as csvfile:
-            #        reader = csv.DictReader(csvfile)
-            #        for row in reader:
-            #            fullpath = row["dataset/filename"]
-            #            prefix = fullpath.rfind("/" + dataset + "/")
-            #            #print(f"Looking for {dataset} in {fullpath}")
-            #            if prefix >= 0:
-            #                key = fullpath[prefix + len(dataset) + 2 :]
-            #                #print(f"key={key} row={row}")
-            #                sizes[key] = int(row["tokens"])
-            #    shard_sizes = [sizes[shard] for shard in shards]
-            #else:
-            #    shard_sizes = [
-            #        os.path.getsize(os.path.join(datapath, shard)) for shard in shards
-            #    ]
-            shard_sizes = [
-                os.path.getsize(os.path.join(datapath, shard)) for shard in shards
-            ]
+            if sizes_in_countpath:
+                sizes = {}
+                with open(countpath, "r") as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        fullpath = row["dataset/filename"]
+                        prefix = fullpath.rfind("/" + dataset + "/")
+                        #print(f"Looking for {dataset} in {fullpath}")
+                        if prefix >= 0:
+                            key = fullpath[prefix + len(dataset) + 2 :]
+                            #print(f"key={key} row={row}")
+                            sizes[key] = int(row["size"])
+                shard_sizes = [sizes[shard] for shard in shards]
+            else:
+                shard_sizes = [
+                    os.path.getsize(os.path.join(datapath, shard)) for shard in shards
+                ]
             shard_sizes = [s / sum(shard_sizes) for s in shard_sizes]
             start = self.rank / self.worldsize
             end = (self.rank + 1) / self.worldsize
@@ -1382,6 +1383,48 @@ class SamplingDataset(_WrapperDataset):
     verbose : bool
         Track setup progress?
     """
+    def get_datasets_weights(self, datasets, weights):
+        datapath = self.datapath
+        if os.path.exists(os.path.join(datapath, "meta")):
+            countfiles = [x for x in os.listdir(os.path.join(datapath, "meta")) if "counts" in x and "csv" in x ]
+        if len(countfiles) > 0:
+            # Count file exists, use it
+            countpath = os.path.join(datapath, "meta", countfiles[0])
+        else:
+            countpath = ""
+        if self.verbose: print(f"countpath={countpath}")
+        if datasets is None:
+            if countpath == "": datasets=[]
+            else:
+                datasets = [f for f in os.listdir(datapath) if not os.path.isfile(os.path.join(datapath, f)) and "meta" not in f]
+        if weights is None:
+            if countpath == "":
+                self.datasets = datasets
+                self.weights = [1] * len(self.datasets)
+            else:
+                tokens={}
+                for dataset in datasets:
+                    with open(countpath, "r") as csvfile:
+                        reader = csv.DictReader(csvfile)
+                        for row in reader:
+                            fullpath = row["dataset/filename"]
+                            prefix = fullpath.rfind("/" + dataset + "/")
+                            #print(f"Looking for {dataset} in {fullpath}")
+                            if prefix >= 0:
+                                tokens[dataset] = tokens.get(dataset,0)+int(row["tokens"])
+                self.datasets = tokens.keys()
+                self.weights = tokens.values()
+        else:
+            self.datasets = datasets
+            self.weights = weights
+        #self.datasets = ','.join(str(value) for value in tokens.keys())
+        #self.weights = ','.join(str(value) for value in tokens.values())
+        if self.verbose: print(f"datasets={self.datasets}")
+        assert len(self.datasets) > 0, "You must specify at least one dataset"
+        assert len(self.weights) == len(self.datasets), f"Number of weights {len(self.weights)} must match number of datasets {len(self.datasets)}"
+        for w in self.weights: assert w > 0, f"Sampling rate {w} must be positive"
+        self.weights = [w / sum(self.weights) for w in self.weights]
+        if self.verbose: print(f"weights={self.weights}")
 
     def __init__(
         self,
@@ -1396,30 +1439,9 @@ class SamplingDataset(_WrapperDataset):
         self.datapath = datapath
         self.delimiter = delimiter_token
         self.verbose = verbose
-        self.datasets = (
-            datasets
-            if datasets is not None
-            else [
-                f
-                for f in os.listdir(datapath)
-                if not os.path.isfile(os.path.join(datapath, f)) and "meta" not in f
-            ]
-        )
-        print(f"datasets={self.datasets}")
-        assert len(self.datasets) > 0, "You must specify at least one dataset"
 
-        if weights is not None:
-            assert len(weights) == len(
-                self.datasets
-            ), f"Number of oversample weights {len(weights)} must match number of datasets {len(self.datasets)}"
-            for w in weights:
-                assert w > 0, f"Sampling rate {w} must be positive"
-        self.weights = [1] * len(self.datasets) if weights is None else weights
-        self.weights = [w / sum(self.weights) for w in self.weights]
-        print(f"weights={self.weights}")
-
+        self.get_datasets_weights(datasets, weights)
         self.tokens_seen = [0] * len(self.datasets)
-
         self.current_iterator = -1
         self.state_params = ["tokens_seen", "current_iterator"]
 
