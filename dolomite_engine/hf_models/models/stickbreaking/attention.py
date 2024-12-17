@@ -5,11 +5,11 @@ import torch.nn
 import torch.nn.functional as F
 from transformers import DynamicCache
 
+from ....utils import print_ranks_all
 from ...enums import InitMethod
 from ...modeling_utils import Attention, ParameterizedLinear
 from .config import StickBreakingConfig
 from .stickbreaking_attention import sb_attn, sb_attn_varlen
-from ....utils import print_ranks_all
 
 
 # torch._dynamo.config.cache_size_limit = 16
@@ -23,7 +23,7 @@ def decoding_stickbreaking(q, k, v, scale=None):
     if scale is None:
         scale = 1 / math.sqrt(q.shape[-1])
     # logits = q @ k[..., :-1, :].transpose(-1, -2) * scale
-    
+
     assert q.size(2) == 1, (q.size(2), k.size(2))
     original_dtype = q.dtype
     q = q.float()
