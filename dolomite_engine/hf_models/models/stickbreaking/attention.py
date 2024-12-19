@@ -8,7 +8,10 @@ from transformers import DynamicCache
 from ...enums import InitMethod
 from ...modeling_utils import Attention, ParameterizedLinear
 from .config import StickBreakingConfig
-from .sb_varlen import sb_attn_varlen_, sb_flash_attn_varlen
+from .stickbreaking_attention import sb_attn, sb_attn_varlen
+
+
+# torch._dynamo.config.cache_size_limit = 16
 
 
 @torch.compile
@@ -78,31 +81,17 @@ class SBAttention(Attention):
         key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
 
-        q_ = query
-        k_ = key
-        v_ = value
-
-        def sb_attn(q_, k_, v_):
-            bsz, heads, length, hdim = k_.size()
-            q_ = q_.flatten(0, 1)
-            k_ = k_.flatten(0, 1)
-            v_ = v_.flatten(0, 1)
-            attn_output, rem = sb_flash_attn_varlen(
-                q=q_,
-                k=k_,
-                v=v_,
-                cu_seqlens=torch.arange(bsz + 1, dtype=torch.int32, device=query.device) * length,
-                inv_temp=softmax_scale,
-                zero_start=True,
-            )
-            attn_output = attn_output.view(bsz, heads, length, hdim)
-            return attn_output, rem
-
         if query.size(2) == key.size(2):
-            attn_output, rem = sb_attn(q_, k_, v_)
+            attn_output, rem = sb_attn(
+                q=query,
+                k=key,
+                v=value,
+                inv_temp=softmax_scale,
+            )
+
         else:
-            attn_output, rem = decoding_stickbreaking(q=q_, k=k_, v=v_, scale=softmax_scale)
-        attn_output = attn_output.permute(0, 2, 1, 3).contiguous()
+            attn_output, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
+        attn_output = attn_output.permute(0, 2, 1, 3)
 
         if self.sb_remainder:
             attn_output = attn_output + rem[..., None] * self.head_bias[None, :, None, :]
@@ -138,19 +127,15 @@ class PaddingFreeSBAttention(SBAttention):
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
         softmax_scale = self._get_softmax_scale()
-        self.attn_pdrop if self.training else 0
 
-        cu_row_blocks, first_row_block, sequence_ids = sb_metadata
         value = value.permute(1, 0, 2)
-        attn_output, rem = sb_attn_varlen_(
+        attn_output, rem = sb_attn_varlen(
             q=query.permute(1, 0, 2),
             k=key.permute(1, 0, 2),
             v=value,
             inv_temp=softmax_scale,
-            cu_seqlens=cu_seqlens[1:],
-            first_row_block=first_row_block,
-            cu_row_blocks=cu_row_blocks,
-            sequence_ids=sequence_ids,
+            cu_seqlens=cu_seqlens,
+            max_seqlens=max_seqlen,
         )
         if self.sb_remainder:
             attn_output = attn_output + rem[..., None] * self.head_bias[:, None, :]
