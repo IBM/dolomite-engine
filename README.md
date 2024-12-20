@@ -20,9 +20,6 @@ _Mayank Mishra_
 1. [Reducing Transformer Key-Value Cache Size with Cross-Layer Attention](https://arxiv.org/abs/2405.12981)  
 _William Brandon, Mayank Mishra, Aniruddha Nrusimha, Rameswar Panda, Jonathan Ragan Kelly_  
 ![image][Efficient Inference] ![image][Model Architecture]
-1. [NEFTune: Noisy Embeddings Improve Instruction Finetuning](https://arxiv.org/abs/2310.05914)  
-_Neel Jain, Ping-yeh Chiang, Yuxin Wen, John Kirchenbauer, Hong-Min Chu, Gowthami Somepalli, Brian R. Bartoldson, Bhavya Kailkhura, Avi Schwarzschild, Aniruddha Saha, Micah Goldblum, Jonas Geiping, Tom Goldstein_  
-![image][Instruction Finetuning]
 1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
 _Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
 ![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
@@ -34,6 +31,7 @@ _Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_
 ![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
 1. [Stick-breaking Attention](https://arxiv.org/abs/2410.17980)  
 _Shawn Tan, Yikang Shen, Songlin Yang, Aaron Courville, Rameswar Panda_
+![image][Model Architecture]
 
 # Getting Started
 Run `make install` to install the requirements for this repository. You might need to install `flash-attn`.
@@ -186,15 +184,7 @@ SST2Dataset
 This repository implements the dataloader from Megatron-LM for efficient pretraining. If for some reason you need to use that dataloader outside this repository, take a look at [this example](tools/megatron_dataset/megatron_dataloader.py).
 
 ## Supported optimizers
-We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.
-
 ```python
-# https://nvidia.github.io/apex/optimizers.html
-from apex.optimizers import FusedAdam as ApexFusedAdam
-from apex.optimizers import FusedLAMB as ApexFusedLAMB
-from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
-from apex.optimizers import FusedSGD as ApexFusedSGD
-
 # https://pytorch.org/docs/stable/optim.html
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad

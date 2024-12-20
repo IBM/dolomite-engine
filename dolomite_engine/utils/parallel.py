@@ -36,6 +36,8 @@ _DATA_PARALLEL_MESH: DeviceMesh | None = None
 _DATA_PARALLEL_GROUP: ProcessGroup | None = None
 _DATA_PARALLEL_RANK: int | None = None
 _DATA_PARALLEL_WORLD_SIZE: int | None = None
+_DATA_PARALLEL_REPLICATION_WORLD_SIZE: int | None = None
+_DATA_PARALLEL_SHARDING_WORLD_SIZE: int | None = None
 
 
 class ProcessGroupManager:
@@ -82,7 +84,10 @@ class ProcessGroupManager:
 
         assert data_parallel_replication_world_size * data_parallel_sharding_world_size == data_parallel_size
 
-        global _MESH
+        global _MESH, _TENSOR_PARALLEL_FIRST_RANK, _DATA_PARALLEL_REPLICATION_WORLD_SIZE, _DATA_PARALLEL_SHARDING_WORLD_SIZE
+
+        _DATA_PARALLEL_REPLICATION_WORLD_SIZE = data_parallel_replication_world_size
+        _DATA_PARALLEL_SHARDING_WORLD_SIZE = data_parallel_sharding_world_size
 
         _MESH = init_device_mesh(
             "cuda",
@@ -105,7 +110,6 @@ class ProcessGroupManager:
         group = ProcessGroupManager.get_tensor_parallel_group()
         ranks = torch.distributed.get_process_group_ranks(group)
 
-        global _TENSOR_PARALLEL_FIRST_RANK
         _TENSOR_PARALLEL_FIRST_RANK = ranks[0]
 
     @staticmethod
@@ -324,6 +328,14 @@ class ProcessGroupManager:
         if _DATA_PARALLEL_WORLD_SIZE is None:
             _DATA_PARALLEL_WORLD_SIZE = ProcessGroupManager.get_data_parallel_mesh().size()
         return _DATA_PARALLEL_WORLD_SIZE
+
+    @staticmethod
+    def get_data_parallel_replication_world_size() -> int:
+        return _DATA_PARALLEL_REPLICATION_WORLD_SIZE
+
+    @staticmethod
+    def get_data_parallel_sharding_world_size() -> int:
+        return _DATA_PARALLEL_SHARDING_WORLD_SIZE
 
     @contextmanager
     @staticmethod

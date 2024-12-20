@@ -23,17 +23,26 @@ from torch.distributed.pipelining.schedules import (
 
 from ..arguments import TrainingArgs
 from ..containers import ModelContainer
-from ..enums import FP8Backend
 from ..gradient_checkpointing import apply_gradient_checkpointing
-from ..utils import ProcessGroupManager, get_module_class_from_name, log_rank_0, string_to_torch_dtype
+from ..utils import (
+    ProcessGroupManager,
+    get_module_class_from_name,
+    is_torchao_available,
+    log_rank_0,
+    string_to_torch_dtype,
+)
 from .dtensors import (
     dtensor_to_tensor,
     modify_state_dict_to_dtensor_dict,
     tensor_to_dtensor,
     use_async_tensor_parallel,
 )
-from .fp8 import convert_model_to_transformer_engine
 
+
+if is_torchao_available():
+    from torchao.float8 import ScalingType
+
+    from .fp8 import FP8Manager
 
 # import torch._inductor.config
 # torch._inductor.config.reorder_for_compute_comm_overlap = True
@@ -71,7 +80,6 @@ def wrap_model_container_for_distributed_training(
     torch_compile = args.distributed_args.torch_compile
     dtype = args.mixed_precision_args.dtype
     communication_dtype = args.distributed_args.communication_dtype
-    fp8_backend = args.mixed_precision_args.fp8_backend
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
@@ -83,10 +91,19 @@ def wrap_model_container_for_distributed_training(
                 logging.WARN,
                 f"using ({communication_dtype}) with mixed precision training in ({dtype}), recommended is to use ({torch.float32})",
             )
+    elif dtype == "fp8":
+        assert is_torchao_available(), "torchao is needed for FP8 training"
 
-    if dtype == "fp8" and fp8_backend == FP8Backend.nvte:
-        # FIXME this wont work
-        convert_model_to_transformer_engine(model)
+        FP8Manager(
+            model_container,
+            enable_fsdp_fp8_all_gather=ProcessGroupManager.get_data_parallel_sharding_world_size() > 1,
+            precompute_fp8_dynamic_scale_for_fsdp=True,
+            torch_compile=torch_compile,
+            scaling_type_input=ScalingType(args.mixed_precision_args.scaling_type_input),
+            scaling_type_weight=ScalingType(args.mixed_precision_args.scaling_type_weight),
+            scaling_type_grad_output=ScalingType(args.mixed_precision_args.scaling_type_grad_output),
+        )
+
         dtype = "bf16"
 
     block_names = model_container[0].model._no_split_modules
@@ -251,6 +268,14 @@ def wrap_model_container_for_distributed_training(
     if num_pipeline_stages > 1:
         micro_batch_size = args.training_parameters.micro_batch_size
         sequence_length = args.datasets[0].class_args.get("sequence_length")
+
+        pipeline_parallel_schedule = args.distributed_args.pipeline_parallel_schedule
+        gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
+
+        if pipeline_parallel_schedule == "1F1B":
+            assert (
+                gradient_accumulation_steps % num_pipeline_stages == 0
+            ), f"gradient_accumulation_steps ({gradient_accumulation_steps}) should be divisible by num_pipeline_stages ({num_pipeline_stages})"
 
         for model in model_container:
             intermediate_dtype = string_to_torch_dtype(args.mixed_precision_args.dtype)

@@ -11,6 +11,7 @@ class MoEDolomiteConfig(CommonConfig):
         output_router_logits: bool = False,
         router_aux_loss_coef: float = 0.001,
         shared_n_inner: int | None = None,
+        use_aux_free_moe: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -22,3 +23,5 @@ class MoEDolomiteConfig(CommonConfig):
 
         self.output_router_logits = output_router_logits
         self.router_aux_loss_coef = router_aux_loss_coef
+
+        self.use_aux_free_moe = use_aux_free_moe

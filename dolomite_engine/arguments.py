@@ -9,7 +9,6 @@ from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import (
     AttentionImplementation,
     ExperimentsTrackerName,
-    FP8Backend,
     GradientCheckpointingMethod,
     Kernel,
     KLDivergenceMethod,
@@ -239,16 +238,14 @@ class LRSchedulerArgs(BaseArgs):
 class MixedPrecisionArgs(BaseArgs):
     # dtype to use for training / inference
     dtype: str = "fp32"
-    # fp8 backend
-    fp8_backend: FP8Backend | None = None
+    # fp8
+    scaling_type_input: str = "dynamic"
+    scaling_type_weight: str = "dynamic"
+    scaling_type_grad_output: str = "dynamic"
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
         self.dtype = normalize_dtype_string(self.dtype)
-
-        # fp8_backend
-        if self.dtype != "fp8":
-            assert self.fp8_backend is None, "fp8_backend specified without fp8 dtype"
 
 
 class ZeroTopologyArgs(BaseArgs):
@@ -385,12 +382,6 @@ class LoggingArgs(BaseArgs):
             _check_not_None([(self.wandb_args, "wandb_args")])
 
 
-class ResearchArgs(BaseArgs):
-    # Scalar of noise to inject into input embeddings
-    # https://arxiv.org/abs/2310.05914
-    neft_alpha: float | None = None
-
-
 class KernelArgs(BaseArgs):
     # Scalar of noise to inject into input embeddings
     # https://arxiv.org/abs/2310.05914
@@ -455,8 +446,6 @@ class TrainingArgs(BaseArgs):
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # distributed training related arguments
     distributed_args: DistributedArgs = DistributedArgs()
-    # research args
-    research_args: ResearchArgs = ResearchArgs()
     # kernel args
     kernel_args: KernelArgs = KernelArgs()
 

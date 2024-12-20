@@ -1,4 +1,4 @@
-from .....utils import SafeTensorsWeightsManager
+from .....utils import SafeTensorsWeightsManager, divide_if_divisible
 from ....enums import PositionEmbeddingType
 from ...gpt_dolomite_TP.weights.shard import _get_attention, _get_embeddings_or_lm_head, _get_layernorm, _get_mlp
 from ...moe_dolomite import MoEDolomiteConfig
@@ -11,28 +11,41 @@ def get_moe_dolomite_tensor_parallel_state_dict(
     num_pipeline_stages: int,
     pipeline_stage_id: int,
 ) -> dict:
-    assert num_pipeline_stages == 1
+    is_first_pipeline_stage = pipeline_stage_id == 0
+    is_last_pipeline_stage = pipeline_stage_id == num_pipeline_stages - 1
 
-    # word embeddings
-    state_dict = _get_embeddings_or_lm_head(
-        safetensors_weights_manager,
-        prefix="transformer.wte.",
-        vocab_size=config.vocab_size,
-        tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+    layers_per_stage = divide_if_divisible(
+        config.n_layer, num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
     )
 
-    # positional embeddings
-    if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
+    layer_start_id = layers_per_stage * pipeline_stage_id
+    layer_end_id = layers_per_stage * (pipeline_stage_id + 1)
+
+    state_dict = {}
+
+    if is_first_pipeline_stage:
+        # word embeddings
         state_dict.update(
             _get_embeddings_or_lm_head(
                 safetensors_weights_manager,
-                prefix="transformer.wpe.",
-                vocab_size=config.n_positions,
-                tensor_parallel_word_embeddings=False,
+                prefix="transformer.wte.",
+                vocab_size=config.vocab_size,
+                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             )
         )
 
-    for layer_idx in range(config.n_layer):
+        # positional embeddings
+        if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
+            state_dict.update(
+                _get_embeddings_or_lm_head(
+                    safetensors_weights_manager,
+                    prefix="transformer.wpe.",
+                    vocab_size=config.n_positions,
+                    tensor_parallel_word_embeddings=False,
+                )
+            )
+
+    for layer_idx in range(layer_start_id, layer_end_id):
         prefix = f"transformer.h.{layer_idx}."
 
         state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
@@ -59,17 +72,18 @@ def get_moe_dolomite_tensor_parallel_state_dict(
             )
         )
 
-    state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))
+    if is_last_pipeline_stage:
+        state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))
 
-    if not config.tie_word_embeddings:
-        state_dict.update(
-            _get_embeddings_or_lm_head(
-                safetensors_weights_manager=safetensors_weights_manager,
-                prefix="lm_head.",
-                vocab_size=config.vocab_size,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+        if not config.tie_word_embeddings:
+            state_dict.update(
+                _get_embeddings_or_lm_head(
+                    safetensors_weights_manager=safetensors_weights_manager,
+                    prefix="lm_head.",
+                    vocab_size=config.vocab_size,
+                    tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+                )
             )
-        )
 
     return state_dict
 

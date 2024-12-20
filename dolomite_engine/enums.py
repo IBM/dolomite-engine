@@ -62,11 +62,6 @@ class TuningMethod(Enum):
     distillation = "distillation"
 
 
-class FP8Backend(Enum):
-    msamp = "msamp"
-    nvte = "nvte"
-
-
 class LossMask(Enum):
     """Type of loss masking method"""
 
@@ -90,3 +85,4 @@ class ExperimentsTrackerName(Enum):
 
 class Kernel(Enum):
     cute_rmsnorm = "cute_rmsnorm"
+    cute_swiglu_unchunked = "cute_swiglu_unchunked"
