@@ -146,7 +146,7 @@ def train(
     metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
-    print(f"*****Starting at {global_step}")
+    log_rank_0(logging.INFO, f"*****Starting iteration {global_step}")
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
@@ -201,6 +201,7 @@ def train(
             evaluate(val_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
+            log_rank_0(logging.INFO, f"Saving model checkpoint {global_step}")
             save_checkpoint(
                 args=args,
                 model_container=model_container,
@@ -213,6 +214,7 @@ def train(
                     "consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size
                 },
             )
+            log_rank_0(logging.INFO, f"Saved model checkpoint {global_step}")
 
             start_time = time.perf_counter()
             steps_since_start_time = 0
@@ -362,10 +364,11 @@ def main(mode: Mode = Mode.training) -> None:
     starting_iteration = 0
     metadata = None
     experiments_tracker_state_dict = None
-    if args.load_args is not None and args.load_args.load_path is not None and os.path.isdir(args.load_args.load_path):
+    if args.load_args is not None and args.load_args.load_path is not None and os.path.isdir(args.load_args.load_path) and os.path.isfile(args.load_args.load_path+"/latest_checkpointed_iteration.json"):
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
             args, model_container, optimizer_container, lr_scheduler_container, None
         )
+        log_rank_0(logging.INFO, f"Loaded model checkpoint {starting_iteration}")
 
         # metadata field contains the dataloader state so we need to reset it here
         if not args.load_args.load_dataloader_state and metadata is not None:
