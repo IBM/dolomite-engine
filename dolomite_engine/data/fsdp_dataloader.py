@@ -79,7 +79,9 @@ def _get_latest(targdir, qualifier=lambda x: True):
                 if qualifier(os.path.join(targdir, x))
             ],
             key=lambda path: int(path.split("/")[-1].split("-")[1]),
+            default=0
         )
+        if latest==0: return None
         return latest
     return None
 
@@ -624,6 +626,12 @@ class CheckpointDataset(_WrapperDataset):
             return ""
         # Check latest path
         latest = _get_latest(path, lambda x: x.find("/step-")>0)
+        if latest is None:
+            if verbose:
+                self.report(
+                    f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch."
+                )
+            return ""
         if verbose:
             self.report(f"Checkpoint detected at {latest}")
         # If item is not a folder, exit early
@@ -994,36 +1002,29 @@ class StreamingDocDataset(_StatefulDataset):
                     for x in os.listdir(os.path.join(pardir, "meta"))
                     if "counts" in x and "csv" in x
                 ]
-            sizes_in_countpath=False
             if len(countfiles) > 0:
                 # Count file exists, use it
                 countpath = os.path.join(pardir, "meta", countfiles[0])
-                with open(countpath, "r") as file:
-                    first_line = file.readline().rstrip('\n')
-                if first_line.find(",size")>0: sizes_in_countpath=True
-                #else: print(f"size not found in {first_line}, will use os.path.getsize")
             else:
                 countpath = ""
 
             # Use shard file sizes to perform partitioning
             # Create shardlist of form shardid -> [start%, end%]
-            if sizes_in_countpath:
-                sizes = {}
+            sizes = {}
+            if len(countfiles) > 0:
                 with open(countpath, "r") as csvfile:
                     reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        fullpath = row["dataset/filename"]
-                        prefix = fullpath.rfind("/" + dataset + "/")
-                        #print(f"Looking for {dataset} in {fullpath}")
-                        if prefix >= 0:
-                            key = fullpath[prefix + len(dataset) + 2 :]
-                            #print(f"key={key} row={row}")
-                            sizes[key] = int(row["size"])
+                    if "size" in reader.fieldnames:
+                        for row in reader:
+                            fullpath = row["dataset/filename"]
+                            prefix = fullpath.rfind("/" + dataset + "/")
+                            if prefix >= 0:
+                                key = fullpath[prefix + len(dataset) + 2 :]
+                                sizes[key] = int(row["size"])
+            if len(sizes)>0:
                 shard_sizes = [sizes[shard] for shard in shards]
             else:
-                shard_sizes = [
-                    os.path.getsize(os.path.join(datapath, shard)) for shard in shards
-                ]
+                shard_sizes = [os.path.getsize(os.path.join(datapath, shard)) for shard in shards]
             shard_sizes = [s / sum(shard_sizes) for s in shard_sizes]
             start = self.rank / self.worldsize
             end = (self.rank + 1) / self.worldsize
@@ -1385,6 +1386,7 @@ class SamplingDataset(_WrapperDataset):
     """
     def get_datasets_weights(self, datasets, weights):
         datapath = self.datapath
+        countfiles=[]
         if os.path.exists(os.path.join(datapath, "meta")):
             countfiles = [x for x in os.listdir(os.path.join(datapath, "meta")) if "counts" in x and "csv" in x ]
         if len(countfiles) > 0:
@@ -1394,9 +1396,9 @@ class SamplingDataset(_WrapperDataset):
             countpath = ""
         if self.verbose: print(f"countpath={countpath}")
         if datasets is None:
-            if countpath == "": datasets=[]
-            else:
-                datasets = [f for f in os.listdir(datapath) if not os.path.isfile(os.path.join(datapath, f)) and "meta" not in f]
+            #if countpath == "": datasets=[]
+            #else:
+            datasets = [f for f in os.listdir(datapath) if not os.path.isfile(os.path.join(datapath, f)) and "meta" not in f]
         if weights is None:
             if countpath == "":
                 self.datasets = datasets
