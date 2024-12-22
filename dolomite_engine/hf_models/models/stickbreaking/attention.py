@@ -111,6 +111,29 @@ class SBAttention(Attention):
 
         return attn_output
 
+    def _prepare_qkv_for_forward_gqa(
+        self, hidden_states: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        batch_size, query_length = hidden_states.shape[:-1]
+
+        hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
+
+        query, key, value = hidden_states.split(
+            ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
+        )
+
+        # this needs to be a reshape instead of view sadly
+        query = query.reshape(batch_size, query_length, -1, self.head_dim)
+
+        key = key.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
+        value = value.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
+
+        query = query.transpose(1, 2)
+        key = key.transpose(1, 2)
+        value = value.transpose(1, 2)
+
+        return query, key, value
+
 
 class PaddingFreeSBAttention(SBAttention):
     def forward(
