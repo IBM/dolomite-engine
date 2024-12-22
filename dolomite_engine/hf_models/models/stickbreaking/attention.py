@@ -134,6 +134,9 @@ class SBAttention(Attention):
 
         return query, key, value
 
+    def _prepare_qkv_for_forward_mqa(self, hidden_states):
+        raise NotImplementedError()
+
 
 class PaddingFreeSBAttention(SBAttention):
     def forward(
