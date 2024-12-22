@@ -37,7 +37,6 @@ def softplus(x, is_compiling: tl.constexpr = False):
         out = tl.where(x < 15.0, tl.math.log2(1 + tl.math.exp2(x)), x)
         return out
     else:
-        tl.static_print("Using inline asm softplus.")
         out = tl.inline_asm_elementwise(
             asm=asm_str,
             constraints=constraints_str,

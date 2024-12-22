@@ -6,6 +6,7 @@ from ..sb_varlen import ALLOW_TF32, inv_log2
 from ..sb_varlen.sb_varlen_fwd import _forward_one_row
 from ..sb_varlen.softplus import softplus
 
+from ..utils import custom_op
 
 def get_configs():
     return [triton.Config({}, num_stages=s, num_warps=w) for s in [4] for w in [4]]
@@ -165,7 +166,7 @@ def _fwd(q, k, v, logit_scale, no_grad=False, return_attention=False, BLOCK_M: i
         return o, rem, neg_log_acc
 
 
-@torch.library.custom_op("stickbreaking_attention::attn_fwd", mutates_args={"o", "rem", "neg_log_acc", "W"})
+@custom_op("attn_fwd", mutates_args={"o", "rem", "neg_log_acc", "W"})
 def _compileable_fwd(
     q: torch.Tensor,
     k: torch.Tensor,

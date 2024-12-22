@@ -9,7 +9,9 @@ from ....utils import print_ranks_all
 from ...enums import InitMethod
 from ...modeling_utils import Attention, ParameterizedLinear
 from .config import StickBreakingConfig
-from .stickbreaking_attention import sb_attn, sb_attn_varlen
+
+from stickbreaking_attention import sb_attn, sb_attn_varlen
+# from .stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
 # torch._dynamo.config.cache_size_limit = 16
@@ -81,6 +83,7 @@ class SBAttention(Attention):
         if not self.training:
             key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
+
         if query.size(2) == key.size(2):
             attn_output, rem = sb_attn(
                 q=query,
@@ -90,6 +93,7 @@ class SBAttention(Attention):
             )
         else:
             attn_output, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
+
         attn_output = attn_output.permute(0, 2, 1, 3)
         if self.sb_remainder:
             rem = rem.permute(0, 2, 1)
@@ -177,11 +181,8 @@ class PaddingFreeSBAttention(SBAttention):
         self, hidden_states: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         total_q = hidden_states.shape[0]
-
         query, key, value = hidden_states.split((self.hidden_size, self.head_dim, self.head_dim), dim=-1)
-
         query = query.view(total_q, self.num_heads, -1)
         key = key.unsqueeze(1)
         value = value.unsqueeze(1)
-
         return query, key, value
