@@ -91,10 +91,11 @@ class SBAttention(Attention):
 
         else:
             attn_output, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
-        attn_output = attn_output.permute(0, 2, 1, 3)
 
         if self.sb_remainder:
             attn_output = attn_output + rem[..., None] * self.head_bias[None, :, None, :]
+
+        attn_output = attn_output.permute(0, 2, 1, 3)
 
         # ==========================================================================================
         # attn_output -> (total_q, num_heads, head_dim)
