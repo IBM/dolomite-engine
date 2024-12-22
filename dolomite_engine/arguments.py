@@ -268,10 +268,6 @@ class ZeroTopologyArgs(BaseArgs):
 class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
-    # overlap communication with computation
-    overlap_comm: bool = False
-    # use contiguous buffers for gradients, requires more memory if enabled
-    contiguous_gradients: bool = False
     # train with CPU offloading to save GPU memory
     cpu_offload: bool = False
     # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
