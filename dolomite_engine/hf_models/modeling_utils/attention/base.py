@@ -147,8 +147,10 @@ class Attention(nn.Module):
         # this needs to be a reshape instead of view sadly
         query = query.reshape(batch_size, query_length, -1, self.head_dim)
 
-        key = key.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
-        value = value.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
+        # check class name
+        if self.__class__.__name__ == "SBAttention":
+            key = key.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
+            value = value.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
 
         query = query.transpose(1, 2)
         key = key.transpose(1, 2)
