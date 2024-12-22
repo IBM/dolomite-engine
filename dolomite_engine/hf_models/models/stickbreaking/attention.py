@@ -91,10 +91,11 @@ class SBAttention(Attention):
 
         else:
             attn_output, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
-        attn_output = attn_output.permute(0, 2, 1, 3)
 
         if self.sb_remainder:
             attn_output = attn_output + rem[..., None] * self.head_bias[None, :, None, :]
+
+        attn_output = attn_output.permute(0, 2, 1, 3)
 
         # ==========================================================================================
         # attn_output -> (total_q, num_heads, head_dim)
@@ -109,6 +110,32 @@ class SBAttention(Attention):
         attn_output = self.resid_dropout(attn_output)
 
         return attn_output
+
+    def _prepare_qkv_for_forward_gqa(
+        self, hidden_states: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        batch_size, query_length = hidden_states.shape[:-1]
+
+        hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
+
+        query, key, value = hidden_states.split(
+            ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
+        )
+
+        # this needs to be a reshape instead of view sadly
+        query = query.reshape(batch_size, query_length, -1, self.head_dim)
+
+        key = key.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
+        value = value.repeat(1, 1, self.num_heads // self.num_key_value_heads, 1)
+
+        query = query.transpose(1, 2)
+        key = key.transpose(1, 2)
+        value = value.transpose(1, 2)
+
+        return query, key, value
+
+    def _prepare_qkv_for_forward_mqa(self, hidden_states):
+        raise NotImplementedError()
 
 
 class PaddingFreeSBAttention(SBAttention):
@@ -171,6 +198,8 @@ class PaddingFreeSBAttention(SBAttention):
 
         # this needs to be a reshape instead of view sadly
         query = query.reshape(total_q, -1, self.head_dim)
+        key = key.repeat(1, self.num_heads // self.num_key_value_heads, 1)
+        value = value.repeat(1, self.num_heads // self.num_key_value_heads, 1)
 
         return query, key, value
 
