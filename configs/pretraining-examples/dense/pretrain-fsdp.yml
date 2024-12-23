@@ -27,8 +27,6 @@ datasets:
       logical_shards: 8 # 8GPUs * 2 Nodes * 4 workers * 2 (Some multiple)
       num_workers: 1
       seed: 2023
-      # checkpoint
-      interval_type: "steps"
       sequence_length: 2048 # This sets the seq_len
  
 tokenizer_args:

@@ -1454,7 +1454,6 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
     data = PreprocessDataset(data, causal_lm)
     # Enable auto-saving
     if cfg.enable_checkpoint and not cfg.checkpoint_model_weights_only:
-        assert cfg.interval_type == "steps", "Dataloader checkpointing supports only step-based interval"
         data = CheckpointDataset(
             data,
             cfg.checkpoint_folder,
