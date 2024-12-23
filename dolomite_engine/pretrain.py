@@ -13,8 +13,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
-from .data import get_megatron_gpt_dataloaders, get_next_batch
-from .data.fsdp_dataloader import get_fsdp_dataloaders
+from .data import get_fsdp_dataloaders, get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import Mode, TuningMethod
 from .model_wrapper import get_model_container
@@ -146,7 +145,6 @@ def train(
     metrics_tracker = MetricsTrackingDict({})
 
     global_step = starting_iteration
-    log_rank_0(logging.INFO, f"*****Starting iteration {global_step}")
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
