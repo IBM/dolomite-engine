@@ -12,9 +12,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 from torch.utils.data import IterableDataset, get_worker_info
-from transformers import GPT2TokenizerFast
+from transformers import AutoTokenizer
 
-from ..utils import log_rank_0
+from ..utils import ProcessGroupManager, log_rank_0
 
 
 @dataclass
@@ -32,7 +32,7 @@ class train_config:
         return "{}({})".format(type(self).__name__, ", ".join(kws))
 
 
-def get_fsdp_dataloaders(args, global_rank, world_size, tokenizer) -> None:
+def get_fsdp_dataloaders(args, tokenizer) -> None:
     assert len(args.datasets) == 1
     cfg = train_config(args.datasets[0].class_args)
 
@@ -41,7 +41,7 @@ def get_fsdp_dataloaders(args, global_rank, world_size, tokenizer) -> None:
     cfg.set("checkpoint_interval", args.save_args.save_interval)
     cfg.set("gradient_accumulation_steps", args.training_parameters.gradient_accumulation_steps)
 
-    train_dataloader = build_experimental_data_loader(cfg, global_rank, world_size, tokenizer)
+    train_dataloader = build_experimental_data_loader(cfg, tokenizer)
     val_dataloaders = []
     test_dataloaders = []
 
@@ -379,7 +379,7 @@ class ParquetHandler(_ShardFileHandler):
     before getting/slicing. However, this is a standard and widely-used data format.
     """
 
-    def __init__(self, tokenizer: GPT2TokenizerFast, col_name: str = "text"):
+    def __init__(self, tokenizer: AutoTokenizer, col_name: str = "text"):
         self.tokenizer = tokenizer
         self.col_name = col_name
 
@@ -1239,8 +1239,6 @@ class SamplingDataset(_WrapperDataset):
     weights : list(float) | None
         Weights describing what percent of emitted tokens should come from each subdataset.
         Need not sum to 1. If None, tokens are drawn evenly.
-    verbose : bool
-        Track setup progress?
     """
 
     def get_datasets_weights(self, datasets, weights):
@@ -1303,12 +1301,10 @@ class SamplingDataset(_WrapperDataset):
         delimiter_token: Any,
         datasets=None,
         weights=None,
-        verbose=False,
     ):
         super().__init__(dataset)
         self.datapath = datapath
         self.delimiter = delimiter_token
-        self.verbose = verbose
 
         self.get_datasets_weights(datasets, weights)
         self.tokens_seen = [0] * len(self.datasets)
@@ -1326,10 +1322,10 @@ class SamplingDataset(_WrapperDataset):
                 self.data[-1].rank = self.rank
                 self.data[-1].worldsize = self.worldsize
                 self.data[-1].local_worldsize = self.local_worldsize
-                if self.verbose:
-                    logging.info(
-                        f"Worker {self.rank} assembled subdataset iterator for {d}, {i+1} of {len(self.datasets)}"
-                    )
+                log_rank_0(
+                    logging.INFO,
+                    f"Worker {self.rank} assembled subdataset iterator for {d}, {i+1} of {len(self.datasets)}",
+                )
             [d.setup() for d in self.data]
 
     def __iter__(self):
@@ -1382,7 +1378,7 @@ _handler_map = {
 }
 
 
-def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
+def build_experimental_data_loader(cfg, tokenizer: AutoTokenizer):
     """
     Pytorch dataloader for stateful, distributed, and rescalable causal language model (CLM) training.
     Assumes underlying data is sequences of integer values.
@@ -1391,11 +1387,7 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
     ----
     cfg : dataclass
         Training config containing seq len, dataset, dataset weight, datapath, etc. arguments
-    rank : int
-        Rank of current distributed worker. Used for handling dataset sharding logic.
-    world_size : int
-        Number of distributed workers. Used for handling dataset sharding logic.
-    tokenizer : GPT2TokenizerFast
+    tokenizer : AutoTokenizer
         If performing tokenization dynamically, the tokenizer to use.
     """
 
@@ -1418,8 +1410,8 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
     # Base reader layer
     data = StreamingDocDataset(
         cfg.dataset_path,
-        rank,
-        world_size,
+        ProcessGroupManager.get_data_parallel_rank(),
+        ProcessGroupManager.get_data_parallel_world_size(),
         filehandler,
         cfg.eos_token,
         bos_token=None if cfg.bos_token == -1 else cfg.bos_token,
@@ -1440,7 +1432,6 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
         cfg.eos_token,
         datasets=datasets,
         weights=weights,
-        verbose=(rank == 0),
     )
     # Wrap above dataset in packing logic to form constant-length lines.
     data = BufferDataset(

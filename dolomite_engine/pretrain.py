@@ -375,17 +375,14 @@ def main(mode: Mode = Mode.training) -> None:
         # metadata field contains the dataloader state so we need to reset it here
         if not args.load_args.load_dataloader_state and metadata is not None:
             metadata["consumed_samples"] = 0
-    global_rank = ProcessGroupManager.get_global_rank()
-    world_size = ProcessGroupManager.get_world_size()
+
     if args.datasets[0].class_name != "FSDPDataset":
         train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
             args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
         )
     else:
         # Todo: use args.load_args.load_dataloader_state
-        train_dataloader, val_dataloaders, test_dataloaders = get_fsdp_dataloaders(
-            args, global_rank, world_size, model_container[0].tokenizer
-        )
+        train_dataloader, val_dataloaders, test_dataloaders = get_fsdp_dataloaders(args, model_container[0].tokenizer)
 
     experiments_tracker = ExperimentsTracker(
         args.logging_args.experiments_tracker_name,
