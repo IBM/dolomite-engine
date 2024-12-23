@@ -6,9 +6,8 @@ datasets:
     class_args:
       enable_checkpoint: True
       checkpoint_model_weights_only: False
-      checkpoint_folder: "/proj/data-eng/ak_dolomite/thinkahead-dolomite-engine/checkpoints"
-      # dataset and dataloader
-      dataset_path: "/proj/data-eng/fsdp/data/Large_FW_Edu_100B_3B_S1/"
+      checkpoint_folder: checkpoints
+      dataset_path: /proj/datasets/fms-dataloader-test/
       datasets: null #"dump=CC-MAIN-2013-20,dump=CC-MAIN-2015-35,dump=CC-MAIN-2017-26,dump=CC-MAIN-2018-47,dump=CC-MAIN-2020-24,dump=CC-MAIN-2022-27"
       weights: null #"1,1,1,1,1,1"
       #dataset_path: "/proj/data-eng/fsdp/data/R45_th7_200"
@@ -21,11 +20,11 @@ datasets:
       #weights: str = "0.3,0.3,0.4"
       #col_name: str = "contents"
       #file_type: str = "hf_parquet"
-      vocab_size: 49152 # 32000
+      vocab_size: 200000
       bos_token: null
       eos_token: 0
       drop_tokens: ""
-      logical_shards: 128 # 8GPUs * 2 Nodes * 4 workers * 2 (Some multiple)
+      logical_shards: 8 # 8GPUs * 2 Nodes * 4 workers * 2 (Some multiple)
       num_workers: 1
       seed: 2023
       # checkpoint
@@ -39,7 +38,7 @@ model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
     model_type: gpt_dolomite
-    vocab_size: 50257
+    vocab_size: 200000
     n_positions: 2048
     n_embd: 768
     n_layer: 12
@@ -69,7 +68,7 @@ tuning_args:
   tuning_method: pretraining
 
 load_args:
-  load_path: checkpoints
+  load_path: /proj/checkpoints/mayank/fms
 
 save_args:
   save_path: checkpoints
@@ -99,5 +98,4 @@ mixed_precision_args:
   dtype: bf16
 
 logging_args:
-  log_interval: 100
-  logging_level: ERROR # INFO # ERROR
+  log_interval: 10
