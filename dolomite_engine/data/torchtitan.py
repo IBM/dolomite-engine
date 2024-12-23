@@ -14,6 +14,8 @@ import torch
 from torch.utils.data import IterableDataset, get_worker_info
 from transformers import GPT2TokenizerFast
 
+from ..utils import log_rank_0
+
 
 @dataclass
 class train_config:
@@ -495,10 +497,6 @@ class CheckpointDataset(_WrapperDataset):
                     newpath = os.path.join(self.path, "step-" + str(self.step))
                     self.save_to_path(newpath)
 
-    def report(self, msg):
-        if self.rank == 0:
-            print(msg)
-
     def _validate_ckp_path(self, path: str, verbose: bool = False):
         """
         Interpret path to appropriate checkpoint.
@@ -508,30 +506,35 @@ class CheckpointDataset(_WrapperDataset):
         # Does path exists, and if it exists, is it non-empty?
         if not os.path.exists(path) or len(os.listdir(path)) == 0:
             if verbose:
-                self.report(f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch.")
+                log_rank_0(
+                    logging.INFO, f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch."
+                )
             return ""
         # Check latest path
         latest = _get_latest(path, lambda x: x.find("/step-") > 0)
         if latest is None:
             if verbose:
-                self.report(f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch.")
+                log_rank_0(
+                    logging.INFO, f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch."
+                )
             return ""
         if verbose:
-            self.report(f"Checkpoint detected at {latest}")
+            log_rank_0(logging.INFO, f"Checkpoint detected at {latest}")
         # If item is not a folder, exit early
         if os.path.isfile(latest):
             if verbose:
-                self.report(
-                    f"  Dataset: Detected checkpoint {latest} is a single file with no dataset info."
-                    + " Dataset starting from scratch."
+                log_rank_0(
+                    logging.INFO,
+                    f"  Dataset: Detected checkpoint {latest} is a single file with no dataset info. Dataset starting from scratch.",
                 )
             return ""
         # If item is a folder, check that it contains shard files
         if len([x for x in os.listdir(latest) if "loader" in x]) == 0:
             if verbose:
-                self.report(
+                log_rank_0(
+                    logging.INFO,
                     f"  Dataset: Detected checkpoint {latest} exists but contains no dataset checkpoints."
-                    + " Dataset starting from scratch."
+                    + " Dataset starting from scratch.",
                 )
             return ""
         # If item is a folder, get the step count
@@ -539,17 +542,18 @@ class CheckpointDataset(_WrapperDataset):
         return latest
 
     def save_to_path(self, path: str):
-        self.report(f"Saving dataset to {path}")
+        log_rank_0(logging.INFO, f"Saving dataset to {path}")
         start = time.time()
         super().save_to_path(path)
-        self.report(f"Dataset successfully saved to {path}! Save time: {time.time() - start}")
+        log_rank_0(logging.INFO, f"Dataset successfully saved to {path}! Save time: {time.time() - start}")
 
     def load_from_path(self, path: str):
         # print(f"****************Inside load_from_path {path}")
         save_path = self._validate_ckp_path(self.path, False)
         if len(save_path) > 0:
-            self.report(
-                f"  ****************Dataset: Detected a checkpoint in the save directory {save_path}. Restoring from this checkpoint."
+            log_rank_0(
+                logging.INFO,
+                f"  ****************Dataset: Detected a checkpoint in the save directory {save_path}. Restoring from this checkpoint.",
             )
             path = save_path
         else:
@@ -563,7 +567,7 @@ class CheckpointDataset(_WrapperDataset):
         # Proceed
         start = time.time()
         self.dataset.load_from_path(path)
-        self.report(f"****************Dataset checkpoint loaded! Load time: {time.time() - start}")
+        log_rank_0(logging.INFO, f"****************Dataset checkpoint loaded! Load time: {time.time() - start}")
 
 
 class PreloadBufferDataset(_WrapperDataset):
@@ -1460,7 +1464,7 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
             cfg.checkpoint_interval,
             cfg.batch_size * cfg.gradient_accumulation_steps / cfg.num_workers,  # cfg.batch_size,
         )
-    # print(f"num_workers={cfg.num_workers} gradient_accumulation_steps={cfg.gradient_accumulation_steps} batch_size={cfg.batch_size} given to torch.utils.data.DataLoader")
+
     return iter(torch.utils.data.DataLoader(data, num_workers=cfg.num_workers, batch_size=cfg.batch_size))
 
 
