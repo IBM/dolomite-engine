@@ -5,44 +5,14 @@ import os
 import random
 import time
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Set, Union
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 import torch.utils.data as data
-from transformers import AutoTokenizer as Tokenizer
 from transformers.models.gpt2.tokenization_gpt2_fast import GPT2TokenizerFast
-
-
-"""
-The following distributed dataloaders are designed around 3 main principles:
-
-1. Efficient, asynchronous operation. Workers on different devices do not communicate. 
-2. Modularity. Data loading pipeline is composed of wrapped iterators, the base iterator 
-    loading from disk and additional layers adding levels of post-processing (shuffling, 
-    packing, padding, etc.).
-3. Seamless resumption from checkpoint. Each stage of the pipeline maintains an internal 
-    state that can be written/read on disk via implemented recursive `state_dict()` and 
-    `load_state_dict()` calls.
-4. Rescalability. Users can save and load checkpoints to/from different numbers of workers 
-    without losing the global state. This is accomplished by splitting state fields for each 
-    layer into `state_params`, which are typically scalar-valued and can be discarded when 
-    rescaling (i.e. counters, RNG states), and `reshard_params`, which are lists that can be 
-    re-distributed over workers (i.e. buffers).
-
-Our loaders obey the following type heirarchy: 
-torch.data.IterableDataset -> _StatefulDataset -> _WrapperDataset. 
-`_StatefulDataset` implements state and checkpointing logic. A `_WrapperDataset` holds a 
-single `_StatefulDataset` and iterates via calling its wrapped dataset any number of times, 
-then applying some sort of post-processing and yielding the result. Users build data processing 
-pipelines by wrapping a base `_StatefulDataset` in any number of `_WrapperDataset` layers, 
-which is then passed to the torch DataLoader. 
-"""
-
-
-# --------------  UTILITIES  --------------
-from dataclasses import dataclass
 
 
 @dataclass
@@ -243,11 +213,9 @@ class _StatefulDataset(data.IterableDataset):
         fileshards = [x for x in os.listdir(path) if "loader" in x]
         fileshards = sorted(fileshards, key=lambda x: int(x.split("_")[2][:-4]))
         assert len(fileshards) > 0, "Checkpoint directory must contain checkpoint files with 'loader' in the name"
-        # print(f"fileshards={fileshards}")
         self.load_worldsize = len(fileshards)
         # Grab only the shard files holding data we currently own
         my_fileshards = _shard_inclusive(fileshards, self.rank, self.worldsize)
-        # print(f"load_from_path my_fileshards={my_fileshards}")
         states = [torch.load(os.path.join(path, x), weights_only=False) for x in my_fileshards]
         self.load_state_dict(states, True)
 
@@ -316,9 +284,6 @@ class _WrapperDataset(_StatefulDataset):
                 )
         out.update(state)
         return out
-
-
-# --------------  FILE READERS  --------------
 
 
 class _ShardFileHandler:
@@ -414,10 +379,8 @@ class ParquetHandler(_ShardFileHandler):
     """
 
     def __init__(self, tokenizer: GPT2TokenizerFast, col_name: str = "text"):
-        # self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         self.tokenizer = tokenizer
         self.col_name = col_name
-        # self.chunk_size = 128_000 # 10*4096*1024
 
     def is_legal(self, filepath: str):
         return "parquet" in os.path.splitext(filepath)[1]
@@ -430,69 +393,8 @@ class ParquetHandler(_ShardFileHandler):
         name = overlap.pop()
         return pq.read_pandas(path, columns=[name], partitioning=None)[name]
 
-    # def open(self, path: str):
-    #    #return pq.read_pandas(path, columns=[self.col_name])[self.col_name]
-    #    return pq.read_pandas(path, columns=[self.col_name], use_threads=True, memory_map=True)[self.col_name]
-
     def length(self, path: str):
-        # return pq.read_pandas(path, columns=[]).num_rows
-        # return pq.read_table(path, columns=[]).num_rows
         return pq.read_metadata(path).num_rows
-
-    # def split_text(self, text: str, chunk_size: int) -> str:
-    #    """
-    #    Split text into chunks for languages with spaces between words.
-    #    For input/output, please refer to the split_text() function
-    #    """
-    #    index = 0
-    #    while index < len(text):
-    #        # last chunk:
-    #        if len(text) - index < chunk_size:
-    #            yield text[index:]
-    #            break
-
-    #        if text[index + chunk_size - 1] != " ":
-    #            """
-    #            if the last character of the chunk is not a space,
-    #            search index of the last space in the chunk:
-    #            """
-    #            last_space_index = text.rfind(" ", index, index + chunk_size)
-
-    #            if last_space_index != -1:  # s[last_space_index] = ' '
-    #                # If found, return the chunk up to and include such space:
-    #                yield text[index : last_space_index + 1]
-    #                index = last_space_index + 1
-    #            else:
-    #                # If not, force cutting up to chunk_size:
-    #                yield text[index : index + chunk_size]
-    #                index += chunk_size
-    #        else:
-    #            yield text[index : index + chunk_size]
-    #            index += chunk_size
-
-    # def get(self, reader, index: int, drop_tokens: Set):
-    #    #doc = self.tokenizer(str(reader[index]))["input_ids"]
-    #    doc_content=str(reader[index].as_py())
-    #    doc_length = len(doc_content)
-    #    if self.chunk_size > 0 and doc_length > self.chunk_size:
-    #        #print(len(doc_content),flush=True)
-    #        token_line = []
-    #        doc_len_so_far = 0
-    #        for chunk_idx, chunk in enumerate(self.split_text(doc_content, self.chunk_size)):
-    #            print("tokenizing",chunk_idx,"in",self.chunk_size)
-    #            #token_line.extend(self.tokenizer(chunk)["input_ids"])
-    #            token_line.extend(self.tokenizer.encode(chunk))
-    #            doc_len_so_far += len(chunk)
-    #    else:
-    #        #print("tokenizing",doc_content)
-    #        token_line = self.tokenizer.encode(doc_content)
-    #    doc = token_line
-    #    if len(doc) > 0:
-    #        if doc[0] in drop_tokens:
-    #            doc = doc[1:]
-    #        if doc[-1] in drop_tokens:
-    #            doc = doc[:-1]
-    #    return doc
 
     def get(self, reader, index: int, drop_tokens: Set):
         doc = self.tokenizer.encode(str(reader[index])[:128_000])
@@ -504,9 +406,6 @@ class ParquetHandler(_ShardFileHandler):
 
     def slice(self, doc: List, index: int, n_pull: int) -> List:
         return doc[index : index + n_pull]
-
-
-# --------------  DATASET LAYERS  --------------
 
 
 class PreprocessDataset(_WrapperDataset):
@@ -1474,9 +1373,6 @@ class SamplingDataset(_WrapperDataset):
         return sharded_dicts
 
 
-# --------------  CONSTRUCTORS  --------------
-
-
 _handler_map = {
     "arrow": ArrowHandler,
     "hf_parquet": ParquetHandler,
@@ -1504,17 +1400,6 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
 
     def causal_lm(data_seq, prompt_len=0):
         return torch.LongTensor(data_seq)
-
-    # def causal_lm(data_seq, prompt_len=0):
-    #    """
-    #    Perform causal language modeling by right-shifting the input sequence.
-    #    Sets first prompt_len tokens to be ignored by the loss.
-    #    """
-    #    data_seq = torch.LongTensor(data_seq)
-    #    t = data_seq.clone()[1:]
-    #    data_seq = data_seq[:-1]
-    #    t[:prompt_len] = -100
-    #    return data_seq, t
 
     # Base streaming dataset. Returns doc chunks in sequence.
     # Implements dataset sampling and rescalability.
