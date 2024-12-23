@@ -134,7 +134,6 @@ def train(
     )
 
     forward_context = nullcontext
-
     backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
 
     torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
@@ -151,6 +150,7 @@ def train(
     while global_step < num_training_steps:
         global_step += 1
         steps_since_start_time += 1
+
         loss_step_dict = train_step(
             model_container=model_container,
             pipeline_schedule=pipeline_schedule,
@@ -202,7 +202,6 @@ def train(
             evaluate(val_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
-            log_rank_0(logging.INFO, f"Saving model checkpoint {global_step}")
             save_checkpoint(
                 args=args,
                 model_container=model_container,
@@ -215,7 +214,6 @@ def train(
                     "consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size
                 },
             )
-            log_rank_0(logging.INFO, f"Saved model checkpoint {global_step}")
 
             start_time = time.perf_counter()
             steps_since_start_time = 0
