@@ -1251,8 +1251,8 @@ class SamplingDataset(_WrapperDataset):
             countpath = os.path.join(datapath, "meta", countfiles[0])
         else:
             countpath = ""
-        if self.verbose:
-            print(f"countpath={countpath}")
+
+        log_rank_0(logging.INFO, f"countpath={countpath}")
         if datasets is None:
             # if countpath == "": datasets=[]
             # else:
