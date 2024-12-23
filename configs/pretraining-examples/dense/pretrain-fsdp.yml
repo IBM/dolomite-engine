@@ -27,9 +27,6 @@ datasets:
       drop_tokens: ""
       logical_shards: 128 # 8GPUs * 2 Nodes * 4 workers * 2 (Some multiple)
       num_workers: 1
-      # training spec
-      #gradient_accumulation_steps: 4 # This is picked up from training_parameters
-      #batch_size: 6 # This is picked up from training_parameters.micro_batch_size
       seed: 2023
       # checkpoint
       interval_type: "steps"

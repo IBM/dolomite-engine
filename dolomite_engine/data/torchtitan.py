@@ -11,7 +11,7 @@ from typing import Any, Callable, List, Optional, Set, Union
 import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
-import torch.utils.data as data
+from torch.utils.data import IterableDataset, get_worker_info
 from transformers import GPT2TokenizerFast
 
 
@@ -33,14 +33,16 @@ class train_config:
 def get_fsdp_dataloaders(args, global_rank, world_size, tokenizer) -> None:
     assert len(args.datasets) == 1
     cfg = train_config(args.datasets[0].class_args)
+
     cfg.set("batch_size", args.training_parameters.micro_batch_size)
     cfg.set("seq_len", cfg.sequence_length)
     cfg.set("checkpoint_interval", args.save_args.save_interval)
     cfg.set("gradient_accumulation_steps", args.training_parameters.gradient_accumulation_steps)
-    # print(cfg)
+
     train_dataloader = build_experimental_data_loader(cfg, global_rank, world_size, tokenizer)
     val_dataloaders = []
     test_dataloaders = []
+
     return train_dataloader, val_dataloaders, test_dataloaders
 
 
@@ -76,7 +78,7 @@ def _shard_inclusive(itemlist: List[Any], rank: int, worldsize: int) -> List[Any
     return itemlist[start:end]
 
 
-class _StatefulDataset(data.IterableDataset):
+class _StatefulDataset(IterableDataset):
     """
     Stub for stateful datasets, extends data.IterableDataset with state_dict methods.
     All subclasses should specify the params to be considered stateful or reshardable in the
@@ -122,7 +124,7 @@ class _StatefulDataset(data.IterableDataset):
             self.is_setup = True
             # Perform adjustment only if not already adjusted (i.e. via _WrapperDataset)
             if self.local_worldsize == -1:
-                info = data.get_worker_info()
+                info = get_worker_info()
                 # print(f"info={info}")
                 if info is None or info.num_workers == 1:
                     # No multi-worker rank adjustment needed
