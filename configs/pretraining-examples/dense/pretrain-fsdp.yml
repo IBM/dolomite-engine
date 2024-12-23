@@ -24,8 +24,6 @@ datasets:
       vocab_size: 49152 # 32000
       bos_token: null
       eos_token: 0
-      bol_token: null
-      eol_token: null
       drop_tokens: ""
       logical_shards: 128 # 8GPUs * 2 Nodes * 4 workers * 2 (Some multiple)
       num_workers: 1
