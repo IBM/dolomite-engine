@@ -256,7 +256,9 @@ def load_checkpoint_for_training(
     if args.load_args.load_lr_scheduler:
         assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
-        _LRSchedulerSaver(lr_scheduler_container).load_state_dict(torch.load(_get_lr_scheduler_path(load_path)))
+        _LRSchedulerSaver(lr_scheduler_container).load_state_dict(
+            torch.load(_get_lr_scheduler_path(load_path), weights_only=False)
+        )
     elif args.load_args.resume_learning_rate:
         for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
             _resume_learning_rate(
@@ -267,7 +269,7 @@ def load_checkpoint_for_training(
             )
 
     if load_rng_state:
-        rng_state = torch.load(_get_rng_state_path(load_path))
+        rng_state = torch.load(_get_rng_state_path(load_path), weights_only=False)
         random.setstate(rng_state["random_rng_state"])
         np.random.set_state(rng_state["np_rng_state"])
         torch.set_rng_state(rng_state["torch_rng_state"])
@@ -278,7 +280,7 @@ def load_checkpoint_for_training(
         metadata = json.load(open(_get_metadata_path(load_path), "r"))
 
     if load_dataloader_state and train_dataloader is not None:
-        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path)))
+        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path), weights_only=False))
 
     experiments_tracker_json = None
     if load_experiments_tracker_state and os.path.exists(_get_experiments_tracker_path(load_path)):
