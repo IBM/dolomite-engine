@@ -1282,8 +1282,7 @@ class SamplingDataset(_WrapperDataset):
             self.weights = weights
         # self.datasets = ','.join(str(value) for value in tokens.keys())
         # self.weights = ','.join(str(value) for value in tokens.values())
-        if self.verbose:
-            print(f"datasets={self.datasets}")
+        log_rank_0(logging.INFO, f"datasets={self.datasets}")
         assert len(self.datasets) > 0, "You must specify at least one dataset"
         assert len(self.weights) == len(
             self.datasets
@@ -1291,8 +1290,7 @@ class SamplingDataset(_WrapperDataset):
         for w in self.weights:
             assert w > 0, f"Sampling rate {w} must be positive"
         self.weights = [w / sum(self.weights) for w in self.weights]
-        if self.verbose:
-            print(f"weights={self.weights}")
+        log_rank_0(logging.INFO, f"weights={self.weights}")
 
     def __init__(
         self,
