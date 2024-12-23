@@ -14,6 +14,7 @@ import torch.utils.data as data
 from transformers import AutoTokenizer as Tokenizer
 from transformers.models.gpt2.tokenization_gpt2_fast import GPT2TokenizerFast
 
+
 """
 The following distributed dataloaders are designed around 3 main principles:
 
@@ -41,7 +42,8 @@ which is then passed to the torch DataLoader.
 
 
 # --------------  UTILITIES  --------------
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+
 
 @dataclass
 class train_config:
@@ -49,39 +51,40 @@ class train_config:
         if d is not None:
             for key, value in d.items():
                 setattr(self, key, value)
+
     def set(self, key, value):
         setattr(self, key, value)
+
     def __repr__(self):
         kws = [f"{key}={value!r}" for key, value in self.__dict__.items()]
         return "{}({})".format(type(self).__name__, ", ".join(kws))
 
+
 def get_fsdp_dataloaders(args, global_rank, world_size, tokenizer) -> None:
     assert len(args.datasets) == 1
     cfg = train_config(args.datasets[0].class_args)
-    cfg.set("batch_size",args.training_parameters.micro_batch_size)
-    cfg.set("seq_len",cfg.sequence_length)
-    cfg.set("checkpoint_interval",args.save_args.save_interval)
-    cfg.set("gradient_accumulation_steps",args.training_parameters.gradient_accumulation_steps)
-    #print(cfg)
+    cfg.set("batch_size", args.training_parameters.micro_batch_size)
+    cfg.set("seq_len", cfg.sequence_length)
+    cfg.set("checkpoint_interval", args.save_args.save_interval)
+    cfg.set("gradient_accumulation_steps", args.training_parameters.gradient_accumulation_steps)
+    # print(cfg)
     train_dataloader = build_experimental_data_loader(cfg, global_rank, world_size, tokenizer)
     val_dataloaders = []
     test_dataloaders = []
     return train_dataloader, val_dataloaders, test_dataloaders
+
 
 def _get_latest(targdir, qualifier=lambda x: True):
     """Fetch the latest file or folder written to target directory, subject to name passing the qualifier fn.
     If directory is empty or nonexistent or no items qualify, return None."""
     if os.path.exists(targdir) and len(os.listdir(targdir)) > 0:
         latest = max(
-            [
-                os.path.join(targdir, x)
-                for x in os.listdir(targdir)
-                if qualifier(os.path.join(targdir, x))
-            ],
+            [os.path.join(targdir, x) for x in os.listdir(targdir) if qualifier(os.path.join(targdir, x))],
             key=lambda path: int(path.split("/")[-1].split("-")[1]),
-            default=0
+            default=0,
         )
-        if latest==0: return None
+        if latest == 0:
+            return None
         return latest
     return None
 
@@ -90,9 +93,7 @@ def _shard_partition(itemlist: List[Any], rank: int, worldsize: int) -> List[Any
     """
     Partition itemlist into worldsize chunks, grab chunk corresponding to rank and return.
     """
-    return itemlist[
-        (rank * len(itemlist)) // worldsize : ((rank + 1) * len(itemlist)) // worldsize
-    ]
+    return itemlist[(rank * len(itemlist)) // worldsize : ((rank + 1) * len(itemlist)) // worldsize]
 
 
 def _shard_inclusive(itemlist: List[Any], rank: int, worldsize: int) -> List[Any]:
@@ -119,9 +120,7 @@ class _StatefulDataset(data.IterableDataset):
         worldsize: int,
     ):
         assert rank >= 0, f"Rank {rank} must be a positive integer"
-        assert (
-            worldsize > rank
-        ), f"Worldsize {worldsize} must be greater than rank {rank}"
+        assert worldsize > rank, f"Worldsize {worldsize} must be greater than rank {rank}"
         assert datapath is None or (
             os.path.isdir(datapath) and len(os.listdir(datapath)) > 0
         ), f"Data path {datapath} must be a non-empty folder or None"
@@ -154,7 +153,7 @@ class _StatefulDataset(data.IterableDataset):
             # Perform adjustment only if not already adjusted (i.e. via _WrapperDataset)
             if self.local_worldsize == -1:
                 info = data.get_worker_info()
-                #print(f"info={info}")
+                # print(f"info={info}")
                 if info is None or info.num_workers == 1:
                     # No multi-worker rank adjustment needed
                     self.local_worldsize = 1
@@ -162,9 +161,9 @@ class _StatefulDataset(data.IterableDataset):
                     self.local_worldsize = info.num_workers
                     self.worldsize = self.worldsize * self.local_worldsize
                     self.rank = self.local_worldsize * self.rank + info.id
-                    #print(f"self.local_worldsize={self.local_worldsize}")
-                    #print(f"self.worldsize={self.worldsize}")
-                    #print(f"self.rank={self.rank}")
+                    # print(f"self.local_worldsize={self.local_worldsize}")
+                    # print(f"self.worldsize={self.worldsize}")
+                    # print(f"self.rank={self.rank}")
 
     def statename(self, x: str):
         # Note that this naming convention implicitly disallows repeated layers in the dataset pipeline
@@ -176,10 +175,7 @@ class _StatefulDataset(data.IterableDataset):
         On the off chance that you're saving a checkpoint with zero steps, run setup first.
         """
         self.setup()
-        return {
-            self.statename(flag): getattr(self, flag)
-            for flag in self.state_params + self.reshard_params
-        }
+        return {self.statename(flag): getattr(self, flag) for flag in self.state_params + self.reshard_params}
 
     def _reshard(self, sharded_list):
         """
@@ -193,9 +189,7 @@ class _StatefulDataset(data.IterableDataset):
         # How long are the list shards?
         shard_len = len(sharded_list[0])
         for i, shard in enumerate(sharded_list):
-            assert (
-                len(shard) == shard_len
-            ), f"Shard {i} with length {len(shard)} does not match expected {shard_len}"
+            assert len(shard) == shard_len, f"Shard {i} with length {len(shard)} does not match expected {shard_len}"
         # How many list items did _shard_inclusive() drop to the left of the flattened sharded_list?
         item_offset = shard_len * shard_offset
         # How many list items are there in total?
@@ -234,9 +228,7 @@ class _StatefulDataset(data.IterableDataset):
             ]
         else:
             for flag in self.reshard_params:
-                reshard = self._reshard(
-                    [sd[self.statename(flag)] for sd in state_dicts]
-                )
+                reshard = self._reshard([sd[self.statename(flag)] for sd in state_dicts])
                 setattr(self, flag, reshard)
         return state_dicts
 
@@ -250,15 +242,13 @@ class _StatefulDataset(data.IterableDataset):
         assert not os.path.isfile(path), "Checkpoint should be a folder of shard states"
         fileshards = [x for x in os.listdir(path) if "loader" in x]
         fileshards = sorted(fileshards, key=lambda x: int(x.split("_")[2][:-4]))
-        assert (
-            len(fileshards) > 0
-        ), "Checkpoint directory must contain checkpoint files with 'loader' in the name"
-        #print(f"fileshards={fileshards}")
+        assert len(fileshards) > 0, "Checkpoint directory must contain checkpoint files with 'loader' in the name"
+        # print(f"fileshards={fileshards}")
         self.load_worldsize = len(fileshards)
         # Grab only the shard files holding data we currently own
         my_fileshards = _shard_inclusive(fileshards, self.rank, self.worldsize)
-        #print(f"load_from_path my_fileshards={my_fileshards}")
-        states = [torch.load(os.path.join(path, x),weights_only=False) for x in my_fileshards]
+        # print(f"load_from_path my_fileshards={my_fileshards}")
+        states = [torch.load(os.path.join(path, x), weights_only=False) for x in my_fileshards]
         self.load_state_dict(states, True)
 
     def save_to_path(self, path: str):
@@ -282,9 +272,7 @@ class _WrapperDataset(_StatefulDataset):
     ):
         self.dataset = dataset
         # Inherit default flags from sub-dataset
-        super().__init__(
-            self.dataset.datapath, self.dataset.rank, self.dataset.worldsize
-        )
+        super().__init__(self.dataset.datapath, self.dataset.rank, self.dataset.worldsize)
 
     def setup(self):
         """
@@ -426,10 +414,10 @@ class ParquetHandler(_ShardFileHandler):
     """
 
     def __init__(self, tokenizer: GPT2TokenizerFast, col_name: str = "text"):
-        #self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        # self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         self.tokenizer = tokenizer
         self.col_name = col_name
-        #self.chunk_size = 128_000 # 10*4096*1024
+        # self.chunk_size = 128_000 # 10*4096*1024
 
     def is_legal(self, filepath: str):
         return "parquet" in os.path.splitext(filepath)[1]
@@ -438,21 +426,20 @@ class ParquetHandler(_ShardFileHandler):
         colnames = pq.read_metadata(path).schema.names
         legal_fields = ["text", "content", "contents"]
         overlap = set(legal_fields).intersection(set(colnames))
-        assert (
-            len(overlap) == 1
-        ), f"{len(overlap)} shared column names detected, need 1 ({overlap})"
+        assert len(overlap) == 1, f"{len(overlap)} shared column names detected, need 1 ({overlap})"
         name = overlap.pop()
         return pq.read_pandas(path, columns=[name], partitioning=None)[name]
-    #def open(self, path: str):
+
+    # def open(self, path: str):
     #    #return pq.read_pandas(path, columns=[self.col_name])[self.col_name]
     #    return pq.read_pandas(path, columns=[self.col_name], use_threads=True, memory_map=True)[self.col_name]
 
     def length(self, path: str):
-        #return pq.read_pandas(path, columns=[]).num_rows
-        #return pq.read_table(path, columns=[]).num_rows
+        # return pq.read_pandas(path, columns=[]).num_rows
+        # return pq.read_table(path, columns=[]).num_rows
         return pq.read_metadata(path).num_rows
 
-    #def split_text(self, text: str, chunk_size: int) -> str:
+    # def split_text(self, text: str, chunk_size: int) -> str:
     #    """
     #    Split text into chunks for languages with spaces between words.
     #    For input/output, please refer to the split_text() function
@@ -483,7 +470,7 @@ class ParquetHandler(_ShardFileHandler):
     #            yield text[index : index + chunk_size]
     #            index += chunk_size
 
-    #def get(self, reader, index: int, drop_tokens: Set):
+    # def get(self, reader, index: int, drop_tokens: Set):
     #    #doc = self.tokenizer(str(reader[index]))["input_ids"]
     #    doc_content=str(reader[index].as_py())
     #    doc_length = len(doc_content)
@@ -511,7 +498,7 @@ class ParquetHandler(_ShardFileHandler):
         doc = self.tokenizer.encode(str(reader[index])[:128_000])
         if len(doc) > 0 and doc[0] in drop_tokens:
             doc = doc[1:]
-        if len(doc) > 0 and doc[-1] in drop_tokens: # Recheck len for edge case where doc=[eos]
+        if len(doc) > 0 and doc[-1] in drop_tokens:  # Recheck len for edge case where doc=[eos]
             doc = doc[:-1]
         return doc
 
@@ -620,17 +607,13 @@ class CheckpointDataset(_WrapperDataset):
         # Does path exists, and if it exists, is it non-empty?
         if not os.path.exists(path) or len(os.listdir(path)) == 0:
             if verbose:
-                self.report(
-                    f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch."
-                )
+                self.report(f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch.")
             return ""
         # Check latest path
-        latest = _get_latest(path, lambda x: x.find("/step-")>0)
+        latest = _get_latest(path, lambda x: x.find("/step-") > 0)
         if latest is None:
             if verbose:
-                self.report(
-                    f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch."
-                )
+                self.report(f"  Dataset: No valid checkpoint detected at {path}, dataset starting from scratch.")
             return ""
         if verbose:
             self.report(f"Checkpoint detected at {latest}")
@@ -658,12 +641,10 @@ class CheckpointDataset(_WrapperDataset):
         self.report(f"Saving dataset to {path}")
         start = time.time()
         super().save_to_path(path)
-        self.report(
-            f"Dataset successfully saved to {path}! Save time: {time.time() - start}"
-        )
+        self.report(f"Dataset successfully saved to {path}! Save time: {time.time() - start}")
 
     def load_from_path(self, path: str):
-        #print(f"****************Inside load_from_path {path}")
+        # print(f"****************Inside load_from_path {path}")
         save_path = self._validate_ckp_path(self.path, False)
         if len(save_path) > 0:
             self.report(
@@ -704,9 +685,7 @@ class PreloadBufferDataset(_WrapperDataset):
 
     def __init__(self, dataset: _StatefulDataset, window_size: int):
         super().__init__(dataset)
-        assert (
-            window_size > 1
-        ), f"Window size {window_size} must be greater than 1 for shuffling to occur"
+        assert window_size > 1, f"Window size {window_size} must be greater than 1 for shuffling to occur"
         self.window_size = window_size
         self.g_state = None
         self.generator = torch.Generator().manual_seed(self.rank)
@@ -805,9 +784,7 @@ class BufferDataset(_WrapperDataset):
         self.pad = pad_token
         self.pack_hard = pack_hard
         if not pack_hard:
-            assert (
-                pad_token is not None
-            ), "Error: if using pads, you must supply a pad_token"
+            assert pad_token is not None, "Error: if using pads, you must supply a pad_token"
 
         self.state_params = ["buffer"]
 
@@ -936,9 +913,7 @@ class StreamingDocDataset(_StatefulDataset):
         self.bos = bos_token
         self.drop = strip_tokens
         self.verbose = verbose
-        self.docset: List[
-            Any
-        ] = []  # map of doc indices to (shardid, min docid, max docid)
+        self.docset: List[Any] = []  # map of doc indices to (shardid, min docid, max docid)
 
         # Position
         self.docset_index = 0
@@ -966,7 +941,7 @@ class StreamingDocDataset(_StatefulDataset):
         self._len = 0
         self.dataset = ""
         self.lcg_state = 0
-        #print(f"Initialized StreamingDocDataset with rank {rank} self.rank {self.rank}")
+        # print(f"Initialized StreamingDocDataset with rank {rank} self.rank {self.rank}")
 
     def setup(self):
         """
@@ -992,16 +967,12 @@ class StreamingDocDataset(_StatefulDataset):
                 if self.filehandler.is_legal(os.path.join(root, name))
             ]
             shards.sort()  # Ensure consistent sharding across machines
-            #print(shards)
+            # print(shards)
 
             # Find metadata file
             countfiles = []
             if os.path.exists(os.path.join(pardir, "meta")):
-                countfiles = [
-                    x
-                    for x in os.listdir(os.path.join(pardir, "meta"))
-                    if "counts" in x and "csv" in x
-                ]
+                countfiles = [x for x in os.listdir(os.path.join(pardir, "meta")) if "counts" in x and "csv" in x]
             if len(countfiles) > 0:
                 # Count file exists, use it
                 countpath = os.path.join(pardir, "meta", countfiles[0])
@@ -1021,7 +992,7 @@ class StreamingDocDataset(_StatefulDataset):
                             if prefix >= 0:
                                 key = fullpath[prefix + len(dataset) + 2 :]
                                 sizes[key] = int(row["size"])
-            if len(sizes)>0:
+            if len(sizes) > 0:
                 shard_sizes = [sizes[shard] for shard in shards]
             else:
                 shard_sizes = [os.path.getsize(os.path.join(datapath, shard)) for shard in shards]
@@ -1053,10 +1024,7 @@ class StreamingDocDataset(_StatefulDataset):
             else:
                 # Count file does not exist, touch every owned file for length
                 # unique_shardfiles = set(shard for shard, frag in shardfrags)
-                doc_counts = {
-                    shard: self.filehandler.length(os.path.join(datapath, shard))
-                    for shard in shardset
-                }
+                doc_counts = {shard: self.filehandler.length(os.path.join(datapath, shard)) for shard in shardset}
 
             # Assemble doc list for each file shard
             # Create docset of form [shardid, min docid, max docid]
@@ -1071,9 +1039,7 @@ class StreamingDocDataset(_StatefulDataset):
             self._len = doccount
 
             if self.verbose:
-                logging.info(
-                    f"    Worker {self.rank} ingested {len(self.docset)} shards from {dataset}"
-                )
+                logging.info(f"    Worker {self.rank} ingested {len(self.docset)} shards from {dataset}")
 
             # Shuffle shard files - guaranteed inconsistent across workers
             seed = self.seed + self.rank
@@ -1088,9 +1054,7 @@ class StreamingDocDataset(_StatefulDataset):
         return the corresponding data/shard/local index
         """
         cur = 0
-        assert (
-            i <= self._len
-        ), f"You have requested an illegal doc index {i}, docset length is {self._len}"
+        assert i <= self._len, f"You have requested an illegal doc index {i}, docset length is {self._len}"
         for shardid, min_d, max_d in self.docset:
             docrange = max_d - min_d + 1
             cur += docrange
@@ -1186,9 +1150,7 @@ class StreamingDocDataset(_StatefulDataset):
                             # Document complete, update stats
                             if j == n_chunks - 1:
                                 self.docs_seen += 1
-                                self.percent_seen = (
-                                    self.docs_seen * 100 / (self._len + 1e-9)
-                                )
+                                self.percent_seen = self.docs_seen * 100 / (self._len + 1e-9)
                             yield self._construct_chunk(j, doc, n_chunks)
 
                 # Advance RNG state
@@ -1218,9 +1180,7 @@ class StreamingDocDataset(_StatefulDataset):
         ), f"StreamingDocDataset does not support rescaling (ckp size: {self.load_worldsize}, world size: {self.worldsize}). Please use a ScalableShardDataset."
         d = self.dataset
         out = super().load_state_dict(state_dicts, sharded_input)
-        assert (
-            d == self.dataset
-        ), f"Dataset mismatch: checkpoint contains {self.dataset}, expected {d}"
+        assert d == self.dataset, f"Dataset mismatch: checkpoint contains {self.dataset}, expected {d}"
         return out
 
 
@@ -1254,9 +1214,7 @@ class ScalableShardDataset(_WrapperDataset):
         assert (
             n_logical_shards % self.worldsize == 0
         ), f"World size {self.worldsize} must divide n_logical_shards {n_logical_shards} evenly"
-        assert (
-            n_logical_shards > 0
-        ), f"n_logical_shards {n_logical_shards} must be a positive integer"
+        assert n_logical_shards > 0, f"n_logical_shards {n_logical_shards} must be a positive integer"
 
         self.total_shards = n_logical_shards
         self.delimiter = delimiter_token
@@ -1295,7 +1253,7 @@ class ScalableShardDataset(_WrapperDataset):
                 self.data[-1].worldsize = n_logical_shards
                 self.data[-1].load_worldsize = n_logical_shards
                 self.data[-1].rank = self.logicals_owned[i]
-                #print(f"self.data[-1].rank={self.data[-1].rank} {self.rank} assembled logical shard {self.logicals_owned[i]}, {i+1} of {self.n_logicals}")
+                # print(f"self.data[-1].rank={self.data[-1].rank} {self.rank} assembled logical shard {self.logicals_owned[i]}, {i+1} of {self.n_logicals}")
                 self.data[-1].local_worldsize = 1
                 self.data[-1].datapath = self.datapath
                 self.data[-1].verbose = self.rank == 0
@@ -1347,9 +1305,7 @@ class ScalableShardDataset(_WrapperDataset):
 
     def load_state_dict(self, state_dicts, sharded_input=False):
         self.setup()
-        sharded_dicts = _StatefulDataset.load_state_dict(
-            self, state_dicts, sharded_input
-        )
+        sharded_dicts = _StatefulDataset.load_state_dict(self, state_dicts, sharded_input)
         # Manually set generator state if it exists
         if self.g_state is not None:
             self.generator.set_state(self.g_state)
@@ -1384,50 +1340,59 @@ class SamplingDataset(_WrapperDataset):
     verbose : bool
         Track setup progress?
     """
+
     def get_datasets_weights(self, datasets, weights):
         datapath = self.datapath
-        countfiles=[]
+        countfiles = []
         if os.path.exists(os.path.join(datapath, "meta")):
-            countfiles = [x for x in os.listdir(os.path.join(datapath, "meta")) if "counts" in x and "csv" in x ]
+            countfiles = [x for x in os.listdir(os.path.join(datapath, "meta")) if "counts" in x and "csv" in x]
         if len(countfiles) > 0:
             # Count file exists, use it
             countpath = os.path.join(datapath, "meta", countfiles[0])
         else:
             countpath = ""
-        if self.verbose: print(f"countpath={countpath}")
+        if self.verbose:
+            print(f"countpath={countpath}")
         if datasets is None:
-            #if countpath == "": datasets=[]
-            #else:
-            datasets = [f for f in os.listdir(datapath) if not os.path.isfile(os.path.join(datapath, f)) and "meta" not in f]
+            # if countpath == "": datasets=[]
+            # else:
+            datasets = [
+                f for f in os.listdir(datapath) if not os.path.isfile(os.path.join(datapath, f)) and "meta" not in f
+            ]
         if weights is None:
             if countpath == "":
                 self.datasets = datasets
                 self.weights = [1] * len(self.datasets)
             else:
-                tokens={}
+                tokens = {}
                 with open(countpath, "r") as csvfile:
                     reader = csv.DictReader(csvfile)
                     for row in reader:
                         for dataset in datasets:
                             fullpath = row["dataset/filename"]
                             prefix = fullpath.rfind("/" + dataset + "/")
-                            #print(f"Looking for {dataset} in {fullpath}")
+                            # print(f"Looking for {dataset} in {fullpath}")
                             if prefix >= 0:
-                                tokens[dataset] = tokens.get(dataset,0)+int(row["tokens"])
+                                tokens[dataset] = tokens.get(dataset, 0) + int(row["tokens"])
                                 break
                 self.datasets = tokens.keys()
                 self.weights = tokens.values()
         else:
             self.datasets = datasets
             self.weights = weights
-        #self.datasets = ','.join(str(value) for value in tokens.keys())
-        #self.weights = ','.join(str(value) for value in tokens.values())
-        if self.verbose: print(f"datasets={self.datasets}")
+        # self.datasets = ','.join(str(value) for value in tokens.keys())
+        # self.weights = ','.join(str(value) for value in tokens.values())
+        if self.verbose:
+            print(f"datasets={self.datasets}")
         assert len(self.datasets) > 0, "You must specify at least one dataset"
-        assert len(self.weights) == len(self.datasets), f"Number of weights {len(self.weights)} must match number of datasets {len(self.datasets)}"
-        for w in self.weights: assert w > 0, f"Sampling rate {w} must be positive"
+        assert len(self.weights) == len(
+            self.datasets
+        ), f"Number of weights {len(self.weights)} must match number of datasets {len(self.datasets)}"
+        for w in self.weights:
+            assert w > 0, f"Sampling rate {w} must be positive"
         self.weights = [w / sum(self.weights) for w in self.weights]
-        if self.verbose: print(f"weights={self.weights}")
+        if self.verbose:
+            print(f"weights={self.weights}")
 
     def __init__(
         self,
@@ -1481,8 +1446,7 @@ class SamplingDataset(_WrapperDataset):
                 # Choose new subdataset to draw from
                 # (whichever is currently most underrepresented compared to target rate)
                 offset = [
-                    self.weights[i]
-                    - self.tokens_seen[i] / (sum(self.tokens_seen) + 1e-9)
+                    self.weights[i] - self.tokens_seen[i] / (sum(self.tokens_seen) + 1e-9)
                     for i in range(len(self.datasets))
                 ]
                 offset_argmax = max((diff, i) for i, diff in enumerate(offset))[1]
@@ -1491,29 +1455,20 @@ class SamplingDataset(_WrapperDataset):
     def state_dict(self):
         self.setup()
         # Manually add state of all subloaders to self state
-        out = {
-            self.statename("sample_iterator_states"): [
-                d.state_dict() for d in self.data
-            ]
-        }
+        out = {self.statename("sample_iterator_states"): [d.state_dict() for d in self.data]}
         out.update(_StatefulDataset.state_dict(self))
         return out
 
     def load_state_dict(self, state_dicts, sharded_input=False):
         self.setup()
         # Load stats
-        sharded_dicts = _StatefulDataset.load_state_dict(
-            self, state_dicts, sharded_input
-        )
+        sharded_dicts = _StatefulDataset.load_state_dict(self, state_dicts, sharded_input)
         # Load sub-iterator states
         for i, subdata in enumerate(self.data):
             # Grab just that sub-iterator across all ranks
             subdata.load_worldsize = self.load_worldsize
             subdata.load_state_dict(
-                [
-                    sd[self.statename("sample_iterator_states")][i]
-                    for sd in sharded_dicts
-                ],
+                [sd[self.statename("sample_iterator_states")][i] for sd in sharded_dicts],
                 True,
             )
         return sharded_dicts
@@ -1545,13 +1500,12 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
         If performing tokenization dynamically, the tokenizer to use.
     """
 
-    datasets, weights = parse_data_args(
-        cfg.datasets, cfg.weights
-    )
+    datasets, weights = parse_data_args(cfg.datasets, cfg.weights)
 
     def causal_lm(data_seq, prompt_len=0):
         return torch.LongTensor(data_seq)
-    #def causal_lm(data_seq, prompt_len=0):
+
+    # def causal_lm(data_seq, prompt_len=0):
     #    """
     #    Perform causal language modeling by right-shifting the input sequence.
     #    Sets first prompt_len tokens to be ignored by the loss.
@@ -1564,21 +1518,15 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
 
     # Base streaming dataset. Returns doc chunks in sequence.
     # Implements dataset sampling and rescalability.
-    droplist = [
-        int(x.strip())
-        for x in cfg.drop_tokens.split(",")
-        if len(x.strip()) > 0
-    ]
+    droplist = [int(x.strip()) for x in cfg.drop_tokens.split(",") if len(x.strip()) > 0]
     droplist = droplist + [cfg.bos_token, cfg.eos_token]
-    assert (
-        cfg.file_type in _handler_map
-    ), f"File type {cfg.file_type} is not recognized ({list(_handler_map.keys())})"
+    assert cfg.file_type in _handler_map, f"File type {cfg.file_type} is not recognized ({list(_handler_map.keys())})"
     if cfg.file_type == "hf_parquet":
         assert tokenizer is not None, "You must provide a tokenizer path for hf_parquet raw text file shards."
         filehandler = ParquetHandler(tokenizer, cfg.col_name)
     else:
         filehandler = _handler_map[cfg.file_type](cfg.col_name)
-    
+
     # Base reader layer
     data = StreamingDocDataset(
         cfg.dataset_path,
@@ -1618,19 +1566,15 @@ def build_experimental_data_loader(cfg, rank, world_size, tokenizer):
     data = PreprocessDataset(data, causal_lm)
     # Enable auto-saving
     if cfg.enable_checkpoint and not cfg.checkpoint_model_weights_only:
-        assert (
-            cfg.interval_type == "steps"
-        ), "Dataloader checkpointing supports only step-based interval"
+        assert cfg.interval_type == "steps", "Dataloader checkpointing supports only step-based interval"
         data = CheckpointDataset(
             data,
             cfg.checkpoint_folder,
             cfg.checkpoint_interval,
-            cfg.batch_size*cfg.gradient_accumulation_steps/cfg.num_workers, #cfg.batch_size,
+            cfg.batch_size * cfg.gradient_accumulation_steps / cfg.num_workers,  # cfg.batch_size,
         )
-    #print(f"num_workers={cfg.num_workers} gradient_accumulation_steps={cfg.gradient_accumulation_steps} batch_size={cfg.batch_size} given to torch.utils.data.DataLoader")
-    return iter(torch.utils.data.DataLoader(
-        data, num_workers=cfg.num_workers, batch_size=cfg.batch_size
-    ))
+    # print(f"num_workers={cfg.num_workers} gradient_accumulation_steps={cfg.gradient_accumulation_steps} batch_size={cfg.batch_size} given to torch.utils.data.DataLoader")
+    return iter(torch.utils.data.DataLoader(data, num_workers=cfg.num_workers, batch_size=cfg.batch_size))
 
 
 def parse_data_args(datas, weights):
@@ -1645,6 +1589,8 @@ def parse_data_args(datas, weights):
         else:
             raise ValueError(f"arg input {x} cannot be parsed.")
 
-    if datas is not None: datas = splitstrip(datas)
-    if weights is not None: weights = [float(x) for x in splitstrip(weights)]
+    if datas is not None:
+        datas = splitstrip(datas)
+    if weights is not None:
+        weights = [float(x) for x in splitstrip(weights)]
     return datas, weights

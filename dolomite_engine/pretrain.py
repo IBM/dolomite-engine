@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 import time
 from contextlib import nullcontext
 
@@ -13,8 +13,8 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
-from .data.fsdp_dataloader import get_fsdp_dataloaders
 from .data import get_megatron_gpt_dataloaders, get_next_batch
+from .data.fsdp_dataloader import get_fsdp_dataloaders
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import Mode, TuningMethod
 from .model_wrapper import get_model_container
@@ -29,6 +29,7 @@ from .utils import (
     log_rank_0,
     setup_tf32,
 )
+
 
 def track_val_metrics(
     global_step: int,
@@ -364,7 +365,12 @@ def main(mode: Mode = Mode.training) -> None:
     starting_iteration = 0
     metadata = None
     experiments_tracker_state_dict = None
-    if args.load_args is not None and args.load_args.load_path is not None and os.path.isdir(args.load_args.load_path) and os.path.isfile(args.load_args.load_path+"/latest_checkpointed_iteration.json"):
+    if (
+        args.load_args is not None
+        and args.load_args.load_path is not None
+        and os.path.isdir(args.load_args.load_path)
+        and os.path.isfile(args.load_args.load_path + "/latest_checkpointed_iteration.json")
+    ):
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
             args, model_container, optimizer_container, lr_scheduler_container, None
         )
@@ -375,13 +381,13 @@ def main(mode: Mode = Mode.training) -> None:
             metadata["consumed_samples"] = 0
     global_rank = ProcessGroupManager.get_global_rank()
     world_size = ProcessGroupManager.get_world_size()
-    if args.datasets[0].class_name!="FSDPDataset":
+    if args.datasets[0].class_name != "FSDPDataset":
         train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
             args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
         )
     else:
         # Todo: use args.load_args.load_dataloader_state
-        train_dataloader,val_dataloaders,test_dataloaders = get_fsdp_dataloaders(
+        train_dataloader, val_dataloaders, test_dataloaders = get_fsdp_dataloaders(
             args, global_rank, world_size, model_container[0].tokenizer
         )
 
