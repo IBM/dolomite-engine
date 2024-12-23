@@ -135,9 +135,6 @@ class _StatefulDataset(IterableDataset):
                     self.local_worldsize = info.num_workers
                     self.worldsize = self.worldsize * self.local_worldsize
                     self.rank = self.local_worldsize * self.rank + info.id
-                    # print(f"self.local_worldsize={self.local_worldsize}")
-                    # print(f"self.worldsize={self.worldsize}")
-                    # print(f"self.rank={self.rank}")
 
     def statename(self, x: str):
         # Note that this naming convention implicitly disallows repeated layers in the dataset pipeline
