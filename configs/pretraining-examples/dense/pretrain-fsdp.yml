@@ -10,16 +10,11 @@ datasets:
       dataset_path: /proj/datasets/fms-dataloader-test/
       datasets: null #"dump=CC-MAIN-2013-20,dump=CC-MAIN-2015-35,dump=CC-MAIN-2017-26,dump=CC-MAIN-2018-47,dump=CC-MAIN-2020-24,dump=CC-MAIN-2022-27"
       weights: null #"1,1,1,1,1,1"
-      #dataset_path: "/proj/data-eng/fsdp/data/R45_th7_200"
-      #datasets: "Java,Python"
-      #weights: "0.5,0.5"
+      # dataset_path: "/proj/data-eng/fsdp/data/R45_th7_200"
+      # datasets: "Java,Python"
+      # weights: "0.5,0.5"
       col_name: "tokens"
       file_type: "arrow"
-      #dataset_path: str = "/proj/data-eng/ak_dolomite/dolomite-engine/data/starcoder/R44_th9"
-      #datasets: str = "Java,Python,Go"
-      #weights: str = "0.3,0.3,0.4"
-      #col_name: str = "contents"
-      #file_type: str = "hf_parquet"
       vocab_size: 200000
       bos_token: null
       eos_token: 0
