@@ -12,7 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 import torch.utils.data as data
-from transformers.models.gpt2.tokenization_gpt2_fast import GPT2TokenizerFast
+from transformers import GPT2TokenizerFast
 
 
 @dataclass
