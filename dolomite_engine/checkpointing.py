@@ -256,7 +256,9 @@ def load_checkpoint_for_training(
     if args.load_args.load_lr_scheduler:
         assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
 
-        _LRSchedulerSaver(lr_scheduler_container).load_state_dict(torch.load(_get_lr_scheduler_path(load_path),weights_only=False))
+        _LRSchedulerSaver(lr_scheduler_container).load_state_dict(
+            torch.load(_get_lr_scheduler_path(load_path), weights_only=False)
+        )
     elif args.load_args.resume_learning_rate:
         for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
             _resume_learning_rate(
@@ -267,7 +269,7 @@ def load_checkpoint_for_training(
             )
 
     if load_rng_state:
-        rng_state = torch.load(_get_rng_state_path(load_path),weights_only=False)
+        rng_state = torch.load(_get_rng_state_path(load_path), weights_only=False)
         random.setstate(rng_state["random_rng_state"])
         np.random.set_state(rng_state["np_rng_state"])
         torch.set_rng_state(rng_state["torch_rng_state"])
@@ -278,7 +280,7 @@ def load_checkpoint_for_training(
         metadata = json.load(open(_get_metadata_path(load_path), "r"))
 
     if load_dataloader_state and train_dataloader is not None:
-        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path),weights_only=False))
+        train_dataloader.load_state_dict(torch.load(_get_dataloader_path(load_path), weights_only=False))
 
     experiments_tracker_json = None
     if load_experiments_tracker_state and os.path.exists(_get_experiments_tracker_path(load_path)):
@@ -357,17 +359,6 @@ def load_checkpoint_for_inference(
         state = fix_unsharded_state_dict(
             model.config, state, tensor_parallel_world_size=checkpoint_tp_world_size, prefix="model."
         )
-
-    was_compiled_model = args_from_checkpoint.distributed_args.torch_compile
-
-    # fix state dict if torch compile was used to train the model
-    #if was_compiled_model:
-    #    print(list(state.keys()))
-    #    for key in list(state.keys()):
-    #        assert key.startswith("_orig_mod.")
-    #        if key.startswith("_orig_mod."):
-    #            new_key = key.split("_orig_mod.")[1]
-    #            state[new_key] = state.pop(key)
 
     dtype = string_to_torch_dtype(model.dtype)
     for key in list(state.keys()):
