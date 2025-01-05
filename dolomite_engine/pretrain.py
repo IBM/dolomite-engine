@@ -12,7 +12,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
-from .data import get_megatron_gpt_dataloaders, get_next_batch
+from .data import get_next_batch, get_pretraining_dataloaders
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import Mode, TuningMethod
 from .model_wrapper import get_model_container
@@ -371,7 +371,7 @@ def main(mode: Mode = Mode.training) -> None:
         if not args.load_args.load_dataloader_state and metadata is not None:
             metadata["consumed_samples"] = 0
 
-    train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
+    train_dataloader, val_dataloaders, test_dataloaders = get_pretraining_dataloaders(
         args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 

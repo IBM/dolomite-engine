@@ -8,7 +8,7 @@ from transformers import set_seed
 from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
-from .data import ResumableDataLoader, custom_iterator, get_dataloader, get_next_batch
+from .data import ResumableDataLoader, custom_iterator, get_finetuning_dataloader, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import DatasetSplit, Mode, TuningMethod
 from .model_wrapper import get_model_container
@@ -222,7 +222,7 @@ def main() -> None:
 
     model_container = get_model_container(args, mode)
 
-    train_dataloader = get_dataloader(
+    train_dataloader = get_finetuning_dataloader(
         args,
         split=DatasetSplit.train,
         mode=mode,
@@ -232,7 +232,7 @@ def main() -> None:
 
     val_dataloader = None
     if args.training_parameters.eval_during_training:
-        val_dataloader = get_dataloader(
+        val_dataloader = get_finetuning_dataloader(
             args,
             split=DatasetSplit.val,
             mode=mode,
