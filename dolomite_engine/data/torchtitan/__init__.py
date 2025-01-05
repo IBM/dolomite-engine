@@ -32,7 +32,7 @@ class train_config:
         return "{}({})".format(type(self).__name__, ", ".join(kws))
 
 
-def get_fsdp_dataloaders(args, tokenizer) -> None:
+def get_ibm_dataloaders(args, tokenizer) -> None:
     assert len(args.datasets) == 1
     cfg = train_config(args.datasets[0].class_args)
 

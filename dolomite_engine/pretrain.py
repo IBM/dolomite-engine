@@ -13,7 +13,7 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
-from .data import get_fsdp_dataloaders, get_megatron_gpt_dataloaders, get_next_batch
+from .data import get_ibm_dataloaders, get_megatron_gpt_dataloaders, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import Mode, TuningMethod
 from .model_wrapper import get_model_container
@@ -382,7 +382,7 @@ def main(mode: Mode = Mode.training) -> None:
         )
     else:
         # Todo: use args.load_args.load_dataloader_state
-        train_dataloader, val_dataloaders, test_dataloaders = get_fsdp_dataloaders(args, model_container[0].tokenizer)
+        train_dataloader, val_dataloaders, test_dataloaders = get_ibm_dataloaders(args, model_container[0].tokenizer)
 
     experiments_tracker = ExperimentsTracker(
         args.logging_args.experiments_tracker_name,
