@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from contextlib import nullcontext
 
@@ -114,6 +113,7 @@ def train(
         evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
 
     dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
+
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
     local_batch_size = micro_batch_size * gradient_accumulation_steps
@@ -298,6 +298,7 @@ def evaluate(
 
 def main(mode: Mode = Mode.training) -> None:
     """main program"""
+
     setup_tf32()
 
     args: TrainingArgs = get_args(mode)
@@ -361,16 +362,10 @@ def main(mode: Mode = Mode.training) -> None:
     starting_iteration = 0
     metadata = None
     experiments_tracker_state_dict = None
-    if (
-        args.load_args is not None
-        and args.load_args.load_path is not None
-        and os.path.isdir(args.load_args.load_path)
-        and os.path.isfile(args.load_args.load_path + "/latest_checkpointed_iteration.json")
-    ):
+    if args.load_args is not None:
         starting_iteration, metadata, experiments_tracker_state_dict = load_checkpoint_for_training(
             args, model_container, optimizer_container, lr_scheduler_container, None
         )
-        log_rank_0(logging.INFO, f"Loaded model checkpoint {starting_iteration}")
 
         # metadata field contains the dataloader state so we need to reset it here
         if not args.load_args.load_dataloader_state and metadata is not None:
