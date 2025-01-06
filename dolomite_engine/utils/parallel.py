@@ -56,6 +56,7 @@ class ProcessGroupManager:
             timeout_minutes = timedelta(timeout_minutes)
 
         torch.distributed.init_process_group(
+            backend="cpu:gloo,cuda:nccl",
             rank=ProcessGroupManager.get_global_rank(),
             world_size=ProcessGroupManager.get_world_size(),
             timeout=timeout_minutes,
@@ -88,8 +89,6 @@ class ProcessGroupManager:
 
         _DATA_PARALLEL_REPLICATION_WORLD_SIZE = data_parallel_replication_world_size
         _DATA_PARALLEL_SHARDING_WORLD_SIZE = data_parallel_sharding_world_size
-
-        torch.distributed.init_process_group("cuda:nccl,cpu:gloo")
 
         _MESH = init_device_mesh(
             "cuda",
