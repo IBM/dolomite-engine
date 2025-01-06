@@ -8,7 +8,7 @@ import torch
 import torch.distributed
 import torch.distributed.checkpoint as dcp
 import yaml
-from torch.distributed.checkpoint import FileSystemReader, StorageWriter
+from torch.distributed.checkpoint import FileSystemReader
 from torch.distributed.checkpoint.format_utils import _EmptyStateDictLoadPlanner
 from torch.distributed.checkpoint.state_dict import (
     StateDictOptions,
@@ -36,7 +36,6 @@ _TRAINING_CONFIG_PREFIX = "training_config"
 _INFERENCE_CONFIG_PREFIX = "inference_config"
 _KILLSWITCH = "KILLSWITCH"
 _FUTURE = None
-_STORAGE_WRITER = StorageWriter(cached_state_dict=True)
 
 
 class _Saver(Stateful):
@@ -198,7 +197,6 @@ def save_checkpoint(
                 optimizer_container=optimizer_container if args.save_args.save_optimizer else None,
             )
         },
-        storage_writer=_STORAGE_WRITER,
         checkpoint_id=_get_model_optimizer_path(save_path),
     )
 
