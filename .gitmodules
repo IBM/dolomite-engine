@@ -1,0 +1,3 @@
+[submodule "cute-kernels"]
+	path = cute-kernels
+	url = https://github.com/mayank31398/cute-kernels/
