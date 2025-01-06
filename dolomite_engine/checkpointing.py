@@ -200,12 +200,14 @@ def save_checkpoint(
         checkpoint_id=_get_model_path(save_path),
     )
 
-    def _f():
+    def _f(_future):
         run_rank_n(json.dump)(
             {"latest_checkpointed_iteration": iteration},
             run_rank_n(open)(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
             indent=4,
         )
+
+        log_rank_0(logging.INFO, f"checkpoint saved asynchronously at {iteration}")
 
         if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
             ProcessGroupManager.destroy_process_groups()
