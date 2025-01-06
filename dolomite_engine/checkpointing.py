@@ -197,7 +197,7 @@ def save_checkpoint(
                 optimizer_container=optimizer_container if args.save_args.save_optimizer else None,
             )
         },
-        checkpoint_id=_get_model_path(save_path),
+        checkpoint_id=_get_model_optimizer_path(save_path),
     )
 
     def _f(_future):
@@ -260,7 +260,7 @@ def load_checkpoint_for_training(
 
     saver = _Saver(model_container, optimizer_container if load_optimizer else None)
     state_dict = {"state": saver.state_dict()}
-    dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
+    dcp.load(state_dict, checkpoint_id=_get_model_optimizer_path(load_path))
     saver.load_state_dict(state_dict["state"])
 
     if args.load_args.load_lr_scheduler:
@@ -356,7 +356,7 @@ def load_checkpoint_for_inference(
     state = {}
     _load_state_dict(
         state,
-        storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
+        storage_reader=FileSystemReader(_get_model_optimizer_path(_get_base_path(load_path, iteration))),
         planner=_EmptyStateDictLoadPlanner(),
         no_dist=True,
     )
@@ -428,8 +428,8 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str) -> str:
-    return os.path.join(path, "model")
+def _get_model_optimizer_path(path: str) -> str:
+    return os.path.join(path, "model_optimizer")
 
 
 def _get_lr_scheduler_path(path: str) -> str:
