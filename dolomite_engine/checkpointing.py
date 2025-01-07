@@ -364,7 +364,7 @@ def load_checkpoint_for_inference(
         no_dist=True,
     )
 
-    state = state["state"]
+    state = state["state"]["model"]
 
     if checkpoint_tp_world_size > 1:
         state = fix_unsharded_state_dict(
