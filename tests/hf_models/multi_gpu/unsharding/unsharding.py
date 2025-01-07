@@ -118,5 +118,3 @@ def run_check(fix: bool):
 
 run_check(True)
 run_check(False)
-
-ProcessGroupManager.destroy_process_groups()

@@ -16,8 +16,6 @@ def main() -> None:
         args.unsharded_path, state_dict=state_dict
     )
 
-    ProcessGroupManager.destroy_process_groups()
-
 
 if __name__ == "__main__":
     main()

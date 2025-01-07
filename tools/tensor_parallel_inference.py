@@ -39,5 +39,3 @@ y = model.generate(**x, max_new_tokens=100)
 
 if torch.distributed.get_rank() == 0:
     print(tokenizer.batch_decode(y)[0])
-
-ProcessGroupManager.destroy_process_groups()

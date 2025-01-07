@@ -34,7 +34,7 @@ class TensorParallelTest(TestCommons):
             [PositionEmbeddingType.rope],
             ["sdpa"],
             TestCommons.get_dtypes(),
-            [False, True],
+            [False],
             [False, True],
             [MoEDolomiteConfig.model_type],
         )

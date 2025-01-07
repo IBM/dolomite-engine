@@ -6,7 +6,7 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
-from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .checkpointing import ensure_last_checkpoint_is_saved, load_checkpoint_for_training, save_checkpoint
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import ResumableDataLoader, custom_iterator, get_finetuning_dataloader, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
@@ -120,6 +120,8 @@ def train(
                 experiments_tracker=experiments_tracker,
                 iteration=global_step,
             )
+
+    ensure_last_checkpoint_is_saved()
 
     if torch_profiler is not None:
         torch_profiler.__exit__()
@@ -290,8 +292,6 @@ def main() -> None:
         experiments_tracker=experiments_tracker,
         starting_iteration=starting_iteration,
     )
-
-    ProcessGroupManager.destroy_process_groups()
 
 
 if __name__ == "__main__":

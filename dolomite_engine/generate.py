@@ -132,8 +132,6 @@ def main() -> None:
 
     generate(args, model, datasets_list, mode)
 
-    ProcessGroupManager.destroy_process_groups()
-
 
 if __name__ == "__main__":
     main()

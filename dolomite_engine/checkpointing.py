@@ -35,13 +35,29 @@ from .utils import ExperimentsTracker, ProcessGroupManager, load_yaml, log_rank_
 _TRAINING_CONFIG_PREFIX = "training_config"
 _INFERENCE_CONFIG_PREFIX = "inference_config"
 _KILLSWITCH = "KILLSWITCH"
+_FUTURE = None
 
 
-class _ModelSaver(Stateful):
-    def __init__(self, model_container: ModelContainer) -> None:
+def ensure_last_checkpoint_is_saved() -> None:
+    global _FUTURE
+    if _FUTURE is not None:
+        _FUTURE.result()
+
+
+class _Saver(Stateful):
+    def __init__(self, model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
         self.model_container = model_container
+        self.optimizer_container = optimizer_container
 
-    def state_dict(self) -> dict:
+    def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
+        result = {}
+        for key, value in state_dict.items():
+            if not "teacher_model" in key:
+                result[key] = value
+
+        return result
+
+    def _model_state_dict(self) -> dict:
         state_dict = {}
 
         for model in self.model_container:
@@ -53,27 +69,7 @@ class _ModelSaver(Stateful):
 
         return state_dict
 
-    def load_state_dict(self, state_dict: dict) -> None:
-        for model in self.model_container:
-            set_model_state_dict(
-                model, model_state_dict=state_dict, options=StateDictOptions(strict=not model.has_teacher_model())
-            )
-
-    def _filter_out_teacher_state_dict(self, state_dict: dict) -> dict:
-        result = {}
-        for key, value in state_dict.items():
-            if not "teacher_model" in key:
-                result[key] = value
-
-        return result
-
-
-class _OptimizerSaver(Stateful):
-    def __init__(self, model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
-        self.model_container = model_container
-        self.optimizer_container = optimizer_container
-
-    def state_dict(self) -> dict:
+    def _optimizer_state_dict(self) -> dict:
         state_dict = {}
 
         for model, optimizer in zip(self.model_container, self.optimizer_container):
@@ -84,7 +80,13 @@ class _OptimizerSaver(Stateful):
 
         return state_dict
 
-    def load_state_dict(self, state_dict: dict) -> None:
+    def _load_model_state_dict(self, state_dict: dict) -> None:
+        for model in self.model_container:
+            set_model_state_dict(
+                model, model_state_dict=state_dict, options=StateDictOptions(strict=not model.has_teacher_model())
+            )
+
+    def _load_optimizer_state_dict(self, state_dict: dict) -> None:
         for model, optimizer in zip(self.model_container, self.optimizer_container):
             set_optimizer_state_dict(
                 model,
@@ -92,6 +94,17 @@ class _OptimizerSaver(Stateful):
                 optim_state_dict=state_dict,
                 options=StateDictOptions(flatten_optimizer_state_dict=True),
             )
+
+    def state_dict(self) -> dict:
+        return {
+            "model": self._model_state_dict(),
+            "optimizer": self._optimizer_state_dict() if self.optimizer_container is not None else None,
+        }
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        self._load_model_state_dict(state_dict["model"])
+        if self.optimizer_container is not None:
+            self._load_optimizer_state_dict(state_dict["optimizer"])
 
 
 class _LRSchedulerSaver(Stateful):
@@ -137,20 +150,14 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    dcp.save({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(save_path))
+    if optimizer_container is None:
+        log_rank_0(
+            logging.WARN,
+            "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
+            "Therefore, the function will not save the optimizer",
+        )
 
-    if args.save_args.save_optimizer:
-        if optimizer_container is None:
-            log_rank_0(
-                logging.WARN,
-                "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
-                "Therefore, the function will not save the optimizer",
-            )
-        else:
-            dcp.save(
-                {"state": _OptimizerSaver(model_container, optimizer_container)},
-                checkpoint_id=_get_optimizer_path(save_path),
-            )
+    ensure_last_checkpoint_is_saved()
 
     if lr_scheduler_container is None:
         log_rank_0(
@@ -187,17 +194,29 @@ def save_checkpoint(
 
     save_args(args, save_path, mode=Mode.training)
 
-    torch.distributed.barrier()
-
-    run_rank_n(json.dump)(
-        {"latest_checkpointed_iteration": iteration},
-        run_rank_n(open)(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
-        indent=4,
+    _FUTURE = dcp.async_save(
+        {
+            "state": _Saver(
+                model_container=model_container,
+                optimizer_container=optimizer_container if args.save_args.save_optimizer else None,
+            )
+        },
+        checkpoint_id=_get_model_optimizer_path(save_path),
     )
 
-    if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
-        ProcessGroupManager.destroy_process_groups()
-        exit()
+    def _f(_future):
+        run_rank_n(json.dump)(
+            {"latest_checkpointed_iteration": iteration},
+            run_rank_n(open)(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
+            indent=4,
+        )
+
+        log_rank_0(logging.INFO, f"checkpoint saved asynchronously at {iteration}")
+
+        if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
+            exit()
+
+    _FUTURE.add_done_callback(_f)
 
 
 def load_checkpoint_for_training(
@@ -242,16 +261,10 @@ def load_checkpoint_for_training(
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
-    saver = _ModelSaver(model_container)
+    saver = _Saver(model_container, optimizer_container if load_optimizer else None)
     state_dict = {"state": saver.state_dict()}
-    dcp.load(state_dict, checkpoint_id=_get_model_path(load_path))
+    dcp.load(state_dict, checkpoint_id=_get_model_optimizer_path(load_path))
     saver.load_state_dict(state_dict["state"])
-
-    if load_optimizer:
-        saver = _OptimizerSaver(model_container, optimizer_container)
-        state_dict = {"state": saver.state_dict()}
-        dcp.load(state_dict, checkpoint_id=_get_optimizer_path(load_path))
-        saver.load_state_dict(state_dict["state"])
 
     if args.load_args.load_lr_scheduler:
         assert load_optimizer, "load_lr_scheduler requires loading of optimizer"
@@ -348,12 +361,12 @@ def load_checkpoint_for_inference(
     state = {}
     _load_state_dict(
         state,
-        storage_reader=FileSystemReader(_get_model_path(_get_base_path(load_path, iteration))),
+        storage_reader=FileSystemReader(_get_model_optimizer_path(_get_base_path(load_path, iteration))),
         planner=_EmptyStateDictLoadPlanner(),
         no_dist=True,
     )
 
-    state = state["state"]
+    state = state["state"]["model"]
 
     if checkpoint_tp_world_size > 1:
         state = fix_unsharded_state_dict(
@@ -420,12 +433,8 @@ def _get_base_path(path: str, iteration: int) -> str:
     return os.path.join(path, _get_checkpoint_tag(iteration))
 
 
-def _get_model_path(path: str) -> str:
-    return os.path.join(path, "model")
-
-
-def _get_optimizer_path(path: str) -> str:
-    return os.path.join(path, "optimizer")
+def _get_model_optimizer_path(path: str) -> str:
+    return os.path.join(path, "model_optimizer")
 
 
 def _get_lr_scheduler_path(path: str) -> str:

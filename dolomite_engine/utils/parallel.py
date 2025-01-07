@@ -56,6 +56,7 @@ class ProcessGroupManager:
             timeout_minutes = timedelta(timeout_minutes)
 
         torch.distributed.init_process_group(
+            backend="cpu:gloo,cuda:nccl",
             rank=ProcessGroupManager.get_global_rank(),
             world_size=ProcessGroupManager.get_world_size(),
             timeout=timeout_minutes,
