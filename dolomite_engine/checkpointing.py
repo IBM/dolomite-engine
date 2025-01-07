@@ -214,7 +214,6 @@ def save_checkpoint(
         log_rank_0(logging.INFO, f"checkpoint saved asynchronously at {iteration}")
 
         if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
-            ProcessGroupManager.destroy_process_groups()
             exit()
 
     _FUTURE.add_done_callback(_f)

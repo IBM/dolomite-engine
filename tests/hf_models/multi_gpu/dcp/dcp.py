@@ -107,5 +107,3 @@ if global_rank == 0:
     assert consolidated_state_dict.keys() == original_state_dict.keys()
     for key in original_state_dict:
         assert original_state_dict[key].equal(consolidated_state_dict[key])
-
-ProcessGroupManager.destroy_process_groups()

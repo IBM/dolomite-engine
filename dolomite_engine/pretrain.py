@@ -400,8 +400,6 @@ def main(mode: Mode = Mode.training) -> None:
         starting_iteration=starting_iteration,
     )
 
-    ProcessGroupManager.destroy_process_groups()
-
 
 if __name__ == "__main__":
     main()
