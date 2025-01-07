@@ -177,7 +177,7 @@ if torch.distributed.get_rank() == 0:
         logits_tp = logits_tp.reshape(batch_size, sequence_length, -1)
 
     error = (logits - logits_tp).abs().max()
-    assert error < 5e-4, "logits don't match for normal and tensor parallel model"
+    assert error < 5e-4, f"logits don't match for normal and tensor parallel model, error is ({error})"
 
     error = (loss - loss_tp).abs().max()
-    assert error < 3e-6, "losses don't match for normal and tensor parallel model"
+    assert error < 3e-6, f"losses don't match for normal and tensor parallel model, error is ({error})"
