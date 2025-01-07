@@ -5,7 +5,11 @@ import torch
 import torch.distributed
 
 from dolomite_engine.arguments import TrainingArgs, UnshardingArgs
-from dolomite_engine.checkpointing import load_checkpoint_for_inference, save_checkpoint
+from dolomite_engine.checkpointing import (
+    ensure_last_checkpoint_is_saved,
+    load_checkpoint_for_inference,
+    save_checkpoint,
+)
 from dolomite_engine.distributed import wrap_model_container_for_distributed_training
 from dolomite_engine.enums import Mode
 from dolomite_engine.hf_models import AttentionHeadType
@@ -90,6 +94,8 @@ save_checkpoint(
     iteration=iteration,
     metadata=None,
 )
+
+ensure_last_checkpoint_is_saved()
 
 torch.distributed.barrier()
 

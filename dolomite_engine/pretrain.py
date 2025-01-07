@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
-from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .checkpointing import ensure_last_checkpoint_is_saved, load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import get_megatron_gpt_dataloaders, get_next_batch
@@ -218,6 +218,8 @@ def train(
 
     if eval_during_training:
         evaluate(test_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
+
+    ensure_last_checkpoint_is_saved()
 
     if torch_profiler is not None:
         torch_profiler.__exit__()

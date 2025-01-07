@@ -38,6 +38,12 @@ _KILLSWITCH = "KILLSWITCH"
 _FUTURE = None
 
 
+def ensure_last_checkpoint_is_saved() -> None:
+    global _FUTURE
+    if _FUTURE is not None:
+        _FUTURE.result()
+
+
 class _Saver(Stateful):
     def __init__(self, model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
         self.model_container = model_container
@@ -151,9 +157,7 @@ def save_checkpoint(
             "Therefore, the function will not save the optimizer",
         )
 
-    global _FUTURE
-    if _FUTURE is not None:
-        _FUTURE.result()
+    ensure_last_checkpoint_is_saved()
 
     if lr_scheduler_container is None:
         log_rank_0(
