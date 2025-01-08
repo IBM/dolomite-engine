@@ -6,7 +6,7 @@ from torch.distributed import ProcessGroup
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from ..communication import Communication
-from ..utils import ProcessGroupManager, StepTracker
+from ..utils import ProcessGroupManager
 
 
 class ResumableDataLoader(DataLoader):
