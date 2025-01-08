@@ -1,7 +1,9 @@
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 
 import torch
 from torch.distributed.tensor.parallel import loss_parallel
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
@@ -10,22 +12,120 @@ from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, custom_iterator, get_finetuning_dataloader, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import DatasetSplit, Mode, TuningMethod
-from .model_wrapper import get_model_container
+from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
-from .train_utils import (
-    all_reduce_metrics_tracker,
-    get_torch_profiler,
-    track_metrics,
-    train_step_without_pipeline_parallel,
-)
+from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
 from .utils import (
     ExperimentsTracker,
     MetricsTrackingDict,
     ProcessGroupManager,
     StepTracker,
     init_distributed,
+    is_torchao_available,
     setup_tf32,
 )
+
+
+def train_step_without_pipeline_parallel(
+    model: ModelWrapper,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
+    train_dataloader: ResumableDataLoader,
+    gradient_accumulation_steps: int,
+    gradient_clipping: float,
+    forward_context: AbstractContextManager,
+    backward_context: AbstractContextManager,
+    sync_every_gradient_accumulation_step: bool,
+    lm_loss_multiplier: float,
+) -> MetricsTrackingDict:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model (ModelWrapper): model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LamdaLR): learning rate scheduler
+        train_dataloader (ResumableDataLoader): training dataloader
+        gradient_accumulation_steps (int): gradient accumulation steps
+        gradient_clipping (float): gradient clipping value
+        forward_context (AbstractContextManager): a context that is used for every model forward call
+        backward_context (AbstractContextManager): a context that is used for every model backward call
+        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+        lm_loss_multiplier (int): lm loss multiplier
+
+    Returns:
+        MetricsTrackingDict: metrics to track
+    """
+
+    fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+    no_sync = nullcontext
+    if not sync_every_gradient_accumulation_step:
+        if fsdp_algorithm == 1:
+            no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
+
+    metrics_tracker = MetricsTrackingDict({})
+    grad_norm = None
+    optimizer.zero_grad()
+
+    with no_sync():
+        for _ in range(gradient_accumulation_steps - 1):
+            batch = get_next_batch(train_dataloader)
+            with forward_context():
+                loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
+
+            # compute gradients
+            with backward_context():
+                loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+                loss_micro_step_scaled.backward()
+
+            with torch.inference_mode():
+                metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+    if fsdp_algorithm == 2:
+        model.set_requires_gradient_sync(True)
+
+    batch = get_next_batch(train_dataloader)
+    with forward_context():
+        loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
+
+    # compute gradients
+    with backward_context():
+        loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+        loss_micro_step_scaled.backward()
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+    if gradient_clipping is not None:
+        if fsdp_algorithm == 1:
+            grad_norm = model.clip_grad_norm_(gradient_clipping)
+        else:
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history([model])
+
+    optimizer.step()
+    lr_scheduler.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker / gradient_accumulation_steps
+
+        metrics_tracker["grad_norm"] = (
+            torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
+        )
+
+        for key in metrics_tracker:
+            metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
+
+        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+
+    return metrics_tracker
 
 
 def train(
