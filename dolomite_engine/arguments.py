@@ -79,30 +79,12 @@ class ModelArgs(BaseArgs):
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
 
-class LoRAArgs(BaseArgs):
-    # lora rank
-    lora_rank: int = None
-    # the scaling factor for the low-rank matrices
-    lora_alpha: float = 32.0
-    # the dropout probability of the LoRA layers
-    lora_dropout: float = 0.1
-
-    def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.lora_rank, "lora_rank")])
-
-
 class TuningArgs(BaseArgs):
-    # type of tuning, full finetuning or PEFT
+    # type of tuning, full finetuning / pretraining / distillation
     tuning_method: TuningMethod = None
-    # lora related arguments
-    lora_args: LoRAArgs | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.tuning_method, "tuning_method")])
-
-        # check whether the arguments specified are valid
-        if self.tuning_method in [TuningMethod.full_finetuning, TuningMethod.pretraining]:
-            assert self.lora_args is None, "load_args should not be specified with full_finetuning or pretraining"
 
 
 class TrainingParameters(BaseArgs):
