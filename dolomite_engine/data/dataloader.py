@@ -17,20 +17,6 @@ class ResumableDataLoader(DataLoader):
         self.dataset.load_state_dict(state_dict.get("dataset"))
         self.sampler.load_state_dict(state_dict.get("sampler"))
 
-    def __iter__(self):
-        gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
-        batch = []
-        iterator = super().__iter__()
-
-        while len(batch) < gradient_accumulation_steps:
-            batch.append(next(iterator))
-
-        for sample in batch:
-            pass
-
-        for sample in batch:
-            yield sample
-
 
 class DispatchingDataLoader(ResumableDataLoader):
     def __init__(
