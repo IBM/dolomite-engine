@@ -39,7 +39,6 @@ _FUTURE = None
 
 
 def ensure_last_checkpoint_is_saved() -> None:
-    global _FUTURE
     if _FUTURE is not None:
         _FUTURE.result()
 
@@ -194,6 +193,7 @@ def save_checkpoint(
 
     save_args(args, save_path, mode=Mode.training)
 
+    global _FUTURE
     _FUTURE = dcp.async_save(
         {
             "state": _Saver(
