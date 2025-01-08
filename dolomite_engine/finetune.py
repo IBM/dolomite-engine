@@ -282,7 +282,7 @@ def evaluate(
         loss_step_dict = model_container[0](batch)
         metrics_tracker = metrics_tracker + loss_step_dict
 
-    metrics_tracker = metrics_tracker / loss_tokens
+    metrics_tracker = metrics_tracker / loss_tokens.item()
 
     for key in metrics_tracker:
         metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
