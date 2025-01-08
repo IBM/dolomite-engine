@@ -201,10 +201,9 @@ def main() -> None:
 
     args: TrainingArgs = get_args(mode)
 
-    assert args.tuning_args.tuning_method in [
-        TuningMethod.full_finetuning,
-        TuningMethod.lora,
-    ], f"unexpected tuning method ({args.tuning_args.tuning_method})"
+    assert (
+        args.tuning_args.tuning_method == TuningMethod.full_finetuning
+    ), f"unexpected tuning method ({args.tuning_args.tuning_method})"
 
     # initialize distributed with nccl for multi-node communications
     init_distributed(

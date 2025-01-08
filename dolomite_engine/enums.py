@@ -58,7 +58,6 @@ class TuningMethod(Enum):
 
     pretraining = "pretraining"
     full_finetuning = "full_finetuning"
-    lora = "lora"
     distillation = "distillation"
 
 

@@ -3,4 +3,3 @@ transformers
 datasets
 pydantic
 safetensors
-peft
