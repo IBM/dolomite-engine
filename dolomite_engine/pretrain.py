@@ -112,17 +112,16 @@ def train(
         eval_steps = args.datasets[0].class_args.get("eval_steps")
         evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
 
-    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
-
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-    tokens_per_batch = StepTracker.get_global_batch_size() * sequence_length
+    global_batch_size = StepTracker.get_global_batch_size()
+    tokens_per_batch = global_batch_size * sequence_length
 
     # model flops per GPU
     model_flops = (
         get_model_tflops(
             config=model_container[0].config,
-            batch_size=StepTracker.get_global_batch_size(),
+            batch_size=global_batch_size,
             sequence_length=sequence_length,
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
             gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
@@ -205,9 +204,7 @@ def train(
                 train_dataloader=None,
                 experiments_tracker=experiments_tracker,
                 iteration=global_step,
-                metadata={
-                    "consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size
-                },
+                metadata={"consumed_samples": global_step * global_batch_size},
             )
 
             start_time = time.perf_counter()
@@ -219,7 +216,7 @@ def train(
     ensure_last_checkpoint_is_saved()
 
     if torch_profiler is not None:
-        torch_profiler.__exit__()
+        torch_profiler.__exit__(None, None, None)
 
 
 @torch.no_grad()

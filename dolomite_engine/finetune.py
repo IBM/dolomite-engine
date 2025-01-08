@@ -123,7 +123,7 @@ def train(
     ensure_last_checkpoint_is_saved()
 
     if torch_profiler is not None:
-        torch_profiler.__exit__()
+        torch_profiler.__exit__(None, None, None)
 
 
 @torch.no_grad()
