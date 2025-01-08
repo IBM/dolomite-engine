@@ -15,7 +15,14 @@ from .enums import GradientCheckpointingMethod
 from .hf_models import is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .model_wrapper import ModelWrapper
-from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, is_torchao_available, log_metrics
+from .utils import (
+    ExperimentsTracker,
+    MetricsTrackingDict,
+    ProcessGroupManager,
+    StepTracker,
+    is_torchao_available,
+    log_metrics,
+)
 
 
 if is_torchao_available():
@@ -34,7 +41,6 @@ def train_step(
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
     is_pipeline_parallel_enabled: bool,
-    local_batch_size: int,
     micro_batch_size: int,
     sequence_length: int,
 ) -> MetricsTrackingDict:
@@ -52,7 +58,6 @@ def train_step(
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
         is_pipeline_parallel_enabled (bool): whether to use pipeline parallel
-        local_batch_size (int): local batch size
         sequence_length (int): sequence length
 
     Returns:
@@ -71,7 +76,6 @@ def train_step(
             train_dataloader=train_dataloader,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
-            local_batch_size=local_batch_size,
             sequence_length=sequence_length,
         )
     else:
@@ -102,7 +106,6 @@ def _train_step_with_pipeline_parallel(
     train_dataloader: ResumableDataLoader,
     gradient_accumulation_steps: int,
     gradient_clipping: float,
-    local_batch_size: int,
     sequence_length: int,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
@@ -115,7 +118,6 @@ def _train_step_with_pipeline_parallel(
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
-        local_batch_size (int): local batch size
         sequence_length (int): sequence length
 
     Returns:
@@ -132,7 +134,9 @@ def _train_step_with_pipeline_parallel(
     if ProcessGroupManager.is_tensor_parallel_first_rank():
         batch = batch["text"]
 
-    batch = model_container[0].broadcast_tensor_parallel_input(batch, (local_batch_size, sequence_length + 1))
+    batch = model_container[0].broadcast_tensor_parallel_input(
+        batch, (StepTracker.get_local_batch_size(), sequence_length + 1)
+    )
 
     is_first_pipeline_rank = ProcessGroupManager.get_pipeline_parallel_rank() == 0
     is_last_pipeline_rank = (

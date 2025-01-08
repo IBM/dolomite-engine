@@ -116,15 +116,13 @@ def train(
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-    local_batch_size = micro_batch_size * gradient_accumulation_steps
-    global_batch_size = local_batch_size * dp_world_size
-    tokens_per_batch = global_batch_size * sequence_length
+    tokens_per_batch = StepTracker.get_global_batch_size() * sequence_length
 
     # model flops per GPU
     model_flops = (
         get_model_tflops(
             config=model_container[0].config,
-            batch_size=global_batch_size,
+            batch_size=StepTracker.get_global_batch_size(),
             sequence_length=sequence_length,
             gradient_checkpointing_method=args.distributed_args.gradient_checkpointing_method,
             gradient_checkpointing_args=args.distributed_args.gradient_checkpointing_args,
@@ -161,7 +159,6 @@ def train(
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
             is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
-            local_batch_size=local_batch_size,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
         )
