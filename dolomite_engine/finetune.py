@@ -72,8 +72,9 @@ def train_step_without_pipeline_parallel(
 
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
+    # note the effect of gradient accumulation division is already in the lm_loss_multiplier
     batches = [get_next_batch(train_dataloader) for _ in range(gradient_accumulation_steps)]
-    lm_loss_multiplier = gradient_accumulation_steps / sum([(batch["labels"] != -100).sum() for batch in batches])
+    lm_loss_multiplier = 1 / sum([(batch["labels"] != -100).sum() for batch in batches])
 
     with no_sync():
         for batch in batches[:-1]:
@@ -82,8 +83,7 @@ def train_step_without_pipeline_parallel(
 
             # compute gradients
             with backward_context():
-                loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
-                loss_micro_step_scaled.backward()
+                loss_micro_step_dict["loss"].backward()
 
             with torch.inference_mode():
                 metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -97,8 +97,7 @@ def train_step_without_pipeline_parallel(
 
     # compute gradients
     with backward_context():
-        loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
-        loss_micro_step_scaled.backward()
+        loss_micro_step_dict["loss"].backward()
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -119,8 +118,6 @@ def train_step_without_pipeline_parallel(
         FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
 
     with torch.inference_mode():
-        metrics_tracker = metrics_tracker / gradient_accumulation_steps
-
         metrics_tracker["grad_norm"] = (
             torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
         )
