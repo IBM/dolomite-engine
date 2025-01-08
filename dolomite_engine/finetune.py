@@ -192,8 +192,6 @@ def evaluate(
 def main() -> None:
     """main program"""
 
-    assert False
-
     mode = Mode.training
 
     setup_tf32()
