@@ -40,7 +40,6 @@ def train_step_without_pipeline_parallel(
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
-    lm_loss_multiplier: float,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -54,7 +53,6 @@ def train_step_without_pipeline_parallel(
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
-        lm_loss_multiplier (int): lm loss multiplier
 
     Returns:
         MetricsTrackingDict: metrics to track
@@ -73,9 +71,11 @@ def train_step_without_pipeline_parallel(
     grad_norm = None
     optimizer.zero_grad()
 
+    batches = [get_next_batch(train_dataloader) for _ in range(gradient_accumulation_steps)]
+    lm_loss_multiplier = gradient_accumulation_steps / sum([(batch["labels"] != -100).sum() for batch in batches])
+
     with no_sync():
-        for _ in range(gradient_accumulation_steps - 1):
-            batch = get_next_batch(train_dataloader)
+        for batch in batches[:-1]:
             with forward_context():
                 loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
@@ -90,7 +90,7 @@ def train_step_without_pipeline_parallel(
     if fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
 
-    batch = get_next_batch(train_dataloader)
+    batch = batches[-1]
     with forward_context():
         loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
