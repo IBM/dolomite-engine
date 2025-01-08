@@ -35,7 +35,6 @@ def train_step_without_pipeline_parallel(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: ResumableDataLoader,
-    gradient_accumulation_steps: int,
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
@@ -70,6 +69,8 @@ def train_step_without_pipeline_parallel(
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
     optimizer.zero_grad()
+
+    gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
     batches = [get_next_batch(train_dataloader) for _ in range(gradient_accumulation_steps)]
     lm_loss_multiplier = gradient_accumulation_steps / sum([(batch["labels"] != -100).sum() for batch in batches])
@@ -157,7 +158,6 @@ def train(
     """
 
     num_training_steps = args.training_parameters.num_training_steps
-    gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
     gradient_clipping = args.training_parameters.gradient_clipping
 
     eval_during_training = args.training_parameters.eval_during_training
@@ -192,12 +192,10 @@ def train(
             optimizer=optimizer_container[0],
             lr_scheduler=lr_scheduler_container[0],
             train_dataloader=train_dataloader_infinite,
-            gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
             forward_context=forward_context,
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
-            lm_loss_multiplier=None,
         )
 
         metrics_tracker = metrics_tracker + loss_step_dict
