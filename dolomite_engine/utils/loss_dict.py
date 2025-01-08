@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import torch
+
 
 class MetricsTrackingDict:
     def __init__(self, data: dict) -> None:
@@ -27,7 +29,7 @@ class MetricsTrackingDict:
 
             for key, value in x.items():
                 self.data[key] = self.data.get(key, 0) / value
-        elif isinstance(x, (int, float)):
+        elif isinstance(x, (int, float, torch.Tensor)):
             for key in self.data:
                 self.data[key] /= x
         else:
