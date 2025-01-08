@@ -29,76 +29,7 @@ if is_torchao_available():
     from .distributed import FP8Manager
 
 
-def train_step(
-    model_container: ModelContainer,
-    pipeline_schedule: _PipelineSchedule,
-    optimizer_container: OptimizerContainer,
-    lr_scheduler_container: LRSchedulerContainer,
-    train_dataloader: ResumableDataLoader,
-    gradient_accumulation_steps: int,
-    gradient_clipping: float,
-    forward_context: AbstractContextManager,
-    backward_context: AbstractContextManager,
-    sync_every_gradient_accumulation_step: bool,
-    is_pipeline_parallel_enabled: bool,
-    micro_batch_size: int,
-    sequence_length: int,
-) -> MetricsTrackingDict:
-    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
-
-    Args:
-        model_container (ModelContainer): container of models
-        pipeline_schedule (_PipelineSchedule): pipeline schedule
-        optimizer_container (OptimizerContainer): container of optimizers
-        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
-        train_dataloader (ResumableDataLoader): training dataloader
-        gradient_accumulation_steps (int): gradient accumulation steps
-        gradient_clipping (float): gradient clipping value
-        forward_context (AbstractContextManager): a context that is used for every model forward call
-        backward_context (AbstractContextManager): a context that is used for every model backward call
-        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
-        is_pipeline_parallel_enabled (bool): whether to use pipeline parallel
-        sequence_length (int): sequence length
-
-    Returns:
-        MetricsTrackingDict: metrics to track
-    """
-
-    assert len(model_container) == len(optimizer_container)
-    assert len(optimizer_container) == len(lr_scheduler_container)
-
-    if is_pipeline_parallel_enabled:
-        metrics_tracker = _train_step_with_pipeline_parallel(
-            model_container=model_container,
-            pipeline_schedule=pipeline_schedule,
-            optimizer_container=optimizer_container,
-            lr_scheduler_container=lr_scheduler_container,
-            train_dataloader=train_dataloader,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            gradient_clipping=gradient_clipping,
-            sequence_length=sequence_length,
-        )
-    else:
-        assert len(model_container) == 1
-
-        metrics_tracker = _train_step_without_pipeline_parallel(
-            model=model_container[0],
-            optimizer=optimizer_container[0],
-            lr_scheduler=lr_scheduler_container[0],
-            train_dataloader=train_dataloader,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            gradient_clipping=gradient_clipping,
-            forward_context=forward_context,
-            backward_context=backward_context,
-            sync_every_gradient_accumulation_step=sync_every_gradient_accumulation_step,
-            micro_batch_size=micro_batch_size,
-            sequence_length=sequence_length,
-        )
-
-    return metrics_tracker
-
-
-def _train_step_with_pipeline_parallel(
+def train_step_with_pipeline_parallel(
     model_container: ModelContainer,
     pipeline_schedule: _PipelineSchedule,
     optimizer_container: OptimizerContainer,
@@ -193,7 +124,7 @@ def _train_step_with_pipeline_parallel(
     return metrics_tracker
 
 
-def _train_step_without_pipeline_parallel(
+def train_step_without_pipeline_parallel(
     model: ModelWrapper,
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
@@ -203,8 +134,7 @@ def _train_step_without_pipeline_parallel(
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
-    micro_batch_size: int,
-    sequence_length: int,
+    lm_loss_multiplier: float,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -237,8 +167,6 @@ def _train_step_without_pipeline_parallel(
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
     optimizer.zero_grad()
-
-    lm_loss_multiplier = 1 / (micro_batch_size * sequence_length)
 
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):

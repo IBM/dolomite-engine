@@ -259,6 +259,9 @@ def main() -> None:
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
     )
 
+    assert len(model_container) == len(optimizer_container)
+    assert len(optimizer_container) == len(lr_scheduler_container)
+
     log_model_optimizer_container(model_container, optimizer_container)
 
     starting_iteration = 0
