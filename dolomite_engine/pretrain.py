@@ -42,7 +42,6 @@ def train_step_with_pipeline_parallel(
     optimizer_container: OptimizerContainer,
     lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
-    gradient_accumulation_steps: int,
     gradient_clipping: float,
     sequence_length: int,
 ) -> MetricsTrackingDict:
@@ -54,7 +53,6 @@ def train_step_with_pipeline_parallel(
         optimizer_container (OptimizerContainer): container of optimizers
         lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
-        gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
         sequence_length (int): sequence length
 
@@ -119,7 +117,7 @@ def train_step_with_pipeline_parallel(
             metrics_tracker = metrics_tracker + model.get_extra_metrics()
             model.reset_extra_metrics()
 
-            metrics_tracker = metrics_tracker / gradient_accumulation_steps
+            metrics_tracker = metrics_tracker / StepTracker.get_gradient_accumulation_steps()
 
             metrics_tracker["grad_norm"] = grad_norm
 
@@ -136,7 +134,6 @@ def train_step_without_pipeline_parallel(
     optimizer: Optimizer,
     lr_scheduler: LambdaLR,
     train_dataloader: ResumableDataLoader,
-    gradient_accumulation_steps: int,
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
@@ -150,7 +147,6 @@ def train_step_without_pipeline_parallel(
         optimizer (Optimizer): optimizer
         lr_scheduler (LamdaLR): learning rate scheduler
         train_dataloader (ResumableDataLoader): training dataloader
-        gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
@@ -173,6 +169,8 @@ def train_step_without_pipeline_parallel(
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
     optimizer.zero_grad()
+
+    gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
@@ -297,7 +295,6 @@ def train(
     """
 
     num_training_steps = args.training_parameters.num_training_steps
-    gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
     gradient_clipping = args.training_parameters.gradient_clipping
 
     eval_during_training = args.training_parameters.eval_during_training
@@ -361,7 +358,6 @@ def train(
                 optimizer_container=optimizer_container,
                 lr_scheduler_container=lr_scheduler_container,
                 train_dataloader=train_dataloader,
-                gradient_accumulation_steps=gradient_accumulation_steps,
                 gradient_clipping=gradient_clipping,
                 sequence_length=sequence_length,
             )
@@ -371,7 +367,6 @@ def train(
                 optimizer=optimizer_container[0],
                 lr_scheduler=lr_scheduler_container[0],
                 train_dataloader=train_dataloader,
-                gradient_accumulation_steps=gradient_accumulation_steps,
                 gradient_clipping=gradient_clipping,
                 forward_context=forward_context,
                 backward_context=backward_context,
