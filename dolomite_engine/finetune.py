@@ -26,6 +26,10 @@ from .utils import (
 )
 
 
+if is_torchao_available():
+    from .distributed import FP8Manager
+
+
 def train_step_without_pipeline_parallel(
     model: ModelWrapper,
     optimizer: Optimizer,
