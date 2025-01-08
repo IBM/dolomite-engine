@@ -19,7 +19,14 @@ from .train_utils import (
     track_metrics,
     train_step_without_pipeline_parallel,
 )
-from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, init_distributed, setup_tf32
+from .utils import (
+    ExperimentsTracker,
+    MetricsTrackingDict,
+    ProcessGroupManager,
+    StepTracker,
+    init_distributed,
+    setup_tf32,
+)
 
 
 def train(
@@ -215,6 +222,11 @@ def main() -> None:
         zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
         use_async_tensor_parallel=args.distributed_args.use_async_tensor_parallel,
+    )
+
+    StepTracker(
+        micro_batch_size=args.training_parameters.micro_batch_size,
+        gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
     )
 
     set_seed(args.random_args.seed)
