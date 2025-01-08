@@ -13,7 +13,12 @@ from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed
 from .enums import DatasetSplit, Mode, TuningMethod
 from .model_wrapper import get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
-from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics, train_step
+from .train_utils import (
+    all_reduce_metrics_tracker,
+    get_torch_profiler,
+    track_metrics,
+    train_step_without_pipeline_parallel,
+)
 from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, init_distributed, setup_tf32
 
 
@@ -73,19 +78,17 @@ def train(
     while global_step < num_training_steps:
         global_step += 1
 
-        loss_step_dict = train_step(
-            model_container=model_container,
-            pipeline_schedule=pipeline_schedule,
-            optimizer_container=optimizer_container,
-            lr_scheduler_container=lr_scheduler_container,
+        loss_step_dict = train_step_without_pipeline_parallel(
+            model=model_container[0],
+            optimizer=optimizer_container[0],
+            lr_scheduler=lr_scheduler_container[0],
             train_dataloader=train_dataloader_infinite,
             gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_clipping=gradient_clipping,
             forward_context=forward_context,
             backward_context=backward_context,
             sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
-            is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
-            sequence_length=None,
+            lm_loss_multiplier=None,
         )
 
         metrics_tracker = metrics_tracker + loss_step_dict
