@@ -73,7 +73,7 @@ def train_step_without_pipeline_parallel(
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
     batches = [get_next_batch(train_dataloader) for _ in range(gradient_accumulation_steps)]
-    lm_loss_multiplier = 1 / sum([(batch["labels"] != -100).sum() for batch in batches])
+    lm_loss_multiplier = gradient_accumulation_steps / sum([(batch["labels"] != -100).sum() for batch in batches])
 
     with no_sync():
         for batch in batches[:-1]:
@@ -82,7 +82,8 @@ def train_step_without_pipeline_parallel(
 
             # compute gradients
             with backward_context():
-                loss_micro_step_dict["loss"].backward()
+                loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+                loss_micro_step_scaled.backward()
 
             with torch.inference_mode():
                 metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -96,7 +97,8 @@ def train_step_without_pipeline_parallel(
 
     # compute gradients
     with backward_context():
-        loss_micro_step_dict["loss"].backward()
+        loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+        loss_micro_step_scaled.backward()
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
