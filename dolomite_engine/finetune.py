@@ -1,7 +1,6 @@
 from contextlib import nullcontext
 
 import torch
-from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
 from transformers import set_seed
 
@@ -32,7 +31,6 @@ from .utils import (
 def train(
     args: TrainingArgs,
     model_container: ModelContainer,
-    pipeline_schedule: _PipelineSchedule,
     optimizer_container: OptimizerContainer,
     lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
@@ -253,7 +251,7 @@ def main() -> None:
             is_encoder_decoder=model_container[0].is_encoder_decoder,
         )
 
-    model_container, pipeline_schedule = wrap_model_container_for_distributed_training(args, model_container)
+    model_container, _ = wrap_model_container_for_distributed_training(args, model_container)
 
     optimizer_container = get_optimizer_container(
         optimizer_class_name=args.optimizer_args.class_name,
@@ -298,7 +296,6 @@ def main() -> None:
     train(
         args,
         model_container=model_container,
-        pipeline_schedule=pipeline_schedule,
         optimizer_container=optimizer_container,
         lr_scheduler_container=lr_scheduler_container,
         train_dataloader=train_dataloader,
