@@ -30,6 +30,15 @@ if is_torchao_available():
         precompute_float8_dynamic_scale_for_fsdp,
         sync_float8_amax_and_scale_history,
     )
+    from torchao.float8.fsdp_utils import (
+        WeightWithDelayedFloat8CastTensor,
+        WeightWithDynamicFloat8CastTensor,
+        WeightWithStaticFloat8CastTensor,
+    )
+
+    torch.serialization.add_safe_globals(
+        [WeightWithDynamicFloat8CastTensor, WeightWithDelayedFloat8CastTensor, WeightWithStaticFloat8CastTensor]
+    )
 
     _PRECOMPUTE_SCALE: bool = False
     _DELAYED_SCALING: bool = False
