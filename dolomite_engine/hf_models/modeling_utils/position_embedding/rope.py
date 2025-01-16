@@ -24,10 +24,10 @@ class RoPE(nn.Module):
 
     def forward(self, seq_len: int, dtype: torch.dtype, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
         if seq_len > self.max_seq_len_cached:
-            self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+            self._set_cos_sin_cache(seq_len=seq_len, dtype=dtype)
 
-        cos = self.cos_cached[:seq_len].to(dtype)
-        sin = self.sin_cached[:seq_len].to(dtype)
+        cos = self.cos_cached[:seq_len].to(dtype).to(device)
+        sin = self.sin_cached[:seq_len].to(dtype).to(device)
 
         return cos, sin
 
