@@ -1,18 +1,16 @@
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
-from ..utils import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank
+from ..utils import get_pipeline_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
-from .peft import ModelWrapperForPEFT
 from .pretraining import ModelWrapperForPretraining
 
 
 _MODEL_CLASS_MAPPING = {
     TuningMethod.pretraining: ModelWrapperForPretraining,
     TuningMethod.full_finetuning: ModelWrapperForFinetuning,
-    TuningMethod.lora: ModelWrapperForPEFT,
     TuningMethod.distillation: ModelWrapperForDistillation,
 }
 

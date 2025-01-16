@@ -12,6 +12,7 @@ from .base import BaseDataset, BlendedDatasets
 from .dataloader import DispatchingDataLoader, ResumableDataLoader
 from .debug import DebugDataset
 from .huggingface import HuggingFaceDataset
+from .ibm import get_ibm_dataloaders
 from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
 from .megatron import get_megatron_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
@@ -88,7 +89,7 @@ def get_datasets_list(
     return datasets_list, data_sampling_ratios
 
 
-def get_dataloader(
+def get_finetuning_dataloader(
     args: TrainingArgs | InferenceArgs,
     split: DatasetSplit,
     mode: Mode,
@@ -127,6 +128,17 @@ def get_dataloader(
         )
 
     return dataloader
+
+
+def get_pretraining_dataloaders(
+    args: TrainingArgs, tokenizer: AutoTokenizer, consumed_samples: int
+) -> tuple[ResumableDataLoader]:
+    if args.datasets[0].class_name == "MegatronDataset":
+        dataloaders = get_megatron_gpt_dataloaders(args, tokenizer, consumed_samples=consumed_samples)
+    elif args.datasets[0].class_name == "IBMDataset":
+        dataloaders = get_ibm_dataloaders(args, tokenizer)
+
+    return dataloaders
 
 
 def _get_dispatching_dataloader(

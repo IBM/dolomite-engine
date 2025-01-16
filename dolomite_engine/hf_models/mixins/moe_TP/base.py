@@ -153,8 +153,8 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
-
         total_aux_loss = 0
+
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)

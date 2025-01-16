@@ -5,7 +5,11 @@ import torch
 import torch.distributed
 
 from dolomite_engine.arguments import TrainingArgs, UnshardingArgs
-from dolomite_engine.checkpointing import load_checkpoint_for_inference, save_checkpoint
+from dolomite_engine.checkpointing import (
+    ensure_last_checkpoint_is_saved,
+    load_checkpoint_for_inference,
+    save_checkpoint,
+)
 from dolomite_engine.distributed import wrap_model_container_for_distributed_training
 from dolomite_engine.enums import Mode
 from dolomite_engine.hf_models import AttentionHeadType
@@ -91,6 +95,8 @@ save_checkpoint(
     metadata=None,
 )
 
+ensure_last_checkpoint_is_saved()
+
 torch.distributed.barrier()
 
 _, _, consolidated_state_dict = load_checkpoint_for_inference(unshard_config, mode=Mode.unsharding, use_meta=False)
@@ -101,5 +107,3 @@ if global_rank == 0:
     assert consolidated_state_dict.keys() == original_state_dict.keys()
     for key in original_state_dict:
         assert original_state_dict[key].equal(consolidated_state_dict[key])
-
-ProcessGroupManager.destroy_process_groups()

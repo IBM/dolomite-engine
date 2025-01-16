@@ -120,7 +120,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return output
 
-    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
+    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
         if isinstance(model_outputs, torch.Tensor):
             logits = model_outputs
             aux_loss = None

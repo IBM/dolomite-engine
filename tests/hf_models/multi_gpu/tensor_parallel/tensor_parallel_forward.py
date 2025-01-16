@@ -162,24 +162,22 @@ if args.use_padding_free_transformer:
 else:
     output_tp = model_tp(input_ids=input_ids, labels=labels)
 
-loss_tp = output_tp[0]
-logits_tp = output_tp[1]
+loss_tp = output_tp.loss
+logits_tp = output_tp.logits
 
 if args.tensor_parallel_word_embeddings:
     logits_tp = logits_tp[..., : config.vocab_size]
 
 if torch.distributed.get_rank() == 0:
     output = model(input_ids=input_ids, labels=labels)
-    loss = output[0]
-    logits = output[1]
+    loss = output.loss
+    logits = output.logits
 
     if args.use_padding_free_transformer:
         logits_tp = logits_tp.reshape(batch_size, sequence_length, -1)
 
     error = (logits - logits_tp).abs().max()
-    assert error < 5e-4, "logits don't match for normal and tensor parallel model"
+    assert error < 5e-4, f"logits don't match for normal and tensor parallel model, error is ({error})"
 
     error = (loss - loss_tp).abs().max()
-    assert error < 3e-6, "losses don't match for normal and tensor parallel model"
-
-ProcessGroupManager.destroy_process_groups()
+    assert error < 3e-6, f"losses don't match for normal and tensor parallel model, error is ({error})"

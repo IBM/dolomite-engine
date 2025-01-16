@@ -283,8 +283,12 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         hidden_states = self.dropout(hidden_states)
 
-        aux_loss = self._compute_switch_loss(
-            logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+        aux_loss = (
+            self._compute_switch_loss(
+                logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+            )
+            if self.training
+            else 0
         )
 
         return hidden_states, router_logits, aux_loss

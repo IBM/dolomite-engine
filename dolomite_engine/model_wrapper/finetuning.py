@@ -1,14 +1,16 @@
 import torch
 import torch.distributed
+from torch.distributed._tensor.placement_types import Replicate
 
 from ..communication import Communication
+from ..distributed import tensor_to_dtensor
 from ..hf_models import get_autoregressive_language_modeling_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
 
 class ModelWrapperForFinetuning(ModelWrapper):
-    def forward(self, batch: dict) -> MetricsTrackingDict:
+    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> MetricsTrackingDict:
         """forward function for a batch
 
         Args:
@@ -25,17 +27,42 @@ class ModelWrapperForFinetuning(ModelWrapper):
 
         model_outputs = self.model(**batch)
 
-        loss = get_autoregressive_language_modeling_loss(
-            lm_logits=model_outputs.logits,
+        return self.get_loss(
+            model_outputs=model_outputs,
+            labels=labels,
+            cu_seqlens=batch.get("cu_seqlens", None),
+            lm_loss_multiplier=lm_loss_multiplier,
+        )
+
+    def get_loss(
+        self, model_outputs, labels: torch.Tensor, cu_seqlens: torch.Tensor | None, lm_loss_multiplier: float = 1
+    ) -> torch.Tensor | dict:
+        logits: torch.Tensor = model_outputs.logits
+        aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
+
+        lm_loss = get_autoregressive_language_modeling_loss(
+            lm_logits=logits,
             labels=labels,
             upcast_logits_for_loss=self.upcast_logits_for_loss,
-            cu_seqlens=batch.get("cu_seqlens", None),
+            cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
             tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
         )
 
-        return MetricsTrackingDict({"loss": loss})
+        lm_loss = lm_loss * lm_loss_multiplier
+
+        if aux_loss is None:
+            loss = lm_loss
+            output = {"loss": loss}
+        else:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
+                aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
+
+            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
+
+        return output
 
     def _broadcast_inputs_for_tensor_parallel(self, batch: dict) -> dict:
         device = torch.cuda.current_device()

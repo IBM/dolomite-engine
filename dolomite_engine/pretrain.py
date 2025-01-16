@@ -1,32 +1,234 @@
 import logging
 import time
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 
 import torch
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
-from .checkpointing import load_checkpoint_for_training, save_checkpoint
+from .checkpointing import ensure_last_checkpoint_is_saved, load_checkpoint_for_training, save_checkpoint
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
-from .data import get_megatron_gpt_dataloaders, get_next_batch
+from .data import ResumableDataLoader, get_next_batch, get_pretraining_dataloaders
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import Mode, TuningMethod
-from .model_wrapper import get_model_container
+from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
-from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics, train_step
+from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics
 from .utils import (
     ExperimentsTracker,
     MetricsTrackingDict,
     ProcessGroupManager,
     StepTracker,
     init_distributed,
+    is_torchao_available,
     log_rank_0,
     setup_tf32,
 )
+
+
+if is_torchao_available():
+    from .distributed import FP8Manager
+
+
+def train_step_with_pipeline_parallel(
+    model_container: ModelContainer,
+    pipeline_schedule: _PipelineSchedule,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
+    train_dataloader: ResumableDataLoader,
+    gradient_clipping: float,
+    sequence_length: int,
+) -> MetricsTrackingDict:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model_container (ModelContainer): container of models
+        pipeline_schedule (_PipelineSchedule): pipeline schedule
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
+        train_dataloader (ResumableDataLoader): training dataloader
+        gradient_clipping (float): gradient clipping value
+        sequence_length (int): sequence length
+
+    Returns:
+        MetricsTrackingDict: metrics to track
+    """
+
+    fsdp_algorithm = 2 if hasattr(model_container[0], "set_requires_gradient_sync") else 1
+    grad_norm = []
+
+    optimizer_container.zero_grad()
+
+    batch = get_next_batch(train_dataloader)
+
+    if ProcessGroupManager.is_tensor_parallel_first_rank():
+        batch = batch["text"]
+
+    batch = model_container[0].broadcast_tensor_parallel_input(
+        batch, (StepTracker.get_local_batch_size(), sequence_length + 1)
+    )
+
+    is_first_pipeline_rank = ProcessGroupManager.get_pipeline_parallel_rank() == 0
+    is_last_pipeline_rank = (
+        ProcessGroupManager.get_pipeline_parallel_rank() == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
+    )
+
+    if is_first_pipeline_rank:
+        pipeline_schedule.step(batch)
+    elif is_last_pipeline_rank:
+        losses = []
+        labels = batch[:, 1:]
+        pipeline_schedule.step(target=labels, losses=losses)
+    else:
+        pipeline_schedule.step()
+
+    if gradient_clipping is not None:
+        for model in model_container:
+            if fsdp_algorithm == 1:
+                grad_norm.append(model.clip_grad_norm_(gradient_clipping))
+            else:
+                grad_norm.append(torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping))
+
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history(model_container)
+
+    optimizer_container.step()
+    lr_scheduler_container.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp(model_container)
+
+    metrics_tracker = MetricsTrackingDict({})
+
+    with torch.inference_mode():
+        grad_norm = dtensor_to_tensor(sum(grad_norm))
+        torch.distributed.all_reduce(grad_norm, group=ProcessGroupManager.get_pipeline_parallel_group())
+
+        if is_last_pipeline_rank:
+            losses = sum(losses)
+
+            metrics_tracker = metrics_tracker + {"loss": losses, "grad_norm": grad_norm}
+            metrics_tracker = metrics_tracker + model.get_extra_metrics()
+            model.reset_extra_metrics()
+
+            metrics_tracker = metrics_tracker / StepTracker.get_gradient_accumulation_steps()
+
+            metrics_tracker["grad_norm"] = grad_norm
+
+            for key in metrics_tracker:
+                metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
+
+            metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+
+    return metrics_tracker
+
+
+def train_step_without_pipeline_parallel(
+    model: ModelWrapper,
+    optimizer: Optimizer,
+    lr_scheduler: LambdaLR,
+    train_dataloader: ResumableDataLoader,
+    gradient_clipping: float,
+    forward_context: AbstractContextManager,
+    backward_context: AbstractContextManager,
+    sync_every_gradient_accumulation_step: bool,
+    lm_loss_multiplier: float,
+) -> MetricsTrackingDict:
+    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
+
+    Args:
+        model (ModelWrapper): model
+        optimizer (Optimizer): optimizer
+        lr_scheduler (LamdaLR): learning rate scheduler
+        train_dataloader (ResumableDataLoader): training dataloader
+        gradient_clipping (float): gradient clipping value
+        forward_context (AbstractContextManager): a context that is used for every model forward call
+        backward_context (AbstractContextManager): a context that is used for every model backward call
+        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+        lm_loss_multiplier (int): lm loss multiplier
+
+    Returns:
+        MetricsTrackingDict: metrics to track
+    """
+
+    fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
+
+    no_sync = nullcontext
+    if not sync_every_gradient_accumulation_step:
+        if fsdp_algorithm == 1:
+            no_sync = model.no_sync
+        else:
+            model.set_requires_gradient_sync(False)
+
+    metrics_tracker = MetricsTrackingDict({})
+    grad_norm = None
+    optimizer.zero_grad()
+
+    gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
+
+    with no_sync():
+        for _ in range(gradient_accumulation_steps - 1):
+            batch = get_next_batch(train_dataloader)
+            with forward_context():
+                loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
+
+            # compute gradients
+            with backward_context():
+                loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+                loss_micro_step_scaled.backward()
+
+            with torch.inference_mode():
+                metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+    if fsdp_algorithm == 2:
+        model.set_requires_gradient_sync(True)
+
+    batch = get_next_batch(train_dataloader)
+    with forward_context():
+        loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
+
+    # compute gradients
+    with backward_context():
+        loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
+        loss_micro_step_scaled.backward()
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker + loss_micro_step_dict
+
+    if gradient_clipping is not None:
+        if fsdp_algorithm == 1:
+            grad_norm = model.clip_grad_norm_(gradient_clipping)
+        else:
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+
+    if is_torchao_available():
+        FP8Manager.sync_float8_amax_and_scale_history([model])
+
+    optimizer.step()
+    lr_scheduler.step()
+
+    if is_torchao_available():
+        FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
+
+    with torch.inference_mode():
+        metrics_tracker = metrics_tracker / gradient_accumulation_steps
+
+        metrics_tracker["grad_norm"] = (
+            torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
+        )
+
+        for key in metrics_tracker:
+            metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
+
+        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
+
+    return metrics_tracker
 
 
 def track_val_metrics(
@@ -93,7 +295,6 @@ def train(
     """
 
     num_training_steps = args.training_parameters.num_training_steps
-    gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
     gradient_clipping = args.training_parameters.gradient_clipping
 
     eval_during_training = args.training_parameters.eval_during_training
@@ -112,13 +313,14 @@ def train(
         eval_steps = args.datasets[0].class_args.get("eval_steps")
         evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
 
-    dp_world_size = ProcessGroupManager.get_data_parallel_world_size()
-
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
-    local_batch_size = micro_batch_size * gradient_accumulation_steps
-    global_batch_size = local_batch_size * dp_world_size
+    global_batch_size = StepTracker.get_global_batch_size()
     tokens_per_batch = global_batch_size * sequence_length
+
+    is_pipeline_parallel_enabled = args.distributed_args.num_pipeline_stages > 1
+    if not is_pipeline_parallel_enabled:
+        assert len(model_container) == 1
 
     # model flops per GPU
     model_flops = (
@@ -149,22 +351,28 @@ def train(
         global_step += 1
         steps_since_start_time += 1
 
-        loss_step_dict = train_step(
-            model_container=model_container,
-            pipeline_schedule=pipeline_schedule,
-            optimizer_container=optimizer_container,
-            lr_scheduler_container=lr_scheduler_container,
-            train_dataloader=train_dataloader,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            gradient_clipping=gradient_clipping,
-            forward_context=forward_context,
-            backward_context=backward_context,
-            sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
-            is_pipeline_parallel_enabled=args.distributed_args.num_pipeline_stages > 1,
-            local_batch_size=local_batch_size,
-            micro_batch_size=micro_batch_size,
-            sequence_length=sequence_length,
-        )
+        if is_pipeline_parallel_enabled:
+            loss_step_dict = train_step_with_pipeline_parallel(
+                model_container=model_container,
+                pipeline_schedule=pipeline_schedule,
+                optimizer_container=optimizer_container,
+                lr_scheduler_container=lr_scheduler_container,
+                train_dataloader=train_dataloader,
+                gradient_clipping=gradient_clipping,
+                sequence_length=sequence_length,
+            )
+        else:
+            loss_step_dict = train_step_without_pipeline_parallel(
+                model=model_container[0],
+                optimizer=optimizer_container[0],
+                lr_scheduler=lr_scheduler_container[0],
+                train_dataloader=train_dataloader,
+                gradient_clipping=gradient_clipping,
+                forward_context=forward_context,
+                backward_context=backward_context,
+                sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
+                lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+            )
 
         metrics_tracker = metrics_tracker + loss_step_dict
 
@@ -208,9 +416,7 @@ def train(
                 train_dataloader=None,
                 experiments_tracker=experiments_tracker,
                 iteration=global_step,
-                metadata={
-                    "consumed_samples": global_step * micro_batch_size * gradient_accumulation_steps * dp_world_size
-                },
+                metadata={"consumed_samples": global_step * global_batch_size},
             )
 
             start_time = time.perf_counter()
@@ -219,8 +425,10 @@ def train(
     if eval_during_training:
         evaluate(test_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
 
+    ensure_last_checkpoint_is_saved()
+
     if torch_profiler is not None:
-        torch_profiler.__exit__()
+        torch_profiler.__exit__(None, None, None)
 
 
 @torch.no_grad()
@@ -357,6 +565,9 @@ def main(mode: Mode = Mode.training) -> None:
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
     )
 
+    assert len(model_container) == len(optimizer_container)
+    assert len(optimizer_container) == len(lr_scheduler_container)
+
     log_model_optimizer_container(model_container, optimizer_container)
 
     starting_iteration = 0
@@ -371,7 +582,7 @@ def main(mode: Mode = Mode.training) -> None:
         if not args.load_args.load_dataloader_state and metadata is not None:
             metadata["consumed_samples"] = 0
 
-    train_dataloader, val_dataloaders, test_dataloaders = get_megatron_gpt_dataloaders(
+    train_dataloader, val_dataloaders, test_dataloaders = get_pretraining_dataloaders(
         args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
@@ -397,8 +608,6 @@ def main(mode: Mode = Mode.training) -> None:
         experiments_tracker=experiments_tracker,
         starting_iteration=starting_iteration,
     )
-
-    ProcessGroupManager.destroy_process_groups()
 
 
 if __name__ == "__main__":
