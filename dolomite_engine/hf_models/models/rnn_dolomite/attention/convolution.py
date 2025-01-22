@@ -96,7 +96,7 @@ class ParameterizedShortConvolution(nn.Conv1d):
         batch_size, _, hidden_size = x.shape
 
         if mask is not None:
-            x = x.mul_(mask.unsqueeze(-1))
+            x = x.mul(mask.unsqueeze(-1))
         if output_final_state and cache is None:
             cache = x.new_zeros(batch_size, hidden_size, self.kernel_size[0])
         if cache is not None and x.shape[1] == 1:
