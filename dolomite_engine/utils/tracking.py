@@ -12,6 +12,9 @@ if is_aim_available():
 if is_wandb_available():
     import wandb
 
+#track the LSF/Slurm job in W&B per run - bobcalio
+import os
+job = None if int(os.getenv("JOB_ID",0))==0 else int(os.getenv("JOB_ID"))
 
 class ProgressBar:
     """progress bar for training or validation"""
@@ -76,6 +79,10 @@ class ExperimentsTracker:
             # this is for a custom step, we can't use the wandb step
             # since it doesn't allow time travel to the past
             wandb.define_metric("iteration", hidden=True)
+            #track the LSF/Slurm job in W&B per run - bobcalio
+            if job is not None:
+                wandb.define_metric("job", step_metric="iteration", hidden=True, step_sync=True)
+
             wandb.define_metric("train/*", step_metric="iteration", step_sync=True)
             wandb.define_metric("val/*", step_metric="iteration", step_sync=True)
         elif experiments_tracker_name is not None:
@@ -131,6 +138,9 @@ class ExperimentsTracker:
                 # this is for a custom step, we can't use the wandb step
                 # since it doesn't allow time travel to the past
                 values["iteration"] = step
+                #track the LSF/Slurm job in W&B per run - bobcalio 
+                if job is not None:
+                    values["job"]= job
                 wandb.log(values)
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
