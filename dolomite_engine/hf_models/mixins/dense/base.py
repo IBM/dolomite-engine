@@ -262,11 +262,9 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         return alibi_bias
 
-    def _get_rope_cos_sin(
-        self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype, device: torch.device
-    ) -> torch.Tensor:
+    def _get_rope_cos_sin(self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
         if self.position_embedding_type == PositionEmbeddingType.rope:
-            cos, sin = self.rope(key_length, dtype=dtype, device=device)
+            cos, sin = self.rope(key_length, dtype=dtype)
             cos = cos[position_ids].unsqueeze(1)
             sin = sin[position_ids].unsqueeze(1)
             return cos, sin
@@ -468,9 +466,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         # alibi_bias -> (batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
-        rope_cos_sin = self._get_rope_cos_sin(
-            key_length, position_ids, dtype=hidden_states.dtype, device=hidden_states.device
-        )
+        rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         # ==========================================================================================
         # padding_free:

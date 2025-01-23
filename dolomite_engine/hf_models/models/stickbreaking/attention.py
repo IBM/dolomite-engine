@@ -64,6 +64,8 @@ class SBAttention(Attention):
                 std=std,
             )
 
+        self.norm = torch.nn.GroupNorm(self.num_heads, self.hidden_size)
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -100,6 +102,8 @@ class SBAttention(Attention):
         # ==========================================================================================
         # attn_output -> (total_q, num_heads, head_dim)
         # ==========================================================================================
+        attn_output = attn_output.view(bsz_ * length_, self.hidden_size)
+        attn_output = self.norm(attn_output)
         attn_output = attn_output.view(bsz_, length_, self.hidden_size)
 
         # ==========================================================================================
@@ -169,6 +173,7 @@ class PaddingFreeSBAttention(SBAttention):
         attn_output = attn_output.permute(1, 0, 2)
 
         attn_output = attn_output.view(-1, self.hidden_size)
+        attn_output = self.norm(attn_output)
 
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)

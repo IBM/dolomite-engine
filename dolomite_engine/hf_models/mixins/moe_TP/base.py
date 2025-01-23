@@ -146,9 +146,7 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             position_ids = torch.arange(past_length, key_length, dtype=torch.long, device=hidden_states.device)
             position_ids = position_ids.unsqueeze(0).view(-1, query_length)
 
-            rope_cos_sin = self._get_rope_cos_sin(
-                key_length, position_ids, dtype=hidden_states.dtype, device=hidden_states.device
-            )
+            rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
         all_hidden_states = () if output_hidden_states else None
