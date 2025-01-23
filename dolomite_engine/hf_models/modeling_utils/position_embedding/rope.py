@@ -22,12 +22,12 @@ class RoPE(nn.Module):
 
         self.reset_parameters()
 
-    def forward(self, seq_len: int, dtype: torch.dtype, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, seq_len: int, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
         if seq_len > self.max_seq_len_cached:
             self._set_cos_sin_cache(seq_len=seq_len, dtype=dtype)
 
-        cos = self.cos_cached[:seq_len].to(dtype).to(device)
-        sin = self.sin_cached[:seq_len].to(dtype).to(device)
+        cos = self.cos_cached[:seq_len].to(dtype)
+        sin = self.sin_cached[:seq_len].to(dtype)
 
         return cos, sin
 
@@ -46,8 +46,10 @@ class RoPE(nn.Module):
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
 
-        self.register_buffer("cos_cached", (emb.cos() * self.mscale).to(dtype), persistent=False)
-        self.register_buffer("sin_cached", (emb.sin() * self.mscale).to(dtype), persistent=False)
+        device = self.cos_cached.device if hasattr(self, "cos_cached") else None
+
+        self.register_buffer("cos_cached", (emb.cos() * self.mscale).to(device=device, dtype=dtype), persistent=False)
+        self.register_buffer("sin_cached", (emb.sin() * self.mscale).to(device=device, dtype=dtype), persistent=False)
 
     def _get_inv_freq(self) -> torch.Tensor:
         return 1.0 / (self.base ** (torch.arange(0, self.head_dim, 2, dtype=torch.float32) / self.head_dim))
