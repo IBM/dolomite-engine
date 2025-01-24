@@ -5,9 +5,12 @@ import torch.nn
 import torch.nn.functional as F
 from transformers import DynamicCache
 
+from ....utils import print_ranks_all
 from ...enums import InitMethod
 from ...modeling_utils import Attention, ParameterizedLinear
 from .config import StickBreakingConfig
+
+# from stickbreaking_attention.sb_naive_varlen import sb_attn_varlen
 from .stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
@@ -23,7 +26,7 @@ def decoding_stickbreaking(q, k, v, scale=None):
         scale = 1 / math.sqrt(q.shape[-1])
     # logits = q @ k[..., :-1, :].transpose(-1, -2) * scale
 
-    assert q.size(2) == 1
+    assert q.size(2) == 1, (q.size(2), k.size(2))
     original_dtype = q.dtype
     q = q.float()
     k = k.float()
@@ -76,11 +79,11 @@ class SBAttention(Attention):
         max_seqlen: torch.Tensor | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
-        assert past_key_values is not None
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
         softmax_scale = self._get_softmax_scale()
         self.attn_pdrop if self.training else 0
-        key, value = past_key_values.update(key, value, self.layer_idx)
+        if not self.training:
+            key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
 
         if query.size(2) == key.size(2):
@@ -90,12 +93,13 @@ class SBAttention(Attention):
                 v=value,
                 inv_temp=softmax_scale,
             )
-
         else:
             attn_output, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
 
+        attn_output = attn_output.permute(0, 2, 1, 3)
         if self.sb_remainder:
-            attn_output = attn_output + rem[..., None] * self.head_bias[None, :, None, :]
+            rem = rem.permute(0, 2, 1)
+            attn_output = attn_output + rem.unsqueeze(-1) * self.head_bias.unsqueeze(0).unsqueeze(1)
 
         attn_output = attn_output.permute(0, 2, 1, 3)
 
@@ -212,11 +216,8 @@ class PaddingFreeSBAttention(SBAttention):
         self, hidden_states: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         total_q = hidden_states.shape[0]
-
         query, key, value = hidden_states.split((self.hidden_size, self.head_dim, self.head_dim), dim=-1)
-
         query = query.view(total_q, self.num_heads, -1)
         key = key.unsqueeze(1)
         value = value.unsqueeze(1)
-
         return query, key, value

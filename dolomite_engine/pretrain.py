@@ -30,7 +30,7 @@ from .utils import (
     log_rank_0,
     setup_tf32,
 )
-
+torch._dynamo.config.cache_size_limit = 1024
 
 if is_torchao_available():
     from .distributed import FP8Manager

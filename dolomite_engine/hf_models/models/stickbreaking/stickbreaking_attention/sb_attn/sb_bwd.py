@@ -6,6 +6,8 @@ from ..sb_varlen import ALLOW_TF32, inv_log2
 from ..sb_varlen.sb_varlen_bwd import _backward_one_row
 from ..sb_varlen.sb_varlen_fwd import compute_block, load_kv
 
+from ..utils import custom_op
+
 
 def get_configs():
     return [triton.Config({}, num_stages=s, num_warps=w) for s in [8] for w in [4]]
@@ -197,9 +199,7 @@ def _bwd(do, dr, q, k, v, neg_log_acc, logit_scale, BLOCK_M=64, BLOCK_N=32):
     return dq, dk, dv
 
 
-@torch.library.custom_op(
-    "stickbreaking_attention::attn_bwd", mutates_args={"dq", "dk", "dv", "dkdv_lock", "dkdv_count"}
-)
+@custom_op("attn_bwd", mutates_args={"dq", "dk", "dv", "dkdv_lock", "dkdv_count"})
 def _compileable_backward(
     do: torch.Tensor,
     dr: torch.Tensor,
