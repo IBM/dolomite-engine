@@ -60,13 +60,16 @@ class ModelConversionTest(TestCommons):
         )
 
     @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
+        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types(), [None])
     )
-    def test_granitemoe_model_conversion(self, device: torch.device, attention_head_type: AttentionHeadType) -> None:
+    def test_granitemoe_model_conversion(
+        self, device: torch.device, attention_head_type: AttentionHeadType, shared_n_inner: int | None
+    ) -> None:
         dolomite_config = self.get_moe_test_config(
             attention_head_type,
             PositionEmbeddingType.rope,
             add_bias=False,
+            shared_n_inner=shared_n_inner,
             activation_function="swiglu",
             normalization_function="rmsnorm",
             m_emb=2,
