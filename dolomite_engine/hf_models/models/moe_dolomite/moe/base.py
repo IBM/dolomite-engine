@@ -151,8 +151,9 @@ class MoE(nn.Module):
         if self.shared_intermediate_size is None:
             hidden_states = moe_output
         else:
-            shared_experts_output = self._compute_shared_experts(hidden_states)
-            hidden_states = moe_output + shared_experts_output
+            hidden_states = moe_output + self._compute_shared_experts(hidden_states)
+
+        del moe_output
 
         if not self.use_padding_free_transformer:
             hidden_states = hidden_states.reshape(batch_size, sequence_length, self.hidden_size)
