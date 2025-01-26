@@ -57,7 +57,9 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
         n_inner=original_config.intermediate_size,
-        shared_n_inner=original_config.shared_intermediate_size,
+        shared_n_inner=(
+            None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
+        ),
         activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
@@ -188,7 +190,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
         num_attention_heads=config.n_head,
         num_key_value_heads=config.num_key_value_heads,
         intermediate_size=4 * config.n_embd if config.n_inner is None else config.n_inner,
-        shared_intermediate_size=config.shared_n_inner,
+        shared_intermediate_size=0 if config.shared_n_inner is None else config.shared_n_inner,
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
