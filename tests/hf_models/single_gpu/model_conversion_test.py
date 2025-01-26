@@ -60,7 +60,7 @@ class ModelConversionTest(TestCommons):
         )
 
     @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types(), [None])
+        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types(), [None, 64])
     )
     def test_granitemoe_model_conversion(
         self, device: torch.device, attention_head_type: AttentionHeadType, shared_n_inner: int | None
