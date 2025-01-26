@@ -8,7 +8,6 @@ from ..modeling_utils import (
     split_query_key_value_tensor_for_attention,
 )
 from ..models import MoEDolomiteConfig
-from ..models.gpt_dolomite import interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -122,12 +121,8 @@ def _import_state_dict_from_huggingface(
         )
 
         if safetensors_weights_manager.has_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"):
-            state_dict[f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"] = interleave_up_gate_tensor_for_mlp(
-                *split_up_gate_tensor_for_mlp(
-                    safetensors_weights_manager.get_tensor(
-                        f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"
-                    )
-                )
+            state_dict[f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"] = safetensors_weights_manager.get_tensor(
+                f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"
             )
             state_dict[f"transformer.h.{layer_idx}.moe.c_proj_shared.weight"] = safetensors_weights_manager.get_tensor(
                 f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"
