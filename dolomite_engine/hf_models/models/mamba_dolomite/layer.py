@@ -1,36 +1,28 @@
 import torch
-import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_attention_module, get_normalization_function
-from ..gpt_dolomite.mlp import MLP
-from .config import MambaDolomiteConfig
+from ...modeling_utils import get_normalization_function
+from ..gpt_dolomite.layer import GPTDolomiteBlock
+from .config import Mamba2DolomiteConfig
 
 
-class MambaDolomiteBlock(nn.Module):
+class Mamba2DolomiteBlock(GPTDolomiteBlock):
     def __init__(
         self,
-        config: MambaDolomiteConfig,
+        config: Mamba2DolomiteConfig,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
     ) -> None:
-        super().__init__()
-
-        hidden_size = config.hidden_size
-        self.layer_idx = layer_idx
-        self.m_residual = config.m_residual
-
-        self.ln_1 = get_normalization_function(
-            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
-        )
-        self.attn = get_attention_module(
-            config, True, attention_implementation, use_padding_free_transformer, layer_idx
-        )
-        self.ln_2 = get_normalization_function(
-            config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
-        )
-        self.mlp = MLP(config)
+        if self.is_attention_layer:
+            super().__init__(
+                config=config,
+                attention_implementation=attention_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                layer_idx=layer_idx,
+            )
+        else:
+            pass
 
     def forward(
         self,
@@ -41,33 +33,16 @@ class MambaDolomiteBlock(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
-        residual = hidden_states
-        hidden_states = self.ln_1(hidden_states)
-
-        hidden_states = self.attn(
-            hidden_states,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
-
-        if self.m_residual is not None:
-            hidden_states = hidden_states * self.m_residual
-
-        # residual connection
-        hidden_states = hidden_states + residual
-
-        residual = hidden_states
-        hidden_states = self.ln_2(hidden_states)
-
-        hidden_states = self.mlp(hidden_states)
-
-        if self.m_residual is not None:
-            hidden_states = hidden_states * self.m_residual
-
-        # residual connection
-        hidden_states = hidden_states + residual
+        if self.is_attention_layer:
+            hidden_states = super().forward(
+                hidden_states=hidden_states,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
+        else:
+            pass
 
         return hidden_states

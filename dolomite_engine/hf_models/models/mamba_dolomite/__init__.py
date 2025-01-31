@@ -1,3 +1,3 @@
-from .base import MambaDolomiteModel
-from .config import MambaDolomiteConfig
-from .main import MambaDolomiteForCausalLM
+from .base import Mamba2DolomiteModel
+from .config import Mamba2DolomiteConfig
+from .main import Mamba2DolomiteForCausalLM
