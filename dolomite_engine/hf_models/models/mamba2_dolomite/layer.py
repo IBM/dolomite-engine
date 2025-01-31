@@ -16,6 +16,9 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
     ) -> None:
+        self.is_attention_layer = config.layer_map[layer_idx] == "attention"
+        self.is_mamba_layer = config.layer_map[layer_idx] == "mamba"
+
         if self.is_attention_layer:
             super().__init__(
                 config=config,
@@ -23,13 +26,15 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
                 use_padding_free_transformer=use_padding_free_transformer,
                 layer_idx=layer_idx,
             )
-        else:
+        elif self.is_mamba_layer:
             nn.Module.__init__()
 
             self.ln = get_normalization_function(
                 config.normalization_function, config.hidden_size, eps=config.layer_norm_epsilon
             )
             self.mamba = get_mamba2(config, layer_idx=layer_idx)
+        else:
+            raise ValueError(f"unexpected layer_map value for layer {layer_idx}")
 
     def forward(
         self,
@@ -50,7 +55,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-        else:
+        elif self.is_mamba_layer:
             residual = hidden_states
 
             hidden_states = self.ln(hidden_states)
@@ -62,5 +67,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
             )
 
             hidden_states = residual + hidden_states
+        else:
+            raise ValueError(f"unexpected layer_map value for layer {layer_idx}")
 
         return hidden_states
