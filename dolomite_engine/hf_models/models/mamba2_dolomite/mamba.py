@@ -3,6 +3,7 @@ import torch.nn as nn
 from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from ....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
+from .config import Mamba2DolomiteConfig
 from .gated_rmsnorm import GatedRMSNorm
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
 
@@ -23,7 +24,7 @@ class Mamba2Base(nn.Module):
     and is why Mamba is called **selective** state spaces)
     """
 
-    def __init__(self, config: Mamba2Config, layer_idx: int):
+    def __init__(self, config: Mamba2DolomiteConfig, layer_idx: int):
         super().__init__()
         self.num_heads = config.num_heads
         self.hidden_size = config.hidden_size
