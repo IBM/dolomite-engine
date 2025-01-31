@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from ....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
+from .gated_rmsnorm import GatedRMSNorm
 
 
 if is_mamba_2_ssm_available():
@@ -10,6 +12,68 @@ if is_mamba_2_ssm_available():
 
 if is_causal_conv1d_available():
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
+
+
+def _pad_tensor_by_size(input_tensor: torch.Tensor, pad_size: int):
+    """
+    Padding x tensor with `pad_size` on the seq_len dim (dim=1)
+
+    Assumes that we only have tensors of either size 4 or 3
+    """
+    pad_shape = (0, 0, 0, 0, 0, pad_size, 0, 0) if len(input_tensor.shape) == 4 else (0, 0, 0, pad_size, 0, 0)
+
+    return torch.nn.functional.pad(input_tensor, pad_shape, mode="constant", value=0)
+
+
+def _reshape_into_chunks(input_tensor, pad_size, chunk_size):
+    """
+    Padding input_tensor with `pad_size` on the seq_len dim (dim=1) and
+    simultaneously splitting it into chunk sequences.
+
+    Assumes that we only have tensors of either size 4 or 3
+    """
+    # [bsz, seq_len, ...] -> [bsz, seq_len multiple of chunk_size, ...]
+    input_tensor = _pad_tensor_by_size(input_tensor, pad_size)
+
+    if len(input_tensor.shape) == 3:
+        # [bsz, seq_len multiple of chunk_size, num_heads] -> [bsz, -1, chunk_size, num_heads]
+        return input_tensor.reshape(input_tensor.shape[0], -1, chunk_size, input_tensor.shape[2])
+    else:
+        # [bsz, seq_len multiple of chunk_size, num_heads, head_dim or state_size] -> [bsz, -1, chunk_size, num_heads, head_dim or state_size]
+        return input_tensor.reshape(
+            input_tensor.shape[0], -1, chunk_size, input_tensor.shape[2], input_tensor.shape[3]
+        )
+
+
+def _segment_sum(input_tensor: torch.Tensor) -> torch.Tensor:
+    """
+    More stable segment sum calculation. Uses cumulative sums and masking instead of direct subtractions.
+    """
+    chunk_size = input_tensor.size(-1)
+    # 1. expand input tensor to have an additional dimension and repeat along that dimension
+    # [..., chunk_size] -> [..., chunk_size, chunk_size]
+    input_tensor = input_tensor[..., None].expand(*input_tensor.size(), chunk_size)
+    # 2. create a lower triangular mask with the diagonal set to 0 to 0 out elements above diag
+    mask = torch.tril(torch.ones(chunk_size, chunk_size, device=input_tensor.device, dtype=torch.bool), diagonal=-1)
+    input_tensor = input_tensor.masked_fill(~mask, 0)
+    # 3. compute actual cumsum
+    tensor_segsum = torch.cumsum(input_tensor, dim=-2)
+
+    # 4. apply mask to keep only the lower triangular part of the cumulative sum result (incl diagonal this time)
+    mask = torch.tril(torch.ones(chunk_size, chunk_size, device=input_tensor.device, dtype=torch.bool), diagonal=0)
+    tensor_segsum = tensor_segsum.masked_fill(~mask, -torch.inf)
+    return tensor_segsum
+
+
+def _apply_mask_to_padding_states(hidden_states, attention_mask):
+    """
+    Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
+    """
+    if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
+        dtype = hidden_states.dtype
+        hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
+
+    return hidden_states
 
 
 class Mamba2Base(nn.Module):
@@ -68,7 +132,7 @@ class Mamba2Base(nn.Module):
         A = torch.arange(1, self.num_heads + 1)
         self.A_log = nn.Parameter(torch.log(A))
         self.A_log._no_weight_decay = True
-        self.norm = MambaRMSNormGated(self.intermediate_size, eps=config.layer_norm_epsilon)
+        self.norm = GatedRMSNorm(self.intermediate_size, eps=config.layer_norm_epsilon)
         self.D = nn.Parameter(torch.ones(self.num_heads))
         self.D._no_weight_decay = True
 
@@ -91,7 +155,7 @@ class Mamba2Base(nn.Module):
         dtype = input_states.dtype
 
         # 1. Gated MLP's linear projection
-        input_states = apply_mask_to_padding_states(input_states, attention_mask)
+        input_states = _apply_mask_to_padding_states(input_states, attention_mask)
         projected_states = self.in_proj(input_states)
         d_mlp = (
             projected_states.shape[-1]
@@ -128,7 +192,7 @@ class Mamba2Base(nn.Module):
 
             hidden_states_B_C = self.act(self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2))
 
-        hidden_states_B_C = apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
+        hidden_states_B_C = _apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
         hidden_states, B, C = torch.split(
             hidden_states_B_C,
             [self.intermediate_size, self.n_groups * self.ssm_state_size, self.n_groups * self.ssm_state_size],
@@ -209,7 +273,7 @@ class Mamba2Base(nn.Module):
             C = C.repeat(1, 1, self.num_heads // self.n_groups, 1)
             pad_size = (self.chunk_size - seq_len % self.chunk_size) % self.chunk_size
 
-            D_residual = self.D[..., None] * pad_tensor_by_size(hidden_states, pad_size)
+            D_residual = self.D[..., None] * _pad_tensor_by_size(hidden_states, pad_size)
 
             # Discretize x and A
             hidden_states = hidden_states * dt[..., None]
@@ -217,7 +281,7 @@ class Mamba2Base(nn.Module):
 
             # Rearrange into blocks/chunks
             hidden_states, A, B, C = [
-                reshape_into_chunks(t, pad_size, self.chunk_size) for t in (hidden_states, A, B, C)
+                _reshape_into_chunks(t, pad_size, self.chunk_size) for t in (hidden_states, A, B, C)
             ]
 
             # [bsz, -1, chunk_size, num_heads] -> [bsz, num_heads, -1, chunk_size]
@@ -226,7 +290,7 @@ class Mamba2Base(nn.Module):
 
             # 1. Compute the output for each intra-chunk (diagonal blocks)
             # This is the analog of a causal mask
-            L = torch.exp(segment_sum(A))
+            L = torch.exp(_segment_sum(A))
 
             # Contraction of C and B to get G (attention-weights like)
             G_intermediate = C[:, :, :, None, :, :] * B[:, :, None, :, :, :]  # shape: (b, c, l, s, h, n)
@@ -252,7 +316,7 @@ class Mamba2Base(nn.Module):
             else:
                 previous_states = torch.zeros_like(states[:, :1])
             states = torch.cat([previous_states, states], dim=1)
-            decay_chunk = torch.exp(segment_sum(nn.functional.pad(A_cumsum[:, :, :, -1], (1, 0))))
+            decay_chunk = torch.exp(_segment_sum(nn.functional.pad(A_cumsum[:, :, :, -1], (1, 0))))
             decay_chunk = decay_chunk.transpose(1, 3)
             new_states = (decay_chunk[..., None, None] * states[:, :, None, ...]).sum(dim=1)
             states, ssm_state = new_states[:, :-1], new_states[:, -1]
@@ -297,7 +361,7 @@ class Mamba2CUDA(Mamba2Base):
         attention_mask: torch.Tensor | None = None,
     ):
         # 1. Gated MLP's linear projection
-        hidden_states = apply_mask_to_padding_states(hidden_states, attention_mask)
+        hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
         projected_states = self.in_proj(hidden_states)
 
         # Set up dimensions for reshapes later
@@ -414,7 +478,7 @@ class Mamba2CUDA(Mamba2Base):
                         activation=self.activation,
                     ).transpose(1, 2)
 
-                hidden_states_B_C = apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
+                hidden_states_B_C = _apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
                 hidden_states, B, C = torch.split(
                     hidden_states_B_C,
                     [self.intermediate_size, groups_time_state_size, groups_time_state_size],
