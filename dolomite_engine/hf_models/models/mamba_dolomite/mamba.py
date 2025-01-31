@@ -1,6 +1,16 @@
 import torch
 import torch.nn as nn
 
+from ....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
+
+
+if is_mamba_2_ssm_available():
+    from mamba_ssm.ops.triton.selective_state_update import selective_state_update
+    from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined, mamba_split_conv1d_scan_combined
+
+if is_causal_conv1d_available():
+    from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
+
 
 class Mamba2Base(nn.Module):
     """
@@ -438,4 +448,5 @@ class Mamba2CUDA(Mamba2Base):
 
                 # 4. Final linear projection
                 out = self.out_proj(scan_output)
+
         return out
