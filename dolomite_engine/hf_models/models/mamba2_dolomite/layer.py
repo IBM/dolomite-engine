@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
-from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
@@ -32,24 +31,6 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
                 config.normalization_function, config.hidden_size, eps=config.layer_norm_epsilon
             )
             self.mamba = get_mamba2(config, layer_idx=layer_idx)
-
-    def forward(
-        self,
-        hidden_states,
-        cache_params: Mamba2Cache | None = None,
-        cache_position: torch.LongTensor | None = None,
-        attention_mask: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        residual = hidden_states
-        hidden_states = self.norm(hidden_states.to(dtype=self.norm.weight.dtype))
-        if self.residual_in_fp32:
-            residual = residual.to(torch.float32)
-
-        hidden_states = self.mixer(
-            hidden_states, cache_params=cache_params, cache_position=cache_position, attention_mask=attention_mask
-        )
-        hidden_states = residual + hidden_states
-        return hidden_states
 
     def forward(
         self,
