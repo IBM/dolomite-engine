@@ -3,6 +3,7 @@ import torch.nn as nn
 from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from ....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
+from ...modeling_utils import get_activation_function
 from .config import Mamba2DolomiteConfig
 from .gated_rmsnorm import GatedRMSNorm
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
@@ -26,16 +27,18 @@ class Mamba2Base(nn.Module):
 
     def __init__(self, config: Mamba2DolomiteConfig, layer_idx: int):
         super().__init__()
+
         self.num_heads = config.num_heads
         self.hidden_size = config.hidden_size
         self.ssm_state_size = config.state_size
-        self.conv_kernel_size = config.conv_kernel
-        self.intermediate_size = int(config.expand * self.hidden_size)
+        self.conv_kernel_size = config.conv_kernel_size
+        self.intermediate_size = config.mamba_intermediate_size
         self.time_step_rank = int(config.time_step_rank)
         self.layer_idx = layer_idx
         self.use_conv_bias = config.use_conv_bias
-        self.activation = config.hidden_act
-        self.act = ACT2FN[config.hidden_act]
+
+        self.activation_string = config.mamba_activation_function
+        self.activation = get_activation_function(self.activation_string)
 
         self.n_groups = config.n_groups
         self.head_dim = config.head_dim
@@ -50,16 +53,16 @@ class Mamba2Base(nn.Module):
             in_channels=self.conv_dim,
             out_channels=self.conv_dim,
             bias=config.use_conv_bias,
-            kernel_size=config.conv_kernel,
+            kernel_size=self.conv_kernel_size,
             groups=self.conv_dim,
-            padding=config.conv_kernel - 1,
+            padding=self.conv_kernel_size - 1,
         )
 
         # projection of the input hidden states
         self.in_proj = nn.Linear(
             self.hidden_size,
             self.intermediate_size + self.conv_dim + self.num_heads,
-            bias=config.use_bias,
+            bias=config.add_bias,
         )
         # selective projection used to make dt, B and C input dependant
 
@@ -76,8 +79,7 @@ class Mamba2Base(nn.Module):
         self.D = nn.Parameter(torch.ones(self.num_heads))
         self.D._no_weight_decay = True
 
-        self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=config.use_bias)
-        self.use_bias = config.use_bias
+        self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=config.add_bias)
 
     def forward(
         self,
@@ -119,7 +121,7 @@ class Mamba2Base(nn.Module):
             hidden_states_B_C = torch.sum(conv_states * self.conv1d.weight.squeeze(1), dim=-1)
             if self.use_conv_bias:
                 hidden_states_B_C = hidden_states_B_C + self.conv1d.bias
-            hidden_states_B_C = self.act(hidden_states_B_C)
+            hidden_states_B_C = self.activation(hidden_states_B_C)
         else:
             # Init cache
             if cache_params is not None:
@@ -130,7 +132,9 @@ class Mamba2Base(nn.Module):
                 )
                 cache_params.update_conv_state(layer_idx=self.layer_idx, new_conv_state=conv_states, cache_init=True)
 
-            hidden_states_B_C = self.act(self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2))
+            hidden_states_B_C = self.activation(
+                self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2)
+            )
 
         hidden_states_B_C = _apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
         hidden_states, B, C = torch.split(
@@ -327,7 +331,7 @@ class Mamba2CUDA(Mamba2Base):
                 cache_params.conv_states[self.layer_idx],
                 self.conv1d.weight.squeeze(1),
                 self.conv1d.bias,
-                self.activation,
+                self.activation_string,
             )
 
             hidden_states, B, C = torch.split(
@@ -379,7 +383,7 @@ class Mamba2CUDA(Mamba2Base):
                     D=self.D,
                     chunk_size=self.chunk_size,
                     seq_idx=None,  # was seq_idx
-                    activation=self.activation,
+                    activation=self.activation_string,
                     rmsnorm_weight=self.norm.weight,
                     rmsnorm_eps=self.norm.variance_epsilon,
                     outproj_weight=self.out_proj.weight,
@@ -407,8 +411,8 @@ class Mamba2CUDA(Mamba2Base):
                         layer_idx=self.layer_idx, new_conv_state=conv_states, cache_init=True
                     )
 
-                if self.activation not in ["silu", "swish"]:
-                    hidden_states_B_C = self.act(
+                if self.activation_string not in ["silu", "swish"]:
+                    hidden_states_B_C = self.activation(
                         self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2)
                     )
                 else:
@@ -416,7 +420,7 @@ class Mamba2CUDA(Mamba2Base):
                         x=hidden_states_B_C.transpose(1, 2),
                         weight=self.conv1d.weight.squeeze(1),
                         bias=self.conv1d.bias,
-                        activation=self.activation,
+                        activation=self.activation_string,
                     ).transpose(1, 2)
 
                 hidden_states_B_C = _apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
