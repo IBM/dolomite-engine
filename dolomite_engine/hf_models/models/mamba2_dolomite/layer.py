@@ -17,7 +17,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
         layer_idx: int | None = None,
     ) -> None:
         self.is_attention_layer = config.layer_map[layer_idx] == "attention"
-        self.is_mamba_layer = config.layer_map[layer_idx] == "mamba"
+        self.is_mamba_layer = config.layer_map[layer_idx] == "mamba2"
 
         if self.is_attention_layer:
             super().__init__(
@@ -68,6 +68,6 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
 
             hidden_states = residual + hidden_states
         else:
-            raise ValueError(f"unexpected layer_map value for layer {layer_idx}")
+            raise ValueError(f"unexpected layer_map value for layer {self.layer_idx}")
 
         return hidden_states

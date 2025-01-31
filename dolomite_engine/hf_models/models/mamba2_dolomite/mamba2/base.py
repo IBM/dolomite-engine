@@ -5,7 +5,7 @@ from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 from ....modeling_utils import get_activation_function
 from ..config import Mamba2DolomiteConfig
 from ..gated_rmsnorm import GatedRMSNorm
-from ..utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
+from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
 
 
 class Mamba2Base(nn.Module):
@@ -19,9 +19,9 @@ class Mamba2Base(nn.Module):
     def __init__(self, config: Mamba2DolomiteConfig, layer_idx: int) -> None:
         super().__init__()
 
-        self.num_heads = config.num_heads
+        self.num_heads = config.mamba_n_head
         self.hidden_size = config.hidden_size
-        self.ssm_state_size = config.state_size
+        self.ssm_state_size = config.ssm_state_size
         self.conv_kernel_size = config.conv_kernel_size
         self.intermediate_size = config.mamba_intermediate_size
         self.time_step_rank = int(config.time_step_rank)

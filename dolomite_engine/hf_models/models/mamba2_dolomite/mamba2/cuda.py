@@ -3,8 +3,8 @@ import torch.nn as nn
 from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from .....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
-from ..utils import _apply_mask_to_padding_states
 from .base import Mamba2Base
+from .utils import _apply_mask_to_padding_states
 
 
 if is_mamba_2_ssm_available():
