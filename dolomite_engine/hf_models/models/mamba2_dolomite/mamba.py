@@ -288,6 +288,7 @@ class Mamba2Base(nn.Module):
 
         # 4. Final linear projection
         contextualized_states = self.out_proj(scan_output.to(dtype))  # [batch, seq_len, hidden_size]
+
         return contextualized_states
 
 
