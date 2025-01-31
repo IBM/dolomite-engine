@@ -105,7 +105,7 @@ class DispatchingDataLoader(ResumableDataLoader):
 
 
 def get_source_and_broadcast_group(
-    source_broadcast_mapping: dict[int, ProcessGroup]
+    source_broadcast_mapping: dict[int, ProcessGroup],
 ) -> tuple[bool, int, int, ProcessGroup]:
     global_rank = ProcessGroupManager.get_global_rank()
 
