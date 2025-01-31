@@ -22,7 +22,7 @@ class Mamba2CUDA(Mamba2Base):
         cache_params: Mamba2Cache | None = None,
         cache_position: torch.LongTensor | None = None,
         attention_mask: torch.Tensor | None = None,
-    ):
+    ) -> torch.Tensor:
         # 1. Gated MLP's linear projection
         hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
         projected_states = self.in_proj(hidden_states)

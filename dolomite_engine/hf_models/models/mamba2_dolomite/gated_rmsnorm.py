@@ -11,7 +11,7 @@ class GatedRMSNorm(nn.RMSNorm):
             hidden_states = hidden_states * nn.functional.silu(gate.to(torch.float32))
 
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
-        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+        hidden_states = hidden_states * torch.rsqrt(variance + self.eps)
 
         if self.weight is not None:
             hidden_states = self.weight * hidden_states.to(input_dtype)

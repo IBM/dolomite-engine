@@ -26,8 +26,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
         else:
             nn.Module.__init__()
 
-            self.layer_idx = layer_idx
-            self.ln_1 = get_normalization_function(
+            self.ln = get_normalization_function(
                 config.normalization_function, config.hidden_size, eps=config.layer_norm_epsilon
             )
             self.mamba = get_mamba2(config, layer_idx=layer_idx)
@@ -54,7 +53,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
         else:
             residual = hidden_states
 
-            hidden_states = self.ln_1(hidden_states)
+            hidden_states = self.ln(hidden_states)
             hidden_states = self.mamba(
                 hidden_states,
                 cache_params=past_key_values,
