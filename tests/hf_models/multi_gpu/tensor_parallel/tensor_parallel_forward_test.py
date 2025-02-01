@@ -40,7 +40,7 @@ class TensorParallelTest(TestCommons):
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.mha, AttentionHeadType.gqa],
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            TestCommons.get_position_embedding_types(),
             ["sdpa"],
             [torch.float32],
             [False],
