@@ -41,13 +41,17 @@ class Mamba2DolomiteConfig(CommonConfig):
         conv_kernel_size: int = 4,
         n_groups: int = 8,
         use_conv_bias: bool = True,
-        mamba_activation_function: str = "silu",
-        time_step_rank="auto",
-        time_step_min=0.001,
-        time_step_max=0.1,
-        time_step_floor=1e-4,
-        time_step_limit=(0.0, float("inf")),
-        chunk_size=256,
+        time_step_rank: str = "auto",
+        time_step_min: float = 0.001,
+        time_step_max: float = 0.1,
+        time_step_floor: float = 1e-4,
+        time_step_limit: float = (0.0, float("inf")),
+        chunk_size: int = 256,
+        ssm_activation_function: str = "silu",
+        ssm_state_size: int = 128,
+        ssm_head_dim: int = 64,
+        ssm_num_heads: int = 128,
+        ssm_intermediate_size: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -88,7 +92,6 @@ class Mamba2DolomiteConfig(CommonConfig):
         self.layer_map = ["mamba2"] * self.n_layer if layer_map is None else layer_map
         self.conv_kernel_size = conv_kernel_size
         self.n_groups = n_groups
-        self.mamba_activation_function = mamba_activation_function
         self.use_conv_bias = use_conv_bias
 
         self.time_step_limit = time_step_limit
@@ -96,3 +99,11 @@ class Mamba2DolomiteConfig(CommonConfig):
         self.time_step_min = time_step_min
         self.time_step_max = time_step_max
         self.time_step_floor = time_step_floor
+
+        self.chunk_size = chunk_size
+
+        self.ssm_activation_function = ssm_activation_function
+        self.ssm_state_size = ssm_state_size
+        self.ssm_head_dim = ssm_head_dim
+        self.ssm_num_heads = ssm_num_heads
+        self.ssm_intermediate_size = 2 * self.n_embd if ssm_intermediate_size is None else ssm_intermediate_size

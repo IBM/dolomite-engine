@@ -19,20 +19,20 @@ class Mamba2Base(nn.Module):
     def __init__(self, config: Mamba2DolomiteConfig, layer_idx: int) -> None:
         super().__init__()
 
-        self.num_heads = config.mamba_n_head
+        self.num_heads = config.ssm_num_heads
         self.hidden_size = config.hidden_size
         self.ssm_state_size = config.ssm_state_size
         self.conv_kernel_size = config.conv_kernel_size
-        self.intermediate_size = config.mamba_intermediate_size
+        self.intermediate_size = config.ssm_intermediate_size
         self.time_step_rank = int(config.time_step_rank)
         self.layer_idx = layer_idx
         self.use_conv_bias = config.use_conv_bias
 
-        self.activation_string = config.mamba_activation_function
+        self.activation_string = config.ssm_activation_function
         self.activation = get_activation_function(self.activation_string)
 
         self.n_groups = config.n_groups
-        self.head_dim = config.head_dim
+        self.head_dim = config.ssm_head_dim
         self.chunk_size = config.chunk_size
 
         self.time_step_limit = config.time_step_limit
