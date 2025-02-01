@@ -1,3 +1,5 @@
+import torch.nn as nn
+
 from ...modeling_utils import get_attention_module, get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..gpt_dolomite.mlp import MLP
@@ -13,6 +15,8 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
     ) -> None:
+        nn.Module.__init__(self)
+
         self.is_attention_layer = config.layer_map[layer_idx] == "attention"
         self.is_mamba_layer = config.layer_map[layer_idx] == "mamba2"
 
