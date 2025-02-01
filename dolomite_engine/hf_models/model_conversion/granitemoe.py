@@ -18,7 +18,6 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.n_layer,
-        config.num_experts,
         config.n_head,
         config.num_key_value_heads,
         config.n_embd // config.n_head,
@@ -57,6 +56,9 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
         n_inner=original_config.intermediate_size,
+        shared_n_inner=(
+            None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
+        ),
         activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
@@ -86,7 +88,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
 def _import_state_dict_from_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
-    num_experts: int,
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
@@ -113,11 +114,21 @@ def _import_state_dict_from_huggingface(
         )
 
         state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight")
+            safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"),
+            dim=1,
         )
         state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
         )
+
+        if safetensors_weights_manager.has_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"):
+            state_dict[f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"] = _split_and_reorder_for_glu(
+                safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"),
+                dim=0,
+            )
+            state_dict[f"transformer.h.{layer_idx}.moe.c_proj_shared.weight"] = safetensors_weights_manager.get_tensor(
+                f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"
+            )
 
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
             safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
@@ -143,7 +154,6 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.n_layer,
-        config.num_experts,
         config.n_head,
         config.num_key_value_heads,
         config.n_embd // config.n_head,
@@ -177,6 +187,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
         num_attention_heads=config.n_head,
         num_key_value_heads=config.num_key_value_heads,
         intermediate_size=4 * config.n_embd if config.n_inner is None else config.n_inner,
+        shared_intermediate_size=0 if config.shared_n_inner is None else config.shared_n_inner,
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
@@ -206,7 +217,6 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
 def _export_state_dict_to_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
-    num_experts: int,
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
@@ -233,11 +243,19 @@ def _export_state_dict_to_huggingface(
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight"), dim=1
         )
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
         )
+
+        if safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"):
+            state_dict[f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"] = _split_and_reorder_for_glu(
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"), dim=0
+            )
+            state_dict[f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj_shared.weight")
+            )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),
@@ -257,7 +275,7 @@ def _export_state_dict_to_huggingface(
     return state_dict
 
 
-def _split_and_reorder_for_glu(weight: torch.Tensor) -> torch.Tensor:
-    x, y = weight.chunk(2, dim=1)
-    weight = torch.cat([y, x], dim=1)
+def _split_and_reorder_for_glu(weight: torch.Tensor, dim: int) -> torch.Tensor:
+    x, y = weight.chunk(2, dim=dim)
+    weight = torch.cat([y, x], dim=dim)
     return weight
