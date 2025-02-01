@@ -30,17 +30,22 @@ class Mamba2CUDA(Mamba2Base):
         # Set up dimensions for reshapes later
         batch_size, seq_len, _ = hidden_states.shape
         groups_time_state_size = self.n_groups * self.ssm_state_size
-        d_mlp = (
-            projected_states.shape[-1]
-            - 2 * self.intermediate_size
-            - 2 * self.n_groups * self.ssm_state_size
-            - self.num_heads
-        ) // 2
 
-        # Single step calculations via cache
-        if cache_params is not None and cache_position is not None and cache_position[0] > 0:
-            _, _, gate, hidden_states_B_C, dt = projected_states.squeeze(1).split(
-                [d_mlp, d_mlp, self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
+        use_precomputed_states = (
+            cache_params is not None
+            and cache_params.has_previous_state
+            and seq_len == 1
+            and cache_params.conv_states[self.layer_idx].shape[0]
+            == cache_params.ssm_states[self.layer_idx].shape[0]
+            == batch_size
+            and cache_position is not None
+            and cache_position[0] > 0
+        )
+
+        # getting projected states from cache if it exists
+        if use_precomputed_states:
+            gate, hidden_states_B_C, dt = projected_states.squeeze(1).split(
+                [self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
             )
 
             # 2. Convolution sequence transformation
@@ -49,7 +54,7 @@ class Mamba2CUDA(Mamba2Base):
                 cache_params.conv_states[self.layer_idx],
                 self.conv1d.weight.squeeze(1),
                 self.conv1d.bias,
-                self.activation_string,
+                self.activation,
             )
 
             hidden_states, B, C = torch.split(
@@ -84,7 +89,6 @@ class Mamba2CUDA(Mamba2Base):
 
             # 4. Final linear projection
             out = self.out_proj(hidden_states)[:, None, ...]
-
         # Fused calculations or step by step if no initialized cache is found
         else:
             A = -torch.exp(self.A_log.float())  # (num_heads) or (intermediate_size, state_size)
@@ -113,21 +117,22 @@ class Mamba2CUDA(Mamba2Base):
                     **dt_limit_kwargs,
                 )
             else:
-                _, _, gate, hidden_states_B_C, dt = projected_states.split(
-                    [d_mlp, d_mlp, self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
+                gate, hidden_states_B_C, dt = projected_states.split(
+                    [self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
                 )
 
                 # 2. Convolution sequence transformation
                 # Init cache
                 if cache_params is not None:
+                    # storing the states
+                    # If we just take xBC[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
+                    # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
                     hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
                     conv_states = nn.functional.pad(
                         hidden_states_B_C_transposed,
-                        (cache_params.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0),
+                        (self.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0),
                     )
-                    cache_params.update_conv_state(
-                        layer_idx=self.layer_idx, new_conv_state=conv_states, cache_init=True
-                    )
+                    cache_params.conv_states[self.layer_idx].copy_(conv_states)
 
                 if self.activation_string not in ["silu", "swish"]:
                     hidden_states_B_C = self.activation(
@@ -167,7 +172,7 @@ class Mamba2CUDA(Mamba2Base):
 
                 # Init cache
                 if ssm_state is not None and cache_params is not None:
-                    cache_params.update_ssm_state(layer_idx=self.layer_idx, new_ssm_state=ssm_state)
+                    cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
 
                 scan_output = scan_output.view(batch_size, seq_len, -1)
                 # Multiply "gate" branch and apply extra normalization layer
