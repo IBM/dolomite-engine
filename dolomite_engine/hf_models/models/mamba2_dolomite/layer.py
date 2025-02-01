@@ -68,7 +68,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
         elif self.is_mamba_layer:
             hidden_states = self.attn(
                 hidden_states=hidden_states,
-                cache_params=past_key_value,
+                cache_params=past_key_values,
                 cache_position=cache_position,
                 attention_mask=attention_mask,
             )
