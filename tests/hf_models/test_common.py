@@ -39,7 +39,7 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_position_embedding_types() -> list[PositionEmbeddingType]:
-        return [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.alibi, PositionEmbeddingType.rope]
+        return [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope]
 
     @staticmethod
     def get_dtypes() -> list[torch.dtype]:

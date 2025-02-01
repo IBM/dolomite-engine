@@ -169,9 +169,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         with torch.device(torch.cuda.current_device()):
             position_embedding_type = PositionEmbeddingType(self.config.position_embedding_type)
 
-            if position_embedding_type == PositionEmbeddingType.alibi:
-                self.transformer.alibi.reset_parameters()
-            elif position_embedding_type == PositionEmbeddingType.rope:
+            if position_embedding_type == PositionEmbeddingType.rope:
                 self.transformer.rope.reset_parameters()
 
         state_dict = self.__class__.model_parallel_state_dict_function(

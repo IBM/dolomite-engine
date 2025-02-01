@@ -7,7 +7,7 @@ from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
-from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_normalization_function_TP
+from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 
@@ -195,11 +195,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
-        elif self.position_embedding_type == PositionEmbeddingType.alibi:
-            if self.is_pipeline_parallel_enabled:
-                raise NotImplementedError()
-
-            self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
             if self.config.rope_scaling is None:
                 self.rope = RoPE(

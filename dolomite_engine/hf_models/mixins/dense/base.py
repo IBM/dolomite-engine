@@ -1,5 +1,3 @@
-import warnings
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache, PreTrainedModel
@@ -8,7 +6,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors
 
 
@@ -234,34 +232,6 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         return position_ids
 
-    def _get_alibi_bias(
-        self,
-        attention_mask: torch.Tensor,
-        batch_size: int,
-        query_length: int,
-        key_length: int,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> torch.Tensor:
-        if self.position_embedding_type != PositionEmbeddingType.alibi:
-            return None
-
-        alibi_bias = self.alibi(attention_mask, batch_size, key_length, device, dtype)
-
-        # ==========================================================================================
-        # alibi_bias -> (batch_size, num_heads, key_length)
-        # ==========================================================================================
-
-        alibi_bias = alibi_bias.unsqueeze(2)
-        if query_length != 1:
-            alibi_bias = alibi_bias.expand(-1, -1, query_length, -1)
-
-        # ==========================================================================================
-        # alibi_bias -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
-        return alibi_bias
-
     def _get_rope_cos_sin(self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
         if self.position_embedding_type == PositionEmbeddingType.rope:
             cos, sin = self.rope(key_length, dtype=dtype)
@@ -407,10 +377,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 "inputs"
             )
         else:
-            if self.position_embedding_type == PositionEmbeddingType.alibi:
-                if position_ids is not None:
-                    warnings.warn("`position_ids` have no functionality with Alibi.", FutureWarning)
-
             if token_type_ids is not None:
                 token_type_ids = token_type_ids.view(-1, input_shape[-1])
 
@@ -458,14 +424,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         #     hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
-        alibi_bias = self._get_alibi_bias(
-            attention_mask, batch_size, query_length, key_length, device, hidden_states.dtype
-        )
-
-        # ==========================================================================================
-        # alibi_bias -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
         rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         # ==========================================================================================
@@ -476,7 +434,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         # ==========================================================================================
 
         attention_mask = self._get_maybe_causal_mask(
-            attention_mask, alibi_bias, batch_size, query_length, key_length, hidden_states.dtype, device
+            attention_mask, batch_size, query_length, key_length, hidden_states.dtype, device
         )
 
         return (
@@ -494,10 +452,6 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
             self.wpe = ParameterizedEmbedding(max_position_embeddings, self.embed_dim, std=self.initializer_range)
-        elif self.position_embedding_type == PositionEmbeddingType.alibi:
-            assert not self._use_flash_attention_2, "alibi is not implemented with FlashAttention"
-
-            self.alibi = Alibi(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
@@ -527,7 +481,6 @@ class BaseModelMixin(PreTrainedModelMixin):
     def _get_maybe_causal_mask(
         self,
         attention_mask: torch.Tensor | None,
-        alibi_bias: torch.Tensor | None,
         batch_size: int,
         query_length: int,
         key_length: int,
@@ -543,7 +496,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
                 attention_mask = torch.where(
                     attention_mask,
-                    ~attention_mask if alibi_bias is None else alibi_bias,
+                    ~attention_mask,
                     self._get_mask_value(attention_mask.device, dtype),
                 )
 
@@ -559,7 +512,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
             attention_mask = torch.where(
                 attention_mask,
-                ~attention_mask if alibi_bias is None else alibi_bias,
+                ~attention_mask,
                 self._get_mask_value(attention_mask.device, dtype),
             )
 

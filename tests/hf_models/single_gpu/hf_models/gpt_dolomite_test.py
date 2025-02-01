@@ -83,7 +83,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         TestCommons.make_args_matrix(
             [torch.device("cuda")],
             TestCommons.get_attention_head_types(),
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            TestCommons.get_position_embedding_types(),
             [torch.float16, torch.bfloat16],
         )
     )
@@ -140,7 +140,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         TestCommons.make_args_matrix(
             [torch.device("cuda")],
             TestCommons.get_attention_head_types(),
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            TestCommons.get_position_embedding_types(),
             [torch.float16, torch.bfloat16],
         )
     )
@@ -195,7 +195,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         TestCommons.make_args_matrix(
             [torch.device("cuda")],
             TestCommons.get_attention_head_types(),
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            TestCommons.get_position_embedding_types(),
             [torch.float16, torch.bfloat16],
         )
     )
@@ -249,7 +249,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         TestCommons.make_args_matrix(
             [torch.device("cuda")],
             TestCommons.get_attention_head_types(),
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            TestCommons.get_position_embedding_types(),
             [torch.float16, torch.bfloat16],
         )
     )
@@ -295,7 +295,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         TestCommons.make_args_matrix(
             [torch.device("cuda")],
             TestCommons.get_attention_head_types(),
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
+            TestCommons.get_position_embedding_types(),
             [torch.float16, torch.bfloat16],
         )
     )
