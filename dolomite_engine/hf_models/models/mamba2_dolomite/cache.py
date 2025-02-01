@@ -1,4 +1,5 @@
 import torch
+from transformers import DynamicCache
 from transformers.models.jamba.modeling_jamba import (
     HybridMambaAttentionDynamicCache as _HybridMambaAttentionDynamicCache,
 )
@@ -14,7 +15,8 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
         dtype: torch.dtype = torch.float16,
         device: torch.device | None = None,
     ) -> None:
-        super().__init__(config, batch_size, dtype, device)
+        DynamicCache.__init__(self)
+
         self.layer_map = config.layer_map
         self.has_previous_state = False  # only used by mamba
         ssm_state_size = config.ssm_state_size
