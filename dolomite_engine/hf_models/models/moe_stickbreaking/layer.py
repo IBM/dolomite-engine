@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
 from ..moe_dolomite.moe import get_moe
 from ..stickbreaking.attention import PaddingFreeSBAttention, SBAttention
