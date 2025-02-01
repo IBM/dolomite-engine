@@ -17,7 +17,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
     ) -> None:
         DynamicCache.__init__(self)
 
-        self.layer_map = config.layer_map
+        self.layers_block_type = config.layer_map
         self.has_previous_state = False  # only used by mamba
         ssm_state_size = config.ssm_state_size
 
