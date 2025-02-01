@@ -15,10 +15,9 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
         device: torch.device | None = None,
     ) -> None:
         super().__init__(config, batch_size, dtype, device)
-        self.layers_block_type = config.layers_block_type
+        self.layer_map = config.layer_map
         self.has_previous_state = False  # only used by mamba
-        conv_kernel_size = config.mamba_d_conv
-        ssm_state_size = config.mamba_d_state
+        ssm_state_size = config.ssm_state_size
 
         self.conv_states = []
         self.ssm_states = []
@@ -29,7 +28,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                     torch.zeros(
                         batch_size,
                         (config.mamba_expand * config.hidden_size + 2 * config.mamba_n_groups * ssm_state_size),
-                        conv_kernel_size,
+                        config.conv_kernel_size,
                         device=device,
                         dtype=dtype,
                     )
