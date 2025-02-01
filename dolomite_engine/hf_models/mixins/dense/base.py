@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import DynamicCache, GenerationMixin, PreTrainedModel
+from transformers import DynamicCache, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import divide_if_divisible
@@ -10,7 +10,7 @@ from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_
 from ...utils import convert_padding_free_lists_to_tensors
 
 
-class PreTrainedModelMixin(PreTrainedModel, GenerationMixin):
+class PreTrainedModelMixin(PreTrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
