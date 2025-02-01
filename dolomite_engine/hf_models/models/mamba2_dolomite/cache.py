@@ -29,7 +29,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                 self.conv_states += [
                     torch.zeros(
                         batch_size,
-                        (config.mamba_expand * config.hidden_size + 2 * config.mamba_n_groups * ssm_state_size),
+                        (config.ssm_intermediate_size + 2 * config.n_groups * ssm_state_size),
                         config.conv_kernel_size,
                         device=device,
                         dtype=dtype,
@@ -38,8 +38,8 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                 self.ssm_states += [
                     torch.zeros(
                         batch_size,
-                        config.mamba_n_heads,
-                        config.mamba_d_head,
+                        config.ssm_num_heads,
+                        config.ssm_head_dim,
                         ssm_state_size,
                         device=device,
                         dtype=dtype,
