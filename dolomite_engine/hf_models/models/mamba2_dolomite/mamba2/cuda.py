@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from .....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
+from ..cache import HybridMambaAttentionDynamicCache
 from .base import Mamba2Base
 from .utils import _apply_mask_to_padding_states
 
@@ -19,7 +19,7 @@ class Mamba2CUDA(Mamba2Base):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        cache_params: Mamba2Cache | None = None,
+        cache_params: HybridMambaAttentionDynamicCache | None = None,
         cache_position: torch.LongTensor | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:

@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 from ....modeling_utils import get_activation_function
+from ..cache import HybridMambaAttentionDynamicCache
 from ..config import Mamba2DolomiteConfig
 from ..gated_rmsnorm import GatedRMSNorm
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
@@ -75,7 +75,7 @@ class Mamba2Base(nn.Module):
     def forward(
         self,
         input_states: torch.Tensor,
-        cache_params: Mamba2Cache | None = None,
+        cache_params: HybridMambaAttentionDynamicCache | None = None,
         cache_position: torch.LongTensor | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
