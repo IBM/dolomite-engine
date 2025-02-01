@@ -67,13 +67,10 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
             )
         elif self.is_mamba_layer:
             hidden_states = self.attn(
-                hidden_states=hidden_states,
-                cache_params=past_key_values,
-                cache_position=cache_position,
-                attention_mask=attention_mask,
+                hidden_states=hidden_states, cache_params=past_key_values, attention_mask=attention_mask
             )
         else:
-            raise ValueError(f"unexpected layer_map value for layer {layer_idx}")
+            raise ValueError(f"unexpected layer_map value for layer {self.layer_idx}")
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual

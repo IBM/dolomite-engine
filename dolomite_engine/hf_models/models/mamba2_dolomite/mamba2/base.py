@@ -76,7 +76,6 @@ class Mamba2Base(nn.Module):
         self,
         input_states: torch.Tensor,
         cache_params: HybridMambaAttentionDynamicCache | None = None,
-        cache_position: torch.LongTensor | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         dtype = input_states.dtype
@@ -101,8 +100,6 @@ class Mamba2Base(nn.Module):
             and cache_params.conv_states[self.layer_idx].shape[0]
             == cache_params.ssm_states[self.layer_idx].shape[0]
             == batch_size
-            and cache_position is not None
-            and cache_position[0] > 0
         )
 
         # 2. Convolution sequence transformation

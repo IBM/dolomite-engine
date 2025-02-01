@@ -20,7 +20,6 @@ class Mamba2CUDA(Mamba2Base):
         self,
         hidden_states: torch.Tensor,
         cache_params: HybridMambaAttentionDynamicCache | None = None,
-        cache_position: torch.LongTensor | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # 1. Gated MLP's linear projection
@@ -38,8 +37,6 @@ class Mamba2CUDA(Mamba2Base):
             and cache_params.conv_states[self.layer_idx].shape[0]
             == cache_params.ssm_states[self.layer_idx].shape[0]
             == batch_size
-            and cache_position is not None
-            and cache_position[0] > 0
         )
 
         # getting projected states from cache if it exists
