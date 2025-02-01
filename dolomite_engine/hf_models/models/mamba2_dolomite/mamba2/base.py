@@ -90,20 +90,28 @@ class Mamba2Base(nn.Module):
         # 1. Gated MLP's linear projection
         input_states = _apply_mask_to_padding_states(input_states, attention_mask)
         projected_states = self.in_proj(input_states)
-        d_mlp = (
-            projected_states.shape[-1]
-            - 2 * self.intermediate_size
-            - 2 * self.n_groups * self.ssm_state_size
-            - self.num_heads
-        ) // 2
-        _, _, gate, hidden_states_B_C, dt = projected_states.split(
-            [d_mlp, d_mlp, self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
+        gate, hidden_states_B_C, dt = projected_states.split(
+            [self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
+        )
+
+        use_precomputed_states = (
+            cache_params is not None
+            and cache_params.has_previous_state
+            and seq_len == 1
+            and cache_params.conv_states[self.layer_idx].shape[0]
+            == cache_params.ssm_states[self.layer_idx].shape[0]
+            == batch_size
+            and cache_position is not None
+            and cache_position[0] > 0
         )
 
         # 2. Convolution sequence transformation
-        if cache_params is not None and cache_position is not None and cache_position[0] > 0:
-            cache_params.update_conv_state(
-                layer_idx=self.layer_idx, new_conv_state=hidden_states_B_C, cache_init=False
+        if use_precomputed_states:
+            cache_params.conv_states[self.layer_idx] = cache_params.conv_states[self.layer_idx].roll(
+                shifts=-1, dims=-1
+            )
+            cache_params.conv_states[self.layer_idx][:, :, -1] = hidden_states_B_C[:, 0, :].to(
+                cache_params.conv_states[self.layer_idx].device
             )
 
             # We need to guarantee that anything regarding the cache is on the same device
@@ -112,16 +120,15 @@ class Mamba2Base(nn.Module):
             hidden_states_B_C = torch.sum(conv_states * self.conv1d.weight.squeeze(1), dim=-1)
             if self.use_conv_bias:
                 hidden_states_B_C = hidden_states_B_C + self.conv1d.bias
-            hidden_states_B_C = self.activation(hidden_states_B_C)
+            hidden_states_B_C = self.act(hidden_states_B_C)
         else:
             # Init cache
             if cache_params is not None:
                 hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
                 conv_states = nn.functional.pad(
-                    hidden_states_B_C_transposed,
-                    (cache_params.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0),
+                    hidden_states_B_C_transposed, (self.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0)
                 )
-                cache_params.update_conv_state(layer_idx=self.layer_idx, new_conv_state=conv_states, cache_init=True)
+                cache_params.conv_states[self.layer_idx].copy_(conv_states)
 
             hidden_states_B_C = self.activation(
                 self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2)
@@ -136,9 +143,9 @@ class Mamba2Base(nn.Module):
 
         # 3. SSM transformation
         A = -torch.exp(self.A_log.float())  # [num_heads]
-        if cache_params is not None and cache_position is not None and cache_position[0] > 0:
+        if use_precomputed_states:
             # We need to guarantee that anything regarding the cache is on the same device
-            cache_device = cache_params.ssm_states.device
+            cache_device = cache_params.ssm_states[self.layer_idx].device
 
             # Note: there is no need to pad parameter matrices here, as there is just one new token
             # for batched generation
@@ -168,9 +175,7 @@ class Mamba2Base(nn.Module):
             dBx = (dB * hidden_states[..., None]).to(device=cache_device)
 
             # State calculation
-            cache_params.update_ssm_state(
-                layer_idx=self.layer_idx, new_ssm_state=cache_params.ssm_states[self.layer_idx] * dA + dBx
-            )
+            cache_params.ssm_states[self.layer_idx].copy_(cache_params.ssm_states[self.layer_idx] * dA + dBx)
 
             # Subsequent output
             # [bsz, n_groups * state_size] -> [bsz, num_heads, state_size]
@@ -246,7 +251,7 @@ class Mamba2Base(nn.Module):
 
             # 3. Compute the inter-chunk SSM recurrence; produces correct SSM states at chunk boundaries
             # (middle term of factorization of off-diag blocks; A terms)
-            if cache_params is not None and cache_position is not None and cache_position[0] > 0:
+            if use_precomputed_states:
                 previous_states = cache_params.ssm_states[self.layer_idx][:, None, ...].to(device=states.device)
             else:
                 previous_states = torch.zeros_like(states[:, :1])
@@ -276,7 +281,7 @@ class Mamba2Base(nn.Module):
 
             # Init cache
             if ssm_state is not None and cache_params is not None:
-                cache_params.update_ssm_state(layer_idx=self.layer_idx, new_ssm_state=ssm_state)
+                cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
 
         scan_output = self.norm(y, gate)
 
