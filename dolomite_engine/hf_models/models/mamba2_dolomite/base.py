@@ -59,7 +59,9 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
         # ==========================================================================================
 
         past_key_values = (
-            HybridMambaAttentionDynamicCache() if use_cache and past_key_values is None else past_key_values
+            HybridMambaAttentionDynamicCache(config=self.config, batch_size=input_ids.size(0))
+            if use_cache and past_key_values is None
+            else past_key_values
         )
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
