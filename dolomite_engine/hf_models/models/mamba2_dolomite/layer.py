@@ -27,7 +27,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
                 layer_idx=layer_idx,
             )
         elif self.is_mamba_layer:
-            nn.Module.__init__()
+            nn.Module.__init__(self)
 
             self.ln = get_normalization_function(
                 config.normalization_function, config.hidden_size, eps=config.layer_norm_epsilon
