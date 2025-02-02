@@ -27,12 +27,13 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        cache_position: torch.Tensor | None = None,
     ) -> BaseModelOutputWithPast:
         (
             output_hidden_states,
             use_cache,
             hidden_states,
-            attention_mask,
+            causal_mask,
             position_ids,
             rope_cos_sin,
             past_key_values,
@@ -48,6 +49,8 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
+
+        self._update_mamba_mask(attention_mask, cache_position)
 
         # ==========================================================================================
         # padding_free:
@@ -90,9 +93,13 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
         )
 
     def _update_mamba_mask(
-        self, attention_mask: torch.Tensor | None, past_key_values: HybridMambaAttentionDynamicCache
+        self, attention_mask: torch.Tensor | None, cache_position: torch.Tensor
     ) -> torch.Tensor | None:
         mamba_mask = attention_mask
-        if cache_position[0] > 0 or (attention_mask is not None and torch.all(attention_mask == 1)):
+        if (
+            cache_position is None
+            or cache_position[0] > 0
+            or (attention_mask is not None and torch.all(attention_mask == 1))
+        ):
             mamba_mask = None
         return mamba_mask
