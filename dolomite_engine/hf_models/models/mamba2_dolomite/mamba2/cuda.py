@@ -104,7 +104,7 @@ class Mamba2CUDA(Mamba2Base):
                     seq_idx=None,  # was seq_idx
                     activation=self.activation_string,
                     rmsnorm_weight=self.norm.weight,
-                    rmsnorm_eps=self.norm.variance_epsilon,
+                    rmsnorm_eps=self.norm.eps,
                     outproj_weight=self.out_proj.weight,
                     outproj_bias=self.out_proj.bias,
                     headdim=self.head_dim,
