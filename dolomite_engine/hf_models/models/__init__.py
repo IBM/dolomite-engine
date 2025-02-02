@@ -20,6 +20,7 @@ from .gpt_dolomite_TP import (
 )
 from .ladder_residual import LadderResidualConfig, LadderResidualForCausalLM, LadderResidualModel
 from .ladder_residual_TP import LadderResidualForCausalLM_TP, LadderResidualModel_TP
+from .mamba2_dolomite import Mamba2DolomiteConfig, Mamba2DolomiteForCausalLM, Mamba2DolomiteModel
 from .moe_dolomite import MoEDolomiteConfig, MoEDolomiteForCausalLM, MoEDolomiteModel
 from .moe_dolomite_TP import (
     MoEDolomiteForCausalLM_TP,

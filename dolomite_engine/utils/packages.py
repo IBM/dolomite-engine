@@ -118,6 +118,18 @@ def is_causal_conv1d_available() -> bool:
 
 
 try:
+    import mamba_ssm
+
+    _IS_MAMBA_2_SSM_AVAILABLE = True
+except ImportError:
+    _IS_MAMBA_2_SSM_AVAILABLE = False
+
+
+def is_mamba_2_ssm_available() -> bool:
+    return _IS_MAMBA_2_SSM_AVAILABLE
+
+
+try:
     import torchao
 
     _IS_TORCHAO_AVAILABLE = True

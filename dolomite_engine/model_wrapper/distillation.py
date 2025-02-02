@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
+from ..hf_models import disable_generation_cache
 from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 

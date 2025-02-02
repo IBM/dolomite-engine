@@ -13,6 +13,7 @@ from .packages import (
     is_cute_kernels_available,
     is_einops_available,
     is_flash_attention_available,
+    is_mamba_2_ssm_available,
     is_torchao_available,
     is_triton_available,
     log_environment,

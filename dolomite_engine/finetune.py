@@ -12,6 +12,7 @@ from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from .data import ResumableDataLoader, custom_iterator, get_finetuning_dataloader, get_next_batch
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import DatasetSplit, Mode, TuningMethod
+from .hf_models import disable_generation_cache
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
@@ -394,16 +395,17 @@ def main() -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    train(
-        args,
-        model_container=model_container,
-        optimizer_container=optimizer_container,
-        lr_scheduler_container=lr_scheduler_container,
-        train_dataloader=train_dataloader,
-        val_dataloader=val_dataloader,
-        experiments_tracker=experiments_tracker,
-        starting_iteration=starting_iteration,
-    )
+    with disable_generation_cache():
+        train(
+            args,
+            model_container=model_container,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
+            experiments_tracker=experiments_tracker,
+            starting_iteration=starting_iteration,
+        )
 
 
 if __name__ == "__main__":

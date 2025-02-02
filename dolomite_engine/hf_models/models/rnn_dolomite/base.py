@@ -7,6 +7,7 @@ from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
+from ...utils import is_generation_cache_enabled
 from .cache import RNNCache
 from .config import RNNDolomiteConfig
 from .layer import RNNDolomiteBlock
@@ -94,9 +95,11 @@ class RNNDolomiteModel(RNNDolomitePreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        past_key_values = (
-            RNNCache(self.attention_pattern) if use_cache and past_key_values is None else past_key_values
-        )
+        if is_generation_cache_enabled():
+            past_key_values = (
+                RNNCache(self.attention_pattern) if use_cache and past_key_values is None else past_key_values
+            )
+
         for block in self.h:
             hidden_states = block(
                 hidden_states,
