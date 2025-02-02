@@ -22,7 +22,6 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         output_router_logits: bool | None = None,

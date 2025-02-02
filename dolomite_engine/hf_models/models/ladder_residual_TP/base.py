@@ -29,7 +29,6 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> BaseModelOutputWithPast:

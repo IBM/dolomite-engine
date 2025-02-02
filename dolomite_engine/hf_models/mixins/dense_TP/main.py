@@ -56,6 +56,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
     ) -> CausalLMOutputWithPast | torch.Tensor:
+        assert return_dict
+
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,

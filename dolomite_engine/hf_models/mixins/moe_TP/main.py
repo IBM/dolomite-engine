@@ -28,6 +28,8 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         reduction: str = "mean",
         output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
+        assert return_dict
+
         if self.is_pipeline_parallel_enabled:
             prev_aux_loss = past_key_values
             past_key_values = None

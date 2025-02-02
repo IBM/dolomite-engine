@@ -60,6 +60,8 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
     ) -> CausalLMOutputWithPast:
+        assert return_dict
+
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
