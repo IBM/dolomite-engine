@@ -24,7 +24,6 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_router_logits: bool | None = None,
         output_aux_loss: bool = True,
     ) -> MoeModelOutputWithPastAndAuxLoss:
         (
@@ -34,7 +33,6 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
             position_ids,
             rope_cos_sin,
             past_key_values,
-            output_router_logits,
         ) = self._prepare_a_bunch_of_stuff(
             input_ids=input_ids,
             past_key_values=past_key_values,
@@ -45,12 +43,10 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
             use_cache=use_cache,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            output_router_logits=output_router_logits,
         )
 
         sb_metadata = None
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_router_logits = () if output_router_logits else None
         total_aux_loss = 0
 
         for block in self.h:
@@ -61,17 +57,12 @@ class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                output_router_logits=output_router_logits,
                 output_aux_loss=output_aux_loss,
                 sb_metadata=sb_metadata,
             )
 
             hidden_states = outputs[0]
             outputs = outputs[1:]
-
-            if output_router_logits:
-                all_router_logits += (outputs[0],)
-                outputs = outputs[1:]
 
             if output_aux_loss:
                 aux_loss = outputs[0]

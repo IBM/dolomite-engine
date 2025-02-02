@@ -96,7 +96,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_router_logits: bool | None = None,
         output_aux_loss: bool = True,
     ) -> tuple | BaseModelOutputWithPast:
         if self.is_first_stage:
@@ -107,7 +106,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 position_ids,
                 rope_cos_sin,
                 past_key_values,
-                output_router_logits,
             ) = self._prepare_a_bunch_of_stuff(
                 input_ids=input_ids,
                 past_key_values=past_key_values,
@@ -118,7 +116,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 use_cache=use_cache,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                output_router_logits=output_router_logits,
             )
         else:
             assert past_key_values is None
@@ -145,7 +142,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_router_logits = () if output_router_logits else None
         total_aux_loss = 0
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
@@ -156,16 +152,11 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                output_router_logits=output_router_logits,
                 output_aux_loss=output_aux_loss,
             )
 
             hidden_states = outputs[0]
             outputs = outputs[1:]
-
-            if output_router_logits:
-                all_router_logits += (outputs[0],)
-                outputs = outputs[1:]
 
             if output_aux_loss:
                 aux_loss = outputs[0]
@@ -175,8 +166,5 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             hidden_states = self.ln_f(hidden_states)
 
         return MoeModelOutputWithPastAndAuxLoss(
-            last_hidden_state=hidden_states,
-            past_key_values=past_key_values,
-            router_logits=all_router_logits,
-            aux_loss=total_aux_loss,
+            last_hidden_state=hidden_states, past_key_values=past_key_values, aux_loss=total_aux_loss
         )

@@ -30,7 +30,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-        output_router_logits: bool | None = None,
     ) -> MoeCausalLMOutputWithPast:
         assert return_dict
 
@@ -68,7 +67,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             use_cache=use_cache,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            output_router_logits=output_router_logits,
         )
 
         lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)

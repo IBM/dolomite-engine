@@ -26,7 +26,6 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-        output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
         assert return_dict
 
@@ -58,7 +57,6 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             use_cache=use_cache,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            output_router_logits=output_router_logits,
         )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:

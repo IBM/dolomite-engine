@@ -8,7 +8,6 @@ class MoEDolomiteConfig(CommonConfig):
         self,
         num_experts: int = 8,
         num_experts_per_tok: int = 2,
-        output_router_logits: bool = False,
         router_aux_loss_coef: float = 0.001,
         shared_n_inner: int | None = None,
         use_aux_free_moe: bool = False,
@@ -21,7 +20,6 @@ class MoEDolomiteConfig(CommonConfig):
 
         self.shared_n_inner = shared_n_inner
 
-        self.output_router_logits = output_router_logits
         self.router_aux_loss_coef = router_aux_loss_coef
 
         self.use_aux_free_moe = use_aux_free_moe

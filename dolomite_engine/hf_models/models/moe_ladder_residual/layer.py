@@ -15,7 +15,6 @@ class MoELadderResidualBlock(MoEDolomiteBlock):
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_router_logits: bool = False,
         output_aux_loss: bool = True,
     ) -> tuple[torch.Tensor]:
         if previous_attention_out is not None:
@@ -44,9 +43,6 @@ class MoELadderResidualBlock(MoEDolomiteBlock):
             current_mlp_out = current_mlp_out * self.m_residual
 
         outputs = (current_attention_out, current_mlp_out, residual)
-
-        if output_router_logits:
-            outputs += (router_logits,)
 
         if output_aux_loss:
             outputs += (aux_loss,)
