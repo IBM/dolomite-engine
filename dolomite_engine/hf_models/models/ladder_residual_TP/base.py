@@ -3,6 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
+from ...utils import is_generation_cache_enabled
 from ..ladder_residual import LadderResidualConfig
 from .layer import LadderResidualBlock_TP
 
@@ -58,7 +59,9 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
         previous_attention_out = None
         previous_mlp_out = None
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
         all_hidden_states = () if output_hidden_states else None
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             if output_hidden_states:

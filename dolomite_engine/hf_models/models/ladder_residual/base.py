@@ -3,6 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
+from ...utils import is_generation_cache_enabled
 from .config import LadderResidualConfig
 from .layer import LadderResidualBlock
 
@@ -52,7 +53,9 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         previous_attention_out = None
         previous_mlp_out = None
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:

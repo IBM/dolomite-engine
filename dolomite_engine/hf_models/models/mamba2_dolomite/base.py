@@ -2,6 +2,7 @@ import torch
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
+from ...utils import is_generation_cache_enabled
 from .cache import HybridMambaAttentionDynamicCache
 from .config import Mamba2DolomiteConfig
 from .layer import Mamba2DolomiteBlock
@@ -61,11 +62,13 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        past_key_values = (
-            HybridMambaAttentionDynamicCache(config=self.config, batch_size=input_ids.size(0))
-            if use_cache and past_key_values is None
-            else past_key_values
-        )
+        if is_generation_cache_enabled():
+            past_key_values = (
+                HybridMambaAttentionDynamicCache(config=self.config, batch_size=input_ids.size(0))
+                if use_cache and past_key_values is None
+                else past_key_values
+            )
+
         all_hidden_states = () if output_hidden_states else None
         for i, block in enumerate(self.h):
             if output_hidden_states:

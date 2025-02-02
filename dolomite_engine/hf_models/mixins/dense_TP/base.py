@@ -8,6 +8,7 @@ from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
+from ...utils import is_generation_cache_enabled
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 
@@ -153,7 +154,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
 
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
         all_hidden_states = () if output_hidden_states else None
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):

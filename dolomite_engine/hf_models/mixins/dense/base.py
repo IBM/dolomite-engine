@@ -7,7 +7,7 @@ from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
-from ...utils import convert_padding_free_lists_to_tensors
+from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 
 
 class PreTrainedModelMixin(PreTrainedModel):
@@ -190,7 +190,9 @@ class BaseModelMixin(PreTrainedModelMixin):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:

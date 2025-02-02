@@ -3,6 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
+from ...utils import is_generation_cache_enabled
 from .config import StickBreakingConfig
 from .layer import StickBreakingBlock
 
@@ -51,7 +52,9 @@ class StickBreakingModel(StickBreakingPreTrainedModel, BaseModelMixin):
 
         sb_metadata = None
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
         all_hidden_states = () if output_hidden_states else None
         for block in self.h:
             if output_hidden_states:
