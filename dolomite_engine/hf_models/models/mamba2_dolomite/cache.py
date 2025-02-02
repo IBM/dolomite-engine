@@ -4,6 +4,7 @@ from transformers.models.jamba.modeling_jamba import (
     HybridMambaAttentionDynamicCache as _HybridMambaAttentionDynamicCache,
 )
 
+from ....utils import divide_if_divisible
 from .config import Mamba2DolomiteConfig
 
 
@@ -39,7 +40,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                     torch.zeros(
                         batch_size,
                         config.ssm_num_heads,
-                        config.ssm_head_dim,
+                        divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads),
                         ssm_state_size,
                         device=device,
                         dtype=dtype,

@@ -51,7 +51,6 @@ class Mamba2DolomiteConfig(CommonConfig):
         chunk_size: int = 256,
         ssm_activation_function: str = "silu",
         ssm_state_size: int = 128,
-        ssm_head_dim: int = 64,
         ssm_num_heads: int = 128,
         ssm_intermediate_size: int | None = None,
         **kwargs,
@@ -106,6 +105,5 @@ class Mamba2DolomiteConfig(CommonConfig):
 
         self.ssm_activation_function = ssm_activation_function
         self.ssm_state_size = ssm_state_size
-        self.ssm_head_dim = ssm_head_dim
         self.ssm_num_heads = ssm_num_heads
         self.ssm_intermediate_size = 2 * self.n_embd if ssm_intermediate_size is None else ssm_intermediate_size
