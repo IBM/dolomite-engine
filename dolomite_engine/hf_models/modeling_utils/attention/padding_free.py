@@ -1,6 +1,7 @@
 import torch
 from transformers import DynamicCache
 
+from ....kernels import wait_for_ACT
 from ....utils import is_flash_attention_available
 from ...enums import PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
@@ -48,6 +49,10 @@ class PaddingFreeAttention(Attention):
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
+        query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
+        key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
+        value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
+
         hidden_states = flash_attn_varlen_func(
             query,
             key,
@@ -67,6 +72,7 @@ class PaddingFreeAttention(Attention):
         # hidden_states -> (total_q, num_heads, head_dim)
         # ==========================================================================================
 
+        hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
         hidden_states = hidden_states.view(-1, self.hidden_size)
 
         # ==========================================================================================
