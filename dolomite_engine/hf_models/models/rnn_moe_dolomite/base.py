@@ -69,7 +69,6 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_aux_loss: bool = True,
     ) -> MoeModelOutputWithPastAndAuxLoss:
         (
             use_cache,
@@ -96,7 +95,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
         total_aux_loss = 0
 
         for block in self.h:
-            outputs = block(
+            hidden_states, aux_loss = block(
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
@@ -104,21 +103,12 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                output_aux_loss=output_aux_loss,
             )
 
-            hidden_states = outputs[0]
-            outputs = outputs[1:]
-
-            if output_aux_loss:
-                aux_loss = outputs[0]
-                total_aux_loss = total_aux_loss + aux_loss
+            total_aux_loss = total_aux_loss + aux_loss
 
         hidden_states = self.ln_f(hidden_states)
 
         return MoeModelOutputWithPastAndAuxLoss(
-            last_hidden_state=hidden_states,
-            past_key_values=past_key_values,
-            router_logits=all_router_logits,
-            aux_loss=total_aux_loss,
+            last_hidden_state=hidden_states, past_key_values=past_key_values, aux_loss=total_aux_loss
         )

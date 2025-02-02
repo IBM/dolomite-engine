@@ -96,7 +96,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_aux_loss: bool = True,
     ) -> tuple | BaseModelOutputWithPast:
         if self.is_first_stage:
             (
@@ -145,22 +144,16 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         total_aux_loss = 0
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
-            outputs = self.h[str(layer_idx)](
+            hidden_states, aux_loss = self.h[str(layer_idx)](
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                output_aux_loss=output_aux_loss,
             )
 
-            hidden_states = outputs[0]
-            outputs = outputs[1:]
-
-            if output_aux_loss:
-                aux_loss = outputs[0]
-                total_aux_loss = total_aux_loss + aux_loss
+            total_aux_loss = total_aux_loss + aux_loss
 
         if self.is_last_stage:
             hidden_states = self.ln_f(hidden_states)

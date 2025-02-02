@@ -75,7 +75,6 @@ class BaseMoEModelMixin(BaseModelMixin):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_aux_loss: bool = True,
     ) -> MoeModelOutputWithPastAndAuxLoss:
         (
             use_cache,
@@ -109,22 +108,16 @@ class BaseMoEModelMixin(BaseModelMixin):
         total_aux_loss = 0
 
         for block in self.h:
-            outputs = block(
+            hidden_states, aux_loss = block(
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                output_aux_loss=output_aux_loss,
             )
 
-            hidden_states = outputs[0]
-            outputs = outputs[1:]
-
-            if output_aux_loss:
-                aux_loss = outputs[0]
-                total_aux_loss = total_aux_loss + aux_loss
+            total_aux_loss = total_aux_loss + aux_loss
 
         hidden_states = self.ln_f(hidden_states)
 
