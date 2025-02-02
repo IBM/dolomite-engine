@@ -50,7 +50,7 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        self._update_mamba_mask(attention_mask, cache_position)
+        mamba_mask = self._update_mamba_mask(attention_mask, cache_position)
 
         # ==========================================================================================
         # padding_free:
@@ -67,14 +67,14 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
             else past_key_values
         )
         all_hidden_states = () if output_hidden_states else None
-        for block in self.h:
+        for i, block in enumerate(self.h):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
             hidden_states = block(
                 hidden_states,
                 past_key_values=past_key_values,
-                attention_mask=attention_mask,
+                attention_mask=mamba_mask if self.config.layer_map[i] == "mamba2" else causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
