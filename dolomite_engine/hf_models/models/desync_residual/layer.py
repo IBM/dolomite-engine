@@ -66,7 +66,7 @@ class DesyncResidualBlock(nn.Module):
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor]:
+    ) -> torch.Tensor:
         hidden_states = self._prepare_hidden_states(hidden_states, self.previous_mlp_all_reduce)
 
         residual = hidden_states
