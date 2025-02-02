@@ -88,3 +88,11 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
             past_key_values=past_key_values,
             hidden_states=all_hidden_states,
         )
+
+    def _update_mamba_mask(
+        self, attention_mask: torch.Tensor | None, past_key_values: HybridMambaAttentionDynamicCache
+    ) -> torch.Tensor | None:
+        mamba_mask = attention_mask
+        if cache_position[0] > 0 or (attention_mask is not None and torch.all(attention_mask == 1)):
+            mamba_mask = None
+        return mamba_mask
