@@ -65,13 +65,6 @@ def save_checkpoint(
     save_path = _get_base_path(args.save_args.save_path, iteration)
     os.makedirs(save_path, exist_ok=True)
 
-    if optimizer_container is None:
-        log_rank_0(
-            logging.WARN,
-            "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
-            "Therefore, the function will not save the optimizer",
-        )
-
     ensure_last_checkpoint_is_saved()
 
     if lr_scheduler_container is None:
@@ -109,30 +102,59 @@ def save_checkpoint(
 
     save_args(args, save_path, mode=Mode.training)
 
-    global _FUTURE
-    _FUTURE = dcp.async_save(
-        {
-            "state": _ModelOptimizerSaver(
-                model_container=model_container,
-                optimizer_container=optimizer_container if args.save_args.save_optimizer else None,
+    if args.save_args.save_optimizer:
+        if optimizer_container is None:
+            log_rank_0(
+                logging.WARN,
+                "optimizer_container is not passed to save_checkpoint but save_optimizer is set to True. "
+                "Therefore, the function will not save the optimizer",
             )
-        },
-        checkpoint_id=_get_model_optimizer_path(save_path),
-    )
 
-    def _f(_future):
+    if args.save_args.async_checkpointing:
+        global _FUTURE
+        _FUTURE = dcp.async_save(
+            {
+                "state": _ModelOptimizerSaver(
+                    model_container=model_container,
+                    optimizer_container=optimizer_container if args.save_args.save_optimizer else None,
+                )
+            },
+            checkpoint_id=_get_model_optimizer_path(save_path),
+        )
+
+        def _f(_future):
+            run_rank_n(json.dump)(
+                {"latest_checkpointed_iteration": iteration},
+                run_rank_n(open)(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
+                indent=4,
+            )
+
+            log_rank_0(logging.INFO, f"checkpoint saved asynchronously at {iteration}")
+
+            if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
+                exit()
+
+        _FUTURE.add_done_callback(_f)
+    else:
+        dcp.save({"state": _ModelSaver(model_container)}, checkpoint_id=_get_model_path(save_path))
+
+        if args.save_args.save_optimizer and optimizer_container is not None:
+            dcp.save(
+                {"state": _OptimizerSaver(model_container, optimizer_container)},
+                checkpoint_id=_get_optimizer_path(save_path),
+            )
+
+        torch.distributed.barrier()
+
         run_rank_n(json.dump)(
             {"latest_checkpointed_iteration": iteration},
             run_rank_n(open)(_get_latest_checkpointed_iterations_path(args.save_args.save_path), "w"),
             indent=4,
         )
 
-        log_rank_0(logging.INFO, f"checkpoint saved asynchronously at {iteration}")
-
         if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
+            ProcessGroupManager.destroy_process_groups()
             exit()
-
-    _FUTURE.add_done_callback(_f)
 
 
 def load_checkpoint_for_training(

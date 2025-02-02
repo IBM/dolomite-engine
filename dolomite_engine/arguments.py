@@ -120,6 +120,8 @@ class SaveArgs(BaseArgs):
     save_interval: int = None
     # whether to save optimizer
     save_optimizer: bool = True
+    # whether to use async checkpointing
+    async_checkpointing: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.save_path, "save_path"), (self.save_interval, "save_interval")])
