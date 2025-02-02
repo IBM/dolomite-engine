@@ -232,47 +232,51 @@ class Attention(nn.Module):
         # ==========================================================================================
 
         if attention_mask is None:
-            attn_weights = torch.empty(
+            hidden_states = torch.empty(
                 (batch_size * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
             )
             beta = 0
         else:
-            attn_weights = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
+            hidden_states = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
             beta = 1
 
-        attn_weights = torch.baddbmm(attn_weights, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
+        hidden_states = torch.baddbmm(hidden_states, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
             batch_size, self.num_heads, query_length, key_length
         )
 
+        del query, key
+
         # ==========================================================================================
-        # attn_weights -> (batch_size, num_heads, query_length, key_length)
+        # hidden_states -> (batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
-        attn_weights = F.softmax(attn_weights.to(softmax_dtype), dim=-1).to(dtype)
-        attn_weights = self.attn_dropout(attn_weights)
+        hidden_states = F.softmax(hidden_states.to(softmax_dtype), dim=-1).to(dtype)
+        hidden_states = self.attn_dropout(hidden_states)
 
         # ==========================================================================================
         # value -> (batch_size, num_heads, key_length, head_dim)
-        # attn_weights -> (batch_size, num_heads, query_length, key_length)
+        # hidden_states -> (batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
-        attn_output = torch.matmul(attn_weights, value)
+        hidden_states = torch.matmul(hidden_states, value)
+
+        del value
 
         # ==========================================================================================
-        # attn_output -> (batch_size, num_heads, query_length, head_dim)
+        # hidden_states -> (batch_size, num_heads, query_length, head_dim)
         # ==========================================================================================
 
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
+        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         # ==========================================================================================
-        # attn_output -> (batch_size, query_length, num_heads * head_dim)
+        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
-        attn_output = self.c_proj(attn_output)
-        attn_output = self.resid_dropout(attn_output)
+        hidden_states = self.c_proj(hidden_states)
+        hidden_states = self.resid_dropout(hidden_states)
 
-        return attn_output
+        return hidden_states
 
     def _get_softmax_scale(self, return_none_allowed: bool = True) -> float:
         if self.scale_attn_weights:

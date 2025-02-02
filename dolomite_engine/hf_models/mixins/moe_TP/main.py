@@ -21,15 +21,14 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
         inputs_embeds: torch.Tensor | list[list[float]] | None = None,
         labels: torch.Tensor | list[list[int]] | None = None,
         use_cache: bool | None = None,
-        output_attentions: bool | None = None,
-        output_hidden_states: bool | None = None,
         return_dict: bool = True,
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-        output_router_logits: bool | None = None,
     ) -> tuple | MoeCausalLMOutputWithPast:
+        assert return_dict
+
         if self.is_pipeline_parallel_enabled:
             prev_aux_loss = past_key_values
             past_key_values = None
@@ -46,7 +45,6 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
                 use_cache=use_cache,
-                output_attentions=output_attentions,
             )
 
         transformer_outputs: MoeModelOutputWithPastAndAuxLoss = self.transformer(
@@ -57,10 +55,8 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            output_router_logits=output_router_logits,
         )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:

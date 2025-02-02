@@ -26,14 +26,13 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         inputs_embeds: torch.Tensor | list[list[float]] | None = None,
         labels: torch.Tensor | list[list[int]] | None = None,
         use_cache: bool | None = None,
-        output_attentions: bool | None = None,
-        output_hidden_states: bool | None = None,
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-        output_router_logits: bool | None = None,
     ) -> MoeCausalLMOutputWithPast:
+        assert return_dict
+
         input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -45,7 +44,6 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             use_cache=use_cache,
-            output_attentions=output_attentions,
         )
 
         # ==========================================================================================
@@ -67,10 +65,8 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            output_router_logits=output_router_logits,
         )
 
         lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
