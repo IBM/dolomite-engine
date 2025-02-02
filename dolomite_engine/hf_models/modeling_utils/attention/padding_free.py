@@ -48,7 +48,7 @@ class PaddingFreeAttention(Attention):
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
-        attn_output = flash_attn_varlen_func(
+        hidden_states = flash_attn_varlen_func(
             query,
             key,
             value,
@@ -61,20 +61,22 @@ class PaddingFreeAttention(Attention):
             causal=self.causal,
         )
 
-        # ==========================================================================================
-        # attn_output -> (total_q, num_heads, head_dim)
-        # ==========================================================================================
-
-        attn_output = attn_output.view(-1, self.hidden_size)
+        del query, key, value
 
         # ==========================================================================================
-        # attn_output -> (total_q, num_heads * head_dim)
+        # hidden_states -> (total_q, num_heads, head_dim)
         # ==========================================================================================
 
-        attn_output = self.c_proj(attn_output)
-        attn_output = self.resid_dropout(attn_output)
+        hidden_states = hidden_states.view(-1, self.hidden_size)
 
-        return attn_output
+        # ==========================================================================================
+        # hidden_states -> (total_q, num_heads * head_dim)
+        # ==========================================================================================
+
+        hidden_states = self.c_proj(hidden_states)
+        hidden_states = self.resid_dropout(hidden_states)
+
+        return hidden_states
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor

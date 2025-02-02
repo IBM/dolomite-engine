@@ -85,7 +85,7 @@ class SBAttention(Attention):
         bsz_, _, length_, _ = query.size()
 
         if query.size(2) == key.size(2):
-            attn_output, rem = sb_attn(
+            hidden_states, rem = sb_attn(
                 q=query,
                 k=key,
                 v=value,
@@ -93,28 +93,20 @@ class SBAttention(Attention):
             )
 
         else:
-            attn_output, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
+            hidden_states, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
 
         if self.sb_remainder:
-            attn_output = attn_output + rem[..., None] * self.head_bias[None, :, None, :]
+            hidden_states = hidden_states + rem[..., None] * self.head_bias[None, :, None, :]
 
-        attn_output = attn_output.permute(0, 2, 1, 3)
+        hidden_states = hidden_states.permute(0, 2, 1, 3)
+        hidden_states = hidden_states.view(bsz_ * length_, self.hidden_size)
+        hidden_states = self.norm(hidden_states)
+        hidden_states = hidden_states.view(bsz_, length_, self.hidden_size)
 
-        # ==========================================================================================
-        # attn_output -> (total_q, num_heads, head_dim)
-        # ==========================================================================================
-        attn_output = attn_output.view(bsz_ * length_, self.hidden_size)
-        attn_output = self.norm(attn_output)
-        attn_output = attn_output.view(bsz_, length_, self.hidden_size)
+        hidden_states = self.c_proj(hidden_states)
+        hidden_states = self.resid_dropout(hidden_states)
 
-        # ==========================================================================================
-        # attn_output -> (total_q, num_heads * head_dim)
-        # ==========================================================================================
-
-        attn_output = self.c_proj(attn_output)
-        attn_output = self.resid_dropout(attn_output)
-
-        return attn_output
+        return hidden_states
 
     def _prepare_qkv_for_forward_gqa(
         self, hidden_states: torch.Tensor
@@ -161,7 +153,7 @@ class PaddingFreeSBAttention(SBAttention):
         softmax_scale = self._get_softmax_scale()
 
         value = value.permute(1, 0, 2)
-        attn_output, rem = sb_attn_varlen(
+        hidden_states, rem = sb_attn_varlen(
             q=query.permute(1, 0, 2),
             k=key.permute(1, 0, 2),
             v=value,
@@ -170,16 +162,16 @@ class PaddingFreeSBAttention(SBAttention):
             max_seqlens=max_seqlen,
         )
         if self.sb_remainder:
-            attn_output = attn_output + rem[..., None] * self.head_bias[:, None, :]
-        attn_output = attn_output.permute(1, 0, 2)
+            hidden_states = hidden_states + rem[..., None] * self.head_bias[:, None, :]
+        hidden_states = hidden_states.permute(1, 0, 2)
 
-        attn_output = attn_output.view(-1, self.hidden_size)
-        attn_output = self.norm(attn_output)
+        hidden_states = hidden_states.view(-1, self.hidden_size)
+        hidden_states = self.norm(hidden_states)
 
-        attn_output = self.c_proj(attn_output)
-        attn_output = self.resid_dropout(attn_output)
+        hidden_states = self.c_proj(hidden_states)
+        hidden_states = self.resid_dropout(hidden_states)
 
-        return attn_output
+        return hidden_states
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor

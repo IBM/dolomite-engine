@@ -210,7 +210,7 @@ class DesyncResidualSDPA(Attention):
             # TODO avoid this repeat on every layer
             attention_mask = attention_mask.repeat(self.tp_world_size, 1, 1, 1)
 
-        attn_output = F.scaled_dot_product_attention(
+        hidden_states = F.scaled_dot_product_attention(
             query,
             key,
             value,
@@ -220,28 +220,30 @@ class DesyncResidualSDPA(Attention):
             scale=softmax_scale,
         )
 
-        # ==========================================================================================
-        # attn_output -> (TP * batch_size, num_heads, query_length, head_dim)
-        # ==========================================================================================
-
-        query_length = attn_output.shape[2]
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
+        del query, key, value
 
         # ==========================================================================================
-        # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
+        # hidden_states -> (TP * batch_size, num_heads, query_length, head_dim)
         # ==========================================================================================
 
-        attn_output = self.c_proj(attn_output)
+        query_length = hidden_states.shape[2]
+        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = hidden_states.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
+
+        # ==========================================================================================
+        # hidden_states -> (TP, batch_size, query_length, num_heads * head_dim)
+        # ==========================================================================================
+
+        hidden_states = self.c_proj(hidden_states)
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         if self.curent_attention_all_reduce:
-            attn_output = attn_output + residual / self.tp_world_size
-            attn_output = attn_output.sum(dim=0)
+            hidden_states = hidden_states + residual / self.tp_world_size
+            hidden_states = hidden_states.sum(dim=0)
         else:
-            attn_output = attn_output + residual
+            hidden_states = hidden_states + residual
 
-        attn_output = self.resid_dropout(attn_output)
-        return attn_output
+        hidden_states = self.resid_dropout(hidden_states)
+        return hidden_states

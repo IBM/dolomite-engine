@@ -57,7 +57,7 @@ class StickBreakingBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        attn_output = self.attn(
+        hidden_states = self.attn(
             hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -68,10 +68,10 @@ class StickBreakingBlock(nn.Module):
         )
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         # residual connection
-        hidden_states = attn_output + residual
+        hidden_states = hidden_states + residual
         residual = hidden_states
 
         hidden_states = self.ln_2(hidden_states)
