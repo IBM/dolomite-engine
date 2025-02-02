@@ -53,15 +53,6 @@ class Mamba2DolomiteModel(Mamba2DolomitePreTrainedModel, BaseModelMixin):
 
         mamba_mask = self._update_mamba_mask(attention_mask, cache_position)
 
-        # ==========================================================================================
-        # padding_free:
-        #     attention_mask -> None
-        # flash:
-        #     attention_mask -> (batch_size, key_length)
-        # else:
-        #     attention_mask -> (batch_size, 1, query_length, key_length)
-        # ==========================================================================================
-
         if is_generation_cache_enabled():
             past_key_values = (
                 HybridMambaAttentionDynamicCache(config=self.config, batch_size=input_ids.size(0))
