@@ -12,7 +12,7 @@ from .config import StickBreakingConfig
 
 
 if is_triton_available():
-    from .stickbreaking_attention import sb_attn, sb_attn_varlen
+    from stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
 @torch.compile
