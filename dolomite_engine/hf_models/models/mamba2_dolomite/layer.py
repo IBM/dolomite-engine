@@ -66,9 +66,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
                 max_seqlen=max_seqlen,
             )
         elif self.is_mamba_layer:
-            hidden_states = self.attn(
-                input_states=hidden_states, cache_params=past_key_values, attention_mask=attention_mask
-            )
+            hidden_states = self.attn(hidden_states, cache_params=past_key_values, attention_mask=attention_mask)
         else:
             raise ValueError(f"unexpected layer_map value for layer {self.layer_idx}")
 
