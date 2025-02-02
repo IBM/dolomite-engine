@@ -5,13 +5,13 @@ import torch.nn
 import torch.nn.functional as F
 from transformers import DynamicCache
 
-from ....utils import is_triton_available
+from ....utils import is_stickbreaking_available
 from ...enums import InitMethod
 from ...modeling_utils import Attention, ParameterizedLinear
 from .config import StickBreakingConfig
 
 
-if is_triton_available():
+if is_stickbreaking_available():
     from stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
