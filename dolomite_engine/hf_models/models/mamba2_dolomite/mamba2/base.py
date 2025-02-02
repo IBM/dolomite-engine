@@ -33,7 +33,7 @@ class Mamba2Base(nn.Module):
         self.activation = get_activation_function(self.activation_string)
 
         self.n_groups = config.n_groups
-        self.head_dim = (divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads),)
+        self.head_dim = divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads, "")
         self.chunk_size = config.chunk_size
 
         self.time_step_limit = config.time_step_limit

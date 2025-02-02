@@ -40,7 +40,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                     torch.zeros(
                         batch_size,
                         config.ssm_num_heads,
-                        divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads),
+                        divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads, ""),
                         ssm_state_size,
                         device=device,
                         dtype=dtype,
