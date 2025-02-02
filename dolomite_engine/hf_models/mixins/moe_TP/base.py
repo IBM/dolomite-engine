@@ -94,7 +94,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
@@ -103,7 +102,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
     ) -> tuple | BaseModelOutputWithPast:
         if self.is_first_stage:
             (
-                output_hidden_states,
                 use_cache,
                 hidden_states,
                 attention_mask,
@@ -119,7 +117,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 position_ids=position_ids,
                 inputs_embeds=inputs_embeds,
                 use_cache=use_cache,
-                output_hidden_states=output_hidden_states,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
                 output_router_logits=output_router_logits,
@@ -149,14 +146,10 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_hidden_states = () if output_hidden_states else None
         all_router_logits = () if output_router_logits else None
         total_aux_loss = 0
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-
             outputs = self.h[str(layer_idx)](
                 hidden_states,
                 past_key_values=past_key_values,
@@ -182,14 +175,9 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         if self.is_last_stage:
             hidden_states = self.ln_f(hidden_states)
 
-        # Add last hidden state
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
         return MoeModelOutputWithPastAndAuxLoss(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
-            hidden_states=all_hidden_states,
             router_logits=all_router_logits,
             aux_loss=total_aux_loss,
         )

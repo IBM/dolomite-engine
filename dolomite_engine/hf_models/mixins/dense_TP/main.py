@@ -51,7 +51,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         labels: torch.Tensor | list[list[int]] | None = None,
         use_cache: bool | None = None,
         output_attentions: bool | None = None,
-        output_hidden_states: bool | None = None,
         return_dict: bool = True,
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
@@ -81,7 +80,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
