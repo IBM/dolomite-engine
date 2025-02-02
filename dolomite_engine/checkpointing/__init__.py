@@ -189,10 +189,6 @@ def load_checkpoint_for_training(
     load_experiments_tracker_state = args.load_args.load_experiments_tracker_state
     load_starting_iteration = args.load_args.load_starting_iteration
 
-    args_file = os.path.join(_get_base_path(load_path, iteration), f"{_TRAINING_CONFIG_PREFIX}.yml")
-    args_from_checkpoint = load_yaml(args_file)
-    args_from_checkpoint = TrainingArgs(**args_from_checkpoint)
-
     iteration = args.load_args.iteration
     if iteration is None:
         iteration = json.load(open(_get_latest_checkpointed_iterations_path(args.load_args.load_path), "r"))[
@@ -200,6 +196,10 @@ def load_checkpoint_for_training(
         ]
 
     load_path = _get_base_path(args.load_args.load_path, iteration)
+
+    args_file = os.path.join(load_path, f"{_TRAINING_CONFIG_PREFIX}.yml")
+    args_from_checkpoint = load_yaml(args_file)
+    args_from_checkpoint = TrainingArgs(**args_from_checkpoint)
 
     log_rank_0(logging.INFO, f"loading checkpoint saved at {load_path}")
 
