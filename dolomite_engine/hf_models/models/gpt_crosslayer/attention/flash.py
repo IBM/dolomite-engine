@@ -33,7 +33,7 @@ class CrossLayerFlashAttention2(CrossLayerAttention):
 
         batch_size, query_length = query.shape[:2]
 
-        attn_output = _flash_attention_forward(
+        hidden_states = _flash_attention_forward(
             query_states=query,
             key_states=key,
             value_states=value,
@@ -44,9 +44,11 @@ class CrossLayerFlashAttention2(CrossLayerAttention):
             softmax_scale=softmax_scale,
         )
 
-        attn_output = attn_output.view(batch_size, query_length, -1)
+        del query, key, value
 
-        attn_output = self.c_proj(attn_output)
-        attn_output = self.resid_dropout(attn_output)
+        hidden_states = hidden_states.view(batch_size, query_length, -1)
 
-        return attn_output
+        hidden_states = self.c_proj(hidden_states)
+        hidden_states = self.resid_dropout(hidden_states)
+
+        return hidden_states

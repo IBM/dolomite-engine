@@ -51,8 +51,6 @@ class MoEStickBreakingBlock(nn.Module):
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-        output_router_logits: bool = False,
-        output_aux_loss: bool = True,
         sb_metadata=None,
     ) -> tuple[torch.Tensor]:
         residual = hidden_states
@@ -85,12 +83,4 @@ class MoEStickBreakingBlock(nn.Module):
         # residual connection
         hidden_states = hidden_states + residual
 
-        outputs = (hidden_states,)
-
-        if output_router_logits:
-            outputs += (router_logits,)
-
-        if output_aux_loss:
-            outputs += (aux_loss,)
-
-        return outputs
+        return hidden_states, aux_loss

@@ -181,7 +181,7 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
-        attn_output = F.scaled_dot_product_attention(
+        hidden_states = F.scaled_dot_product_attention(
             query,
             key,
             value,
@@ -191,27 +191,29 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
             scale=softmax_scale,
         )
 
-        # ==========================================================================================
-        # attn_output -> (batch_size, num_heads, query_length, head_dim)
-        # ==========================================================================================
-
-        batch_size = attn_output.shape[0]
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
+        del query, key, value
 
         # ==========================================================================================
-        # attn_output -> (batch_size, query_length, num_heads * head_dim)
+        # hidden_states -> (batch_size, num_heads, query_length, head_dim)
+        # ==========================================================================================
+
+        batch_size = hidden_states.shape[0]
+        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
+
+        # ==========================================================================================
+        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         if self.current_attention_all_reduce:
-            attn_output = self.c_proj(attn_output, residual)
+            hidden_states = self.c_proj(hidden_states, residual)
         else:
-            attn_output = self.c_proj(attn_output)
-            attn_output = attn_output + residual
+            hidden_states = self.c_proj(hidden_states)
+            hidden_states = hidden_states + residual
 
-        attn_output = self.resid_dropout(attn_output)
+        hidden_states = self.resid_dropout(hidden_states)
 
-        return attn_output
+        return hidden_states

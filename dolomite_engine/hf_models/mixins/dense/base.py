@@ -57,7 +57,6 @@ class PreTrainedModelMixin(PreTrainedModel):
         past_key_values: tuple[tuple[torch.Tensor]],
         attention_mask: torch.Tensor | None,
         use_cache: bool,
-        output_attentions: bool,
     ) -> tuple[torch.Tensor]:
         if self._use_padding_free_transformer:
             if isinstance(input_ids, list) or isinstance(inputs_embeds, list):
@@ -90,8 +89,6 @@ class PreTrainedModelMixin(PreTrainedModel):
 
             if use_cache or past_key_values is not None:
                 raise NotImplementedError("KV caching is not supported with padding_free transformer")
-
-        assert not output_attentions
 
         return input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen
 
@@ -155,13 +152,10 @@ class BaseModelMixin(PreTrainedModelMixin):
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
-        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> BaseModelOutputWithPast:
         (
-            output_hidden_states,
             use_cache,
             hidden_states,
             attention_mask,
@@ -176,7 +170,6 @@ class BaseModelMixin(PreTrainedModelMixin):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
@@ -191,11 +184,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         # ==========================================================================================
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_hidden_states = () if output_hidden_states else None
         for block in self.h:
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-
             hidden_states = block(
                 hidden_states,
                 past_key_values=past_key_values,
@@ -207,15 +196,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         hidden_states = self.ln_f(hidden_states)
 
-        # Add last hidden state
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        return BaseModelOutputWithPast(
-            last_hidden_state=hidden_states,
-            past_key_values=past_key_values,
-            hidden_states=all_hidden_states,
-        )
+        return BaseModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)
 
     def _get_position_ids(
         self, attention_mask: torch.Tensor, past_length: int, query_length: int, key_length: int, device: torch.device
@@ -324,7 +305,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[
@@ -340,10 +320,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         torch.Tensor,
         tuple[torch.Tensor],
     ]:
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
-
         if use_cache is None:
             use_cache = False if self._use_padding_free_transformer else self.config.use_cache
 
@@ -438,7 +414,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         )
 
         return (
-            output_hidden_states,
             use_cache,
             hidden_states,
             attention_mask,

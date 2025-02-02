@@ -29,7 +29,7 @@ class CrossLayerSDPA(CrossLayerAttention):
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
-        attn_output = F.scaled_dot_product_attention(
+        hidden_states = F.scaled_dot_product_attention(
             query,
             key,
             value,
@@ -38,10 +38,13 @@ class CrossLayerSDPA(CrossLayerAttention):
             is_causal=self.causal if attention_mask is None else False,
             scale=softmax_scale,
         )
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
-        attn_output = self.c_proj(attn_output)
-        attn_output = self.resid_dropout(attn_output)
+        del query, key, value
 
-        return attn_output
+        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
+
+        hidden_states = self.c_proj(hidden_states)
+        hidden_states = self.resid_dropout(hidden_states)
+
+        return hidden_states

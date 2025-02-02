@@ -82,6 +82,7 @@ class CrossLayer(nn.Module):
 
         # residual connection
         hidden_states = hidden_states + residual
+
         return hidden_states
 
 
