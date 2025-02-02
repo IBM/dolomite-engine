@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from ...enums import Kernel
-from ...kernels import is_kernel_allowed
+from ...kernels import is_kernel_allowed, wait_for_ACT
 from ...utils import is_cute_kernels_available
 
 
@@ -15,7 +15,10 @@ _NORMALIZATION_FUNCTIONS = {"layernorm": nn.LayerNorm, "rmsnorm": nn.RMSNorm}
 
 class CuteRMSNorm(nn.RMSNorm):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return rmsnorm_cute(x=x, weight=self.weight, eps=self.eps, memory_efficient=False)
+        x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
+        x = rmsnorm_cute(x=x, weight=self.weight, eps=self.eps, memory_efficient=False)
+        x = wait_for_ACT(x, wait_in_forward=False, wait_in_backward=True)
+        return x
 
 
 def get_normalization_function(
