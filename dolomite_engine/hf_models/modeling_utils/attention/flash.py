@@ -2,6 +2,7 @@ import torch
 from transformers import DynamicCache
 from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
+from ....kernels import wait_for_ACT
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ..position_embedding import apply_rotary_pos_emb
 from .base import Attention
@@ -62,6 +63,10 @@ class FlashAttention2(Attention):
 
         batch_size, query_length = query.shape[:2]
 
+        query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
+        key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
+        value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
+
         hidden_states = _flash_attention_forward(
             query_states=query,
             key_states=key,
@@ -75,6 +80,7 @@ class FlashAttention2(Attention):
 
         del query, key, value
 
+        hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
         hidden_states = hidden_states.view(batch_size, query_length, -1)
 
         # ==========================================================================================
