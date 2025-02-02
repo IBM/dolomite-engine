@@ -57,7 +57,6 @@ class PreTrainedModelMixin(PreTrainedModel):
         past_key_values: tuple[tuple[torch.Tensor]],
         attention_mask: torch.Tensor | None,
         use_cache: bool,
-        output_attentions: bool,
     ) -> tuple[torch.Tensor]:
         if self._use_padding_free_transformer:
             if isinstance(input_ids, list) or isinstance(inputs_embeds, list):
@@ -90,8 +89,6 @@ class PreTrainedModelMixin(PreTrainedModel):
 
             if use_cache or past_key_values is not None:
                 raise NotImplementedError("KV caching is not supported with padding_free transformer")
-
-        assert not output_attentions
 
         return input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen
 

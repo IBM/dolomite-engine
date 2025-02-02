@@ -55,7 +55,6 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         inputs_embeds: torch.Tensor | list[list[float]] | None = None,
         labels: torch.Tensor | list[list[int]] | None = None,
         use_cache: bool | None = None,
-        output_attentions: bool | None = None,
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
@@ -72,7 +71,6 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             use_cache=use_cache,
-            output_attentions=output_attentions,
         )
 
         # ==========================================================================================
