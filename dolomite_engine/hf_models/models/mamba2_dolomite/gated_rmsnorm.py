@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class GatedRMSNorm(nn.RMSNorm):
@@ -8,7 +9,7 @@ class GatedRMSNorm(nn.RMSNorm):
         hidden_states = hidden_states.float()
 
         if gate is not None:
-            hidden_states = hidden_states * nn.functional.silu(gate.to(torch.float32))
+            hidden_states = hidden_states * F.silu(gate.float())
 
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.eps)
