@@ -41,7 +41,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
                     safetensors_weights_manager,
                     prefix="transformer.wpe.",
                     vocab_size=config.n_positions,
-                    tensor_parallel_word_embeddings=False,
+                    tensor_parallel_word_embeddings=True,
                 )
             )
 

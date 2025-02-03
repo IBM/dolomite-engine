@@ -13,7 +13,7 @@ from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
-        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
+        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", True)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
 
         self.num_pipeline_stages = kwargs.get("num_pipeline_stages", 1)
@@ -175,7 +175,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     max_position_embeddings,
                     self.embed_dim,
                     std=self.initializer_range,
-                    tensor_parallel_word_embeddings=False,
+                    tensor_parallel_word_embeddings=True,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )

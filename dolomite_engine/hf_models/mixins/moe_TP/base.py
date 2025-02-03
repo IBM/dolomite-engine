@@ -13,7 +13,7 @@ from ..moe import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTraine
 
 class PreTrainedMoEModelMixin_TP(PreTrainedMoEModelMixin, PreTrainedModelMixin_TP):
     def __init__(self, config: CommonConfig, *args, **kwargs):
-        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
+        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", True)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
 
         super().__init__(config, *args, **kwargs)

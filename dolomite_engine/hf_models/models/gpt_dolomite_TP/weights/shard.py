@@ -44,7 +44,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
                     safetensors_weights_manager,
                     prefix="transformer.wpe.",
                     vocab_size=config.n_positions,
-                    tensor_parallel_word_embeddings=False,
+                    tensor_parallel_word_embeddings=True,
                 )
             )
 

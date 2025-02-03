@@ -35,7 +35,7 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
                 # TODO change this if we support tensor parallel position embeddings
-                tensor_parallel_word_embeddings=False,
+                tensor_parallel_word_embeddings=True,
                 prefix=prefix + "transformer.wpe.weight",
                 vocab_size=config.n_positions,
                 check_correctness=check_correctness,
