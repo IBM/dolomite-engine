@@ -268,8 +268,6 @@ class DistributedArgs(BaseArgs):
     dispatching_dataloader: bool = False
     # tensor parallel world size
     tensor_parallel_world_size: int = 1
-    # tensor parallel embeddings
-    tensor_parallel_word_embeddings: bool = True
     # whether to use sequence parallel
     sequence_parallel: bool = False
     # pipeline parallel world size
