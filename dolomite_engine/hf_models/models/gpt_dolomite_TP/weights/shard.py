@@ -10,7 +10,6 @@ from ...gpt_dolomite import GPTDolomiteConfig
 def get_gpt_dolomite_model_parallel_state_dict(
     config: GPTDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
-    tensor_parallel_word_embeddings: bool,
     num_pipeline_stages: int,
     pipeline_stage_id: int,
 ) -> dict:
@@ -30,10 +29,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
         # word embeddings
         state_dict.update(
             _get_embeddings_or_lm_head(
-                safetensors_weights_manager,
-                prefix="transformer.wte.",
-                vocab_size=config.vocab_size,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+                safetensors_weights_manager, prefix="transformer.wte.", vocab_size=config.vocab_size
             )
         )
 
