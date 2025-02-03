@@ -23,7 +23,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
 parser.add_argument("--model-type", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
