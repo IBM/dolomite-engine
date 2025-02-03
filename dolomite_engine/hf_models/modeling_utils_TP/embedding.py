@@ -17,34 +17,23 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
         num_embeddings: int,
         embedding_dim: int,
         std: float | None = None,
-        tensor_parallel_word_embeddings: bool = False,
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
-        if self.tensor_parallel_word_embeddings:
-            assert ProcessGroupManager.is_tensor_parallel_enabled()
 
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
 
-        if self.tensor_parallel_word_embeddings:
-            self.vocab_start_index, self.vocab_end_index, num_embeddings_per_tp_rank = get_tensor_parallel_vocab_info(
-                num_embeddings
-            )
+        self.vocab_start_index, self.vocab_end_index, num_embeddings_per_tp_rank = get_tensor_parallel_vocab_info(
+            num_embeddings
+        )
 
-            super().__init__(num_embeddings_per_tp_rank, embedding_dim, std=std)
-
-            placement = Shard(0)
-        else:
-            super().__init__(num_embeddings, embedding_dim, std=std)
-
-            placement = Replicate()
+        super().__init__(num_embeddings_per_tp_rank, embedding_dim, std=std)
 
         self.weight = nn.Parameter(
             tensor_to_dtensor(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=placement
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
             )
         )
 
