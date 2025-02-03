@@ -69,9 +69,7 @@ if is_tp_first_rank:
 
 torch.distributed.barrier()
 
-model_tp = get_model_parallel_class(args.model_type).from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings, **kwargs
-)
+model_tp = get_model_parallel_class(args.model_type).from_pretrained(args.tmp_path, **kwargs)
 
 tp_state_dict = model_tp.state_dict()
 
@@ -101,9 +99,7 @@ def run_check(fix: bool):
         ]
 
         tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
-            config,
-            tensor_parallel_state_dicts=tensor_parallel_state_dicts,
-            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+            config, tensor_parallel_state_dicts=tensor_parallel_state_dicts
         )
 
     torch.distributed.barrier()

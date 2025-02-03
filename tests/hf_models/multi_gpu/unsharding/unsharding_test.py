@@ -15,13 +15,11 @@ class UnshardingTest(TestCommons):
         TestCommons.make_args_matrix(
             TestCommons.get_attention_head_types(),
             ["gelu", "geglu"],
-            [False, True],
             [GPTDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
             ["gelu", "geglu"],
-            [False],
             [MoEDolomiteConfig.model_type],
         )
     )
@@ -30,7 +28,6 @@ class UnshardingTest(TestCommons):
         self,
         attention_head_type: AttentionHeadType,
         activation_function: str,
-        tensor_parallel_word_embeddings: bool,
         model_type: str,
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
@@ -53,8 +50,5 @@ class UnshardingTest(TestCommons):
                 "--model-type",
                 model_type,
             ]
-
-            if tensor_parallel_word_embeddings:
-                command.append("--tensor-parallel-word-embeddings")
 
             subprocess.run(command, check=True)

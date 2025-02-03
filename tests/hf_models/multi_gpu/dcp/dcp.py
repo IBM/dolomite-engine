@@ -39,7 +39,7 @@ unshard_config = UnshardingArgs(**load_yaml(args.unshard_config))
 # set zero stage
 train_config.distributed_args.stage = args.zero_stage
 # set tensor parallel embeddings
-train_config.distributed_args.tensor_parallel_word_embeddings = args.tensor_parallel_word_embeddings
+train_config.distributed_args.tensor_parallel_word_embeddings = True
 # attention head type
 train_config.model_args.pretrained_config["attention_head_type"] = args.attention_head_type
 train_config.model_args.pretrained_config["num_key_value_heads"] = num_key_value_heads
