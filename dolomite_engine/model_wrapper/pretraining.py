@@ -25,7 +25,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         attention_implementation: AttentionImplementation,
         moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
@@ -48,7 +47,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
             attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
@@ -76,7 +74,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             attention_implementation=attention_implementation,
             moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             num_pipeline_stages=num_pipeline_stages,
             pipeline_stage_id=pipeline_stage_id,
@@ -138,15 +135,10 @@ class ModelWrapperForPretraining(ModelWrapper):
         is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
 
         if is_tensor_parallel_enabled:
-            logits = tensor_to_dtensor(
-                logits,
-                device_mesh=self.tp_mesh,
-                current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
-            )
-            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
+            loss_context = loss_parallel
 
-            if self.tensor_parallel_word_embeddings:
-                loss_context = loss_parallel
+            logits = tensor_to_dtensor(logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
 
         with loss_context():
             lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
@@ -227,7 +219,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         batch["input_ids"] = input_ids
 
         if ProcessGroupManager.is_tensor_parallel_enabled():
-            batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
+            batch["output_parallel_lm_logits"] = True
 
         if prev_aux_loss is not None:
             # past_key_values is used to send prev_aux_loss

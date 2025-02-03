@@ -24,7 +24,6 @@ _UNSHARD_STATE_DICT_FUNCTIONS = {
 def unshard_tensor_parallel_state_dicts(
     config: MoEDolomiteConfig,
     tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_word_embeddings: bool,
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
@@ -32,7 +31,6 @@ def unshard_tensor_parallel_state_dicts(
         return _UNSHARD_STATE_DICT_FUNCTIONS[config.model_type](
             config=config,
             tensor_parallel_state_dicts=tensor_parallel_state_dicts,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             prefix=prefix,
             check_correctness=check_correctness,
         )

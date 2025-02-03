@@ -13,7 +13,6 @@ from ...gpt_dolomite_TP.weights.unshard import (
 def unshard_desync_residual_tensor_parallel_state_dicts(
     config: DesyncResidualConfig,
     tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_word_embeddings: bool,
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
@@ -23,7 +22,6 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
     # word embeddings
     output_state_dict = _get_embeddings_or_lm_head(
         tensor_parallel_state_dicts,
-        tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
         prefix=prefix + "transformer.wte.weight",
         vocab_size=config.vocab_size,
         check_correctness=check_correctness,
@@ -34,8 +32,6 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
-                # TODO change this if we support tensor parallel position embeddings
-                tensor_parallel_word_embeddings=False,
                 prefix=prefix + "transformer.wpe.weight",
                 vocab_size=config.n_positions,
                 check_correctness=check_correctness,
@@ -116,7 +112,6 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
                 prefix=prefix + "lm_head.weight",
                 vocab_size=config.vocab_size,
                 check_correctness=check_correctness,

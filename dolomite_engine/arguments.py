@@ -268,8 +268,6 @@ class DistributedArgs(BaseArgs):
     dispatching_dataloader: bool = False
     # tensor parallel world size
     tensor_parallel_world_size: int = 1
-    # tensor parallel embeddings
-    tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
     # pipeline parallel world size
@@ -296,11 +294,6 @@ class DistributedArgs(BaseArgs):
 
         if self.sequence_parallel:
             assert self.tensor_parallel_world_size > 1, "tensor parallel needs to be enabled for sequence parallel"
-
-        if self.tensor_parallel_word_embeddings:
-            assert (
-                self.tensor_parallel_world_size > 1
-            ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
         if self.tensor_parallel_world_size > 1:
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"

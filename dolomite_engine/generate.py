@@ -98,7 +98,6 @@ def main() -> None:
                 efficient_initialization=False,
                 attention_implementation=args.model_args.attention_implementation,
                 use_padding_free_transformer=False,
-                tensor_parallel_word_embeddings=False,
                 sequence_parallel=False,
                 random_seed=args.random_args.seed,
                 trust_remote_code=args.model_args.trust_remote_code,
