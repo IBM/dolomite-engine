@@ -100,9 +100,7 @@ def run_check(fix: bool):
         ]
 
         tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
-            config,
-            tensor_parallel_state_dicts=tensor_parallel_state_dicts,
-            tensor_parallel_word_embeddings=True,
+            config, tensor_parallel_state_dicts=tensor_parallel_state_dicts
         )
 
     torch.distributed.barrier()
