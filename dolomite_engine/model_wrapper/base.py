@@ -173,7 +173,6 @@ class ModelWrapper(nn.Module):
             model_kwargs["moe_implementation"] = self.moe_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
-        model_kwargs["tensor_parallel_word_embeddings"] = True
         if self.sequence_parallel:
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
