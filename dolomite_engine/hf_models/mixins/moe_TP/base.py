@@ -13,9 +13,7 @@ from ..moe import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTraine
 
 class PreTrainedMoEModelMixin_TP(PreTrainedMoEModelMixin, PreTrainedModelMixin_TP):
     def __init__(self, config: CommonConfig, *args, **kwargs):
-        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
-
         super().__init__(config, *args, **kwargs)
 
 
@@ -41,7 +39,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 config.vocab_size,
                 self.embed_dim,
                 std=self.initializer_range,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )

@@ -7,7 +7,6 @@ from ...moe_dolomite import MoEDolomiteConfig
 def get_moe_dolomite_tensor_parallel_state_dict(
     config: MoEDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
-    tensor_parallel_word_embeddings: bool,
     num_pipeline_stages: int,
     pipeline_stage_id: int,
 ) -> dict:
@@ -27,10 +26,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
         # word embeddings
         state_dict.update(
             _get_embeddings_or_lm_head(
-                safetensors_weights_manager,
-                prefix="transformer.wte.",
-                vocab_size=config.vocab_size,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+                safetensors_weights_manager, prefix="transformer.wte.", vocab_size=config.vocab_size
             )
         )
 
@@ -38,10 +34,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
         if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
             state_dict.update(
                 _get_embeddings_or_lm_head(
-                    safetensors_weights_manager,
-                    prefix="transformer.wpe.",
-                    vocab_size=config.n_positions,
-                    tensor_parallel_word_embeddings=False,
+                    safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.n_positions
                 )
             )
 
@@ -81,7 +74,6 @@ def get_moe_dolomite_tensor_parallel_state_dict(
                     safetensors_weights_manager=safetensors_weights_manager,
                     prefix="lm_head.",
                     vocab_size=config.vocab_size,
-                    tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
                 )
             )
 

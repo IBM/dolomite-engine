@@ -22,7 +22,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         attention_implementation: AttentionImplementation,
         moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
@@ -50,7 +49,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
             attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
@@ -79,7 +77,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             attention_implementation=attention_implementation,
             moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
