@@ -24,7 +24,6 @@ parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--torch-dtype", type=str)
 parser.add_argument("--tmp-path", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--use-padding-free-transformer", action="store_true")
 parser.add_argument("--sequence-parallel", action="store_true")
 parser.add_argument("--model-type", type=str)
@@ -115,7 +114,7 @@ with torch.device("meta"):
 
     model_tp = get_model_parallel_class(args.model_type)._from_config(
         config,
-        tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+        tensor_parallel_word_embeddings=False,
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
@@ -163,10 +162,7 @@ else:
     output_tp = model_tp(input_ids=input_ids, labels=labels)
 
 loss_tp = output_tp.loss
-logits_tp = output_tp.logits
-
-if args.tensor_parallel_word_embeddings:
-    logits_tp = logits_tp[..., : config.vocab_size]
+logits_tp = output_tp.logits[..., : config.vocab_size]
 
 if torch.distributed.get_rank() == 0:
     output = model(input_ids=input_ids, labels=labels)
