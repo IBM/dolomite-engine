@@ -10,7 +10,6 @@ from ...gpt_dolomite import GPTDolomiteConfig
 def get_gpt_dolomite_model_parallel_state_dict(
     config: GPTDolomiteConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
-    tensor_parallel_word_embeddings: bool,
     num_pipeline_stages: int,
     pipeline_stage_id: int,
 ) -> dict:
@@ -33,7 +32,6 @@ def get_gpt_dolomite_model_parallel_state_dict(
                 safetensors_weights_manager,
                 prefix="transformer.wte.",
                 vocab_size=config.vocab_size,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             )
         )
 
@@ -44,7 +42,6 @@ def get_gpt_dolomite_model_parallel_state_dict(
                     safetensors_weights_manager,
                     prefix="transformer.wpe.",
                     vocab_size=config.n_positions,
-                    tensor_parallel_word_embeddings=False,
                 )
             )
 
@@ -84,7 +81,6 @@ def get_gpt_dolomite_model_parallel_state_dict(
                     safetensors_weights_manager=safetensors_weights_manager,
                     prefix="lm_head.",
                     vocab_size=config.vocab_size,
-                    tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
                 )
             )
 
@@ -92,27 +88,21 @@ def get_gpt_dolomite_model_parallel_state_dict(
 
 
 def _get_embeddings_or_lm_head(
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    prefix: str,
-    vocab_size: int,
-    tensor_parallel_word_embeddings: bool,
+    safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str, vocab_size: int
 ) -> dict:
-    if tensor_parallel_word_embeddings:
-        vocab_start_index, vocab_end_index, vocab_size_per_tensor_parallel_rank = get_tensor_parallel_vocab_info(
-            vocab_size
+    vocab_start_index, vocab_end_index, vocab_size_per_tensor_parallel_rank = get_tensor_parallel_vocab_info(
+        vocab_size
+    )
+
+    weight = safetensors_weights_manager.get_slice(prefix + "weight")[vocab_start_index:vocab_end_index, :]
+
+    if weight.shape[0] < vocab_size_per_tensor_parallel_rank:
+        weight = torch.cat(
+            [
+                weight,
+                torch.zeros((vocab_size_per_tensor_parallel_rank - weight.shape[0], weight.shape[1])),
+            ]
         )
-
-        weight = safetensors_weights_manager.get_slice(prefix + "weight")[vocab_start_index:vocab_end_index, :]
-
-        if weight.shape[0] < vocab_size_per_tensor_parallel_rank:
-            weight = torch.cat(
-                [
-                    weight,
-                    torch.zeros((vocab_size_per_tensor_parallel_rank - weight.shape[0], weight.shape[1])),
-                ]
-            )
-    else:
-        weight = safetensors_weights_manager.get_tensor(prefix + "weight")
 
     return {prefix + "weight": weight}
 

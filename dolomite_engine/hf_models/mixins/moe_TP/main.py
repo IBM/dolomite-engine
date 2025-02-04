@@ -74,20 +74,15 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 )
 
         if self.is_pipeline_parallel_enabled and not self.is_first_stage:
             add_aux_loss(prev_aux_loss)
 
-        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            if output_parallel_lm_logits:
-                assert self.tensor_parallel_word_embeddings
-            else:
-                if self.tensor_parallel_word_embeddings:
-                    # all gather
-                    lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-                    lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+        if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
+            # all gather
+            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+            lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
         aux_loss = get_aux_loss()
 

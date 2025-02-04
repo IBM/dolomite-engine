@@ -28,7 +28,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     self.vocab_size,
                     config.n_embd,
                     std=config.initializer_range,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                     sequence_parallel=self.sequence_parallel,
                 )
 
@@ -100,17 +99,12 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 )
 
-        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            if output_parallel_lm_logits:
-                assert self.tensor_parallel_word_embeddings
-            else:
-                if self.tensor_parallel_word_embeddings:
-                    # all gather
-                    lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-                    lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+        if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
+            # all gather
+            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+            lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
         if not self.is_pipeline_parallel_enabled:
             output = CausalLMOutputWithPast(
@@ -132,7 +126,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             LMHead_TP.compute_with_weight(
                 hidden_states,
                 weight=self.transformer.wte.weight,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
                 tp_mesh=self.tp_mesh,
@@ -143,18 +136,14 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     @classmethod
     def from_pretrained(
-        cls,
-        pretrained_model_name_or_path: str,
-        torch_dtype: torch.dtype = torch.float32,
-        tensor_parallel_word_embeddings: bool = False,
-        **kwargs,
+        cls, pretrained_model_name_or_path: str, torch_dtype: torch.dtype = torch.float32, **kwargs
     ) -> CausalLMModelMixin_TP:
         config: CommonConfig = cls.config_class.from_pretrained(pretrained_model_name_or_path)
 
         # use dummy tensors to avoid initializing model here
         with torch.device("meta"):
             # try sharding vocab matrices if really struggling for memory
-            model = cls._from_config(config, tensor_parallel_word_embeddings=tensor_parallel_word_embeddings, **kwargs)
+            model = cls._from_config(config, **kwargs)
             model = model.to(dtype=torch_dtype)
 
         # copy to device without copying storage
@@ -173,7 +162,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         state_dict = self.__class__.model_parallel_state_dict_function(
             config=self.config,
             safetensors_weights_manager=safetensors_weights_manager,
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
             num_pipeline_stages=self.num_pipeline_stages,
             pipeline_stage_id=self.pipeline_stage_id,
         )
@@ -204,7 +192,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
     ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_last_stage:
             vocab_size = self.config.vocab_size
-            if self.tensor_parallel_word_embeddings and output_parallel_lm_logits_if_possible:
+            if output_parallel_lm_logits_if_possible:
                 vocab_size = divide_if_divisible(vocab_size, ProcessGroupManager.get_tensor_parallel_world_size(), "")
 
             if self._use_padding_free_transformer:

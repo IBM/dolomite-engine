@@ -9,7 +9,6 @@ from ...gpt_dolomite import GPTDolomiteConfig
 def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     config: GPTDolomiteConfig,
     tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_word_embeddings: bool,
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
@@ -19,7 +18,6 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     # word embeddings
     output_state_dict = _get_embeddings_or_lm_head(
         tensor_parallel_state_dicts,
-        tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
         prefix=prefix + "transformer.wte.weight",
         vocab_size=config.vocab_size,
         check_correctness=check_correctness,
@@ -30,8 +28,6 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
-                # TODO change this if we support tensor parallel position embeddings
-                tensor_parallel_word_embeddings=False,
                 prefix=prefix + "transformer.wpe.weight",
                 vocab_size=config.n_positions,
                 check_correctness=check_correctness,
@@ -96,7 +92,6 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
                 prefix=prefix + "lm_head.weight",
                 vocab_size=config.vocab_size,
                 check_correctness=check_correctness,
@@ -119,22 +114,14 @@ def fix_gpt_dolomite_unsharded_state_dict(
 
 def _get_embeddings_or_lm_head(
     tensor_parallel_state_dicts: list[dict],
-    tensor_parallel_word_embeddings: bool,
     prefix: str,
     vocab_size: int,
     check_correctness: bool,
 ) -> dict:
-    if tensor_parallel_word_embeddings:
-        output = _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts, key=prefix, dim=0)
-    else:
-        output = _get_once_from_state_dicts_with_check(
-            tensor_parallel_state_dicts, key=prefix, check_correctness=check_correctness
-        )
+    output = _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts, key=prefix, dim=0)
 
-    # tensor parallel embeddings uses Embedding_TP class so we need to trim the matrix
-    if tensor_parallel_word_embeddings:
-        assert output.shape[0] >= vocab_size
-        output = output[:vocab_size, :]
+    assert output.shape[0] >= vocab_size
+    output = output[:vocab_size, :]
 
     return {prefix: output}
 

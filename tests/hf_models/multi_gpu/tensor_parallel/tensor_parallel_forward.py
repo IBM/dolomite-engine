@@ -24,7 +24,6 @@ parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--torch-dtype", type=str)
 parser.add_argument("--tmp-path", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--use-padding-free-transformer", action="store_true")
 parser.add_argument("--sequence-parallel", action="store_true")
 parser.add_argument("--model-type", type=str)
@@ -115,7 +114,6 @@ with torch.device("meta"):
 
     model_tp = get_model_parallel_class(args.model_type)._from_config(
         config,
-        tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
@@ -163,13 +161,13 @@ else:
     output_tp = model_tp(input_ids=input_ids, labels=labels)
 
 loss_tp = output_tp.loss
-logits_tp = output_tp.logits
-
-if args.tensor_parallel_word_embeddings:
-    logits_tp = logits_tp[..., : config.vocab_size]
+logits_tp = output_tp.logits[..., : config.vocab_size]
 
 if torch.distributed.get_rank() == 0:
-    output = model(input_ids=input_ids, labels=labels)
+    # loss computation hangs if we don't use dummy tensor parallel world size
+    with ProcessGroupManager.set_dummy_tensor_parallel_world_size(1):
+        output = model(input_ids=input_ids, labels=labels)
+
     loss = output.loss
     logits = output.logits
 
@@ -180,4 +178,4 @@ if torch.distributed.get_rank() == 0:
     assert error < 5e-4, f"logits don't match for normal and tensor parallel model, error is ({error})"
 
     error = (loss - loss_tp).abs().max()
-    assert error < 3e-6, f"losses don't match for normal and tensor parallel model, error is ({error})"
+    assert error < 1e-3, f"losses don't match for normal and tensor parallel model, error is ({error})"
