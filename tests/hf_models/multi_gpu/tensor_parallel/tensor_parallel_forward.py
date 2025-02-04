@@ -114,6 +114,7 @@ with torch.device("meta"):
 
     model_tp = get_model_parallel_class(args.model_type)._from_config(
         config,
+        tensor_parallel_word_embeddings=True,
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
@@ -164,7 +165,10 @@ loss_tp = output_tp.loss
 logits_tp = output_tp.logits[..., : config.vocab_size]
 
 if torch.distributed.get_rank() == 0:
-    output = model(input_ids=input_ids, labels=labels)
+    # loss computation hangs if we don't use dummy tensor parallel world size
+    with ProcessGroupManager.set_dummy_tensor_parallel_world_size(1):
+        output = model(input_ids=input_ids, labels=labels)
+
     loss = output.loss
     logits = output.logits
 
