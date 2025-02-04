@@ -37,7 +37,6 @@ def get_model_container(
         "attention_implementation": args.model_args.attention_implementation,
         "moe_implementation": args.model_args.moe_implementation,
         "use_padding_free_transformer": args.model_args.use_padding_free_transformer,
-        "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,
         "num_pipeline_stages": num_pipeline_stages,
         "trust_remote_code": args.model_args.trust_remote_code,
