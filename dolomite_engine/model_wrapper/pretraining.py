@@ -157,7 +157,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             if is_tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
-            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)
             output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
 
         return output
@@ -294,3 +294,15 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
+
+
+class _F(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, lm_loss: torch.Tensor, aux_loss: torch.Tensor, router_aux_loss_coef: float) -> torch.Tensor:
+        ctx.router_aux_loss_coef = router_aux_loss_coef
+        return lm_loss + router_aux_loss_coef * aux_loss
+
+    @staticmethod
+    @torch._dynamo.disable
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
+        return grad_output, grad_output / ctx.router_aux_loss_coef, None
