@@ -47,7 +47,6 @@ class ModelWrapperForFinetuning(ModelWrapper):
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
-            tensor_parallel_word_embeddings=True,
         )
 
         lm_loss = lm_loss * lm_loss_multiplier

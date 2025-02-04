@@ -100,7 +100,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 )
 
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
