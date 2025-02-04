@@ -8,7 +8,6 @@ from ...gpt_dolomite_TP.weights.shard import _get_embeddings_or_lm_head, _get_la
 def get_desync_residual_model_parallel_state_dict(
     config: DesyncResidualConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
-    tensor_parallel_word_embeddings: bool,
     num_pipeline_stages: int,
     pipeline_stage_id: int,
 ) -> dict:
@@ -16,20 +15,14 @@ def get_desync_residual_model_parallel_state_dict(
 
     # word embeddings
     state_dict = _get_embeddings_or_lm_head(
-        safetensors_weights_manager,
-        prefix="transformer.wte.",
-        vocab_size=config.vocab_size,
-        tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
+        safetensors_weights_manager, prefix="transformer.wte.", vocab_size=config.vocab_size
     )
 
     # positional embeddings
     if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
         state_dict.update(
             _get_embeddings_or_lm_head(
-                safetensors_weights_manager,
-                prefix="transformer.wpe.",
-                vocab_size=config.n_positions,
-                tensor_parallel_word_embeddings=False,
+                safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.n_positions
             )
         )
 
@@ -64,7 +57,6 @@ def get_desync_residual_model_parallel_state_dict(
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix="lm_head.",
                 vocab_size=config.vocab_size,
-                tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             )
         )
 
@@ -81,9 +73,7 @@ def _get_desync_residual_layernorm(safetensors_weights_manager: SafeTensorsWeigh
 
 
 def _get_attention(
-    config: DesyncResidualConfig,
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    prefix: str,
+    config: DesyncResidualConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
 ) -> None:
     state_dict = {}
 
@@ -106,9 +96,7 @@ def _get_attention(
 
 
 def _get_mlp(
-    config: DesyncResidualConfig,
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    prefix: str,
+    config: DesyncResidualConfig, safetensors_weights_manager: SafeTensorsWeightsManager, prefix: str
 ) -> None:
     state_dict = _get_column_parallel(
         config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "c_fc."

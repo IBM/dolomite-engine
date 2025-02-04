@@ -173,7 +173,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         state_dict = self.__class__.model_parallel_state_dict_function(
             config=self.config,
             safetensors_weights_manager=safetensors_weights_manager,
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
             num_pipeline_stages=self.num_pipeline_stages,
             pipeline_stage_id=self.pipeline_stage_id,
         )

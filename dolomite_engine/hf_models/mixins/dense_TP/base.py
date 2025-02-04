@@ -175,7 +175,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     max_position_embeddings,
                     self.embed_dim,
                     std=self.initializer_range,
-                    tensor_parallel_word_embeddings=False,
+                    tensor_parallel_word_embeddings=True,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
