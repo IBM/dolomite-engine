@@ -23,7 +23,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
 parser.add_argument("--model-type", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
@@ -70,7 +69,7 @@ if is_tp_first_rank:
 torch.distributed.barrier()
 
 model_tp = get_model_parallel_class(args.model_type).from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings, **kwargs
+    args.tmp_path, tensor_parallel_word_embeddings=True, **kwargs
 )
 
 tp_state_dict = model_tp.state_dict()
@@ -103,7 +102,7 @@ def run_check(fix: bool):
         tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
             config,
             tensor_parallel_state_dicts=tensor_parallel_state_dicts,
-            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+            tensor_parallel_word_embeddings=True,
         )
 
     torch.distributed.barrier()
