@@ -114,7 +114,7 @@ with torch.device("meta"):
 
     model_tp = get_model_parallel_class(args.model_type)._from_config(
         config,
-        tensor_parallel_word_embeddings=False,
+        tensor_parallel_word_embeddings=True,
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
