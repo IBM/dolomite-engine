@@ -1,14 +1,15 @@
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPast
+from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...loss import add_aux_loss, clear_aux_loss
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ..dense_TP import BaseModelMixin_TP, PreTrainedModelMixin_TP
-from ..moe import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
+from ..moe import BaseMoEModelMixin, PreTrainedMoEModelMixin
 
 
 class PreTrainedMoEModelMixin_TP(PreTrainedMoEModelMixin, PreTrainedModelMixin_TP):
@@ -96,7 +97,7 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple | BaseModelOutputWithPast:
+    ) -> MoeModelOutputWithPast:
         if self.is_first_stage:
             (
                 use_cache,
@@ -141,7 +142,7 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        total_aux_loss = 0
+        clear_aux_loss()
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             hidden_states, aux_loss = self.h[str(layer_idx)](
@@ -153,11 +154,9 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                 max_seqlen=max_seqlen,
             )
 
-            total_aux_loss = total_aux_loss + aux_loss
+            add_aux_loss(aux_loss)
 
         if self.is_last_stage:
             hidden_states = self.ln_f(hidden_states)
 
-        return MoeModelOutputWithPastAndAuxLoss(
-            last_hidden_state=hidden_states, past_key_values=past_key_values, aux_loss=total_aux_loss
-        )
+        return MoeModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)

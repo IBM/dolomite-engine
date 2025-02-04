@@ -69,7 +69,7 @@ class MoEDolomiteBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states, router_logits, aux_loss = self.moe(hidden_states)
+        hidden_states, _, aux_loss = self.moe(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual

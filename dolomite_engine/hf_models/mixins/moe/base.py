@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
@@ -8,13 +6,9 @@ from transformers.modeling_outputs import MoeModelOutputWithPast
 from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...loss import add_aux_loss, clear_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ..dense import BaseModelMixin, PreTrainedModelMixin
-
-
-@dataclass
-class MoeModelOutputWithPastAndAuxLoss(MoeModelOutputWithPast):
-    aux_loss: torch.Tensor | None = None
 
 
 class PreTrainedMoEModelMixin(PreTrainedModelMixin):
@@ -75,7 +69,7 @@ class BaseMoEModelMixin(BaseModelMixin):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> MoeModelOutputWithPastAndAuxLoss:
+    ) -> MoeModelOutputWithPast:
         (
             use_cache,
             hidden_states,
@@ -105,7 +99,7 @@ class BaseMoEModelMixin(BaseModelMixin):
         # ==========================================================================================
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        total_aux_loss = 0
+        clear_aux_loss()
 
         for block in self.h:
             hidden_states, aux_loss = block(
@@ -117,10 +111,8 @@ class BaseMoEModelMixin(BaseModelMixin):
                 max_seqlen=max_seqlen,
             )
 
-            total_aux_loss = total_aux_loss + aux_loss
+            add_aux_loss(aux_loss)
 
         hidden_states = self.ln_f(hidden_states)
 
-        return MoeModelOutputWithPastAndAuxLoss(
-            last_hidden_state=hidden_states, past_key_values=past_key_values, aux_loss=total_aux_loss
-        )
+        return MoeModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)

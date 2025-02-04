@@ -9,6 +9,7 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..hf_models import get_aux_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -121,15 +122,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
-        if isinstance(model_outputs, torch.Tensor):
-            logits = model_outputs
-            aux_loss = None
-        elif isinstance(model_outputs, tuple):
-            logits, aux_loss = model_outputs
-            aux_loss = aux_loss.squeeze(0)
-        else:
-            logits: torch.Tensor = model_outputs.logits
-            aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
+        logits: torch.Tensor = model_outputs.logits
+        aux_loss = get_aux_loss()
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
@@ -153,7 +147,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         lm_loss = lm_loss * lm_loss_multiplier
 
-        if aux_loss is None:
+        if aux_loss == 0:
             loss = lm_loss
             output = {"loss": loss}
         else:

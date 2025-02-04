@@ -1,7 +1,9 @@
 import torch
 from transformers import DynamicCache
+from transformers.modeling_outputs import MoeModelOutputWithPast
 
-from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
+from ...loss import add_aux_loss, clear_aux_loss
+from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
 from .config import MoELadderResidualConfig
 from .layer import MoELadderResidualBlock
 
@@ -24,7 +26,7 @@ class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> MoeModelOutputWithPastAndAuxLoss:
+    ) -> MoeModelOutputWithPast:
         (
             use_cache,
             hidden_states,
@@ -48,7 +50,7 @@ class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin
         previous_mlp_out = None
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        total_aux_loss = 0
+        clear_aux_loss()
 
         for block in self.h:
             previous_attention_out, previous_mlp_out, hidden_states, aux_loss = block(
@@ -62,11 +64,9 @@ class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin
                 max_seqlen=max_seqlen,
             )
 
-            total_aux_loss = total_aux_loss + aux_loss
+            add_aux_loss(aux_loss)
 
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
         hidden_states = self.ln_f(hidden_states)
 
-        return MoeModelOutputWithPastAndAuxLoss(
-            last_hidden_state=hidden_states, past_key_values=past_key_values, aux_loss=total_aux_loss
-        )
+        return MoeModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)

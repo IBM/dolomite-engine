@@ -1,11 +1,10 @@
 import torch
 from transformers import DynamicCache
-from transformers.modeling_outputs import MoeCausalLMOutputWithPast
+from transformers.modeling_outputs import MoeCausalLMOutputWithPast, MoeModelOutputWithPast
 
 from ...config import CommonConfig
-from ...loss import get_autoregressive_language_modeling_loss
+from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
 from ..dense import CausalLMModelMixin
-from .base import MoeModelOutputWithPastAndAuxLoss
 
 
 class CausalLMMoEModelMixin(CausalLMModelMixin):
@@ -57,7 +56,7 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
         #     position_ids -> None or (batch_size, key_length)
         # ==========================================================================================
 
-        transformer_outputs: MoeModelOutputWithPastAndAuxLoss = self.transformer(
+        transformer_outputs: MoeModelOutputWithPast = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -85,16 +84,13 @@ class CausalLMMoEModelMixin(CausalLMModelMixin):
                 reduction=reduction,
             )
 
-        aux_loss = transformer_outputs.aux_loss
-
         if lm_loss is None:
             loss = None
         else:
-            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            loss = lm_loss + self.router_aux_loss_coef * get_aux_loss()
 
         return MoeCausalLMOutputWithPast(
             loss=loss,
-            aux_loss=aux_loss,
             logits=lm_logits,
             past_key_values=transformer_outputs.past_key_values,
             hidden_states=transformer_outputs.hidden_states,
