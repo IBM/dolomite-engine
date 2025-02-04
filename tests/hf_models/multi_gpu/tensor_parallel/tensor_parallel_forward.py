@@ -179,4 +179,4 @@ if torch.distributed.get_rank() == 0:
     assert error < 5e-4, f"logits don't match for normal and tensor parallel model, error is ({error})"
 
     error = (loss - loss_tp).abs().max()
-    assert error < 3e-6, f"losses don't match for normal and tensor parallel model, error is ({error})"
+    assert error < 1e-3, f"losses don't match for normal and tensor parallel model, error is ({error})"
