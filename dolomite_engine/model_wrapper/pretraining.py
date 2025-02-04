@@ -305,4 +305,4 @@ class _F(torch.autograd.Function):
     @staticmethod
     @torch._dynamo.disable
     def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
-        return grad_output, grad_output / ctx.router_aux_loss_coef, None
+        return grad_output, ctx.router_aux_loss_coef * grad_output, None
