@@ -1,5 +1,5 @@
-from ...config import CommonConfig
-from ...modeling_utils import SDPA
+from ....config import CommonConfig
+from ....modeling_utils import SDPA
 from .base import _BaseAttention_TP
 
 

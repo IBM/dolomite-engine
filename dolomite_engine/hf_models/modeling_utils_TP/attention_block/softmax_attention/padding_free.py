@@ -1,7 +1,7 @@
 import torch
 
-from ...config import CommonConfig
-from ...modeling_utils import PaddingFreeAttention
+from ....config import CommonConfig
+from ....modeling_utils import PaddingFreeAttention
 from .base import _BaseAttention_TP
 
 

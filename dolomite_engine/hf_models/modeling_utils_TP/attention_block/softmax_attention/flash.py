@@ -1,5 +1,5 @@
-from ...config import CommonConfig
-from ...modeling_utils import FlashAttention2
+from ....config import CommonConfig
+from ....modeling_utils import FlashAttention2
 from .base import _BaseAttention_TP
 
 

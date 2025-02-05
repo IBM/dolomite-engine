@@ -1,4 +1,4 @@
-from .attention import Attention_TP, get_attention_module_TP
+from .attention_block import Attention_TP, get_attention_module_TP
 from .dropout import Dropout_TP
 from .dtensor_module import DTensorModule
 from .embedding import Embedding_TP, get_tensor_parallel_vocab_info
