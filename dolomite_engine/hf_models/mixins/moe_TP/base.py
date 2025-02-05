@@ -4,14 +4,8 @@ from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
-from ..dense_TP import BaseModelMixin_TP, PreTrainedModelMixin_TP
-from ..moe import BaseMoEModelMixin, PreTrainedMoEModelMixin
-
-
-class PreTrainedMoEModelMixin_TP(PreTrainedMoEModelMixin, PreTrainedModelMixin_TP):
-    def __init__(self, config: CommonConfig, *args, **kwargs):
-        self.sequence_parallel = kwargs.get("sequence_parallel", False)
-        super().__init__(config, *args, **kwargs)
+from ..dense_TP import BaseModelMixin_TP
+from ..moe import BaseMoEModelMixin
 
 
 class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):

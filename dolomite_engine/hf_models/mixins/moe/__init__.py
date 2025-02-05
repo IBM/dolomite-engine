@@ -1,2 +1,2 @@
-from .base import BaseMoEModelMixin, PreTrainedMoEModelMixin
+from .base import BaseMoEModelMixin
 from .main import CausalLMMoEModelMixin
