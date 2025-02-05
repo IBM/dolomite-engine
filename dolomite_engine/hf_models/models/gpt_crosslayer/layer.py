@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import MLP, apply_rotary_pos_emb, get_normalization_function, repeat_key_value
+from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
 from .attention import get_attention_module, get_key_value_projection
 from .config import GPTCrossLayerConfig
 
@@ -21,14 +21,6 @@ class CrossLayer(nn.Module):
         hidden_size = config.hidden_size
         self.m_residual = config.m_residual
 
-        self._use_eager_attention = attention_implementation == "eager"
-        self._use_sdpa = attention_implementation == "sdpa"
-        self._use_flash_attention_2 = attention_implementation == "flash_attention_2"
-        self._use_padding_free_transformer = use_padding_free_transformer
-
-        if self._use_padding_free_transformer:
-            assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
-
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
@@ -38,7 +30,9 @@ class CrossLayer(nn.Module):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.mlp = MLP(config)
+        self.mlp = get_mlp_block(
+            config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
+        )
 
     def forward(
         self,

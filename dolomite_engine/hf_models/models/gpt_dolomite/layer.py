@@ -17,7 +17,6 @@ class GPTDolomiteBlock(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
