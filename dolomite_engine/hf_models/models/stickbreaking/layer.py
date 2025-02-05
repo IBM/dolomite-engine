@@ -69,7 +69,6 @@ class StickBreakingBlock(nn.Module):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        # residual connection
         hidden_states = hidden_states + residual
         residual = hidden_states
 
@@ -80,7 +79,6 @@ class StickBreakingBlock(nn.Module):
         if self.m_residual is not None:
             feed_forward_hidden_states = feed_forward_hidden_states * self.m_residual
 
-        # residual connection
         hidden_states = residual + feed_forward_hidden_states
 
         return hidden_states

@@ -79,7 +79,6 @@ class CrossLayer(nn.Module):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        # residual connection
         hidden_states = hidden_states + residual
 
         return hidden_states
