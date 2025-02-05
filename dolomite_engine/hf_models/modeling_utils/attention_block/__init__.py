@@ -41,7 +41,7 @@ def get_attention_module(
             ), "padding free transformer only works with flash attention"
             return PaddingFreeAttention(config, causal=causal, layer_idx=layer_idx)
         else:
-            return _ATTENTION_MODULES[attention_implementation]
+            return _ATTENTION_MODULES[attention_implementation](config, causal=causal, layer_idx=layer_idx)
     elif attention_block_type == "stickbreaking_attention":
         if use_padding_free_transformer:
             return PaddingFreeSBAttention(config, causal=True, layer_idx=layer_idx)
