@@ -79,7 +79,7 @@ def unshard_moe_dolomite_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_moe(
                 tensor_parallel_state_dicts,
-                prefix=prefix + f"transformer.h.{layer_idx}.moe.",
+                prefix=prefix + f"transformer.h.{layer_idx}.mlp.",
                 config=config,
                 check_correctness=check_correctness,
             )
@@ -171,7 +171,7 @@ def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_world_
 
     if is_glu(config.activation_function):
         for layer_idx in range(config.n_layer):
-            key = f"{prefix}transformer.h.{layer_idx}.moe.c_fc.weight"
+            key = f"{prefix}transformer.h.{layer_idx}.mlp.c_fc.weight"
             weight = state_dict[key]
             weight = weight.chunk(tensor_parallel_world_size, dim=1)
             weight = [w.chunk(2, dim=1) for w in weight]

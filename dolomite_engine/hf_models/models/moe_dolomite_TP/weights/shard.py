@@ -59,7 +59,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
             _get_moe(
                 config=config,
                 safetensors_weights_manager=safetensors_weights_manager,
-                prefix=prefix + "moe.",
+                prefix=prefix + "mlp.",
                 column_parallel_shard_dim=1,
                 row_parallel_shard_dim=2,
             )
