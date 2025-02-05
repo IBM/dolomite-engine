@@ -28,4 +28,6 @@ class MoEDolomiteBlock(GPTDolomiteBlock):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.mlp = get_mlp_block(config, use_aux_free_moe=config.use_aux_free_moe, layer_idx=layer_idx)
+        self.mlp = get_mlp_block(
+            config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
+        )
