@@ -10,6 +10,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
@@ -19,6 +20,7 @@ from dolomite_engine.hf_models import (
     import_from_huggingface,
 )
 from dolomite_engine.hf_models.config import CommonConfig
+from dolomite_engine.kernels import enable_kernels
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
@@ -238,36 +240,37 @@ class TestCommons(TestCase):
         return False
 
     def from_config(self, config: AutoConfig, **kwargs) -> AutoModelForCausalLM:
-        model = AutoModelForCausalLM.from_config(config, **kwargs)
-
         attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
-        moe_implementation = kwargs.pop("moe_implementation", None)
 
-        if use_padding_free_transformer:
-            assert model._use_padding_free_transformer
+        kernels = []
 
-        if attention_implementation == "eager":
-            assert "Attention" in str(model)
-            assert "FlashAttention2" not in str(model)
-            assert "PaddingFreeAttention" not in str(model)
-        elif attention_implementation == "sdpa":
-            assert "SDPA" in str(model)
-        elif attention_implementation == "flash_attention_2":
-            if use_padding_free_transformer:
-                assert "PaddingFreeAttention" in str(model)
-            else:
-                assert "FlashAttention2" in str(model)
-
+        moe_implementation = kwargs.pop("moe_implementation", "eager")
         if moe_implementation == "scattermoe":
-            assert "ScatterMoE" in str(model)
-        elif moe_implementation == "eager":
-            assert "MoE" in str(model)
+            kernels.append(Kernel.scattermoe)
 
-        kwargs.pop("torch_dtype", None)
-        assert len(kwargs) == 0
+        with enable_kernels(kernels):
+            model = AutoModelForCausalLM.from_config(config, **kwargs)
 
-        return model
+            if use_padding_free_transformer:
+                assert model._use_padding_free_transformer
+
+            if attention_implementation == "eager":
+                assert "Attention" in str(model)
+                assert "FlashAttention2" not in str(model)
+                assert "PaddingFreeAttention" not in str(model)
+            elif attention_implementation == "sdpa":
+                assert "SDPA" in str(model)
+            elif attention_implementation == "flash_attention_2":
+                if use_padding_free_transformer:
+                    assert "PaddingFreeAttention" in str(model)
+                else:
+                    assert "FlashAttention2" in str(model)
+
+            kwargs.pop("torch_dtype", None)
+            assert len(kwargs) == 0
+
+            return model
 
     def assert_equal_tensors(
         self,

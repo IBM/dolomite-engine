@@ -56,7 +56,6 @@ class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
                     config,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
-                    moe_implementation=self.moe_implementation,
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
                 )

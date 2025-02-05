@@ -1,5 +1,7 @@
 import torch.nn as nn
 
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
 from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
 from ..moe_dolomite import MoEDolomiteConfig
 from ..moe_dolomite.layer import MoEDolomiteBlock
@@ -12,7 +14,6 @@ class MoEDolomiteBlock_TP(MoEDolomiteBlock):
         config: MoEDolomiteConfig,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        moe_implementation: str,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
@@ -45,7 +46,7 @@ class MoEDolomiteBlock_TP(MoEDolomiteBlock):
             sequence_parallel=sequence_parallel,
         )
 
-        assert moe_implementation == "scattermoe", "TP for MoE is only implemented with scattermoe"
+        assert is_kernel_allowed(Kernel.scattermoe), "TP for MoE is only implemented with scattermoe"
         self.mlp = ScatterMoE_TP(
             config,
             use_padding_free_transformer=use_padding_free_transformer,

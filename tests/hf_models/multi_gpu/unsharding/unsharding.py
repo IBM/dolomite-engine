@@ -59,7 +59,6 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_head=16,
         activation_function=args.activation_function,
     )
-    kwargs["moe_implementation"] = "scattermoe"
 
 
 if is_tp_first_rank:

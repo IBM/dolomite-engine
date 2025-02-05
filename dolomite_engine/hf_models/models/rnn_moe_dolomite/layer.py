@@ -17,7 +17,6 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         attention_implementation: str,
         attention_pattern: str,
         use_padding_free_transformer: bool,
-        moe_implementation: str,
         layer_idx: int | None = None,
     ) -> None:
         nn.Module.__init__(self)
@@ -54,7 +53,6 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         )
         self.mlp = get_moe(
             config,
-            moe_implementation=moe_implementation,
             use_aux_free_moe=config.use_aux_free_moe,
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,

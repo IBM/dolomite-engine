@@ -60,7 +60,6 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_embd=128,
         n_head=16,
     )
-    kwargs["moe_implementation"] = "scattermoe"
 elif args.model_type == DesyncResidualConfig.model_type:
     config = DesyncResidualConfig(
         attention_head_type=args.attention_head_type,
@@ -80,7 +79,6 @@ elif args.model_type == DesyncResidualConfig.model_type:
             {"attention": False, "mlp": True},
         ],
     )
-    kwargs["moe_implementation"] = "scattermoe"
 elif args.model_type == LadderResidualConfig.model_type:
     config = LadderResidualConfig(
         attention_head_type=args.attention_head_type,

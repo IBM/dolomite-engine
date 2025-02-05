@@ -44,7 +44,6 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
                     attention_implementation=self.attention_implementation,
                     attention_pattern=self.attention_pattern[i],
                     use_padding_free_transformer=self._use_padding_free_transformer,
-                    moe_implementation=self.moe_implementation,
                     layer_idx=i,
                 )
                 for i in range(config.n_layer)
