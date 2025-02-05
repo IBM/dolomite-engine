@@ -161,8 +161,10 @@ class PaddingFreeSBAttention(SBAttention):
             cu_seqlens=cu_seqlens,
             max_seqlens=max_seqlen,
         )
+
         if self.sb_remainder:
-            hidden_states = hidden_states + rem[..., None] * self.head_bias[:, None, :]
+            hidden_states = hidden_states + rem[..., None] * self._get_head_bias()
+
         hidden_states = hidden_states.permute(1, 0, 2)
 
         hidden_states = hidden_states.view(-1, self.hidden_size)
@@ -172,6 +174,9 @@ class PaddingFreeSBAttention(SBAttention):
         hidden_states = self.resid_dropout(hidden_states)
 
         return hidden_states
+
+    def _get_head_bias(self):
+        return self.head_bias[:, None, :]
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor

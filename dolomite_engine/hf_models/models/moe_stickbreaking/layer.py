@@ -63,7 +63,6 @@ class MoEStickBreakingBlock(nn.Module):
             rope_cos_sin=rope_cos_sin,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            sb_metadata=sb_metadata,
         )
 
         if self.m_residual is not None:

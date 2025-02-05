@@ -25,7 +25,9 @@ from .models import (
     MoELadderResidualModel,
     MoEStickBreakingConfig,
     MoEStickBreakingForCausalLM,
+    MoEStickBreakingForCausalLM_TP,
     MoEStickBreakingModel,
+    MoEStickBreakingModel_TP,
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
@@ -76,6 +78,7 @@ _MODEL_PARALLEL_CLASS_MAPPING = {
     DesyncResidualConfig.model_type: DesyncResidualForCausalLM_TP,
     LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
     MoEDolomiteConfig.model_type: MoEDolomiteForCausalLM_TP,
+    MoEStickBreakingConfig.model_type: MoEStickBreakingForCausalLM_TP,
 }
 
 
