@@ -1,14 +1,13 @@
-import torch
 import torch.nn as nn
-from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_attention_module, get_mlp_block, get_normalization_function
+from ..gpt_dolomite.layer import GPTDolomiteBlock
 from ..rnn_dolomite.attention import DeltaNet
 from .config import RNNMoEDolomiteConfig
 
 
-class RNNMoEDolomiteBlock:
+class RNNMoEDolomiteBlock(GPTDolomiteBlock):
     def __init__(
         self,
         config: RNNMoEDolomiteConfig,
@@ -52,42 +51,3 @@ class RNNMoEDolomiteBlock:
         self.mlp = get_mlp_block(
             config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
         )
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        causal_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        residual = hidden_states
-        hidden_states = self.ln_1(hidden_states)
-
-        hidden_states = self.attn(
-            hidden_states,
-            past_key_values=past_key_values,
-            attention_mask=causal_mask if self.attention_pattern == "a" else attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
-
-        if self.m_residual is not None:
-            hidden_states = hidden_states * self.m_residual
-
-        hidden_states = hidden_states + residual
-
-        residual = hidden_states
-        hidden_states = self.ln_2(hidden_states)
-
-        hidden_states = self.mlp(hidden_states)
-
-        if self.m_residual is not None:
-            hidden_states = hidden_states * self.m_residual
-
-        hidden_states = hidden_states + residual
-
-        return hidden_states

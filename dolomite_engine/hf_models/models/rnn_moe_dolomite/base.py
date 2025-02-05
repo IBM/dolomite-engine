@@ -94,18 +94,16 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, RNNDolomiteModel):
         )
         clear_aux_loss()
 
-        for block in self.h:
-            hidden_states, aux_loss = block(
+        for layer_idx, block in enumerate(self.h):
+            hidden_states = block(
                 hidden_states,
                 past_key_values=past_key_values,
-                attention_mask=attention_mask,
+                attention_mask=causal_mask if self.attention_pattern[layer_idx] == "a" else attention_mask,
                 causal_mask=causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-            add_aux_loss(aux_loss)
 
         hidden_states = self.ln_f(hidden_states)
 
