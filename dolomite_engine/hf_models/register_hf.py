@@ -16,9 +16,6 @@ from .models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
-    MoELadderResidualConfig,
-    MoELadderResidualForCausalLM,
-    MoELadderResidualModel,
     MoEStickBreakingConfig,
     MoEStickBreakingForCausalLM,
     MoEStickBreakingModel,
@@ -44,7 +41,6 @@ _CUSTOM_MODEL_REGISTRY = [
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
     (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
     (MoEStickBreakingConfig, MoEStickBreakingModel, MoEStickBreakingForCausalLM),
-    (MoELadderResidualConfig, MoELadderResidualModel, MoELadderResidualForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
