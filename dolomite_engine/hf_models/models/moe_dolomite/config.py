@@ -23,3 +23,4 @@ class MoEDolomiteConfig(CommonConfig):
         self.router_aux_loss_coef = router_aux_loss_coef
 
         self.use_aux_free_moe = use_aux_free_moe
+        self.mlp_blocks = [{"mlp_block_type": "MoE"} for _ in range(self.n_layer)]
