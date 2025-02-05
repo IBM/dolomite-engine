@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
-from ...modeling_utils import get_attention_module, get_moe, get_normalization_function
+from ...modeling_utils import get_attention_module, get_mlp_block, get_normalization_function
 from ..moe_dolomite.layer import MoEDolomiteBlock
 from ..rnn_dolomite.attention import DeltaNet
 from .config import RNNMoEDolomiteConfig
@@ -50,11 +50,8 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.mlp = get_moe(
-            config,
-            use_aux_free_moe=config.use_aux_free_moe,
-            use_padding_free_transformer=use_padding_free_transformer,
-            layer_idx=layer_idx,
+        self.mlp = get_mlp_block(
+            config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
         )
 
     def forward(
