@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import MLP, get_attention_module, get_normalization_function
 from .config import GPTDolomiteConfig
-from .mlp import MLP
 
 
 class GPTDolomiteBlock(nn.Module):

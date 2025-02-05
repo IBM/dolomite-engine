@@ -3,8 +3,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
-from ...modeling_utils import get_normalization_function
-from ..gpt_dolomite.mlp import MLP
+from ...modeling_utils import MLP, get_normalization_function
 from .attention import PaddingFreeSBAttention, SBAttention
 from .config import StickBreakingConfig
 

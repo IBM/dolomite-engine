@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_attention_module, get_normalization_function
-from ..gpt_dolomite.mlp import MLP
+from ...modeling_utils import MLP, get_attention_module, get_normalization_function
 from .config import PaLMConfig
 
 

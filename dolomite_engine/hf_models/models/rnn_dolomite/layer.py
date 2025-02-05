@@ -1,9 +1,8 @@
 import torch.nn as nn
 
 from ...enums import AttentionHeadType
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import MLP, get_attention_module, get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
-from ..gpt_dolomite.mlp import MLP
 from .attention import DeltaNet
 from .config import RNNDolomiteConfig
 

@@ -3,13 +3,14 @@ import math
 import torch
 import torch.nn as nn
 
-from ...enums import InitMethod
-from ...modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from .config import GPTDolomiteConfig
+from ..config import CommonConfig
+from ..enums import InitMethod
+from .activations import get_activation_function, is_glu
+from .linear import ParameterizedLinear
 
 
 class MLP(nn.Module):
-    def __init__(self, config: GPTDolomiteConfig) -> None:
+    def __init__(self, config: CommonConfig) -> None:
         super().__init__()
 
         hidden_size = config.n_embd
