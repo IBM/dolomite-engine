@@ -1,14 +1,14 @@
 import torch
+import torch.nn.functional as F
 from transformers import DynamicCache
-from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
-from ....kernels import wait_for_ACT
-from ...enums import AttentionHeadType, PositionEmbeddingType
-from ..position_embedding import apply_rotary_pos_emb
+from ....enums import PositionEmbeddingType
+from ...position_embedding import apply_rotary_pos_emb
 from .base import Attention
+from .utils import repeat_key_value
 
 
-class FlashAttention2(Attention):
+class SDPA(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -43,45 +43,37 @@ class FlashAttention2(Attention):
         # value -> (batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
-        # TODO avoid this extra transpose
-        query = query.transpose(1, 2)
-        if self.attention_head_type == AttentionHeadType.mqa:
-            key = key.squeeze(1).unsqueeze(2)
-            value = value.squeeze(1).unsqueeze(2)
-        else:
-            key = key.transpose(1, 2)
-            value = value.transpose(1, 2)
+        key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
+        value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
         # ==========================================================================================
-        # query -> (batch_size, query_length, num_heads, head_dim)
-        # key -> (batch_size, key_length, num_heads, head_dim)
-        # value -> (batch_size, key_length, num_heads, head_dim)
+        # query -> (batch_size, num_heads, query_length, head_dim)
+        # key -> (batch_size, num_heads, key_length, head_dim)
+        # value -> (batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
 
-        batch_size, query_length = query.shape[:2]
-
-        query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
-        key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
-        value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
-
-        hidden_states = _flash_attention_forward(
-            query_states=query,
-            key_states=key,
-            value_states=value,
-            attention_mask=attention_mask,
-            query_length=query_length,
-            is_causal=self.causal,
-            dropout=dropout_p,
-            softmax_scale=softmax_scale,
+        hidden_states = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=dropout_p,
+            is_causal=self.causal if attention_mask is None else False,
+            scale=softmax_scale,
         )
 
         del query, key, value
 
-        hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
-        hidden_states = hidden_states.view(batch_size, query_length, -1)
+        # ==========================================================================================
+        # hidden_states -> (batch_size, num_heads, query_length, head_dim)
+        # ==========================================================================================
+
+        batch_size = hidden_states.shape[0]
+        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)

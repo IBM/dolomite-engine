@@ -1,5 +1,5 @@
 from .activations import get_activation_function, is_glu
-from .attention import (
+from .attention_block import (
     SDPA,
     Attention,
     FlashAttention2,

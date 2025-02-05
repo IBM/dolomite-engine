@@ -2,8 +2,8 @@ import inspect
 
 import torch
 
-from ...config import CommonConfig
-from ...enums import AttentionHeadType
+from ....config import CommonConfig
+from ....enums import AttentionHeadType
 from .base import Attention
 from .flash import FlashAttention2
 from .padding_free import PaddingFreeAttention
