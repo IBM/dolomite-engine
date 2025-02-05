@@ -10,10 +10,8 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     MoEDolomiteForCausalLM_TP,
-    MoEStickBreakingForCausalLM,
     RNNDolomiteForCausalLM,
     RNNMoEDolomiteForCausalLM,
-    StickBreakingForCausalLM,
 )
 from ..hf_models.modeling_utils import MLP, Attention, MoE
 from ..hf_models.models.rnn_dolomite.attention import DeltaNet
@@ -78,10 +76,8 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             RNNDolomiteForCausalLM,
             RNNMoEDolomiteForCausalLM,
             MoEDolomiteForCausalLM_TP,
-            StickBreakingForCausalLM,
             LadderResidualForCausalLM,
             LadderResidualForCausalLM_TP,
-            MoEStickBreakingForCausalLM,
         ),
     ), "mup is not supported with this model architecture"
 

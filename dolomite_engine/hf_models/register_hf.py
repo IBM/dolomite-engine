@@ -16,18 +16,12 @@ from .models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
-    MoEStickBreakingConfig,
-    MoEStickBreakingForCausalLM,
-    MoEStickBreakingModel,
     RNNDolomiteConfig,
     RNNDolomiteForCausalLM,
     RNNDolomiteModel,
     RNNMoEDolomiteConfig,
     RNNMoEDolomiteForCausalLM,
     RNNMoEDolomiteModel,
-    StickBreakingConfig,
-    StickBreakingForCausalLM,
-    StickBreakingModel,
 )
 
 
@@ -39,8 +33,6 @@ _CUSTOM_MODEL_REGISTRY = [
     (RNNMoEDolomiteConfig, RNNMoEDolomiteModel, RNNMoEDolomiteForCausalLM),
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
-    (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
-    (MoEStickBreakingConfig, MoEStickBreakingModel, MoEStickBreakingForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
