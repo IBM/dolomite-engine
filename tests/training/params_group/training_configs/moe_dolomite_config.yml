@@ -24,7 +24,12 @@ model_args:
     resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
-    model_type: moe_dolomite
+    model_type: gpt_dolomite
+    mlp_blocks:
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
     n_embd: 512
     n_head: 16
     n_layer: 4

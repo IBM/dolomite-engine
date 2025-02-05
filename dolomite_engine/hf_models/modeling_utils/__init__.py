@@ -13,6 +13,7 @@ from .embedding import ParameterizedEmbedding
 from .linear import ParameterizedLinear
 from .mlp_block import (
     MLP,
+    MoE,
     ParameterizedExperts,
     ParameterizedScatteredExperts,
     ScatterMoE,
