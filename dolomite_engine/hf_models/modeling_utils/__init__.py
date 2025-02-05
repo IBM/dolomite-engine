@@ -11,6 +11,6 @@ from .attention import (
 )
 from .embedding import ParameterizedEmbedding
 from .linear import ParameterizedLinear
-from .mlp import MLP
+from .mlp import MLP, interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
 from .normalization import get_normalization_function
 from .position_embedding import RoPE, YaRNScaledRoPE, apply_rotary_pos_emb
