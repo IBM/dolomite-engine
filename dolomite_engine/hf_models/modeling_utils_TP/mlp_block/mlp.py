@@ -2,11 +2,11 @@ import math
 
 import torch.nn as nn
 
-from ..config import CommonConfig
-from ..enums import InitMethod
-from ..modeling_utils import MLP, get_activation_function, is_glu
-from .dropout import Dropout_TP
-from .linear import ColumnParallelLinear, RowParallelLinear
+from ...config import CommonConfig
+from ...enums import InitMethod
+from ...modeling_utils import MLP, get_activation_function, is_glu
+from ..dropout import Dropout_TP
+from ..linear import ColumnParallelLinear, RowParallelLinear
 
 
 class MLP_TP(MLP):

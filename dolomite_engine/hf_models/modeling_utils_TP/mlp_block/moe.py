@@ -6,17 +6,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ...distributed import dtensor_to_tensor, tensor_to_dtensor
-from ...kernels import wait_for_ACT
-from ...utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
-from ..config import CommonConfig
-from ..enums import InitMethod
-from ..loss import add_aux_loss
-from ..modeling_utils import ParameterizedLinear, ScatterMoE, get_activation_function, is_glu
-from ..modeling_utils.moe.scatter import ParameterizedScatteredExperts
-from .dropout import Dropout_TP
-from .dtensor_module import DTensorModule
-from .linear import ColumnParallelLinear, RowParallelLinear
+from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ....kernels import wait_for_ACT
+from ....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
+from ...config import CommonConfig
+from ...enums import InitMethod
+from ...loss import add_aux_loss
+from ...modeling_utils import (
+    ParameterizedLinear,
+    ParameterizedScatteredExperts,
+    ScatterMoE,
+    get_activation_function,
+    is_glu,
+)
+from ..dropout import Dropout_TP
+from ..dtensor_module import DTensorModule
+from ..linear import ColumnParallelLinear, RowParallelLinear
 
 
 if is_cute_kernels_available():
@@ -156,18 +161,13 @@ class SharedExpertsRowParallelLinear(RowParallelLinear):
 
 class ScatterMoE_TP(ScatterMoE, DTensorModule):
     def __init__(
-        self,
-        config: CommonConfig,
-        use_padding_free_transformer: bool,
-        sequence_parallel: bool = False,
-        layer_idx: int | None = None,
+        self, config: CommonConfig, use_padding_free_transformer: bool, sequence_parallel: bool = False
     ) -> None:
         nn.Module.__init__(self)
 
         self.num_experts = config.num_experts
         self.top_k = config.num_experts_per_tok
         self.use_padding_free_transformer = use_padding_free_transformer
-        self.layer_idx = layer_idx
 
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.n_inner

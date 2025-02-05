@@ -45,6 +45,7 @@ class CommonConfig(PretrainedConfig):
         m_residual: float | None = None,
         init_method: str = "normal",
         upcast_logits_for_loss: bool = False,
+        mlp_blocks: list[str] = None,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -107,5 +108,9 @@ class CommonConfig(PretrainedConfig):
             assert (
                 self.n_head % self.num_key_value_heads == 0
             ), "GroupedQueryAttention should have more than 1 head for keys and values"
+
+        self.mlp_blocks = mlp_blocks
+        if self.mlp_blocks is None:
+            self.mlp_blocks = [{"mlp_block_type": "MLP"} for _ in range(self.n_layer)]
 
         super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)

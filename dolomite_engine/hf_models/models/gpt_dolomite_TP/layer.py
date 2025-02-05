@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from ...modeling_utils_TP import MLP_TP, get_attention_module_TP, get_normalization_function_TP
+from ...modeling_utils_TP import get_attention_module_TP, get_mlp_block_TP, get_normalization_function_TP
 from ..gpt_dolomite import GPTDolomiteConfig
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 
@@ -42,6 +42,9 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
-        self.mlp = MLP_TP(
-            config, use_padding_free_transformer=use_padding_free_transformer, sequence_parallel=sequence_parallel
+        self.mlp = get_mlp_block_TP(
+            config,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
+            layer_idx=layer_idx,
         )
