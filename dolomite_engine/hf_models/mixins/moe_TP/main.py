@@ -102,7 +102,6 @@ class CausalLMMoEModelMixin_TP(CausalLMModelMixin_TP):
                 past_key_values=transformer_outputs.past_key_values,
                 hidden_states=transformer_outputs.hidden_states,
                 attentions=transformer_outputs.attentions,
-                router_logits=transformer_outputs.router_logits,
             )
 
         return output
