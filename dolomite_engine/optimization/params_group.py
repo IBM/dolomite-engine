@@ -10,11 +10,8 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     MoEDolomiteForCausalLM_TP,
-    RNNDolomiteForCausalLM,
-    RNNMoEDolomiteForCausalLM,
 )
 from ..hf_models.modeling_utils import MLP, Attention, MoE
-from ..hf_models.models.rnn_dolomite.attention import DeltaNet
 from ..model_wrapper import ModelWrapper
 from ..utils import log_rank_0
 
@@ -73,8 +70,6 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         (
             GPTDolomiteForCausalLM,
             GPTDolomiteForCausalLM_TP,
-            RNNDolomiteForCausalLM,
-            RNNMoEDolomiteForCausalLM,
             MoEDolomiteForCausalLM_TP,
             LadderResidualForCausalLM,
             LadderResidualForCausalLM_TP,
@@ -96,7 +91,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 
     # collect parameters with mup learning rate
     for module_name, module in model.named_modules():
-        if isinstance(module, (Attention, MLP, MoE, DeltaNet)):
+        if isinstance(module, (Attention, MLP, MoE)):
             for param_name, param in module.named_parameters():
                 # we don't add bias or norms to mup group
                 if not (param_name.endswith("bias") or "norm" in param_name):
