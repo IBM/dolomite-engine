@@ -6,7 +6,7 @@ from transformers.modeling_outputs import MoeModelOutputWithPast
 from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...loss import add_aux_loss, clear_aux_loss
-from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
+from ...mixins import BaseMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ..rnn_dolomite.base import RNNDolomiteModel, RNNDolomitePreTrainedModel
 from ..rnn_dolomite.cache import RNNCache
@@ -14,7 +14,7 @@ from .config import RNNMoEDolomiteConfig
 from .layer import RNNMoEDolomiteBlock
 
 
-class RNNMoEDolomitePreTrainedModel(PreTrainedMoEModelMixin, RNNDolomitePreTrainedModel):
+class RNNMoEDolomitePreTrainedModel(RNNDolomitePreTrainedModel):
     config_class = RNNMoEDolomiteConfig
     layer_class = RNNMoEDolomiteBlock
     _no_split_modules = ["RNNMoEDolomiteBlock"]
