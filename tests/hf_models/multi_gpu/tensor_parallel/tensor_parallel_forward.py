@@ -113,7 +113,7 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
 
-    model_tp = get_model_parallel_class(args.model_type)._from_config(
+    model_tp = get_model_parallel_class(config.model_type)._from_config(
         config,
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
