@@ -16,12 +16,13 @@ _ATTENTION_MODULES = {
 }
 
 
-def get_attention_module(
+def get_attention_module_TP(
     config: CommonConfig,
     causal: bool,
     attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
+    sequence_parallel: bool,
 ) -> Attention_TP:
     attention_block_type = config.attention_blocks[layer_idx]["attention_block_type"]
 
@@ -30,6 +31,10 @@ def get_attention_module(
             assert (
                 attention_implementation == "flash_attention_2"
             ), "padding free transformer only works with flash attention"
-            return PaddingFreeAttention_TP(config, causal=causal, layer_idx=layer_idx)
+            return PaddingFreeAttention_TP(
+                config, causal=causal, layer_idx=layer_idx, sequence_parallel=sequence_parallel
+            )
         else:
-            return _ATTENTION_MODULES[attention_implementation](config, causal=causal, layer_idx=layer_idx)
+            return _ATTENTION_MODULES[attention_implementation](
+                config, causal=causal, layer_idx=layer_idx, sequence_parallel=sequence_parallel
+            )
