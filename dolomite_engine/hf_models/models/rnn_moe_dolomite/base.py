@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 from transformers import Cache
+from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...mixins import BaseMoEModelMixin, MoeModelOutputWithPastAndAuxLoss, PreTrainedMoEModelMixin
+from ...loss import add_aux_loss, clear_aux_loss
+from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
 from ..rnn_dolomite.base import RNNDolomiteModel, RNNDolomitePreTrainedModel
 from ..rnn_dolomite.cache import RNNCache
@@ -69,7 +71,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> MoeModelOutputWithPastAndAuxLoss:
+    ) -> MoeModelOutputWithPast:
         (
             use_cache,
             hidden_states,
@@ -92,7 +94,7 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
         past_key_values = (
             RNNCache(self.attention_pattern) if use_cache and past_key_values is None else past_key_values
         )
-        total_aux_loss = 0
+        clear_aux_loss()
 
         for block in self.h:
             hidden_states, aux_loss = block(
@@ -105,10 +107,8 @@ class RNNMoEDolomiteModel(RNNMoEDolomitePreTrainedModel, BaseMoEModelMixin, RNND
                 max_seqlen=max_seqlen,
             )
 
-            total_aux_loss = total_aux_loss + aux_loss
+            add_aux_loss(aux_loss)
 
         hidden_states = self.ln_f(hidden_states)
 
-        return MoeModelOutputWithPastAndAuxLoss(
-            last_hidden_state=hidden_states, past_key_values=past_key_values, aux_loss=total_aux_loss
-        )
+        return MoeModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)

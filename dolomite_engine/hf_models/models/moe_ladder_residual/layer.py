@@ -36,7 +36,7 @@ class MoELadderResidualBlock(MoEDolomiteBlock):
             residual = residual + previous_mlp_out
 
         current_mlp_out = self.ln_2(residual)
-        current_mlp_out, router_logits, aux_loss = self.moe(current_mlp_out)
+        current_mlp_out, _, aux_loss = self.moe(current_mlp_out)
 
         if self.m_residual is not None:
             current_mlp_out = current_mlp_out * self.m_residual

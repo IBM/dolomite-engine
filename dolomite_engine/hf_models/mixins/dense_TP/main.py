@@ -28,6 +28,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     self.vocab_size,
                     config.n_embd,
                     std=config.initializer_range,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
 

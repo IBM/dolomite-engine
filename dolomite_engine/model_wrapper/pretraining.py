@@ -9,6 +9,7 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..hf_models import get_aux_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -118,15 +119,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
-        if isinstance(model_outputs, torch.Tensor):
-            logits = model_outputs
-            aux_loss = None
-        elif isinstance(model_outputs, tuple):
-            logits, aux_loss = model_outputs
-            aux_loss = aux_loss.squeeze(0)
-        else:
-            logits: torch.Tensor = model_outputs.logits
-            aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
+        logits: torch.Tensor = model_outputs.logits
+        aux_loss = get_aux_loss()
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
@@ -145,7 +139,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         lm_loss = lm_loss * lm_loss_multiplier
 
-        if aux_loss is None:
+        if aux_loss == 0:
             loss = lm_loss
             output = {"loss": loss}
         else:
@@ -155,7 +149,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             if is_tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
-            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)
             output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
 
         return output
@@ -292,3 +286,15 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
+
+
+class _F(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, lm_loss: torch.Tensor, aux_loss: torch.Tensor, router_aux_loss_coef: float) -> torch.Tensor:
+        ctx.router_aux_loss_coef = router_aux_loss_coef
+        return lm_loss + router_aux_loss_coef * aux_loss
+
+    @staticmethod
+    @torch._dynamo.disable
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
+        return grad_output, ctx.router_aux_loss_coef * grad_output, None
