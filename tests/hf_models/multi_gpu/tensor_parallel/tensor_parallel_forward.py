@@ -5,6 +5,7 @@ import torch
 import torch.distributed
 from transformers import set_seed
 
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     DesyncResidualConfig,
@@ -13,6 +14,7 @@ from dolomite_engine.hf_models import (
     MoEDolomiteConfig,
     get_model_parallel_class,
 )
+from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
@@ -60,6 +62,7 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_embd=128,
         n_head=16,
     )
+    enable_kernels([Kernel.scattermoe]).__enter__()
 elif args.model_type == DesyncResidualConfig.model_type:
     config = DesyncResidualConfig(
         attention_head_type=args.attention_head_type,
