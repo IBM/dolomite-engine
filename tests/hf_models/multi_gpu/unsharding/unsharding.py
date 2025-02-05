@@ -6,6 +6,7 @@ import torch.distributed
 from torch.distributed._tensor.api import DTensor
 
 from dolomite_engine.distributed import dtensor_to_tensor
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
@@ -14,6 +15,7 @@ from dolomite_engine.hf_models import (
     get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
 )
+from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager
 
 from ...test_common import TestCommons
@@ -59,6 +61,7 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_head=16,
         activation_function=args.activation_function,
     )
+    enable_kernels([Kernel.scattermoe]).__enter__()
 
 
 if is_tp_first_rank:
