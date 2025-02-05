@@ -3,10 +3,11 @@ import math
 import torch
 import torch.nn as nn
 
-from .....utils import is_cute_kernels_available
-from ....enums import InitMethod
-from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ..config import MoEDolomiteConfig
+from ....utils import is_cute_kernels_available
+from ...config import CommonConfig
+from ...enums import InitMethod
+from ..activations import get_activation_function, is_glu
+from ..linear import ParameterizedLinear
 from .base import MoE, ParameterizedExperts
 
 
@@ -57,9 +58,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
 
 
 class ScatterMoE(MoE):
-    def __init__(
-        self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
-    ) -> None:
+    def __init__(self, config: CommonConfig, use_padding_free_transformer: bool, layer_idx: int | None = None) -> None:
         nn.Module.__init__(self)
 
         self.num_experts = config.num_experts

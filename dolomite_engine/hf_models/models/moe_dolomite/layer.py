@@ -1,9 +1,8 @@
 import torch.nn as nn
 
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import get_attention_module, get_moe, get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 from .config import MoEDolomiteConfig
-from .moe import get_moe
 
 
 class MoEDolomiteBlock(GPTDolomiteBlock):

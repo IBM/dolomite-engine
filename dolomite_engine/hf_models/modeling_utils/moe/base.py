@@ -5,11 +5,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
-from .....utils import ProcessGroupManager, is_cute_kernels_available
-from ....enums import InitMethod
-from ....loss import add_aux_loss
-from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
-from ..config import MoEDolomiteConfig
+from ....utils import ProcessGroupManager, is_cute_kernels_available
+from ...config import CommonConfig
+from ...enums import InitMethod
+from ...loss import add_aux_loss
+from ..activations import get_activation_function, is_glu
+from ..linear import ParameterizedLinear
 
 
 if is_cute_kernels_available():
@@ -65,9 +66,7 @@ class ParameterizedExperts(nn.Module):
 
 
 class MoE(nn.Module):
-    def __init__(
-        self, config: MoEDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
-    ) -> None:
+    def __init__(self, config: CommonConfig, use_padding_free_transformer: bool, layer_idx: int | None = None) -> None:
         super().__init__()
 
         self.num_experts = config.num_experts

@@ -2,10 +2,9 @@ import torch.nn as nn
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
-from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
+from ...modeling_utils_TP import ScatterMoE_TP, get_attention_module_TP, get_normalization_function_TP
 from ..moe_dolomite import MoEDolomiteConfig
 from ..moe_dolomite.layer import MoEDolomiteBlock
-from .moe_TP import ScatterMoE_TP
 
 
 class MoEDolomiteBlock_TP(MoEDolomiteBlock):
