@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_normalization_function
-from ..moe_dolomite.moe import get_moe
+from ...modeling_utils import get_moe, get_normalization_function
 from ..stickbreaking.attention import PaddingFreeSBAttention, SBAttention
 from .config import MoEStickBreakingConfig
 
