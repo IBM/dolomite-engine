@@ -1,5 +1,5 @@
-from ...config import CommonConfig
-from ..dense import CausalLMModelMixin
+from ..config import CommonConfig
+from .dense import CausalLMModelMixin
 
 
 class CausalLMMoEModelMixin(CausalLMModelMixin):

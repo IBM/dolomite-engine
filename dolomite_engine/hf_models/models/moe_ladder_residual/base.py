@@ -3,7 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ...loss import clear_aux_loss
-from ...mixins import BaseMoEModelMixin, PreTrainedModelMixin
+from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from .config import MoELadderResidualConfig
 from .layer import MoELadderResidualBlock
 
@@ -14,7 +14,7 @@ class MoELadderResidualPreTrainedModel(PreTrainedModelMixin):
     _no_split_modules = ["MoELadderResidualBlock"]
 
 
-class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin):
+class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,

@@ -5,10 +5,9 @@ from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ..dense_TP import BaseModelMixin_TP
-from ..moe import BaseMoEModelMixin
 
 
-class BaseMoEModelMixin_TP(BaseMoEModelMixin, BaseModelMixin_TP):
+class BaseMoEModelMixin_TP(BaseModelMixin_TP):
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size

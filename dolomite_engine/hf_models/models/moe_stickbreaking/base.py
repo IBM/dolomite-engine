@@ -3,7 +3,7 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ...loss import add_aux_loss, clear_aux_loss
-from ...mixins import BaseMoEModelMixin, PreTrainedModelMixin
+from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from .config import MoEStickBreakingConfig
 from .layer import MoEStickBreakingBlock
 
@@ -14,7 +14,7 @@ class MoEStickBreakingPreTrainedModel(PreTrainedModelMixin):
     _no_split_modules = ["MoEStickBreakingBlock"]
 
 
-class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseMoEModelMixin):
+class MoEStickBreakingModel(MoEStickBreakingPreTrainedModel, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,

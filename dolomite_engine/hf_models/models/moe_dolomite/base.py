@@ -1,4 +1,4 @@
-from ...mixins import BaseMoEModelMixin, PreTrainedModelMixin
+from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from .config import MoEDolomiteConfig
 from .layer import MoEDolomiteBlock
 
@@ -9,4 +9,4 @@ class MoEDolomitePreTrainedModel(PreTrainedModelMixin):
     _no_split_modules = ["MoEDolomiteBlock"]
 
 
-class MoEDolomiteModel(MoEDolomitePreTrainedModel, BaseMoEModelMixin): ...
+class MoEDolomiteModel(MoEDolomitePreTrainedModel, BaseModelMixin): ...
