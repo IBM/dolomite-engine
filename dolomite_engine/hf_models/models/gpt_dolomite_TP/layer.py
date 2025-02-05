@@ -1,9 +1,8 @@
 import torch.nn as nn
 
-from ...modeling_utils_TP import get_attention_module_TP, get_normalization_function_TP
+from ...modeling_utils_TP import MLP_TP, get_attention_module_TP, get_normalization_function_TP
 from ..gpt_dolomite import GPTDolomiteConfig
 from ..gpt_dolomite.layer import GPTDolomiteBlock
-from .mlp import MLP_TP
 
 
 class GPTDolomiteBlock_TP(GPTDolomiteBlock):

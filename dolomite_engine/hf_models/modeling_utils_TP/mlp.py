@@ -2,16 +2,16 @@ import math
 
 import torch.nn as nn
 
-from ...enums import InitMethod
-from ...modeling_utils import get_activation_function, is_glu
-from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP, RowParallelLinear
-from ..gpt_dolomite import GPTDolomiteConfig
-from ..gpt_dolomite.mlp import MLP
+from ..config import CommonConfig
+from ..enums import InitMethod
+from ..modeling_utils import MLP, get_activation_function, is_glu
+from .dropout import Dropout_TP
+from .linear import ColumnParallelLinear, RowParallelLinear
 
 
 class MLP_TP(MLP):
     def __init__(
-        self, config: GPTDolomiteConfig, use_padding_free_transformer: bool = False, sequence_parallel: bool = False
+        self, config: CommonConfig, use_padding_free_transformer: bool = False, sequence_parallel: bool = False
     ) -> None:
         nn.Module.__init__(self)
 
