@@ -21,7 +21,20 @@ kernel_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    model_type: moe_dolomite
+    model_type: gpt_dolomite
+    mlp_blocks:
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
     vocab_size: 50304
     n_positions: 2048
     n_embd: 768
