@@ -11,11 +11,10 @@ from ...gpt_dolomite_TP.weights.unshard import (
     _get_layernorm,
     _get_once_from_state_dicts_with_check,
 )
-from ...moe_dolomite import MoEDolomiteConfig
 
 
 def unshard_moe_dolomite_tensor_parallel_state_dicts(
-    config: MoEDolomiteConfig,
+    config,
     tensor_parallel_state_dicts: list[dict],
     prefix: str = "",
     check_correctness: bool = True,
@@ -109,7 +108,7 @@ def unshard_moe_dolomite_tensor_parallel_state_dicts(
 
 
 def fix_moe_dolomite_unsharded_state_dict(
-    config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str = ""
+    config, state_dict: dict, tensor_parallel_world_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][
         : config.vocab_size, :
@@ -129,9 +128,7 @@ def _concatenate_tensors_from_moe(
     return tensor
 
 
-def _get_moe(
-    tensor_parallel_state_dicts: list[dict], config: MoEDolomiteConfig, prefix: str, check_correctness: bool
-) -> dict:
+def _get_moe(tensor_parallel_state_dicts: list[dict], config, prefix: str, check_correctness: bool) -> dict:
     assert not config.add_bias
 
     output = {
@@ -166,7 +163,7 @@ def _get_moe(
     return output
 
 
-def _fix_moe(config: MoEDolomiteConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str) -> dict:
+def _fix_moe(config, state_dict: dict, tensor_parallel_world_size: int, prefix: str) -> dict:
     assert not config.add_bias
 
     if is_glu(config.activation_function):

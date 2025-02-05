@@ -1,6 +1,5 @@
-from ..moe_dolomite import MoEDolomiteConfig
 from ..rnn_dolomite import RNNDolomiteConfig
 
 
-class RNNMoEDolomiteConfig(RNNDolomiteConfig, MoEDolomiteConfig):
+class RNNMoEDolomiteConfig(RNNDolomiteConfig):
     model_type = "rnn_moe_dolomite"

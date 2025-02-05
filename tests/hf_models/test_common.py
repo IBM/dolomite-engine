@@ -14,7 +14,6 @@ from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
-    MoEDolomiteConfig,
     PositionEmbeddingType,
     export_to_huggingface,
     import_from_huggingface,
@@ -115,12 +114,13 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
-    ) -> MoEDolomiteConfig:
-        return MoEDolomiteConfig(
+    ) -> GPTDolomiteConfig:
+        return GPTDolomiteConfig(
             vocab_size=2048,
             n_positions=1024,
             n_embd=32,
             n_layer=num_layers,
+            mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(num_layers)],
             n_head=4,
             num_experts_per_tok=num_experts_per_tok,
             num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,

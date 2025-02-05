@@ -1,11 +1,10 @@
 from .....utils import SafeTensorsWeightsManager, divide_if_divisible
 from ....enums import PositionEmbeddingType
 from ...gpt_dolomite_TP.weights.shard import _get_attention, _get_embeddings_or_lm_head, _get_layernorm, _get_mlp
-from ...moe_dolomite import MoEDolomiteConfig
 
 
 def get_moe_dolomite_tensor_parallel_state_dict(
-    config: MoEDolomiteConfig,
+    config,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_pipeline_stages: int,
     pipeline_stage_id: int,
@@ -81,7 +80,7 @@ def get_moe_dolomite_tensor_parallel_state_dict(
 
 
 def _get_moe(
-    config: MoEDolomiteConfig,
+    config,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
     column_parallel_shard_dim: int,

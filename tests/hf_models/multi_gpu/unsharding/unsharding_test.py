@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, MoEDolomiteConfig
+from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig
 
 from ...test_common import TestCommons
 
@@ -20,7 +20,7 @@ class UnshardingTest(TestCommons):
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
             ["gelu", "geglu"],
-            [MoEDolomiteConfig.model_type],
+            ["MoEDolomiteConfig.model_type"],
         )
     )
     @TestCommons.slow_test

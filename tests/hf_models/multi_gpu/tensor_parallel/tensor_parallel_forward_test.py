@@ -10,7 +10,6 @@ from dolomite_engine.hf_models import (
     DesyncResidualConfig,
     GPTDolomiteConfig,
     LadderResidualConfig,
-    MoEDolomiteConfig,
     PositionEmbeddingType,
 )
 from dolomite_engine.utils import torch_dtype_to_string
@@ -36,7 +35,7 @@ class TensorParallelTest(TestCommons):
             TestCommons.get_dtypes(),
             [False],
             [False, True],
-            [MoEDolomiteConfig.model_type],
+            ["MoEDolomiteConfig.model_type"],
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.mha, AttentionHeadType.gqa],

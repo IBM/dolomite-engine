@@ -1,10 +1,10 @@
 import torch
 from transformers import DynamicCache
 
-from ..moe_dolomite.layer import MoEDolomiteBlock
+from ..gpt_dolomite.layer import GPTDolomiteBlock
 
 
-class MoELadderResidualBlock(MoEDolomiteBlock):
+class MoELadderResidualBlock(GPTDolomiteBlock):
     def forward(
         self,
         previous_attention_out: torch.Tensor,

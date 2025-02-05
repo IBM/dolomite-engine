@@ -3,14 +3,12 @@ import torch.nn as nn
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ...modeling_utils_TP import get_attention_module_TP, get_mlp_block_TP, get_normalization_function_TP
-from ..moe_dolomite import MoEDolomiteConfig
-from ..moe_dolomite.layer import MoEDolomiteBlock
 
 
-class MoEDolomiteBlock_TP(MoEDolomiteBlock):
+class MoEDolomiteBlock_TP(nn.Module):
     def __init__(
         self,
-        config: MoEDolomiteConfig,
+        config,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,

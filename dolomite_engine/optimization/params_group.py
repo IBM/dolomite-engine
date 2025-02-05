@@ -9,7 +9,6 @@ from ..hf_models import (
     GPTDolomiteForCausalLM_TP,
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
-    MoEDolomiteForCausalLM,
     MoEDolomiteForCausalLM_TP,
     MoELadderResidualForCausalLM,
     MoEStickBreakingForCausalLM,
@@ -76,7 +75,6 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         model.model,
         (
             GPTDolomiteForCausalLM,
-            MoEDolomiteForCausalLM,
             GPTDolomiteForCausalLM_TP,
             RNNDolomiteForCausalLM,
             RNNMoEDolomiteForCausalLM,

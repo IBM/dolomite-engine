@@ -16,10 +16,6 @@ from .models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
-    MoEDolomiteConfig,
-    MoEDolomiteForCausalLM,
-    MoEDolomiteForCausalLM_TP,
-    MoEDolomiteModel,
     MoELadderResidualConfig,
     MoELadderResidualForCausalLM,
     MoELadderResidualModel,
@@ -41,7 +37,6 @@ from .models import (
 # (AutoConfig, AutoModel, AutoModelForCausalLM)
 _CUSTOM_MODEL_REGISTRY = [
     (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
-    (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
     (RNNMoEDolomiteConfig, RNNMoEDolomiteModel, RNNMoEDolomiteForCausalLM),
@@ -75,7 +70,6 @@ _MODEL_PARALLEL_CLASS_MAPPING = {
     GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
     DesyncResidualConfig.model_type: DesyncResidualForCausalLM_TP,
     LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
-    MoEDolomiteConfig.model_type: MoEDolomiteForCausalLM_TP,
 }
 
 

@@ -7,7 +7,7 @@ from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..models import MoEDolomiteConfig
+from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -35,7 +35,7 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeConfig):
     assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
@@ -47,7 +47,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
 
     assert not original_config.attention_bias
 
-    config = MoEDolomiteConfig(
+    config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
         n_positions=original_config.max_position_embeddings,
         n_embd=original_config.hidden_size,
@@ -77,6 +77,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         attention_multiplier=original_config.attention_multiplier,
+        mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(original_config.num_hidden_layers)],
     )
 
     return config
@@ -162,7 +163,7 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
         pass
 
 
-def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig:
+def _export_config_to_huggingface(config) -> GraniteMoeConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
