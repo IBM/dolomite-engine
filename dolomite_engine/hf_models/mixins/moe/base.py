@@ -4,15 +4,7 @@ from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, get_normalization_function
-from ..dense import BaseModelMixin, PreTrainedModelMixin
-
-
-class PreTrainedMoEModelMixin(PreTrainedModelMixin):
-    def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
-        self.moe_implementation = kwargs.get("moe_implementation", "eager")
-        assert self.moe_implementation in ["eager", "scattermoe"]
-
-        super().__init__(config, *args, **kwargs)
+from ..dense import BaseModelMixin
 
 
 class BaseMoEModelMixin(BaseModelMixin):
@@ -38,7 +30,6 @@ class BaseMoEModelMixin(BaseModelMixin):
                     config,
                     attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
-                    moe_implementation=self.moe_implementation,
                     layer_idx=i,
                 )
                 for i in range(config.n_layer)

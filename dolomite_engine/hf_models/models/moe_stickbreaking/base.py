@@ -3,12 +3,12 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ...loss import add_aux_loss, clear_aux_loss
-from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
+from ...mixins import BaseMoEModelMixin, PreTrainedModelMixin
 from .config import MoEStickBreakingConfig
 from .layer import MoEStickBreakingBlock
 
 
-class MoEStickBreakingPreTrainedModel(PreTrainedMoEModelMixin):
+class MoEStickBreakingPreTrainedModel(PreTrainedModelMixin):
     config_class = MoEStickBreakingConfig
     layer_class = MoEStickBreakingBlock
     _no_split_modules = ["MoEStickBreakingBlock"]

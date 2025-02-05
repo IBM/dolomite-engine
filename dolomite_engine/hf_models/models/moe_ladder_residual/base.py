@@ -3,12 +3,12 @@ from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
 from ...loss import clear_aux_loss
-from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
+from ...mixins import BaseMoEModelMixin, PreTrainedModelMixin
 from .config import MoELadderResidualConfig
 from .layer import MoELadderResidualBlock
 
 
-class MoELadderResidualPreTrainedModel(PreTrainedMoEModelMixin):
+class MoELadderResidualPreTrainedModel(PreTrainedModelMixin):
     config_class = MoELadderResidualConfig
     layer_class = MoELadderResidualBlock
     _no_split_modules = ["MoELadderResidualBlock"]
