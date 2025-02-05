@@ -2,7 +2,7 @@ import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import MoeModelOutputWithPast
 
-from ...loss import add_aux_loss, clear_aux_loss
+from ...loss import clear_aux_loss
 from ...mixins import BaseMoEModelMixin, PreTrainedMoEModelMixin
 from .config import MoELadderResidualConfig
 from .layer import MoELadderResidualBlock
@@ -53,7 +53,7 @@ class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin
         clear_aux_loss()
 
         for block in self.h:
-            previous_attention_out, previous_mlp_out, hidden_states, aux_loss = block(
+            previous_attention_out, previous_mlp_out, hidden_states = block(
                 previous_attention_out=previous_attention_out,
                 previous_mlp_out=previous_mlp_out,
                 residual=hidden_states,
@@ -63,8 +63,6 @@ class MoELadderResidualModel(MoELadderResidualPreTrainedModel, BaseMoEModelMixin
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-            add_aux_loss(aux_loss)
 
         hidden_states = hidden_states + previous_attention_out + previous_mlp_out
         hidden_states = self.ln_f(hidden_states)

@@ -37,7 +37,6 @@ class PaLMBlock(nn.Module):
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         residual = hidden_states
-
         hidden_states = self.ln(hidden_states)
 
         # NOTE we can contenate the input matrices of attention and MLP here for speedup

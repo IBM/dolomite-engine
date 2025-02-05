@@ -7,6 +7,7 @@ from torch.distributed._functional_collectives import all_reduce
 
 from .....utils import ProcessGroupManager, is_cute_kernels_available
 from ....enums import InitMethod
+from ....loss import add_aux_loss
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ..config import MoEDolomiteConfig
 
@@ -167,7 +168,9 @@ class MoE(nn.Module):
             else 0
         )
 
-        return hidden_states, router_logits, aux_loss
+        add_aux_loss(aux_loss)
+
+        return hidden_states
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)

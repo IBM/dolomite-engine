@@ -10,6 +10,7 @@ from .....distributed import dtensor_to_tensor, tensor_to_dtensor
 from .....kernels import wait_for_ACT
 from .....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
 from ....enums import InitMethod
+from ....loss import add_aux_loss
 from ....modeling_utils import ParameterizedLinear, get_activation_function, is_glu
 from ....modeling_utils_TP import ColumnParallelLinear, Dropout_TP, DTensorModule, RowParallelLinear
 from ...moe_dolomite import MoEDolomiteConfig
@@ -250,7 +251,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         return router_logits, router_weights, selected_experts
 
-    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
 
@@ -290,4 +291,6 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             else 0
         )
 
-        return hidden_states, router_logits, aux_loss
+        add_aux_loss(aux_loss)
+
+        return hidden_states

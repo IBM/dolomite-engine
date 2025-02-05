@@ -52,7 +52,7 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.moe = get_moe(
+        self.mlp = get_moe(
             config,
             moe_implementation=moe_implementation,
             use_aux_free_moe=config.use_aux_free_moe,
@@ -69,7 +69,7 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor]:
+    ) -> torch.Tensor:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
@@ -91,7 +91,7 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states, _, aux_loss = self.moe(hidden_states)
+        hidden_states = self.mlp(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
@@ -99,4 +99,4 @@ class RNNMoEDolomiteBlock(MoEDolomiteBlock):
         # residual connection
         hidden_states = hidden_states + residual
 
-        return hidden_states, aux_loss
+        return hidden_states
