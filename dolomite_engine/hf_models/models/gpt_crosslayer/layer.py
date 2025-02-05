@@ -45,7 +45,6 @@ class CrossLayer(nn.Module):
         hidden_states: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        joint_residual: torch.Tensor | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
@@ -68,8 +67,6 @@ class CrossLayer(nn.Module):
             hidden_states = hidden_states * self.m_residual
 
         hidden_states = hidden_states + residual
-        if joint_residual is not None:
-            hidden_states = hidden_states + joint_residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
@@ -100,7 +97,6 @@ class GPTCrossLayerBlock(nn.Module):
         self.head_dim = config.n_embd // self.num_heads
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.joint_residual_stream = config.joint_residual_stream
         self.layer_idx = layer_idx
 
         self._use_eager_attention = attention_implementation == "eager"
@@ -134,7 +130,6 @@ class GPTCrossLayerBlock(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
-        joint_residual = hidden_states if self.joint_residual_stream else None
         key, value = self.kv_proj(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -165,7 +160,6 @@ class GPTCrossLayerBlock(nn.Module):
                 hidden_states,
                 key,
                 value,
-                joint_residual,
                 attention_mask=attention_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
