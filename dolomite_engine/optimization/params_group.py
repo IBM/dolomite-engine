@@ -13,6 +13,7 @@ from ..hf_models import (
     MoEDolomiteForCausalLM_TP,
     MoELadderResidualForCausalLM,
     MoEStickBreakingForCausalLM,
+    MoEStickBreakingForCausalLM_TP,
     RNNDolomiteForCausalLM,
     RNNMoEDolomiteForCausalLM,
     StickBreakingForCausalLM,
@@ -74,6 +75,8 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
 
 
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[dict]:
+
+    print(model.model)
     assert isinstance(
         model.model,
         (
@@ -87,6 +90,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             LadderResidualForCausalLM,
             LadderResidualForCausalLM_TP,
             MoEStickBreakingForCausalLM,
+            MoEStickBreakingForCausalLM_TP,
             MoELadderResidualForCausalLM,
         ),
     ), "mup is not supported with this model architecture"

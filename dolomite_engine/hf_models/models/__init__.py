@@ -29,6 +29,7 @@ from .moe_dolomite_TP import (
 )
 from .moe_ladder_residual import MoELadderResidualConfig, MoELadderResidualForCausalLM, MoELadderResidualModel
 from .moe_stickbreaking import MoEStickBreakingConfig, MoEStickBreakingForCausalLM, MoEStickBreakingModel
+from .moe_stickbreaking_TP import MoEStickBreakingForCausalLM_TP, MoEStickBreakingModel_TP
 from .palm import PaLMConfig, PaLMForCausalLM, PaLMModel
 from .rnn_dolomite import RNNDolomiteConfig, RNNDolomiteForCausalLM, RNNDolomiteModel
 from .rnn_moe_dolomite import RNNMoEDolomiteConfig, RNNMoEDolomiteForCausalLM, RNNMoEDolomiteModel
