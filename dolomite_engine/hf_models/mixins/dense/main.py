@@ -15,6 +15,8 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
     def __init__(self, config: CommonConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
+
+        self.router_aux_loss_coef = getattr(config, "router_aux_loss_coef", 0)
         self._init_model(config, **kwargs)
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
@@ -114,9 +116,11 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 reduction=reduction,
             )
 
+        aux_loss = get_aux_loss()
+
         if loss is None:
             loss = None
-        else:
+        elif aux_loss != 0:
             loss = loss + self.router_aux_loss_coef * get_aux_loss()
 
         return CausalLMOutputWithPast(

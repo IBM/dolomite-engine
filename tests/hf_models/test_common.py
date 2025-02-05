@@ -250,7 +250,11 @@ class TestCommons(TestCase):
             kernels.append(Kernel.scattermoe)
 
         with enable_kernels(kernels):
-            model = AutoModelForCausalLM.from_config(config, **kwargs)
+            model = AutoModelForCausalLM.from_config(
+                config,
+                attn_implementation=attention_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+            )
 
             if use_padding_free_transformer:
                 assert model._use_padding_free_transformer
