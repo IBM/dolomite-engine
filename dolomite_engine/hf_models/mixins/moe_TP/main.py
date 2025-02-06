@@ -1,16 +1,14 @@
 import torch
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
-from transformers.modeling_outputs import MoeCausalLMOutputWithPast
+from transformers.modeling_outputs import MoeCausalLMOutputWithPast, MoeModelOutputWithPast
 
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
-from ...loss import get_autoregressive_language_modeling_loss
+from ...loss import add_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ..dense_TP import CausalLMModelMixin_TP
-from ..moe import CausalLMMoEModelMixin, MoeModelOutputWithPastAndAuxLoss
 
 
-class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
+class CausalLMMoEModelMixin_TP(CausalLMModelMixin_TP):
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
@@ -47,7 +45,7 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 use_cache=use_cache,
             )
 
-        transformer_outputs: MoeModelOutputWithPastAndAuxLoss = self.transformer(
+        transformer_outputs: MoeModelOutputWithPast = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -66,30 +64,26 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 lm_logits = lm_logits / self.m_width
 
         if not self.is_pipeline_parallel_enabled:
-            lm_loss = None
+            loss = None
             if labels is not None:
-                lm_loss = get_autoregressive_language_modeling_loss(
+                loss = get_autoregressive_language_modeling_loss(
                     lm_logits=lm_logits,
                     labels=labels,
                     upcast_logits_for_loss=self.upcast_logits_for_loss,
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 )
 
-        aux_loss = transformer_outputs.aux_loss
         if self.is_pipeline_parallel_enabled and not self.is_first_stage:
-            aux_loss = aux_loss + prev_aux_loss
+            add_aux_loss(prev_aux_loss)
 
-        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            if output_parallel_lm_logits:
-                assert self.tensor_parallel_word_embeddings
-            else:
-                if self.tensor_parallel_word_embeddings:
-                    # all gather
-                    lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-                    lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+        if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
+            # all gather
+            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+            lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+
+        aux_loss = get_aux_loss()
 
         if self.is_pipeline_parallel_enabled:
             aux_loss = aux_loss.unsqueeze(0)
@@ -99,19 +93,15 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
             else:
                 output = (transformer_outputs.last_hidden_state, aux_loss)
         else:
-            if lm_loss is None:
-                loss = None
-            else:
-                loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            if loss is not None and aux_loss != 0:
+                loss = loss + self.router_aux_loss_coef * aux_loss
 
             output = MoeCausalLMOutputWithPast(
                 loss=loss,
-                aux_loss=aux_loss,
                 logits=lm_logits,
                 past_key_values=transformer_outputs.past_key_values,
                 hidden_states=transformer_outputs.hidden_states,
                 attentions=transformer_outputs.attentions,
-                router_logits=transformer_outputs.router_logits,
             )
 
         return output

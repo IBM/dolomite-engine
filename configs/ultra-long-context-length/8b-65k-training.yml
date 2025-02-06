@@ -50,7 +50,6 @@ distributed_args:
   tensor_parallel_world_size: 8
   fsdp_algorithm: 2
   sequence_parallel: true
-  tensor_parallel_word_embeddings: true
   gradient_checkpointing_method: block
   gradient_checkpointing_args:
     num_blocks: 12

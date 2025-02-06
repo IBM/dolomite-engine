@@ -17,7 +17,6 @@ def get_autoregressive_language_modeling_loss(
     cu_seqlens: torch.Tensor | None = None,
     use_padding_free_transformer: bool = False,
     reduction: str = "mean",
-    tensor_parallel_word_embeddings: bool = False,
 ) -> torch.Tensor | DTensor:
     if use_padding_free_transformer:
         assert cu_seqlens is not None
@@ -38,17 +37,11 @@ def get_autoregressive_language_modeling_loss(
     loss_context = nullcontext
 
     if ProcessGroupManager.is_initialized() and ProcessGroupManager.is_tensor_parallel_enabled():
+        loss_context = loss_parallel
         tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
-        shift_logits = tensor_to_dtensor(
-            shift_logits,
-            device_mesh=tp_mesh,
-            current_placement=Shard(-1) if tensor_parallel_word_embeddings else Replicate(),
-        )
+        shift_logits = tensor_to_dtensor(shift_logits, device_mesh=tp_mesh, current_placement=Shard(-1))
         shift_labels = tensor_to_dtensor(shift_labels, device_mesh=tp_mesh, current_placement=Replicate())
-
-        if tensor_parallel_word_embeddings:
-            loss_context = loss_parallel
 
     if upcast_logits_for_loss:
         shift_logits = shift_logits.float()
@@ -59,3 +52,20 @@ def get_autoregressive_language_modeling_loss(
         )
 
     return loss
+
+
+_AUX_LOSS: torch.Tensor | float = 0
+
+
+def clear_aux_loss() -> None:
+    global _AUX_LOSS
+    _AUX_LOSS = 0
+
+
+def add_aux_loss(aux_loss: torch.Tensor) -> None:
+    global _AUX_LOSS
+    _AUX_LOSS = _AUX_LOSS + aux_loss
+
+
+def get_aux_loss() -> torch.Tensor:
+    return _AUX_LOSS

@@ -27,15 +27,6 @@ class AttentionImplementation(Enum):
     flash_attention_2 = "flash_attention_2"
 
 
-class MoEImplementation(Enum):
-    """
-    Enum class for MoE implementation
-    """
-
-    eager = "eager"
-    scattermoe = "scattermoe"
-
-
 class DatasetSplit(Enum):
     """dataset split"""
 
@@ -86,3 +77,4 @@ class Kernel(Enum):
     cute_rmsnorm = "cute_rmsnorm"
     cute_swiglu_unchunked = "cute_swiglu_unchunked"
     mamba2_ssm = "mamba2_ssm"
+    scattermoe = "scattermoe"

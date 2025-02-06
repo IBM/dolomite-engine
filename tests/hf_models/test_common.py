@@ -10,15 +10,16 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
-    MoEDolomiteConfig,
     PositionEmbeddingType,
     export_to_huggingface,
     import_from_huggingface,
 )
 from dolomite_engine.hf_models.config import CommonConfig
+from dolomite_engine.kernels import enable_kernels
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
@@ -113,12 +114,13 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
-    ) -> MoEDolomiteConfig:
-        return MoEDolomiteConfig(
+    ) -> GPTDolomiteConfig:
+        return GPTDolomiteConfig(
             vocab_size=2048,
             n_positions=1024,
             n_embd=32,
             n_layer=num_layers,
+            mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(num_layers)],
             n_head=4,
             num_experts_per_tok=num_experts_per_tok,
             num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
@@ -238,36 +240,48 @@ class TestCommons(TestCase):
         return False
 
     def from_config(self, config: AutoConfig, **kwargs) -> AutoModelForCausalLM:
-        model = AutoModelForCausalLM.from_config(config, **kwargs)
-
         attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
-        moe_implementation = kwargs.pop("moe_implementation", None)
 
-        if use_padding_free_transformer:
-            assert model._use_padding_free_transformer
+        kernels = []
 
-        if attention_implementation == "eager":
-            assert "Attention" in str(model)
-            assert "FlashAttention2" not in str(model)
-            assert "PaddingFreeAttention" not in str(model)
-        elif attention_implementation == "sdpa":
-            assert "SDPA" in str(model)
-        elif attention_implementation == "flash_attention_2":
-            if use_padding_free_transformer:
-                assert "PaddingFreeAttention" in str(model)
-            else:
-                assert "FlashAttention2" in str(model)
-
+        moe_implementation = kwargs.pop("moe_implementation", "eager")
         if moe_implementation == "scattermoe":
-            assert "ScatterMoE" in str(model)
-        elif moe_implementation == "eager":
-            assert "MoE" in str(model)
+            kernels.append(Kernel.scattermoe)
 
-        kwargs.pop("torch_dtype", None)
-        assert len(kwargs) == 0
+        with enable_kernels(kernels):
+            model = AutoModelForCausalLM.from_config(
+                config,
+                attn_implementation=attention_implementation,
+                use_padding_free_transformer=use_padding_free_transformer,
+                torch_dtype=kwargs.pop("torch_dtype", None),
+            )
 
-        return model
+            if use_padding_free_transformer:
+                assert model._use_padding_free_transformer
+
+            if attention_implementation == "eager":
+                assert "Attention" in str(model)
+                assert "FlashAttention2" not in str(model)
+                assert "PaddingFreeAttention" not in str(model)
+            elif attention_implementation == "sdpa":
+                assert "SDPA" in str(model)
+            elif attention_implementation == "flash_attention_2":
+                if use_padding_free_transformer:
+                    assert "PaddingFreeAttention" in str(model)
+                else:
+                    assert "FlashAttention2" in str(model)
+
+            if moe_implementation == "scattermoe":
+                assert "ScatterMoE" in str(model)
+            elif moe_implementation == "eager":
+                mlp_blocks = getattr(config, "mlp_blocks")
+                if len(mlp_blocks) > 0 and all([i["mlp_block_type"] == "MoE" for i in mlp_blocks]):
+                    assert "MoE" in str(model)
+
+            assert len(kwargs) == 0
+
+            return model
 
     def assert_equal_tensors(
         self,

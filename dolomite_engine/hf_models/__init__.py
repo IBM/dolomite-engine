@@ -1,5 +1,5 @@
 from .enums import AttentionHeadType, PositionEmbeddingType
-from .loss import get_autoregressive_language_modeling_loss
+from .loss import get_autoregressive_language_modeling_loss, get_aux_loss
 from .model_conversion import export_to_huggingface, import_from_huggingface
 from .models import (
     DesyncResidualConfig,
@@ -20,29 +20,9 @@ from .models import (
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
     LadderResidualModel_TP,
-    MoEDolomiteConfig,
-    MoEDolomiteForCausalLM,
-    MoEDolomiteForCausalLM_TP,
-    MoEDolomiteModel,
-    MoEDolomiteModel_TP,
-    MoELadderResidualConfig,
-    MoELadderResidualForCausalLM,
-    MoELadderResidualModel,
-    MoEStickBreakingConfig,
-    MoEStickBreakingForCausalLM,
-    MoEStickBreakingModel,
     PaLMConfig,
     PaLMForCausalLM,
     PaLMModel,
-    RNNDolomiteConfig,
-    RNNDolomiteForCausalLM,
-    RNNDolomiteModel,
-    RNNMoEDolomiteConfig,
-    RNNMoEDolomiteForCausalLM,
-    RNNMoEDolomiteModel,
-    StickBreakingConfig,
-    StickBreakingForCausalLM,
-    StickBreakingModel,
     convert_gpt_dolomite_to_gpt_crosslayer,
 )
 from .register_hf import get_model_parallel_class, is_custom_model, register_model_classes

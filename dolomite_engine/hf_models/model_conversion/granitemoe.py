@@ -7,7 +7,7 @@ from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..models import MoEDolomiteConfig
+from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -35,7 +35,7 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDolomiteConfig:
     assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
@@ -47,7 +47,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
 
     assert not original_config.attention_bias
 
-    config = MoEDolomiteConfig(
+    config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
         n_positions=original_config.max_position_embeddings,
         n_embd=original_config.hidden_size,
@@ -77,6 +77,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         attention_multiplier=original_config.attention_multiplier,
+        mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(original_config.num_hidden_layers)],
     )
 
     return config
@@ -107,14 +108,14 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.post_attention_layernorm.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = _split_and_reorder_for_glu(
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = _split_and_reorder_for_glu(
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight")
         )
-        state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
         )
 
@@ -135,7 +136,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: MoEDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
@@ -162,11 +163,12 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
         pass
 
 
-def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig:
+def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert not config.add_bias
+    assert all(i["mlp_block_type"] == "MoE" for i in config.mlp_blocks)
 
     original_config = GraniteMoeConfig(
         vocab_size=config.vocab_size,
@@ -227,14 +229,14 @@ def _export_state_dict_to_huggingface(
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.gate.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.gate.weight")
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.weight")
         )
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_proj.weight")
         )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(

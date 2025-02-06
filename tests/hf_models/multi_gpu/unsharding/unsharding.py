@@ -6,14 +6,15 @@ import torch.distributed
 from torch.distributed._tensor.api import DTensor
 
 from dolomite_engine.distributed import dtensor_to_tensor
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
-    MoEDolomiteConfig,
     fix_unsharded_state_dict,
     get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
 )
+from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager
 
 from ...test_common import TestCommons
@@ -23,7 +24,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
 parser.add_argument("--model-type", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
@@ -38,7 +38,7 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
 
 kwargs = {}
 
-if args.model_type == GPTDolomiteConfig.model_type:
+if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
@@ -49,8 +49,8 @@ if args.model_type == GPTDolomiteConfig.model_type:
         n_head=16,
         activation_function=args.activation_function,
     )
-elif args.model_type == MoEDolomiteConfig.model_type:
-    config = MoEDolomiteConfig(
+elif args.model_type == "moe":
+    config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
         position_embedding_type="learned_absolute",
@@ -59,8 +59,9 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_embd=128,
         n_head=16,
         activation_function=args.activation_function,
+        mlp_blocks=[{"mlp_block_type": "MoE"}],
     )
-    kwargs["moe_implementation"] = "scattermoe"
+    enable_kernels([Kernel.scattermoe]).__enter__()
 
 
 if is_tp_first_rank:
@@ -69,9 +70,7 @@ if is_tp_first_rank:
 
 torch.distributed.barrier()
 
-model_tp = get_model_parallel_class(args.model_type).from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings, **kwargs
-)
+model_tp = get_model_parallel_class(config.model_type).from_pretrained(args.tmp_path, **kwargs)
 
 tp_state_dict = model_tp.state_dict()
 
@@ -101,9 +100,7 @@ def run_check(fix: bool):
         ]
 
         tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
-            config,
-            tensor_parallel_state_dicts=tensor_parallel_state_dicts,
-            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+            config, tensor_parallel_state_dicts=tensor_parallel_state_dicts
         )
 
     torch.distributed.barrier()

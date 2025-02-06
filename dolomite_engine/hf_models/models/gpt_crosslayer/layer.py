@@ -3,8 +3,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import apply_rotary_pos_emb, get_normalization_function, repeat_key_value
-from ..gpt_dolomite.mlp import MLP
+from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
 from .attention import get_attention_module, get_key_value_projection
 from .config import GPTCrossLayerConfig
 
@@ -22,14 +21,6 @@ class CrossLayer(nn.Module):
         hidden_size = config.hidden_size
         self.m_residual = config.m_residual
 
-        self._use_eager_attention = attention_implementation == "eager"
-        self._use_sdpa = attention_implementation == "sdpa"
-        self._use_flash_attention_2 = attention_implementation == "flash_attention_2"
-        self._use_padding_free_transformer = use_padding_free_transformer
-
-        if self._use_padding_free_transformer:
-            assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
-
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
@@ -39,14 +30,15 @@ class CrossLayer(nn.Module):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.mlp = MLP(config)
+        self.mlp = get_mlp_block(
+            config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
+        )
 
     def forward(
         self,
         hidden_states: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        joint_residual: torch.Tensor | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
@@ -69,8 +61,6 @@ class CrossLayer(nn.Module):
             hidden_states = hidden_states * self.m_residual
 
         hidden_states = hidden_states + residual
-        if joint_residual is not None:
-            hidden_states = hidden_states + joint_residual
 
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
@@ -80,7 +70,6 @@ class CrossLayer(nn.Module):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        # residual connection
         hidden_states = hidden_states + residual
 
         return hidden_states
@@ -102,7 +91,6 @@ class GPTCrossLayerBlock(nn.Module):
         self.head_dim = config.n_embd // self.num_heads
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.joint_residual_stream = config.joint_residual_stream
         self.layer_idx = layer_idx
 
         self._use_eager_attention = attention_implementation == "eager"
@@ -136,7 +124,6 @@ class GPTCrossLayerBlock(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
-        joint_residual = hidden_states if self.joint_residual_stream else None
         key, value = self.kv_proj(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -167,7 +154,6 @@ class GPTCrossLayerBlock(nn.Module):
                 hidden_states,
                 key,
                 value,
-                joint_residual,
                 attention_mask=attention_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,

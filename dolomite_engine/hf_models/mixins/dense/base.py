@@ -6,6 +6,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ....utils import divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...loss import clear_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 
@@ -185,6 +186,8 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if is_generation_cache_enabled():
             past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
+        clear_aux_loss()
 
         for block in self.h:
             hidden_states = block(

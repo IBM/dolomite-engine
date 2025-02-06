@@ -4,7 +4,7 @@ from torch.distributed._tensor.placement_types import Replicate
 
 from ..communication import Communication
 from ..distributed import tensor_to_dtensor
-from ..hf_models import get_autoregressive_language_modeling_loss
+from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -38,7 +38,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
         self, model_outputs, labels: torch.Tensor, cu_seqlens: torch.Tensor | None, lm_loss_multiplier: float = 1
     ) -> torch.Tensor | dict:
         logits: torch.Tensor = model_outputs.logits
-        aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
+        aux_loss = get_aux_loss()
 
         lm_loss = get_autoregressive_language_modeling_loss(
             lm_logits=logits,
@@ -47,12 +47,11 @@ class ModelWrapperForFinetuning(ModelWrapper):
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
 
-        if aux_loss is None:
+        if aux_loss == 0:
             loss = lm_loss
             output = {"loss": loss}
         else:

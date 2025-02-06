@@ -105,6 +105,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
+    assert config.mlp_blocks is None or all(i["mlp_block_type"] == "MLP" for i in config.mlp_blocks)
 
     original_config = GraniteConfig(
         vocab_size=config.vocab_size,

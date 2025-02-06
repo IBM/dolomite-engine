@@ -30,7 +30,7 @@ _Yikang Shen, Matthew Stallone, Mayank Mishra, Gaoyuan Zhang, Shawn Tan, Aditya 
 _Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_  
 ![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
 1. [Stick-breaking Attention](https://arxiv.org/abs/2410.17980)  
-_Shawn Tan, Yikang Shen, Songlin Yang, Aaron Courville, Rameswar Panda_
+_Shawn Tan, Yikang Shen, Songlin Yang, Aaron Courville, Rameswar Panda_  
 ![image][Model Architecture]
 
 # Getting Started

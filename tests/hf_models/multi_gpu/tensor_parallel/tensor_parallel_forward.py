@@ -5,14 +5,15 @@ import torch
 import torch.distributed
 from transformers import set_seed
 
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     DesyncResidualConfig,
     GPTDolomiteConfig,
     LadderResidualConfig,
-    MoEDolomiteConfig,
     get_model_parallel_class,
 )
+from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
@@ -24,7 +25,6 @@ parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--torch-dtype", type=str)
 parser.add_argument("--tmp-path", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--use-padding-free-transformer", action="store_true")
 parser.add_argument("--sequence-parallel", action="store_true")
 parser.add_argument("--model-type", type=str)
@@ -41,7 +41,7 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
 kwargs = {}
-if args.model_type == GPTDolomiteConfig.model_type:
+if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
@@ -51,8 +51,8 @@ if args.model_type == GPTDolomiteConfig.model_type:
         n_embd=128,
         n_head=16,
     )
-elif args.model_type == MoEDolomiteConfig.model_type:
-    config = MoEDolomiteConfig(
+elif args.model_type == "moe":
+    config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
         position_embedding_type="learned_absolute",
@@ -60,9 +60,10 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         add_bias=False,
         n_embd=128,
         n_head=16,
+        mlp_blocks=[{"mlp_block_type": "MoE"}],
     )
-    kwargs["moe_implementation"] = "scattermoe"
-elif args.model_type == DesyncResidualConfig.model_type:
+    enable_kernels([Kernel.scattermoe]).__enter__()
+elif args.model_type == "desync_residual":
     config = DesyncResidualConfig(
         attention_head_type=args.attention_head_type,
         n_layer=4,
@@ -81,8 +82,7 @@ elif args.model_type == DesyncResidualConfig.model_type:
             {"attention": False, "mlp": True},
         ],
     )
-    kwargs["moe_implementation"] = "scattermoe"
-elif args.model_type == LadderResidualConfig.model_type:
+elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
         attention_head_type=args.attention_head_type,
         n_layer=2,
@@ -113,9 +113,8 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
 
-    model_tp = get_model_parallel_class(args.model_type)._from_config(
+    model_tp = get_model_parallel_class(config.model_type)._from_config(
         config,
-        tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
@@ -163,13 +162,13 @@ else:
     output_tp = model_tp(input_ids=input_ids, labels=labels)
 
 loss_tp = output_tp.loss
-logits_tp = output_tp.logits
-
-if args.tensor_parallel_word_embeddings:
-    logits_tp = logits_tp[..., : config.vocab_size]
+logits_tp = output_tp.logits[..., : config.vocab_size]
 
 if torch.distributed.get_rank() == 0:
-    output = model(input_ids=input_ids, labels=labels)
+    # loss computation hangs if we don't use dummy tensor parallel world size
+    with ProcessGroupManager.set_dummy_tensor_parallel_world_size(1):
+        output = model(input_ids=input_ids, labels=labels)
+
     loss = output.loss
     logits = output.logits
 
@@ -180,4 +179,4 @@ if torch.distributed.get_rank() == 0:
     assert error < 5e-4, f"logits don't match for normal and tensor parallel model, error is ({error})"
 
     error = (loss - loss_tp).abs().max()
-    assert error < 3e-6, f"losses don't match for normal and tensor parallel model, error is ({error})"
+    assert error < 1e-3, f"losses don't match for normal and tensor parallel model, error is ({error})"

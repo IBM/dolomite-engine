@@ -4,7 +4,7 @@ from transformers import DynamicCache, GenerationMixin
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ...config import CommonConfig
-from ...loss import get_autoregressive_language_modeling_loss
+from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
 from .base import PreTrainedModelMixin
 
@@ -15,6 +15,8 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
     def __init__(self, config: CommonConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
+
+        self.router_aux_loss_coef = getattr(config, "router_aux_loss_coef", 0)
         self._init_model(config, **kwargs)
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
@@ -113,6 +115,13 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 reduction=reduction,
             )
+
+        aux_loss = get_aux_loss()
+
+        if loss is None:
+            loss = None
+        elif aux_loss != 0:
+            loss = loss + self.router_aux_loss_coef * aux_loss
 
         return CausalLMOutputWithPast(
             loss=loss,
