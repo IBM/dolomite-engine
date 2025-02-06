@@ -9,7 +9,6 @@ from ..hf_models import (
     GPTDolomiteForCausalLM_TP,
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
-    MoEDolomiteForCausalLM_TP,
 )
 from ..hf_models.modeling_utils import MLP, Attention, MoE
 from ..model_wrapper import ModelWrapper
@@ -70,7 +69,6 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         (
             GPTDolomiteForCausalLM,
             GPTDolomiteForCausalLM_TP,
-            MoEDolomiteForCausalLM_TP,
             LadderResidualForCausalLM,
             LadderResidualForCausalLM_TP,
         ),
