@@ -54,6 +54,7 @@ class PaLMBlock(nn.Module):
         mlp_out = self.mlp_block(hidden_states)
 
         hidden_states = attention_out + mlp_out
+        del attention_out, mlp_out
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
