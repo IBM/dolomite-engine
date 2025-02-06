@@ -50,7 +50,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
             _get_attention(
                 config=config,
                 safetensors_weights_manager=safetensors_weights_manager,
-                prefix=prefix + "attn.",
+                prefix=prefix + "sequence_mixer.",
                 column_parallel_shard_dim=0,
                 row_parallel_shard_dim=1,
             )

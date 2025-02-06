@@ -36,7 +36,9 @@ def get_desync_residual_model_parallel_state_dict(
 
         state_dict.update(
             _get_attention(
-                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "attn."
+                config=config,
+                safetensors_weights_manager=safetensors_weights_manager,
+                prefix=prefix + "sequence_mixer.",
             )
         )
 
