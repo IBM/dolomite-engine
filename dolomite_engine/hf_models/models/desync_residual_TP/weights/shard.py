@@ -48,7 +48,9 @@ def get_desync_residual_model_parallel_state_dict(
             state_dict.update(_get_desync_residual_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
 
         state_dict.update(
-            _get_mlp(config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp.")
+            _get_mlp(
+                config=config, safetensors_weights_manager=safetensors_weights_manager, prefix=prefix + "mlp_block."
+            )
         )
 
     state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))

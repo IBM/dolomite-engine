@@ -93,7 +93,7 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
             _get_mlp(
                 tensor_parallel_state_dicts,
                 add_bias=config.add_bias,
-                prefix=prefix + f"transformer.h.{layer_idx}.mlp.",
+                prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                 check_correctness=check_correctness,
             )
         )

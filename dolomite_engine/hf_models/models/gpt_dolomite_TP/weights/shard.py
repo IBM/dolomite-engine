@@ -65,7 +65,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
                 _get_mlp(
                     config=config,
                     safetensors_weights_manager=safetensors_weights_manager,
-                    prefix=prefix + "mlp.",
+                    prefix=prefix + "mlp_block.",
                     column_parallel_shard_dim=0,
                     row_parallel_shard_dim=1,
                 )
@@ -75,7 +75,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
                 _get_moe(
                     config=config,
                     safetensors_weights_manager=safetensors_weights_manager,
-                    prefix=prefix + "mlp.",
+                    prefix=prefix + "mlp_block.",
                     column_parallel_shard_dim=1,
                     row_parallel_shard_dim=2,
                 )
