@@ -28,7 +28,7 @@ class GPTDolomiteBlock(nn.Module):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.mlp = get_mlp_block(
+        self.mlp_block = get_mlp_block(
             config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
         )
 
@@ -61,7 +61,7 @@ class GPTDolomiteBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp_block(hidden_states)
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual

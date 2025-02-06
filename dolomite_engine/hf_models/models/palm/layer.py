@@ -24,7 +24,7 @@ class PaLMBlock(nn.Module):
         self.sequence_mixer = get_sequence_mixer(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
-        self.mlp = get_mlp_block(
+        self.mlp_block = get_mlp_block(
             config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
         )
 
@@ -51,7 +51,7 @@ class PaLMBlock(nn.Module):
             max_seqlen=max_seqlen,
         )
 
-        mlp_out = self.mlp(hidden_states)
+        mlp_out = self.mlp_block(hidden_states)
 
         hidden_states = attention_out + mlp_out
 

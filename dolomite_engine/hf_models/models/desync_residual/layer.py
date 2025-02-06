@@ -56,7 +56,7 @@ class DesyncResidualBlock(nn.Module):
                 eps=config.layer_norm_epsilon,
             )
 
-        self.mlp = DesyncResidualMLP(config, layer_idx=layer_idx)
+        self.mlp_block = DesyncResidualMLP(config, layer_idx=layer_idx)
 
     def forward(
         self,
@@ -87,7 +87,7 @@ class DesyncResidualBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states = self.mlp(hidden_states, residual)
+        hidden_states = self.mlp_block(hidden_states, residual)
 
         return hidden_states
 

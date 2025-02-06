@@ -99,21 +99,21 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.post_attention_layernorm.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = interleave_up_gate_tensor_for_mlp(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = interleave_up_gate_tensor_for_mlp(
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.mlp.up_proj.weight"),
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.mlp.gate_proj.weight"),
         )
         if f"model.layers.{layer_idx}.mlp.up_proj.bias" in safetensors_weights_manager:
-            state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.bias"] = interleave_up_gate_tensor_for_mlp(
+            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.bias"] = interleave_up_gate_tensor_for_mlp(
                 safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.mlp.up_proj.bias"),
                 safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.mlp.gate_proj.bias"),
             )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.mlp.down_proj.weight"
         )
         if f"model.layers.{layer_idx}.mlp.down_proj.bias" in safetensors_weights_manager:
-            state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.bias"] = safetensors_weights_manager.get_tensor(
+            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.bias"] = safetensors_weights_manager.get_tensor(
                 f"model.layers.{layer_idx}.mlp.down_proj.bias"
             )
 
@@ -240,24 +240,24 @@ def _export_state_dict_to_huggingface(
         )
 
         up_weight, gate_weight = split_up_gate_tensor_for_mlp(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight")
         )
         state_dict[f"model.layers.{layer_idx}.mlp.up_proj.weight"] = up_weight
         state_dict[f"model.layers.{layer_idx}.mlp.gate_proj.weight"] = gate_weight
 
-        if f"transformer.h.{layer_idx}.mlp.c_fc.bias" in safetensors_weights_manager:
+        if f"transformer.h.{layer_idx}.mlp_block.c_fc.bias" in safetensors_weights_manager:
             up_bias, gate_bias = split_up_gate_tensor_for_mlp(
-                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.bias")
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.bias")
             )
             state_dict[f"model.layers.{layer_idx}.mlp.up_proj.bias"] = up_bias
             state_dict[f"model.layers.{layer_idx}.mlp.gate_proj.bias"] = gate_bias
 
         state_dict[f"model.layers.{layer_idx}.mlp.down_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.mlp.c_proj.weight"
+            f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"
         )
-        if f"transformer.h.{layer_idx}.mlp.c_proj.bias" in safetensors_weights_manager:
+        if f"transformer.h.{layer_idx}.mlp_block.c_proj.bias" in safetensors_weights_manager:
             state_dict[f"model.layers.{layer_idx}.mlp.down_proj.bias"] = safetensors_weights_manager.get_tensor(
-                f"transformer.h.{layer_idx}.mlp.c_proj.bias"
+                f"transformer.h.{layer_idx}.mlp_block.c_proj.bias"
             )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(

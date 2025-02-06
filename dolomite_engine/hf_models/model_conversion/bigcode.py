@@ -57,19 +57,41 @@ def _import_state_dict_from_huggingface(
     state_dict = {key: safetensors_weights_manager.get_tensor(key) for key in safetensors_weights_manager}
 
     for layer_idx in range(num_layers):
+        # sequence_mixer.c_attn
         state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = state_dict.pop(
             f"transformer.h.{layer_idx}.attn.c_attn.weight"
         )
-        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.attn.c_attn.bias"
-        )
 
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.attn.c_attn.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"] = bias
+
+        # sequence_mixer.c_proj
         state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = state_dict.pop(
             f"transformer.h.{layer_idx}.attn.c_proj.weight"
         )
-        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.attn.c_proj.bias"
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.attn.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias"] = bias
+
+        # mlp_block.c_fc
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp.c_fc.weight"
         )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp.c_fc.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.bias"] = bias
+
+        # mlp_block.c_proj
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp.c_proj.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.bias"] = bias
 
     return state_dict
 
@@ -135,18 +157,36 @@ def _export_state_dict_to_huggingface(safetensors_weights_manager: SafeTensorsWe
     state_dict = {key: safetensors_weights_manager.get_tensor(key) for key in safetensors_weights_manager}
 
     for layer_idx in range(num_layers):
+        # sequence_mixer.c_attn
         state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = state_dict.pop(
             f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"
         )
-        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.bias"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"
-        )
 
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.attn.c_attn.bias"] = bias
+
+        # sequence_mixer.c_proj
         state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = state_dict.pop(
             f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
         )
-        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.bias"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias"
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.attn.c_proj.bias"] = bias
+
+        # mlp_block.c_fc
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp_block.c_fc.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.bias"] = bias
+
+        # mlp_block.c_proj
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"
         )
 
     return state_dict

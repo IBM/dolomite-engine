@@ -120,20 +120,20 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
                 state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias")
             )
 
-        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_fc.weight"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.mlp.c_fc.weight"
+        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_fc.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"
         )
         if config.add_bias:
-            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_fc.bias"] = state_dict.pop(
-                f"transformer.h.{layer_idx}.mlp.c_fc.bias"
+            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_fc.bias"] = state_dict.pop(
+                f"transformer.h.{layer_idx}.mlp_block.c_fc.bias"
             )
 
-        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_proj.weight"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.mlp.c_proj.weight"
+        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"
         )
         if config.add_bias:
-            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_proj.bias"] = state_dict.pop(
-                f"transformer.h.{layer_idx}.mlp.c_proj.bias"
+            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_proj.bias"] = state_dict.pop(
+                f"transformer.h.{layer_idx}.mlp_block.c_proj.bias"
             )
 
     model.load_state_dict(new_state_dict)

@@ -42,7 +42,7 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
-        self.mlp = get_mlp_block_TP(
+        self.mlp_block = get_mlp_block_TP(
             config,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
