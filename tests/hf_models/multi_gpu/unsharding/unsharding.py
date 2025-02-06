@@ -41,23 +41,23 @@ kwargs = {}
 if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
         activation_function=args.activation_function,
     )
 elif args.model_type == "moe":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
         activation_function=args.activation_function,
         mlp_blocks=[{"mlp_block_type": "MoE"}],
     )

@@ -22,11 +22,11 @@ def get_desync_residual_model_parallel_state_dict(
     if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
         state_dict.update(
             _get_embeddings_or_lm_head(
-                safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.n_positions
+                safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.max_position_embeddings
             )
         )
 
-    for layer_idx in range(config.n_layer):
+    for layer_idx in range(config.num_layers):
         prefix = f"transformer.h.{layer_idx}."
 
         if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:

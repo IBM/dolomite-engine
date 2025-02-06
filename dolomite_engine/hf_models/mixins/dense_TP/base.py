@@ -40,7 +40,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         self.head_dim = self.embed_dim // self.num_heads
 
         self.layers_per_stage = divide_if_divisible(
-            config.n_layer, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
+            config.num_layers, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
         )
 
         self.layer_start_id = self.layers_per_stage * self.pipeline_stage_id

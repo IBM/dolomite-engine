@@ -18,14 +18,14 @@ class Attention(nn.Module):
         super().__init__()
 
         self.causal = causal
-        self.hidden_size = config.n_embd
-        self.num_heads = config.n_head
+        self.hidden_size = config.hidden_size
+        self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
 
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
         init_method = InitMethod(config.init_method)
 
         self.head_dim = divide_if_divisible(
@@ -80,7 +80,7 @@ class Attention(nn.Module):
             std=std,
         )
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)

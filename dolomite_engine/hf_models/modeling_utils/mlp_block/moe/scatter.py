@@ -66,14 +66,14 @@ class ScatterMoE(MoE):
         self.use_padding_free_transformer = use_padding_free_transformer
 
         self.hidden_size = config.hidden_size
-        self.intermediate_size = config.n_inner
-        self.shared_intermediate_size = config.shared_n_inner
+        self.intermediate_size = config.intermediate_size
+        self.shared_intermediate_size = config.shared_intermediate_size
 
         activation_function = config.activation_function
 
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
         init_method = InitMethod(config.init_method)
         residual_dropout = config.resid_pdrop
 
@@ -109,7 +109,7 @@ class ScatterMoE(MoE):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedScatteredExperts(

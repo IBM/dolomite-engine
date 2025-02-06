@@ -15,8 +15,8 @@ class MLP_TP(MLP):
     ) -> None:
         nn.Module.__init__(self)
 
-        hidden_size = config.n_embd
-        intermediate_size = config.n_inner
+        hidden_size = config.hidden_size
+        intermediate_size = config.intermediate_size
         activation_function = config.activation_function
         self.add_bias = config.add_bias
         residual_dropout = config.resid_pdrop
@@ -25,7 +25,7 @@ class MLP_TP(MLP):
         init_method = InitMethod(config.init_method)
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -41,7 +41,7 @@ class MLP_TP(MLP):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = RowParallelLinear(

@@ -25,10 +25,10 @@ model_args:
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
-    n_embd: 512
-    n_head: 16
-    n_layer: 4
-    n_positions: 512
+    hidden_size: 512
+    num_attention_heads: 16
+    num_layers: 4
+    max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000

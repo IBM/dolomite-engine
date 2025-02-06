@@ -16,7 +16,7 @@ class GPTCrossLayerConfig(CommonConfig):
         super().__init__(attention_head_type=attention_head_type, num_key_value_heads=num_key_value_heads, **kwargs)
 
         if sharing_pattern is None:
-            self.sharing_pattern = list(range(self.n_layer))
+            self.sharing_pattern = list(range(self.num_layers))
         else:
             assert all(
                 [sharing_pattern[i] == i for i in set(sharing_pattern)]
@@ -27,7 +27,7 @@ class GPTCrossLayerConfig(CommonConfig):
 
             for i in range(len(sharing_pattern)):
                 assert sharing_pattern[i] >= 0
-                assert sharing_pattern[i] < self.n_layer
+                assert sharing_pattern[i] < self.num_layers
 
             self.sharing_pattern = sharing_pattern
 

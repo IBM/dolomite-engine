@@ -17,11 +17,11 @@ class DesyncResidualMLP(nn.Module):
         self.layer_idx = layer_idx
         self.m_residual = config.m_residual
         self.tp_world_size = config.pretraining_tensor_parallel_size
-        self.n_layer = config.n_layer
-        self.current_mlp_all_reduce = layer_idx == self.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
+        self.num_layers = config.num_layers
+        self.current_mlp_all_reduce = layer_idx == self.num_layers - 1 or config.reduce_pattern[layer_idx]["mlp"]
 
-        hidden_size = config.n_embd
-        intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
+        hidden_size = config.hidden_size
+        intermediate_size = divide_if_divisible(config.intermediate_size, config.pretraining_tensor_parallel_size, "")
         activation_function = config.activation_function
         add_bias = config.add_bias
         residual_dropout = config.resid_pdrop
@@ -43,7 +43,7 @@ class DesyncResidualMLP(nn.Module):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * self.n_layer)
+        std = initializer_range / math.sqrt(2 * self.num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = DesyncResidualLinear(

@@ -26,7 +26,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             if not self._tied_word_embeddings:
                 self.lm_head = LMHead_TP(
                     self.vocab_size,
-                    config.n_embd,
+                    config.hidden_size,
                     std=config.initializer_range,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,

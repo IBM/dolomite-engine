@@ -20,8 +20,8 @@ class DesyncResidualSDPA(Attention):
         self.tp_world_size = config.pretraining_tensor_parallel_size
 
         self.causal = causal
-        self.global_hidden_size = config.n_embd
-        self.global_num_heads = config.n_head
+        self.global_hidden_size = config.hidden_size
+        self.global_num_heads = config.num_attention_heads
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
         self.m_residual = config.m_residual
@@ -29,7 +29,7 @@ class DesyncResidualSDPA(Attention):
 
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
         init_method = InitMethod(config.init_method)
 
         divide_if_divisible(
@@ -104,7 +104,7 @@ class DesyncResidualSDPA(Attention):
             std=std,
         )
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = DesyncResidualLinear(
