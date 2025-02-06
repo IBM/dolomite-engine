@@ -70,7 +70,7 @@ if is_tp_first_rank:
 
 torch.distributed.barrier()
 
-model_tp = get_model_parallel_class(args.model_type).from_pretrained(args.tmp_path, **kwargs)
+model_tp = get_model_parallel_class(config.model_type).from_pretrained(args.tmp_path, **kwargs)
 
 tp_state_dict = model_tp.state_dict()
 
