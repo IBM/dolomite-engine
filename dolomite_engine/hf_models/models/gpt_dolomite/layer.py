@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_attention_module, get_mlp_block, get_normalization_function
+from ...modeling_utils import get_mlp_block, get_normalization_function, get_sequence_mixer
 from .config import GPTDolomiteConfig
 
 
@@ -22,7 +22,7 @@ class GPTDolomiteBlock(nn.Module):
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.sequence_mixer = get_attention_module(
+        self.sequence_mixer = get_sequence_mixer(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
         self.ln_2 = get_normalization_function(

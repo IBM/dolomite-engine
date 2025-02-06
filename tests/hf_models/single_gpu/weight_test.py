@@ -3,7 +3,7 @@ from parameterized import parameterized
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 from dolomite_engine.hf_models.modeling_utils import (
-    get_attention_module,
+    get_sequence_mixer,
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
@@ -15,7 +15,7 @@ class WeightTest(TestCommons):
     @parameterized.expand(TestCommons.make_args_matrix(TestCommons.get_attention_head_types()))
     def test_query_key_value_weight_loading_and_saving(self, attention_head_type: AttentionHeadType) -> None:
         config = self.get_dense_test_config(attention_head_type, PositionEmbeddingType.learned_absolute)
-        attention = get_attention_module(config, True, "sdpa", False, 1)
+        attention = get_sequence_mixer(config, True, "sdpa", False, 1)
 
         state_dict = attention.state_dict()
 
