@@ -23,7 +23,6 @@ from ...test_common import TestCommons
 parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
-parser.add_argument("--model-type", type=str)
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
@@ -38,30 +37,18 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
 
 kwargs = {}
 
-if args.model_type == "dense":
-    config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-        activation_function=args.activation_function,
-    )
-elif args.model_type == "moe":
-    config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-        activation_function=args.activation_function,
-        mlp_blocks=[{"mlp_block_type": "MoE"}],
-    )
-    enable_kernels([Kernel.scattermoe]).__enter__()
+config = GPTDolomiteConfig(
+    attention_head_type=args.attention_head_type,
+    n_layer=2,
+    position_embedding_type="learned_absolute",
+    num_key_value_heads=num_key_value_heads,
+    add_bias=False,
+    n_embd=128,
+    n_head=16,
+    activation_function=args.activation_function,
+    mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
+)
+enable_kernels([Kernel.scattermoe]).__enter__()
 
 
 if is_tp_first_rank:
