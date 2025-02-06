@@ -20,7 +20,7 @@ class LadderResidualBlock(GPTDolomiteBlock):
             residual = residual + previous_attention_out
 
         current_attention_out = self.ln_1(residual)
-        current_attention_out = self.attn(
+        current_attention_out = self.sequence_mixer(
             current_attention_out,
             past_key_values=past_key_values,
             attention_mask=attention_mask,

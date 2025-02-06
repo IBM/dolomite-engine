@@ -16,7 +16,7 @@ _ATTENTION_MODULES = {
 }
 
 
-def get_attention_module_TP(
+def get_sequence_mixer_TP(
     config: CommonConfig,
     causal: bool,
     attention_implementation: str,

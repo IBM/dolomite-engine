@@ -22,7 +22,7 @@ class GPTDolomiteBlock(nn.Module):
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.attn = get_attention_module(
+        self.sequence_mixer = get_attention_module(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
         self.ln_2 = get_normalization_function(
@@ -44,7 +44,7 @@ class GPTDolomiteBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        hidden_states = self.attn(
+        hidden_states = self.sequence_mixer(
             hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,

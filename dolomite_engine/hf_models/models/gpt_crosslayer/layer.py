@@ -4,7 +4,7 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
-from .attention import get_attention_module, get_key_value_projection
+from .attention import get_key_value_projection, get_sequence_mixer
 from .config import GPTCrossLayerConfig
 
 
@@ -24,7 +24,7 @@ class CrossLayer(nn.Module):
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.attn = get_attention_module(
+        self.sequence_mixer = get_sequence_mixer(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
         self.ln_2 = get_normalization_function(
@@ -47,7 +47,7 @@ class CrossLayer(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        hidden_states = self.attn(
+        hidden_states = self.sequence_mixer(
             hidden_states,
             key=key,
             value=value,

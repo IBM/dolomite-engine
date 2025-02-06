@@ -25,7 +25,7 @@ _ATTENTION_MODULES = {
 }
 
 
-def get_attention_module(
+def get_sequence_mixer(
     config: CommonConfig,
     causal: bool,
     attention_implementation: str,
