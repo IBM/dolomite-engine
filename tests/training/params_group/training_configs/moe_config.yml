@@ -33,7 +33,7 @@ model_args:
     hidden_size: 512
     num_attention_heads: 16
     num_layers: 4
-    shared_n_inner: 512
+    shared_intermediate_size: 512
     max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope

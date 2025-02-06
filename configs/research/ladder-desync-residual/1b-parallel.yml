@@ -28,7 +28,7 @@ model_args:
     model_type: palm
     hidden_size: 1536
     num_attention_heads: 24
-    n_inner: 4096
+    intermediate_size: 4096
     num_layers: 40
     max_position_embeddings: 2048
     normalization_function: rmsnorm

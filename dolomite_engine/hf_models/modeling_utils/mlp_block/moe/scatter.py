@@ -66,8 +66,8 @@ class ScatterMoE(MoE):
         self.use_padding_free_transformer = use_padding_free_transformer
 
         self.hidden_size = config.hidden_size
-        self.intermediate_size = config.n_inner
-        self.shared_intermediate_size = config.shared_n_inner
+        self.intermediate_size = config.intermediate_size
+        self.shared_intermediate_size = config.shared_intermediate_size
 
         activation_function = config.activation_function
 

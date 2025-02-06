@@ -16,7 +16,7 @@ class DesyncResidualMLP_TP(MLP_TP):
         nn.Module.__init__(self)
 
         hidden_size = config.hidden_size
-        intermediate_size = config.n_inner
+        intermediate_size = config.intermediate_size
         activation_function = config.activation_function
         self.add_bias = config.add_bias
         residual_dropout = config.resid_pdrop

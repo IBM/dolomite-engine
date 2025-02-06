@@ -49,7 +49,7 @@ model_args:
     model_type: gpt_crosslayer
     hidden_size: 3072
     num_attention_heads: 12
-    n_inner: 8192
+    intermediate_size: 8192
     num_layers: 32
     max_position_embeddings: 2048
     normalization_function: rmsnorm

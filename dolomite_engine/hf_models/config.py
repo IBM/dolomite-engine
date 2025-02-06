@@ -14,7 +14,7 @@ class CommonConfig(PretrainedConfig):
         num_layers: int = 12,
         num_attention_heads: int = 12,
         num_key_value_heads: int | None = None,
-        n_inner: int | None = None,
+        intermediate_size: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         attention_head_type: str = "mqa",
         resid_pdrop: float = 0.1,
@@ -44,7 +44,7 @@ class CommonConfig(PretrainedConfig):
         num_experts: int = 8,
         num_experts_per_tok: int = 2,
         router_aux_loss_coef: float = 0.001,
-        shared_n_inner: int | None = None,
+        shared_intermediate_size: int | None = None,
         use_aux_free_moe: bool = False,
         **kwargs,
     ) -> None:
@@ -54,7 +54,7 @@ class CommonConfig(PretrainedConfig):
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
-        self.n_inner = 4 * hidden_size if n_inner is None else n_inner
+        self.intermediate_size = 4 * hidden_size if intermediate_size is None else intermediate_size
         self.activation_function = activation_function
         self.attention_head_type = attention_head_type
         self.resid_pdrop = resid_pdrop
@@ -120,7 +120,7 @@ class CommonConfig(PretrainedConfig):
         self.num_experts = num_experts
         self.num_experts_per_tok = num_experts_per_tok
 
-        self.shared_n_inner = shared_n_inner
+        self.shared_intermediate_size = shared_intermediate_size
 
         self.router_aux_loss_coef = router_aux_loss_coef
 

@@ -263,7 +263,7 @@ def _get_moe(tensor_parallel_state_dicts: list[dict], config, prefix: str, check
     row_parallel_shard_dim = 2
 
     if is_glu(config.activation_function):
-        # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
+        # per_rank_dim = config.intermediate_size // len(tensor_parallel_state_dicts)
         weights = [
             state_dict[prefix + "c_fc.weight"].chunk(2, dim=column_parallel_shard_dim)
             for state_dict in tensor_parallel_state_dicts

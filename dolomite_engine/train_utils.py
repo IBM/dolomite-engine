@@ -79,7 +79,7 @@ def get_model_tflops(
     b = batch_size
     s = sequence_length
     h = config.hidden_size
-    f = config.n_inner
+    f = config.intermediate_size
     n = config.num_attention_heads
     k = config.num_key_value_heads
     l = config.num_layers
