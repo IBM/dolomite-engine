@@ -63,7 +63,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         global_idx, local_idx = model.get_global_local_idx(layer_idx)
 
         q_attn_weight, k_attn_weight, v_attn_weight = split_query_key_value_tensor_for_attention(
-            state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"],
+            state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"],
             num_attention_heads,
             num_key_value_heads,
             head_dim,
@@ -71,16 +71,16 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         )
         if config.add_bias:
             q_attn_bias, k_attn_bias, v_attn_bias = split_query_key_value_tensor_for_attention(
-                state_dict.pop(f"transformer.h.{layer_idx}.attn.c_attn.bias"),
+                state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"),
                 num_attention_heads,
                 num_key_value_heads,
                 head_dim,
                 attention_head_type,
             )
 
-        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.attn.q_attn.weight"] = q_attn_weight
+        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.sequence_mixer.q_attn.weight"] = q_attn_weight
         if config.add_bias:
-            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.attn.q_attn.bias"] = q_attn_bias
+            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.sequence_mixer.q_attn.bias"] = q_attn_bias
 
         if layer_idx in sharing_pattern:
             new_state_dict[f"transformer.h.{global_idx}.kv_proj.kv_attn.weight"] = torch.cat(
@@ -112,28 +112,28 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
                     f"transformer.h.{layer_idx}.{ln}.bias"
                 )
 
-        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.attn.c_proj.weight"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.attn.c_proj.weight"
+        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.sequence_mixer.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
         )
         if config.add_bias:
-            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.attn.c_proj.bias"] = state_dict.pop(
-                f"transformer.h.{layer_idx}.attn.c_proj.bias"
+            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.sequence_mixer.c_proj.bias"] = (
+                state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias")
             )
 
-        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_fc.weight"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.mlp.c_fc.weight"
+        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_fc.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"
         )
         if config.add_bias:
-            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_fc.bias"] = state_dict.pop(
-                f"transformer.h.{layer_idx}.mlp.c_fc.bias"
+            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_fc.bias"] = state_dict.pop(
+                f"transformer.h.{layer_idx}.mlp_block.c_fc.bias"
             )
 
-        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_proj.weight"] = state_dict.pop(
-            f"transformer.h.{layer_idx}.mlp.c_proj.weight"
+        new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"
         )
         if config.add_bias:
-            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp.c_proj.bias"] = state_dict.pop(
-                f"transformer.h.{layer_idx}.mlp.c_proj.bias"
+            new_state_dict[f"transformer.h.{global_idx}.layers.{local_idx}.mlp_block.c_proj.bias"] = state_dict.pop(
+                f"transformer.h.{layer_idx}.mlp_block.c_proj.bias"
             )
 
     model.load_state_dict(new_state_dict)

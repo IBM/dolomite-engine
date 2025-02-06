@@ -4,7 +4,7 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType
 from ...modeling_utils import get_normalization_function
-from .attention import get_attention_module
+from .attention import get_sequence_mixer
 from .config import DesyncResidualConfig
 from .mlp import DesyncResidualMLP
 from .normalization import get_desync_residual_normalization_function
@@ -40,7 +40,7 @@ class DesyncResidualBlock(nn.Module):
                 eps=config.layer_norm_epsilon,
             )
 
-        self.attn = get_attention_module(
+        self.sequence_mixer = get_sequence_mixer(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
 
@@ -56,7 +56,7 @@ class DesyncResidualBlock(nn.Module):
                 eps=config.layer_norm_epsilon,
             )
 
-        self.mlp = DesyncResidualMLP(config, layer_idx=layer_idx)
+        self.mlp_block = DesyncResidualMLP(config, layer_idx=layer_idx)
 
     def forward(
         self,
@@ -72,7 +72,7 @@ class DesyncResidualBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        hidden_states = self.attn(
+        hidden_states = self.sequence_mixer(
             hidden_states,
             residual,
             past_key_values=past_key_values,
@@ -87,7 +87,7 @@ class DesyncResidualBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states = self.mlp(hidden_states, residual)
+        hidden_states = self.mlp_block(hidden_states, residual)
 
         return hidden_states
 

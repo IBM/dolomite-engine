@@ -52,7 +52,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
                 tensor_parallel_state_dicts,
                 attention_head_type=attention_head_type,
                 add_bias=config.add_bias,
-                prefix=prefix + f"transformer.h.{layer_idx}.attn.",
+                prefix=prefix + f"transformer.h.{layer_idx}.sequence_mixer.",
                 check_correctness=check_correctness,
             )
         )
@@ -76,7 +76,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
                     tensor_parallel_state_dicts,
                     is_glu=is_glu(config.activation_function),
                     add_bias=config.add_bias,
-                    prefix=prefix + f"transformer.h.{layer_idx}.mlp.",
+                    prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                     check_correctness=check_correctness,
                 )
             )
@@ -84,7 +84,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
             output_state_dict.update(
                 _get_moe(
                     tensor_parallel_state_dicts,
-                    prefix=prefix + f"transformer.h.{layer_idx}.mlp.",
+                    prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                     config=config,
                     check_correctness=check_correctness,
                 )

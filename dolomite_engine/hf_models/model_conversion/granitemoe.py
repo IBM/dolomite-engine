@@ -108,27 +108,29 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.post_attention_layernorm.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.gate.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = _split_and_reorder_for_glu(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = _split_and_reorder_for_glu(
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight")
         )
-        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
-            num_heads,
-            num_key_value_heads,
-            head_dim,
-            attention_head_type,
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = (
+            interleave_query_key_value_tensor_for_attention(
+                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
+                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
+                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
+                num_heads,
+                num_key_value_heads,
+                head_dim,
+                attention_head_type,
+            )
         )
-        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.self_attn.o_proj.weight"
         )
 
@@ -229,18 +231,18 @@ def _export_state_dict_to_huggingface(
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.gate.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.gate.weight")
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_fc.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight")
         )
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp.c_proj.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
         )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"),
             num_heads,
             num_key_value_heads,
             head_dim,
@@ -251,7 +253,7 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = value_weight
 
         state_dict[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.attn.c_proj.weight"
+            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
         )
 
     return state_dict

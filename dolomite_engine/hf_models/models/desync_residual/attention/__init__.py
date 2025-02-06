@@ -5,7 +5,7 @@ from .sdpa import DesyncResidualSDPA
 _ATTENTION_MODULES = {"sdpa": DesyncResidualSDPA}
 
 
-def get_attention_module(
+def get_sequence_mixer(
     config: DesyncResidualConfig,
     causal: bool,
     attention_implementation: str,
