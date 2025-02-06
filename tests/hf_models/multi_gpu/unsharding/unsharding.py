@@ -39,7 +39,7 @@ kwargs = {}
 
 config = GPTDolomiteConfig(
     attention_head_type=args.attention_head_type,
-    num_layers=1,
+    num_layers=2,
     position_embedding_type="learned_absolute",
     num_key_value_heads=num_key_value_heads,
     add_bias=False,
