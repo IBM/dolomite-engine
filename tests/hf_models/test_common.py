@@ -254,6 +254,7 @@ class TestCommons(TestCase):
                 config,
                 attn_implementation=attention_implementation,
                 use_padding_free_transformer=use_padding_free_transformer,
+                torch_dtype=kwargs.pop("torch_dtype", None),
             )
 
             if use_padding_free_transformer:
@@ -278,7 +279,6 @@ class TestCommons(TestCase):
                 if len(mlp_blocks) > 0 and all([i["mlp_block_type"] == "MoE" for i in mlp_blocks]):
                     assert "MoE" in str(model)
 
-            kwargs.pop("torch_dtype", None)
             assert len(kwargs) == 0
 
             return model
