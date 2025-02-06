@@ -27,7 +27,7 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
 
     config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
-        n_positions=original_config.n_positions,
+        max_position_embeddings=original_config.n_positions,
         n_embd=original_config.n_embd,
         n_layer=original_config.n_layer,
         n_head=original_config.n_head,
@@ -128,7 +128,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
 
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,
-        n_positions=config.n_positions,
+        n_positions=config.max_position_embeddings,
         n_embd=config.n_embd,
         n_layer=config.n_layer,
         n_head=config.n_head,

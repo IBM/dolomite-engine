@@ -34,7 +34,7 @@ model_args:
     n_head: 16
     n_layer: 4
     shared_n_inner: 512
-    n_positions: 512
+    max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000

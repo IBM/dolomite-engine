@@ -16,7 +16,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
 ) -> GPTCrossLayerForCausalLM:
     config = GPTCrossLayerConfig(
         vocab_size=original_config.vocab_size,
-        n_positions=original_config.n_positions,
+        max_position_embeddings=original_config.max_position_embeddings,
         n_embd=original_config.n_embd,
         n_layer=original_config.n_layer,
         n_head=original_config.n_head,

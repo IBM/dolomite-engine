@@ -49,7 +49,7 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
 
     config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
-        n_positions=original_config.max_position_embeddings,
+        max_position_embeddings=original_config.max_position_embeddings,
         n_embd=original_config.hidden_size,
         n_layer=original_config.num_hidden_layers,
         n_head=original_config.num_attention_heads,
@@ -190,7 +190,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
 
     original_config = LlamaConfig(
         vocab_size=config.vocab_size,
-        max_position_embeddings=config.n_positions,
+        max_position_embeddings=config.max_position_embeddings,
         hidden_size=config.n_embd,
         num_hidden_layers=config.n_layer,
         num_attention_heads=config.n_head,

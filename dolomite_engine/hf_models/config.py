@@ -7,7 +7,6 @@ class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
     attribute_map = {
         "hidden_size": "n_embd",
-        "max_position_embeddings": "n_positions",
         "num_attention_heads": "n_head",
         "num_hidden_layers": "n_layer",
     }
@@ -15,7 +14,7 @@ class CommonConfig(PretrainedConfig):
     def __init__(
         self,
         vocab_size: int = 50257,
-        n_positions: int = 1024,
+        max_position_embeddings: int = 1024,
         n_embd: int = 768,
         n_layer: int = 12,
         n_head: int = 12,
@@ -55,7 +54,7 @@ class CommonConfig(PretrainedConfig):
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
-        self.n_positions = n_positions
+        self.max_position_embeddings = max_position_embeddings
         self.n_embd = n_embd
         self.n_layer = n_layer
         self.n_head = n_head

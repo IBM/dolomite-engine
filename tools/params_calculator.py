@@ -6,7 +6,7 @@ from dolomite_engine.hf_models import GPTDolomiteConfig
 
 config = GPTDolomiteConfig(
     vocab_size=65024,
-    n_positions=4096,
+    max_position_embeddings=4096,
     n_embd=8192,
     n_layer=72,
     n_head=64,

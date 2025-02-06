@@ -80,7 +80,7 @@ class TestCommons(TestCase):
     ) -> GPTDolomiteConfig:
         return GPTDolomiteConfig(
             vocab_size=2048,
-            n_positions=1024,
+            max_position_embeddings=1024,
             n_embd=32,
             n_layer=num_layers,
             n_head=4,
@@ -117,7 +117,7 @@ class TestCommons(TestCase):
     ) -> GPTDolomiteConfig:
         return GPTDolomiteConfig(
             vocab_size=2048,
-            n_positions=1024,
+            max_position_embeddings=1024,
             n_embd=32,
             n_layer=num_layers,
             mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(num_layers)],
