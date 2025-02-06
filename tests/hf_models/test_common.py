@@ -271,6 +271,13 @@ class TestCommons(TestCase):
                 else:
                     assert "FlashAttention2" in str(model)
 
+            if moe_implementation == "scattermoe":
+                assert "ScatterMoE" in str(model)
+            elif moe_implementation == "eager":
+                mlp_blocks = getattr(config, "mlp_blocks")
+                if len(mlp_blocks) > 0 and all([i["mlp_block_type"] == "MoE" for i in mlp_blocks]):
+                    assert "MoE" in str(model)
+
             kwargs.pop("torch_dtype", None)
             assert len(kwargs) == 0
 
