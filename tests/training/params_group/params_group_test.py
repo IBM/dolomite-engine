@@ -15,8 +15,8 @@ from ..test_commons import TestCommons
 class ParamsGroupTest(TestCommons):
     @parameterized.expand(
         [
-            ("gpt_dolomite_config.yml", "gpt_dolomite_mup.json"),
-            ("moe_dolomite_config.yml", "moe_dolomite_mup.json"),
+            ("dense_config.yml", "dense_mup.json"),
+            ("moe_config.yml", "moe_mup.json"),
         ]
     )
     def test_mup_group(self, config_filename: str, expected_groups_filename: str) -> None:
@@ -58,8 +58,8 @@ class ParamsGroupTest(TestCommons):
 
     @parameterized.expand(
         [
-            ("gpt_dolomite_config.yml", "gpt_dolomite_normal.json"),
-            ("moe_dolomite_config.yml", "moe_dolomite_normal.json"),
+            ("dense_config.yml", "dense_normal.json"),
+            ("moe_config.yml", "moe_normal.json"),
         ]
     )
     def test_normal_group(self, config_filename: str, expected_groups_filename: str) -> None:
