@@ -10,7 +10,6 @@ from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
-    MoEDolomiteConfig,
     fix_unsharded_state_dict,
     get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
@@ -39,7 +38,7 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
 
 kwargs = {}
 
-if args.model_type == GPTDolomiteConfig.model_type:
+if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
@@ -50,8 +49,8 @@ if args.model_type == GPTDolomiteConfig.model_type:
         n_head=16,
         activation_function=args.activation_function,
     )
-elif args.model_type == MoEDolomiteConfig.model_type:
-    config = MoEDolomiteConfig(
+elif args.model_type == "moe":
+    config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
         n_layer=1,
         position_embedding_type="learned_absolute",
@@ -60,6 +59,7 @@ elif args.model_type == MoEDolomiteConfig.model_type:
         n_embd=128,
         n_head=16,
         activation_function=args.activation_function,
+        mlp_blocks=[{"mlp_block_type": "MoE"}],
     )
     enable_kernels([Kernel.scattermoe]).__enter__()
 
