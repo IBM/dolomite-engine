@@ -136,7 +136,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: MoEDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
@@ -163,7 +163,7 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
         pass
 
 
-def _export_config_to_huggingface(config) -> GraniteMoeConfig:
+def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
