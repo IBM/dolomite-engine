@@ -46,6 +46,7 @@ config = GPTDolomiteConfig(
     activation_function=args.activation_function,
     mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
 )
+enable_kernels([Kernel.scattermoe]).__enter__()
 
 
 if is_tp_first_rank:
