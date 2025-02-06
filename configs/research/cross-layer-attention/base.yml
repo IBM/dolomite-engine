@@ -47,7 +47,7 @@ model_args:
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
-    n_embd: 3072
+    hidden_size: 3072
     n_head: 12
     n_inner: 8192
     n_layer: 32

@@ -15,7 +15,7 @@ class CrossLayerAttention(nn.Module):
 
         self.causal = causal
         self.mask_value = None
-        self.hidden_size = config.n_embd
+        self.hidden_size = config.hidden_size
         self.num_heads = config.n_head
         self.num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias

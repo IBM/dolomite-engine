@@ -20,7 +20,7 @@ class DesyncResidualMLP(nn.Module):
         self.n_layer = config.n_layer
         self.current_mlp_all_reduce = layer_idx == self.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
 
-        hidden_size = config.n_embd
+        hidden_size = config.hidden_size
         intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
         activation_function = config.activation_function
         add_bias = config.add_bias

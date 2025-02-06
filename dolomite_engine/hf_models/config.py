@@ -6,7 +6,6 @@ from .enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
     attribute_map = {
-        "hidden_size": "n_embd",
         "num_attention_heads": "n_head",
         "num_hidden_layers": "n_layer",
     }
@@ -15,7 +14,7 @@ class CommonConfig(PretrainedConfig):
         self,
         vocab_size: int = 50257,
         max_position_embeddings: int = 1024,
-        n_embd: int = 768,
+        hidden_size: int = 768,
         n_layer: int = 12,
         n_head: int = 12,
         num_key_value_heads: int | None = None,
@@ -55,11 +54,11 @@ class CommonConfig(PretrainedConfig):
     ) -> None:
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
-        self.n_embd = n_embd
+        self.hidden_size = hidden_size
         self.n_layer = n_layer
         self.n_head = n_head
         self.num_key_value_heads = num_key_value_heads
-        self.n_inner = 4 * n_embd if n_inner is None else n_inner
+        self.n_inner = 4 * hidden_size if n_inner is None else n_inner
         self.activation_function = activation_function
         self.attention_head_type = attention_head_type
         self.resid_pdrop = resid_pdrop

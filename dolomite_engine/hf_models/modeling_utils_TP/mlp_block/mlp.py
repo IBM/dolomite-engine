@@ -15,7 +15,7 @@ class MLP_TP(MLP):
     ) -> None:
         nn.Module.__init__(self)
 
-        hidden_size = config.n_embd
+        hidden_size = config.hidden_size
         intermediate_size = config.n_inner
         activation_function = config.activation_function
         self.add_bias = config.add_bias

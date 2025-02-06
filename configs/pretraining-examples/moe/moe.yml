@@ -54,7 +54,7 @@ model_args:
       - mlp_block_type: MoE
       - mlp_block_type: MoE
       - mlp_block_type: MoE
-    n_embd: 1024
+    hidden_size: 1024
     n_head: 16
     n_inner: 512
     n_layer: 24

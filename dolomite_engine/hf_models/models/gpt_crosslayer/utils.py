@@ -17,7 +17,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     config = GPTCrossLayerConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
-        n_embd=original_config.n_embd,
+        hidden_size=original_config.hidden_size,
         n_layer=original_config.n_layer,
         n_head=original_config.n_head,
         num_key_value_heads=original_config.num_key_value_heads,
@@ -38,7 +38,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     model = AutoModelForCausalLM.from_config(config, torch_dtype=original_model.dtype, **kwargs)
 
     attention_head_type = AttentionHeadType(original_config.attention_head_type)
-    hidden_size = config.n_embd
+    hidden_size = config.hidden_size
     num_attention_heads = config.n_head
     num_key_value_heads = config.num_key_value_heads
     head_dim = hidden_size // num_attention_heads

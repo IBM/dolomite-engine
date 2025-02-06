@@ -18,7 +18,7 @@ class Attention(nn.Module):
         super().__init__()
 
         self.causal = causal
-        self.hidden_size = config.n_embd
+        self.hidden_size = config.hidden_size
         self.num_heads = config.n_head
         self.num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias

@@ -24,7 +24,7 @@ class WeightTest(TestCommons):
             c_attn_weight,
             config.n_head,
             config.num_key_value_heads,
-            config.n_embd // config.n_head,
+            config.hidden_size // config.n_head,
             attention_head_type,
         )
         assert (c_attn_weight == query_key_value_weight).all()
@@ -34,7 +34,7 @@ class WeightTest(TestCommons):
             c_attn_bias,
             config.n_head,
             config.num_key_value_heads,
-            config.n_embd // config.n_head,
+            config.hidden_size // config.n_head,
             attention_head_type,
         )
         assert (c_attn_bias == query_key_value_bias).all()

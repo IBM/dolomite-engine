@@ -20,7 +20,7 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
         self.causal = causal
-        self.global_hidden_size = config.n_embd
+        self.global_hidden_size = config.hidden_size
         self.global_num_heads = config.n_head
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias

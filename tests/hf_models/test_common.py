@@ -81,7 +81,7 @@ class TestCommons(TestCase):
         return GPTDolomiteConfig(
             vocab_size=2048,
             max_position_embeddings=1024,
-            n_embd=32,
+            hidden_size=32,
             n_layer=num_layers,
             n_head=4,
             num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
@@ -118,7 +118,7 @@ class TestCommons(TestCase):
         return GPTDolomiteConfig(
             vocab_size=2048,
             max_position_embeddings=1024,
-            n_embd=32,
+            hidden_size=32,
             n_layer=num_layers,
             mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(num_layers)],
             n_head=4,

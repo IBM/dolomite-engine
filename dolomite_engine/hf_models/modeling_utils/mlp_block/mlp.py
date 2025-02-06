@@ -13,7 +13,7 @@ class MLP(nn.Module):
     def __init__(self, config: CommonConfig) -> None:
         super().__init__()
 
-        hidden_size = config.n_embd
+        hidden_size = config.hidden_size
         intermediate_size = config.n_inner
         activation_function = config.activation_function
         add_bias = config.add_bias

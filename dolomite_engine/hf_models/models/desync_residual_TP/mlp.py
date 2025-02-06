@@ -15,7 +15,7 @@ class DesyncResidualMLP_TP(MLP_TP):
     def __init__(self, config: DesyncResidualConfig, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
-        hidden_size = config.n_embd
+        hidden_size = config.hidden_size
         intermediate_size = config.n_inner
         activation_function = config.activation_function
         self.add_bias = config.add_bias

@@ -26,7 +26,7 @@ model_args:
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: palm
-    n_embd: 2304
+    hidden_size: 2304
     n_head: 36
     n_layer: 40
     max_position_embeddings: 2048

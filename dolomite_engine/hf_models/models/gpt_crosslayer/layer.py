@@ -88,7 +88,7 @@ class GPTCrossLayerBlock(nn.Module):
 
         self.num_heads = config.n_head
         self.num_key_value_heads = config.num_key_value_heads
-        self.head_dim = config.n_embd // self.num_heads
+        self.head_dim = config.hidden_size // self.num_heads
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.layer_idx = layer_idx

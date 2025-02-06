@@ -139,23 +139,21 @@ def _get_attention(
         tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
-        global_hidden_size = config.n_embd
-        head_dim = divide_if_divisible(global_hidden_size, config.n_head, "")
+        hidden_size = config.hidden_size
+        head_dim = divide_if_divisible(hidden_size, config.n_head, "")
 
-        hidden_size_per_rank = divide_if_divisible(global_hidden_size, tp_world_size, "")
+        hidden_size_per_rank = divide_if_divisible(hidden_size, tp_world_size, "")
         start_index = tp_rank * hidden_size_per_rank
         end_index = (tp_rank + 1) * hidden_size_per_rank
 
         weight = safetensors_weights_manager.get_slice(prefix + "c_attn.weight")
         state_dict[prefix + "c_attn.q_attn.weight"] = weight[start_index:end_index, :]
-        state_dict[prefix + "c_attn.kv_attn.weight"] = weight[
-            global_hidden_size : global_hidden_size + 2 * head_dim, :
-        ]
+        state_dict[prefix + "c_attn.kv_attn.weight"] = weight[hidden_size : hidden_size + 2 * head_dim, :]
 
         if config.add_bias:
             bias = safetensors_weights_manager.get_slice(prefix + "c_attn.bias")
             state_dict[prefix + "c_attn.q_attn.bias"] = bias[start_index:end_index]
-            state_dict[prefix + "c_attn.kv_attn.bias"] = bias[global_hidden_size : global_hidden_size + 2 * head_dim]
+            state_dict[prefix + "c_attn.kv_attn.bias"] = bias[hidden_size : hidden_size + 2 * head_dim]
     else:
         state_dict.update(
             _get_column_parallel(
