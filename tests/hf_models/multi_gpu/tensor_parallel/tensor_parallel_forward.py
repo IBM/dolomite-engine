@@ -44,7 +44,7 @@ kwargs = {}
 if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type=args.position_embedding_type,
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
@@ -54,7 +54,7 @@ if args.model_type == "dense":
 elif args.model_type == "moe":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
@@ -66,7 +66,7 @@ elif args.model_type == "moe":
 elif args.model_type == "desync_residual":
     config = DesyncResidualConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=4,
+        num_layers=4,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
@@ -85,7 +85,7 @@ elif args.model_type == "desync_residual":
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=2,
+        num_layers=2,
         position_embedding_type=args.position_embedding_type,
         num_key_value_heads=num_key_value_heads,
         add_bias=False,

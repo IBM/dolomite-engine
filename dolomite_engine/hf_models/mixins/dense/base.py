@@ -125,7 +125,7 @@ class BaseModelMixin(PreTrainedModelMixin):
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                 )
-                for i in range(config.n_layer)
+                for i in range(config.num_layers)
             ]
         )
         self.ln_f = get_normalization_function(

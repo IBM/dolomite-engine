@@ -41,7 +41,7 @@ kwargs = {}
 if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
@@ -52,7 +52,7 @@ if args.model_type == "dense":
 elif args.model_type == "moe":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,

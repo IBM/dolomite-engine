@@ -33,7 +33,7 @@ class _BaseAttention_TP(nn.Module):
 
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
         init_method = InitMethod(config.init_method)
 
         divide_if_divisible(
@@ -128,7 +128,7 @@ class _BaseAttention_TP(nn.Module):
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = RowParallelLinear(
@@ -189,7 +189,7 @@ class _MQA_QueryKeyValueProjection(nn.Module):
 
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
         init_method = InitMethod(config.init_method)
 
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -215,7 +215,7 @@ class _MQA_QueryKeyValueProjection(nn.Module):
             sequence_parallel=sequence_parallel,
         )
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.kv_attn = ReplicatedLinear(

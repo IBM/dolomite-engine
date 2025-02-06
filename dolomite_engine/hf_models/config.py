@@ -7,7 +7,6 @@ class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
     attribute_map = {
         "num_attention_heads": "n_head",
-        "num_hidden_layers": "n_layer",
     }
 
     def __init__(
@@ -15,7 +14,7 @@ class CommonConfig(PretrainedConfig):
         vocab_size: int = 50257,
         max_position_embeddings: int = 1024,
         hidden_size: int = 768,
-        n_layer: int = 12,
+        num_layers: int = 12,
         n_head: int = 12,
         num_key_value_heads: int | None = None,
         n_inner: int | None = None,
@@ -55,7 +54,7 @@ class CommonConfig(PretrainedConfig):
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
         self.hidden_size = hidden_size
-        self.n_layer = n_layer
+        self.num_layers = num_layers
         self.n_head = n_head
         self.num_key_value_heads = num_key_value_heads
         self.n_inner = 4 * hidden_size if n_inner is None else n_inner
@@ -115,11 +114,11 @@ class CommonConfig(PretrainedConfig):
 
         self.attention_blocks = attention_blocks
         if self.attention_blocks is None:
-            self.attention_blocks = [{"attention_block_type": "softmax_attention"} for _ in range(self.n_layer)]
+            self.attention_blocks = [{"attention_block_type": "softmax_attention"} for _ in range(self.num_layers)]
 
         self.mlp_blocks = mlp_blocks
         if self.mlp_blocks is None:
-            self.mlp_blocks = [{"mlp_block_type": "MLP"} for _ in range(self.n_layer)]
+            self.mlp_blocks = [{"mlp_block_type": "MLP"} for _ in range(self.num_layers)]
 
         self.num_experts = num_experts
         self.num_experts_per_tok = num_experts_per_tok

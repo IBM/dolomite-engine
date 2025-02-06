@@ -35,7 +35,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         )
 
     # layers
-    for layer_idx in trange(config.n_layer):
+    for layer_idx in trange(config.num_layers):
         # first layernorm
         output_state_dict.update(
             _get_layernorm(

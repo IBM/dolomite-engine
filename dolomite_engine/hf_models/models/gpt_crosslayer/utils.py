@@ -18,7 +18,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
-        n_layer=original_config.n_layer,
+        num_layers=original_config.num_layers,
         n_head=original_config.n_head,
         num_key_value_heads=original_config.num_key_value_heads,
         n_inner=original_config.n_inner,
@@ -59,7 +59,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     if config.normalization_function == "layernorm":
         new_state_dict["transformer.ln_f.bias"] = state_dict["transformer.ln_f.bias"]
 
-    for layer_idx in range(original_config.n_layer):
+    for layer_idx in range(original_config.num_layers):
         global_idx, local_idx = model.get_global_local_idx(layer_idx)
 
         q_attn_weight, k_attn_weight, v_attn_weight = split_query_key_value_tensor_for_attention(

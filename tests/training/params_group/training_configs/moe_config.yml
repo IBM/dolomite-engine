@@ -32,7 +32,7 @@ model_args:
       - mlp_block_type: MoE
     hidden_size: 512
     n_head: 16
-    n_layer: 4
+    num_layers: 4
     shared_n_inner: 512
     max_position_embeddings: 512
     normalization_function: rmsnorm

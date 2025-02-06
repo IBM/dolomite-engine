@@ -45,7 +45,7 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
         sub_layer_map = defaultdict(list)
         sub_layer_map[global_index].append(0)
 
-        for layer_idx in range(1, config.n_layer):
+        for layer_idx in range(1, config.num_layers):
             if self.sharing_pattern[layer_idx] != self.sharing_pattern[layer_idx - 1]:
                 global_index += 1
                 local_index = 0

@@ -10,7 +10,7 @@ def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_pat
     config = _import_config_from_huggingface(original_config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
-    state_dict = _import_state_dict_from_huggingface(safetensors_weights_manager, config.n_layer)
+    state_dict = _import_state_dict_from_huggingface(safetensors_weights_manager, config.num_layers)
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     config.save_pretrained(save_path)
@@ -29,7 +29,7 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.n_positions,
         hidden_size=original_config.n_embd,
-        n_layer=original_config.n_layer,
+        num_layers=original_config.n_layer,
         n_head=original_config.n_head,
         attention_head_type="mqa" if original_config.multi_query else "mha",
         position_embedding_type="learned_absolute",
@@ -101,7 +101,7 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
-    state_dict = _export_state_dict_to_huggingface(safetensors_weights_manager, config.n_layer)
+    state_dict = _export_state_dict_to_huggingface(safetensors_weights_manager, config.num_layers)
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     original_config.save_pretrained(save_path)
@@ -130,7 +130,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         vocab_size=config.vocab_size,
         n_positions=config.max_position_embeddings,
         n_embd=config.hidden_size,
-        n_layer=config.n_layer,
+        n_layer=config.num_layers,
         n_head=config.n_head,
         n_inner=config.n_inner,
         activation_function=config.activation_function,

@@ -28,7 +28,7 @@ model_args:
     model_type: ladder_residual
     hidden_size: 2304
     n_head: 36
-    n_layer: 40
+    num_layers: 40
     max_position_embeddings: 2048
     normalization_function: rmsnorm
     position_embedding_type: rope

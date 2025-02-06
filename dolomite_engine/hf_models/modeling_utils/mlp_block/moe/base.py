@@ -81,7 +81,7 @@ class MoE(nn.Module):
 
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
         init_method = InitMethod(config.init_method)
         residual_dropout = config.resid_pdrop
 
@@ -117,7 +117,7 @@ class MoE(nn.Module):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedExperts(

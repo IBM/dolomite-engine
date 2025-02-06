@@ -29,7 +29,7 @@ model_args:
     hidden_size: 1536
     n_head: 24
     n_inner: 4096
-    n_layer: 32
+    num_layers: 32
     max_position_embeddings: 2048
     normalization_function: rmsnorm
     position_embedding_type: rope

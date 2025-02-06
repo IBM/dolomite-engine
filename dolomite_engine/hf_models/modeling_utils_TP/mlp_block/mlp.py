@@ -25,7 +25,7 @@ class MLP_TP(MLP):
         init_method = InitMethod(config.init_method)
         initializer_range = config.initializer_range
         m_width = config.m_width
-        n_layer = config.n_layer
+        num_layers = config.num_layers
 
         std = initializer_range
         if init_method == InitMethod.mup:
@@ -41,7 +41,7 @@ class MLP_TP(MLP):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = RowParallelLinear(

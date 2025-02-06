@@ -82,7 +82,7 @@ def get_model_tflops(
     f = config.n_inner
     n = config.n_head
     k = config.num_key_value_heads
-    l = config.n_layer
+    l = config.num_layers
     v = config.vocab_size
 
     mlp_flops = 4 * b * s * h * f

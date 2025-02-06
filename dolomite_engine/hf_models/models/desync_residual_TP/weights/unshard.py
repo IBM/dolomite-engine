@@ -39,7 +39,7 @@ def unshard_desync_residual_tensor_parallel_state_dicts(
         )
 
     # layers
-    for layer_idx in trange(config.n_layer):
+    for layer_idx in trange(config.num_layers):
         # first layernorm
         if layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]:
             output_state_dict.update(

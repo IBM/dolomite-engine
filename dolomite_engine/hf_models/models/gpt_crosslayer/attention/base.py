@@ -41,7 +41,7 @@ class CrossLayerAttention(nn.Module):
             self.hidden_size,
             self.hidden_size,
             bias=self.add_bias,
-            std=(config.initializer_range / math.sqrt(2 * config.n_layer)),
+            std=(config.initializer_range / math.sqrt(2 * config.num_layers)),
         )
 
         self.attn_pdrop = config.attn_pdrop

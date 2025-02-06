@@ -17,7 +17,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
     is_last_pipeline_stage = pipeline_stage_id == num_pipeline_stages - 1
 
     layers_per_stage = divide_if_divisible(
-        config.n_layer, num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
+        config.num_layers, num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
     )
 
     layer_start_id = layers_per_stage * pipeline_stage_id
