@@ -15,7 +15,7 @@ class DesyncResidualConfig(CommonConfig):
         self.pretraining_tensor_parallel_size = pretraining_tensor_parallel_size
 
         self.reduce_pattern = (
-            [{"attention": True, "mlp": True} for i in range(self.n_layer)]
+            [{"attention": True, "mlp": True} for i in range(self.num_layers)]
             if reduce_pattern is None
             else reduce_pattern
         )

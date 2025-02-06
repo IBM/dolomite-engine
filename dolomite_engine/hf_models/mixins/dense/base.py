@@ -103,8 +103,8 @@ class BaseModelMixin(PreTrainedModelMixin):
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.embed_dim = config.n_embd
-        self.num_heads = config.n_head
+        self.embed_dim = config.hidden_size
+        self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
 
@@ -125,7 +125,7 @@ class BaseModelMixin(PreTrainedModelMixin):
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                 )
-                for i in range(config.n_layer)
+                for i in range(config.num_layers)
             ]
         )
         self.ln_f = get_normalization_function(

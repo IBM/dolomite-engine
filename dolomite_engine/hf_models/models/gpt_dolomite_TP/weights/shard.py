@@ -17,7 +17,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
     is_last_pipeline_stage = pipeline_stage_id == num_pipeline_stages - 1
 
     layers_per_stage = divide_if_divisible(
-        config.n_layer, num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
+        config.num_layers, num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
     )
 
     layer_start_id = layers_per_stage * pipeline_stage_id
@@ -37,7 +37,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
         if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
             state_dict.update(
                 _get_embeddings_or_lm_head(
-                    safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.n_positions
+                    safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.max_position_embeddings
                 )
             )
 
@@ -139,23 +139,21 @@ def _get_attention(
         tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
-        global_hidden_size = config.n_embd
-        head_dim = divide_if_divisible(global_hidden_size, config.n_head, "")
+        hidden_size = config.hidden_size
+        head_dim = divide_if_divisible(hidden_size, config.num_attention_heads, "")
 
-        hidden_size_per_rank = divide_if_divisible(global_hidden_size, tp_world_size, "")
+        hidden_size_per_rank = divide_if_divisible(hidden_size, tp_world_size, "")
         start_index = tp_rank * hidden_size_per_rank
         end_index = (tp_rank + 1) * hidden_size_per_rank
 
         weight = safetensors_weights_manager.get_slice(prefix + "c_attn.weight")
         state_dict[prefix + "c_attn.q_attn.weight"] = weight[start_index:end_index, :]
-        state_dict[prefix + "c_attn.kv_attn.weight"] = weight[
-            global_hidden_size : global_hidden_size + 2 * head_dim, :
-        ]
+        state_dict[prefix + "c_attn.kv_attn.weight"] = weight[hidden_size : hidden_size + 2 * head_dim, :]
 
         if config.add_bias:
             bias = safetensors_weights_manager.get_slice(prefix + "c_attn.bias")
             state_dict[prefix + "c_attn.q_attn.bias"] = bias[start_index:end_index]
-            state_dict[prefix + "c_attn.kv_attn.bias"] = bias[global_hidden_size : global_hidden_size + 2 * head_dim]
+            state_dict[prefix + "c_attn.kv_attn.bias"] = bias[hidden_size : hidden_size + 2 * head_dim]
     else:
         state_dict.update(
             _get_column_parallel(

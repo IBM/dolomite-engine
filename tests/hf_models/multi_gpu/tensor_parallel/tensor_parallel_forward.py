@@ -44,34 +44,34 @@ kwargs = {}
 if args.model_type == "dense":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type=args.position_embedding_type,
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
     )
 elif args.model_type == "moe":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=1,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
         mlp_blocks=[{"mlp_block_type": "MoE"}],
     )
     enable_kernels([Kernel.scattermoe]).__enter__()
 elif args.model_type == "desync_residual":
     config = DesyncResidualConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=4,
+        num_layers=4,
         position_embedding_type="learned_absolute",
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
         resid_pdrop=0,
         normalization_function="rmsnorm",
         pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
@@ -85,12 +85,12 @@ elif args.model_type == "desync_residual":
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
         attention_head_type=args.attention_head_type,
-        n_layer=2,
+        num_layers=2,
         position_embedding_type=args.position_embedding_type,
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
     )
 
 

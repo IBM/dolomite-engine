@@ -39,13 +39,14 @@ kwargs = {}
 
 config = GPTDolomiteConfig(
     attention_head_type=args.attention_head_type,
-    n_layer=2,
+    num_layers=1,
     position_embedding_type="learned_absolute",
     num_key_value_heads=num_key_value_heads,
     add_bias=False,
-    n_embd=128,
-    n_head=16,
+    hidden_size=128,
+    num_attention_heads=16,
     activation_function=args.activation_function,
+    mlp_blocks=[{"mlp_block_type": "MoE"}],
     mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
 )
 enable_kernels([Kernel.scattermoe]).__enter__()

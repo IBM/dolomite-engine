@@ -21,7 +21,7 @@ class DesyncResidualBlock(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.n_inner
+        self.inner_dim = config.intermediate_size
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.m_residual = config.m_residual
 

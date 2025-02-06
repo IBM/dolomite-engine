@@ -16,12 +16,12 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
 ) -> GPTCrossLayerForCausalLM:
     config = GPTCrossLayerConfig(
         vocab_size=original_config.vocab_size,
-        n_positions=original_config.n_positions,
-        n_embd=original_config.n_embd,
-        n_layer=original_config.n_layer,
-        n_head=original_config.n_head,
+        max_position_embeddings=original_config.max_position_embeddings,
+        hidden_size=original_config.hidden_size,
+        num_layers=original_config.num_layers,
+        num_attention_heads=original_config.num_attention_heads,
         num_key_value_heads=original_config.num_key_value_heads,
-        n_inner=original_config.n_inner,
+        intermediate_size=original_config.intermediate_size,
         activation_function=original_config.activation_function,
         resid_pdrop=original_config.resid_pdrop,
         embd_pdrop=original_config.embd_pdrop,
@@ -38,8 +38,8 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     model = AutoModelForCausalLM.from_config(config, torch_dtype=original_model.dtype, **kwargs)
 
     attention_head_type = AttentionHeadType(original_config.attention_head_type)
-    hidden_size = config.n_embd
-    num_attention_heads = config.n_head
+    hidden_size = config.hidden_size
+    num_attention_heads = config.num_attention_heads
     num_key_value_heads = config.num_key_value_heads
     head_dim = hidden_size // num_attention_heads
 
@@ -59,7 +59,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     if config.normalization_function == "layernorm":
         new_state_dict["transformer.ln_f.bias"] = state_dict["transformer.ln_f.bias"]
 
-    for layer_idx in range(original_config.n_layer):
+    for layer_idx in range(original_config.num_layers):
         global_idx, local_idx = model.get_global_local_idx(layer_idx)
 
         q_attn_weight, k_attn_weight, v_attn_weight = split_query_key_value_tensor_for_attention(

@@ -12,7 +12,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
         : config.vocab_size, :
     ]
 
-    for layer_idx in range(config.n_layer):
+    for layer_idx in range(config.num_layers):
         if AttentionHeadType(config.attention_head_type) == AttentionHeadType.mqa:
             q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.q_attn.weight")
             kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.kv_attn.weight")

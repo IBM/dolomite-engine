@@ -15,8 +15,8 @@ class DesyncResidualMLP_TP(MLP_TP):
     def __init__(self, config: DesyncResidualConfig, layer_idx: int = None) -> None:
         nn.Module.__init__(self)
 
-        hidden_size = config.n_embd
-        intermediate_size = config.n_inner
+        hidden_size = config.hidden_size
+        intermediate_size = config.intermediate_size
         activation_function = config.activation_function
         self.add_bias = config.add_bias
         residual_dropout = config.resid_pdrop
@@ -26,10 +26,10 @@ class DesyncResidualMLP_TP(MLP_TP):
         init_method = InitMethod(config.init_method)
         initializer_range = config.initializer_range
         m_width = config.m_width
-        self.n_layer = config.n_layer
+        self.num_layers = config.num_layers
         self.layer_idx = layer_idx
 
-        self.current_mlp_all_reduce = layer_idx == config.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
+        self.current_mlp_all_reduce = layer_idx == self.num_layers - 1 or config.reduce_pattern[layer_idx]["mlp"]
         self.current_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
 
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
@@ -59,7 +59,7 @@ class DesyncResidualMLP_TP(MLP_TP):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * self.n_layer)
+        std = initializer_range / math.sqrt(2 * self.num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
 

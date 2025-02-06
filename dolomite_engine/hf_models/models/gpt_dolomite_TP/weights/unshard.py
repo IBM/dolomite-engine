@@ -29,13 +29,13 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
                 prefix=prefix + "transformer.wpe.weight",
-                vocab_size=config.n_positions,
+                vocab_size=config.max_position_embeddings,
                 check_correctness=check_correctness,
             )
         )
 
     # layers
-    for layer_idx in trange(config.n_layer):
+    for layer_idx in trange(config.num_layers):
         # first layernorm
         output_state_dict.update(
             _get_layernorm(
@@ -263,7 +263,7 @@ def _get_moe(tensor_parallel_state_dicts: list[dict], config, prefix: str, check
     row_parallel_shard_dim = 2
 
     if is_glu(config.activation_function):
-        # per_rank_dim = config.n_inner // len(tensor_parallel_state_dicts)
+        # per_rank_dim = config.intermediate_size // len(tensor_parallel_state_dicts)
         weights = [
             state_dict[prefix + "c_fc.weight"].chunk(2, dim=column_parallel_shard_dim)
             for state_dict in tensor_parallel_state_dicts
