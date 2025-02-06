@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig
+from dolomite_engine.hf_models import AttentionHeadType
 
 from ...test_common import TestCommons
 
