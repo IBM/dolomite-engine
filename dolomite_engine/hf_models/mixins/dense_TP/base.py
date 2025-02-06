@@ -6,6 +6,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ..dense import BaseModelMixin, PreTrainedModelMixin
@@ -148,6 +149,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        clear_aux_loss()
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             hidden_states = self.h[str(layer_idx)](
@@ -189,5 +191,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     scale=self.config.rope_scaling["factor"],
                     original_max_position_embeddings=self.config.rope_scaling["original_max_position_embeddings"],
                 )
+        elif self.position_embedding_type == PositionEmbeddingType.nope:
+            pass
         else:
             raise NotImplementedError()

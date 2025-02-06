@@ -6,10 +6,9 @@ from transformers.modeling_outputs import MoeCausalLMOutputWithPast, MoeModelOut
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ...loss import add_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ..dense_TP import CausalLMModelMixin_TP
-from ..moe import CausalLMMoEModelMixin
 
 
-class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
+class CausalLMMoEModelMixin_TP(CausalLMModelMixin_TP):
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
@@ -103,7 +102,6 @@ class CausalLMMoEModelMixin_TP(CausalLMMoEModelMixin, CausalLMModelMixin_TP):
                 past_key_values=transformer_outputs.past_key_values,
                 hidden_states=transformer_outputs.hidden_states,
                 attentions=transformer_outputs.attentions,
-                router_logits=transformer_outputs.router_logits,
             )
 
         return output

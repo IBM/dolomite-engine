@@ -15,10 +15,26 @@ datasets:
 tokenizer_args:
   tokenizer_name: EleutherAI/gpt-neox-20b
 
+kernel_args:
+  - scattermoe
+
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    model_type: moe_dolomite
+    model_type: gpt_dolomite
+    mlp_blocks:
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
     vocab_size: 50304
     n_positions: 2048
     n_embd: 768
@@ -44,7 +60,6 @@ model_args:
     position_embedding_type: learned_absolute
     rope_theta: 10000
   attention_implementation: sdpa # flash_attention_2
-  moe_implementation: scattermoe
   # use_padding_free_transformer: true
 
 tuning_args:

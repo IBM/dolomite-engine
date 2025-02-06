@@ -6,9 +6,8 @@ import torch.nn as nn
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
-from ...modeling_utils_TP import ColumnParallelLinear, Dropout_TP
+from ...modeling_utils_TP import MLP_TP, ColumnParallelLinear, Dropout_TP
 from ..desync_residual import DesyncResidualConfig
-from ..gpt_dolomite_TP.mlp import MLP_TP
 from .linear import DesyncResidualLinear_TP, DesyncResidualRowParallelLinear
 
 

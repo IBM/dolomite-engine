@@ -11,7 +11,6 @@ class GPTCrossLayerConfig(CommonConfig):
         attention_head_type: str = "gqa",
         num_key_value_heads: int = 12,
         sharing_pattern: list[int] | None = None,
-        joint_residual_stream: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(attention_head_type=attention_head_type, num_key_value_heads=num_key_value_heads, **kwargs)
@@ -31,8 +30,6 @@ class GPTCrossLayerConfig(CommonConfig):
                 assert sharing_pattern[i] < self.n_layer
 
             self.sharing_pattern = sharing_pattern
-
-        self.joint_residual_stream = joint_residual_stream
 
         assert self.init_method == "normal"
 

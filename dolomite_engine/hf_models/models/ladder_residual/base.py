@@ -2,6 +2,7 @@ import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
+from ...loss import clear_aux_loss
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from .config import LadderResidualConfig
 from .layer import LadderResidualBlock
@@ -49,6 +50,8 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         previous_mlp_out = None
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        clear_aux_loss()
+
         for block in self.h:
             previous_attention_out, previous_mlp_out, hidden_states = block(
                 previous_attention_out=previous_attention_out,

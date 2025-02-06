@@ -15,11 +15,9 @@ from .enums import (
     LossMask,
     LRDecaySchedule,
     Mode,
-    MoEImplementation,
     ParamsGroupMethod,
     TuningMethod,
 )
-from .kernels import add_kernel
 from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
@@ -51,8 +49,6 @@ class ModelArgs(BaseArgs):
     trust_remote_code: bool = False
     # attention implementation
     attention_implementation: AttentionImplementation | None = None
-    # moe implementation (only works with MoEDolomiteForCausalLM)
-    moe_implementation: MoEImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
@@ -356,14 +352,8 @@ class LoggingArgs(BaseArgs):
 
 
 class KernelArgs(BaseArgs):
-    # Scalar of noise to inject into input embeddings
-    # https://arxiv.org/abs/2310.05914
-    kernels: list[Kernel] | None = None
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.kernels is not None:
-            for kernel in self.kernels:
-                add_kernel(kernel)
+    # custom kernels
+    kernels: list[Kernel] = []
 
 
 class TeacherArgs(BaseArgs):

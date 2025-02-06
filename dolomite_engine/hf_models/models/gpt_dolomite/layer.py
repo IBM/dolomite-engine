@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import get_attention_module, get_mlp_block, get_normalization_function
 from .config import GPTDolomiteConfig
-from .mlp import MLP
 
 
 class GPTDolomiteBlock(nn.Module):
@@ -18,7 +17,6 @@ class GPTDolomiteBlock(nn.Module):
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.layer_idx = layer_idx
         self.m_residual = config.m_residual
 
         self.ln_1 = get_normalization_function(
@@ -30,7 +28,9 @@ class GPTDolomiteBlock(nn.Module):
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.mlp = MLP(config)
+        self.mlp = get_mlp_block(
+            config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
+        )
 
     def forward(
         self,
@@ -56,7 +56,6 @@ class GPTDolomiteBlock(nn.Module):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        # residual connection
         hidden_states = hidden_states + residual
 
         residual = hidden_states
@@ -67,7 +66,6 @@ class GPTDolomiteBlock(nn.Module):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        # residual connection
         hidden_states = hidden_states + residual
 
         return hidden_states

@@ -15,6 +15,9 @@ datasets:
 tokenizer_args:
   tokenizer_name: bigcode/starcoder
 
+kernel_args:
+  - scattermoe
+
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
@@ -25,7 +28,32 @@ model_args:
     resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
-    model_type: moe_dolomite
+    model_type: gpt_dolomite
+    mlp_blocks:
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
+      - mlp_block_type: MoE
     n_embd: 1024
     n_head: 16
     n_inner: 512
@@ -46,7 +74,6 @@ model_args:
     eos_token_id: 0
     pad_token_id: 0
     router_aux_loss_coef: 0.01
-  moe_implementation: scattermoe
   attention_implementation: sdpa
 
 tuning_args:

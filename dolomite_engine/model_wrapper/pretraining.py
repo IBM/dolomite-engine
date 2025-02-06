@@ -8,7 +8,7 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
-from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..enums import AttentionImplementation, Mode
 from ..hf_models import get_aux_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
@@ -24,7 +24,6 @@ class ModelWrapperForPretraining(ModelWrapper):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
@@ -73,7 +72,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
-            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
             num_pipeline_stages=num_pipeline_stages,
