@@ -3,7 +3,7 @@ from tqdm import trange
 
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
-from ...gpt_dolomite_TP.weights.unshard import (
+from ..weights.unshard.unshard import (
     _concatenate_tensors_from_state_dicts,
     _fix_attention,
     _get_attention,

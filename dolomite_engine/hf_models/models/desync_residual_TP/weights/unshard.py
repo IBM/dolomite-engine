@@ -3,7 +3,7 @@ from tqdm import trange
 
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ...desync_residual import DesyncResidualConfig
-from ...gpt_dolomite_TP.weights.unshard import (
+from ...gpt_dolomite_TP.weights.unshard.unshard import (
     _concatenate_tensors_from_state_dicts,
     _get_embeddings_or_lm_head,
     _get_layernorm,
