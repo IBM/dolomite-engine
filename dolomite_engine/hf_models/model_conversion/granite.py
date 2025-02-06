@@ -14,9 +14,9 @@ def import_from_huggingface_granite(pretrained_model_name_or_path: str, save_pat
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.n_head,
+        config.num_attention_heads,
         config.num_key_value_heads,
-        config.hidden_size // config.n_head,
+        config.hidden_size // config.num_attention_heads,
         AttentionHeadType(config.attention_head_type),
     )
 
@@ -47,7 +47,7 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_hidden_layers,
-        n_head=original_config.num_attention_heads,
+        num_attention_heads=original_config.num_attention_heads,
         num_key_value_heads=original_config.num_key_value_heads,
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
@@ -82,9 +82,9 @@ def export_to_huggingface_granite(pretrained_model_name_or_path: str, save_path:
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.n_head,
+        config.num_attention_heads,
         config.num_key_value_heads,
-        config.hidden_size // config.n_head,
+        config.hidden_size // config.num_attention_heads,
         AttentionHeadType(config.attention_head_type),
     )
 
@@ -112,7 +112,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
         max_position_embeddings=config.max_position_embeddings,
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
-        num_attention_heads=config.n_head,
+        num_attention_heads=config.num_attention_heads,
         num_key_value_heads=config.num_key_value_heads,
         intermediate_size=4 * config.hidden_size if config.n_inner is None else config.n_inner,
         hidden_act="silu",

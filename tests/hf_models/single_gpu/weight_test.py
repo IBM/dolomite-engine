@@ -22,9 +22,9 @@ class WeightTest(TestCommons):
         c_attn_weight = state_dict["c_attn.weight"]
         query_key_value_weight = self._split_and_interleave(
             c_attn_weight,
-            config.n_head,
+            config.num_attention_heads,
             config.num_key_value_heads,
-            config.hidden_size // config.n_head,
+            config.hidden_size // config.num_attention_heads,
             attention_head_type,
         )
         assert (c_attn_weight == query_key_value_weight).all()
@@ -32,9 +32,9 @@ class WeightTest(TestCommons):
         c_attn_bias = state_dict["c_attn.bias"]
         query_key_value_bias = self._split_and_interleave(
             c_attn_bias,
-            config.n_head,
+            config.num_attention_heads,
             config.num_key_value_heads,
-            config.hidden_size // config.n_head,
+            config.hidden_size // config.num_attention_heads,
             attention_head_type,
         )
         assert (c_attn_bias == query_key_value_bias).all()

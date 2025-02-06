@@ -86,7 +86,7 @@ class GPTCrossLayerBlock(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.num_heads = config.n_head
+        self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
         self.head_dim = config.hidden_size // self.num_heads
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)

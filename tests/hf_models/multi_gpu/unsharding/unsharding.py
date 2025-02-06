@@ -46,7 +46,7 @@ if args.model_type == "dense":
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
-        n_head=16,
+        num_attention_heads=16,
         activation_function=args.activation_function,
     )
 elif args.model_type == "moe":
@@ -57,7 +57,7 @@ elif args.model_type == "moe":
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
-        n_head=16,
+        num_attention_heads=16,
         activation_function=args.activation_function,
         mlp_blocks=[{"mlp_block_type": "MoE"}],
     )

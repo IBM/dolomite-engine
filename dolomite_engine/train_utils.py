@@ -80,7 +80,7 @@ def get_model_tflops(
     s = sequence_length
     h = config.hidden_size
     f = config.n_inner
-    n = config.n_head
+    n = config.num_attention_heads
     k = config.num_key_value_heads
     l = config.num_layers
     v = config.vocab_size

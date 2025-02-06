@@ -55,7 +55,7 @@ model_args:
       - mlp_block_type: MoE
       - mlp_block_type: MoE
     hidden_size: 1024
-    n_head: 16
+    num_attention_heads: 16
     n_inner: 512
     num_layers: 24
     max_position_embeddings: 4096

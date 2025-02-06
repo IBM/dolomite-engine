@@ -49,7 +49,7 @@ if args.model_type == "dense":
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
-        n_head=16,
+        num_attention_heads=16,
     )
 elif args.model_type == "moe":
     config = GPTDolomiteConfig(
@@ -59,7 +59,7 @@ elif args.model_type == "moe":
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
-        n_head=16,
+        num_attention_heads=16,
         mlp_blocks=[{"mlp_block_type": "MoE"}],
     )
     enable_kernels([Kernel.scattermoe]).__enter__()
@@ -71,7 +71,7 @@ elif args.model_type == "desync_residual":
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
-        n_head=16,
+        num_attention_heads=16,
         resid_pdrop=0,
         normalization_function="rmsnorm",
         pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
@@ -90,7 +90,7 @@ elif args.model_type == "ladder_residual":
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
-        n_head=16,
+        num_attention_heads=16,
     )
 
 

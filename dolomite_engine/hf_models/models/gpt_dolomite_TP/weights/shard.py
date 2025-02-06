@@ -140,7 +140,7 @@ def _get_attention(
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
         hidden_size = config.hidden_size
-        head_dim = divide_if_divisible(hidden_size, config.n_head, "")
+        head_dim = divide_if_divisible(hidden_size, config.num_attention_heads, "")
 
         hidden_size_per_rank = divide_if_divisible(hidden_size, tp_world_size, "")
         start_index = tp_rank * hidden_size_per_rank

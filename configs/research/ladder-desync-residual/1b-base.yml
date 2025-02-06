@@ -27,7 +27,7 @@ model_args:
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
     hidden_size: 1536
-    n_head: 24
+    num_attention_heads: 24
     n_inner: 4096
     num_layers: 40
     max_position_embeddings: 2048

@@ -27,7 +27,7 @@ class _BaseAttention_TP(nn.Module):
 
         self.causal = causal
         self.global_hidden_size = config.hidden_size
-        self.global_num_heads = config.n_head
+        self.global_num_heads = config.num_attention_heads
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
 
@@ -185,7 +185,7 @@ class _MQA_QueryKeyValueProjection(nn.Module):
 
         self.global_hidden_size = config.hidden_size
         self.add_bias = config.add_bias
-        global_num_heads = config.n_head
+        global_num_heads = config.num_attention_heads
 
         initializer_range = config.initializer_range
         m_width = config.m_width

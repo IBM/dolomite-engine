@@ -19,7 +19,7 @@ class Attention(nn.Module):
 
         self.causal = causal
         self.hidden_size = config.hidden_size
-        self.num_heads = config.n_head
+        self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
 

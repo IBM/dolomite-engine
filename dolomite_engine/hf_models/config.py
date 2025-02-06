@@ -5,9 +5,6 @@ from .enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 
 class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
-    attribute_map = {
-        "num_attention_heads": "n_head",
-    }
 
     def __init__(
         self,
@@ -15,7 +12,7 @@ class CommonConfig(PretrainedConfig):
         max_position_embeddings: int = 1024,
         hidden_size: int = 768,
         num_layers: int = 12,
-        n_head: int = 12,
+        num_attention_heads: int = 12,
         num_key_value_heads: int | None = None,
         n_inner: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
@@ -55,7 +52,7 @@ class CommonConfig(PretrainedConfig):
         self.max_position_embeddings = max_position_embeddings
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.n_head = n_head
+        self.num_attention_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.n_inner = 4 * hidden_size if n_inner is None else n_inner
         self.activation_function = activation_function
@@ -93,10 +90,10 @@ class CommonConfig(PretrainedConfig):
 
         if attention_head_type == AttentionHeadType.mha:
             if self.num_key_value_heads is None:
-                self.num_key_value_heads = self.n_head
+                self.num_key_value_heads = self.num_attention_heads
 
             assert (
-                self.n_head == self.num_key_value_heads
+                self.num_attention_heads == self.num_key_value_heads
             ), "MultiHeadAttention should have same number of heads for query, keys and values"
         elif attention_head_type == AttentionHeadType.mqa:
             if self.num_key_value_heads is None:
@@ -109,7 +106,7 @@ class CommonConfig(PretrainedConfig):
             ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
 
             assert (
-                self.n_head % self.num_key_value_heads == 0
+                self.num_attention_heads % self.num_key_value_heads == 0
             ), "GroupedQueryAttention should have more than 1 head for keys and values"
 
         self.attention_blocks = attention_blocks

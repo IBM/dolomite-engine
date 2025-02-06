@@ -21,7 +21,7 @@ class DesyncResidualSDPA(Attention):
 
         self.causal = causal
         self.global_hidden_size = config.hidden_size
-        self.global_num_heads = config.n_head
+        self.global_num_heads = config.num_attention_heads
         self.global_num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
         self.m_residual = config.m_residual

@@ -16,7 +16,7 @@ class CrossLayerAttention(nn.Module):
         self.causal = causal
         self.mask_value = None
         self.hidden_size = config.hidden_size
-        self.num_heads = config.n_head
+        self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
         self.add_bias = config.add_bias
 
@@ -134,7 +134,7 @@ class KeyValueProjection(nn.Module):
     def __init__(self, config: GPTCrossLayerConfig) -> None:
         super().__init__()
 
-        self.num_heads = config.n_head
+        self.num_heads = config.num_attention_heads
         self.num_key_value_heads = config.num_key_value_heads
 
         head_dim = config.hidden_size // self.num_heads

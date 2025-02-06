@@ -19,7 +19,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_layers,
-        n_head=original_config.n_head,
+        num_attention_heads=original_config.num_attention_heads,
         num_key_value_heads=original_config.num_key_value_heads,
         n_inner=original_config.n_inner,
         activation_function=original_config.activation_function,
@@ -39,7 +39,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
 
     attention_head_type = AttentionHeadType(original_config.attention_head_type)
     hidden_size = config.hidden_size
-    num_attention_heads = config.n_head
+    num_attention_heads = config.num_attention_heads
     num_key_value_heads = config.num_key_value_heads
     head_dim = hidden_size // num_attention_heads
 
