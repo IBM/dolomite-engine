@@ -168,6 +168,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert not config.add_bias
+    assert all(i["mlp_block_type"] == "MoE" for i in config.mlp_blocks)
 
     original_config = GraniteMoeConfig(
         vocab_size=config.vocab_size,
