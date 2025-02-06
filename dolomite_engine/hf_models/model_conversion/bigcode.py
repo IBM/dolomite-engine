@@ -1,26 +1,25 @@
-import shutil
-
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig, GPTBigCodeForCausalLM
 
+from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType, PositionEmbeddingType
 from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
-    shutil.copytree(pretrained_model_name_or_path, save_path)
-
-    original_config: GPTBigCodeConfig = AutoConfig.from_pretrained(save_path)
+    original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
+
+    safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
+    state_dict = _import_state_dict_from_huggingface(safetensors_weights_manager, config.n_layer)
+
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     config.save_pretrained(save_path)
 
     generation_config = GenerationConfig.from_model_config(config)
     generation_config.save_pretrained(save_path)
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
+    if tokenizer is not None:
         tokenizer.save_pretrained(save_path, legacy_format=False)
-    except:
-        pass
 
 
 def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDolomiteConfig:
@@ -52,11 +51,37 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
     return config
 
 
-def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
-    shutil.copytree(pretrained_model_name_or_path, save_path)
+def _import_state_dict_from_huggingface(
+    safetensors_weights_manager: SafeTensorsWeightsManager, num_layers: int
+) -> None:
+    state_dict = {key: safetensors_weights_manager.get_tensor(key) for key in safetensors_weights_manager}
 
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(save_path)
+    for layer_idx in range(num_layers):
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.attn.c_attn.weight"
+        )
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.attn.c_attn.bias"
+        )
+
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.attn.c_proj.weight"
+        )
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.attn.c_proj.bias"
+        )
+
+    return state_dict
+
+
+def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
+
+    safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
+    state_dict = _export_state_dict_to_huggingface(safetensors_weights_manager, config.n_layer)
+
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     original_config.save_pretrained(save_path)
 
     original_generation_config = GenerationConfig.from_model_config(original_config)
@@ -104,3 +129,24 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
     )
 
     return original_config
+
+
+def _export_state_dict_to_huggingface(safetensors_weights_manager: SafeTensorsWeightsManager, num_layers: int) -> dict:
+    state_dict = {key: safetensors_weights_manager.get_tensor(key) for key in safetensors_weights_manager}
+
+    for layer_idx in range(num_layers):
+        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"
+        )
+        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.bias"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"
+        )
+
+        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
+        )
+        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.bias"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias"
+        )
+
+    return state_dict
