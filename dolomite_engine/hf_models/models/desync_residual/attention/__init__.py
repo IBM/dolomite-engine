@@ -2,7 +2,7 @@ from ..config import DesyncResidualConfig
 from .sdpa import DesyncResidualSDPA
 
 
-_SEQUENCE_MIXERS = {"sdpa": DesyncResidualSDPA}
+_ATTENTION_MODULES = {"sdpa": DesyncResidualSDPA}
 
 
 def get_sequence_mixer(
@@ -15,7 +15,7 @@ def get_sequence_mixer(
     if use_padding_free_transformer:
         raise NotImplementedError("padding free transformer is not implemented with DesyncResidual")
 
-    if attention_implementation in _SEQUENCE_MIXERS:
-        return _SEQUENCE_MIXERS[attention_implementation](config, causal=causal, layer_idx=layer_idx)
+    if attention_implementation in _ATTENTION_MODULES:
+        return _ATTENTION_MODULES[attention_implementation](config, causal=causal, layer_idx=layer_idx)
 
     raise ValueError(f"unexpected `attention_implementation` {attention_implementation}")
