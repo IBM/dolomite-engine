@@ -35,8 +35,6 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-kwargs = {}
-
 config = GPTDolomiteConfig(
     attention_head_type=args.attention_head_type,
     num_layers=2,
@@ -48,7 +46,6 @@ config = GPTDolomiteConfig(
     activation_function=args.activation_function,
     mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
 )
-enable_kernels([Kernel.scattermoe]).__enter__()
 
 
 if is_tp_first_rank:
@@ -57,7 +54,7 @@ if is_tp_first_rank:
 
 torch.distributed.barrier()
 
-model_tp = get_model_parallel_class(config.model_type).from_pretrained(args.tmp_path, **kwargs)
+model_tp = get_model_parallel_class(config.model_type).from_pretrained(args.tmp_path)
 
 tp_state_dict = model_tp.state_dict()
 
