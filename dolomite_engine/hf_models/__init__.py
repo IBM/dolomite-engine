@@ -20,8 +20,6 @@ from .models import (
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
     LadderResidualModel_TP,
-    MoEDolomiteForCausalLM_TP,
-    MoEDolomiteModel_TP,
     PaLMConfig,
     PaLMForCausalLM,
     PaLMModel,
