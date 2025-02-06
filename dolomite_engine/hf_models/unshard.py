@@ -18,7 +18,7 @@ _UNSHARD_STATE_DICT_FUNCTIONS = {
 
 
 def unshard_tensor_parallel_state_dicts(
-    config,
+    config: GPTDolomiteConfig,
     tensor_parallel_state_dicts: list[dict],
     prefix: str = "",
     check_correctness: bool = True,
