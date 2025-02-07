@@ -41,26 +41,16 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
 kwargs = {}
-if args.model_type == "dense":
+if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
         attention_head_type=args.attention_head_type,
-        num_layers=1,
+        num_layers=2,
         position_embedding_type=args.position_embedding_type,
         num_key_value_heads=num_key_value_heads,
         add_bias=False,
         hidden_size=128,
         num_attention_heads=16,
-    )
-elif args.model_type == "moe":
-    config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        num_layers=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        hidden_size=128,
-        num_attention_heads=16,
-        mlp_blocks=[{"mlp_block_type": "MoE"}],
+        mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
     )
     enable_kernels([Kernel.scattermoe]).__enter__()
 elif args.model_type == "desync_residual":

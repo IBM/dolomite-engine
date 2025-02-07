@@ -117,6 +117,9 @@ class CommonConfig(PretrainedConfig):
         if self.mlp_blocks is None:
             self.mlp_blocks = [{"mlp_block_type": "MLP"} for _ in range(self.num_layers)]
 
+        assert len(self.attention_blocks) == self.num_layers
+        assert len(self.mlp_blocks) == self.num_layers
+
         self.num_experts = num_experts
         self.num_experts_per_tok = num_experts_per_tok
 
