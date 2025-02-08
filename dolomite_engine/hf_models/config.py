@@ -21,6 +21,7 @@ def _hold_base_args(key: str) -> Callable:
 
 
 class _MLPArgs(BaseArgs):
+    mlp_block_type: str = "MLP"
     intermediate_size: int | None
     activation_function: str
     resid_pdrop: float
@@ -32,11 +33,24 @@ class _MLPArgs(BaseArgs):
     m_residual: float | None
     init_method: InitMethod
 
+    def model_post_init(self, __context: Any) -> None:
+        assert self.mlp_block_type == "MLP"
+
 
 class _MoEArgs(_MLPArgs):
+    mlp_block_type: str = "MoE"
     shared_intermediate_size: int | None
     num_experts: int
     num_experts_per_tok: int
+
+    def model_post_init(self, __context: Any) -> None:
+        assert self.mlp_block_type == "MoE"
+
+
+_MLP_BLOCK_ARGS_CLASSES = {
+    "MLP": _MLPArgs,
+    "MoE": _MoEArgs,
+}
 
 
 class CommonConfig(PretrainedConfig):
@@ -149,8 +163,21 @@ class CommonConfig(PretrainedConfig):
             self.attention_blocks = [{"attention_block_type": "softmax_attention"} for _ in range(self.num_layers)]
 
         self.mlp_blocks = mlp_blocks
-        if self.mlp_blocks is None:
-            self.mlp_blocks = [{"mlp_block_type": "MLP"} for _ in range(self.num_layers)]
+        self._set_mlp_blocks(
+            intermediate_size=intermediate_size,
+            activation_function=activation_function,
+            resid_pdrop=resid_pdrop,
+            embd_pdrop=embd_pdrop,
+            attn_pdrop=attn_pdrop,
+            initializer_range=initializer_range,
+            add_bias=add_bias,
+            m_width=m_width,
+            m_residual=m_residual,
+            init_method=init_method,
+            shared_intermediate_size=shared_intermediate_size,
+            num_experts=num_experts,
+            num_experts_per_tok=num_experts_per_tok,
+        )
 
         assert len(self.attention_blocks) == self.num_layers
         assert len(self.mlp_blocks) == self.num_layers
@@ -161,9 +188,47 @@ class CommonConfig(PretrainedConfig):
 
         super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
 
-        self.mlp_blocks_args: list[_MLPArgs | _MoEArgs] = []
-        for i in range(num_layers):
-            mlp_block_type = self.mlp_blocks[i]["mlp_block_type"]
+    @_hold_base_args(key="mlp_blocks")
+    def save_pretrained(self, save_directory, push_to_hub=False, **kwargs) -> None:
+        return super().save_pretrained(save_directory, push_to_hub, **kwargs)
+
+    @_hold_base_args(key="mlp_blocks")
+    def to_json_string(self, use_diff: bool = True) -> str:
+        return super().to_json_string(use_diff)
+
+    def check_equal_for_all_and_get_value(self, key: str, key_block: str) -> Any:
+        def _get(block, key):
+            return block.get(key) if isinstance(block, dict) else getattr(block, key)
+
+        blocks = getattr(self, key)
+        expected_value = _get(blocks[0], key_block)
+
+        assert all([_get(blocks[0], key_block) == expected_value for block in blocks])
+
+        return expected_value
+
+    def _set_mlp_blocks(
+        self,
+        intermediate_size: int,
+        activation_function: str,
+        resid_pdrop: float,
+        embd_pdrop: float,
+        attn_pdrop: float,
+        initializer_range: float | None,
+        add_bias: bool,
+        m_width: float | None,
+        m_residual: float | None,
+        init_method: InitMethod,
+        shared_intermediate_size: int | None,
+        num_experts: int,
+        num_experts_per_tok: int,
+    ) -> None:
+        if self.mlp_blocks is None:
+            self.mlp_blocks = [{} for _ in range(self.num_layers)]
+
+        mlp_blocks: list[_MLPArgs | _MoEArgs] = []
+        for i in range(self.num_layers):
+            mlp_block_type = self.mlp_blocks[i].get("mlp_block_type", "MLP")
             mlp_kwargs = dict(
                 intermediate_size=self.mlp_blocks[i].get(
                     "intermediate_size", 4 * self.hidden_size if intermediate_size is None else intermediate_size
@@ -191,23 +256,6 @@ class CommonConfig(PretrainedConfig):
                     num_experts_per_tok=self.mlp_blocks[i].get("num_experts_per_tok", num_experts_per_tok),
                 )
 
-            self.mlp_blocks_args.append(mlp_args)
+            mlp_blocks.append(mlp_args)
 
-    @_hold_base_args(key="mlp_blocks_args")
-    def save_pretrained(self, save_directory, push_to_hub=False, **kwargs) -> None:
-        return super().save_pretrained(save_directory, push_to_hub, **kwargs)
-
-    @_hold_base_args(key="mlp_blocks_args")
-    def to_json_string(self, use_diff: bool = True) -> str:
-        return super().to_json_string(use_diff)
-
-    def check_equal_for_all_and_get_value(self, key: str, key_block: str) -> Any:
-        def _get(block, key):
-            return block.get(key) if isinstance(block, dict) else getattr(block, key)
-
-        blocks = getattr(self, key)
-        expected_value = _get(blocks[0], key_block)
-
-        assert all([_get(blocks[0], key_block) == expected_value for block in blocks])
-
-        return expected_value
+        self.mlp_blocks = mlp_blocks

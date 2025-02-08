@@ -132,7 +132,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         n_embd=config.hidden_size,
         n_layer=config.num_layers,
         n_head=config.num_attention_heads,
-        n_inner=config.check_equal_for_all_and_get_value("mlp_blocks_args", "intermediate_size"),
+        n_inner=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         activation_function=config.activation_function,
         resid_pdrop=config.resid_pdrop,
         embd_pdrop=config.embd_pdrop,

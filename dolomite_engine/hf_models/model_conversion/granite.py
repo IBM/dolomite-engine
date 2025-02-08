@@ -114,7 +114,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=config.num_key_value_heads,
-        intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks_args", "intermediate_size"),
+        intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
