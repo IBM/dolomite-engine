@@ -14,9 +14,9 @@ def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, laye
         activation_function=block.activation_function,
         add_bias=block.add_bias,
         dropout=block.dropout,
-        init_method=block.init_method,
-        initializer_range=block.initializer_range,
-        m_width=block.m_width,
+        init_method=config.init_method,
+        initializer_range=config.initializer_range,
+        m_width=config.m_width,
         num_layers=config.num_layers,
     )
 

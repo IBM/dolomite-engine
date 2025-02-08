@@ -25,11 +25,7 @@ class _MLPArgs(BaseArgs):
     intermediate_size: int | None
     activation_function: str
     dropout: float
-    initializer_range: float | None
     add_bias: bool
-    m_width: float | None
-    m_residual: float | None
-    init_method: InitMethod
 
     def model_post_init(self, __context: Any) -> None:
         assert self.mlp_block_type == "MLP"
@@ -159,11 +155,7 @@ class CommonConfig(PretrainedConfig):
             intermediate_size=intermediate_size,
             activation_function=activation_function,
             dropout=resid_pdrop,
-            initializer_range=initializer_range,
             add_bias=add_bias,
-            m_width=m_width,
-            m_residual=m_residual,
-            init_method=init_method,
             shared_intermediate_size=shared_intermediate_size,
             num_experts=num_experts,
             num_experts_per_tok=num_experts_per_tok,
@@ -202,11 +194,7 @@ class CommonConfig(PretrainedConfig):
         intermediate_size: int,
         activation_function: str,
         dropout: float,
-        initializer_range: float | None,
         add_bias: bool,
-        m_width: float | None,
-        m_residual: float | None,
-        init_method: InitMethod,
         shared_intermediate_size: int | None,
         num_experts: int,
         num_experts_per_tok: int,
@@ -223,11 +211,7 @@ class CommonConfig(PretrainedConfig):
                 ),
                 activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
                 dropout=self.mlp_blocks[i].get("dropout", dropout),
-                initializer_range=self.mlp_blocks[i].get("initializer_range", initializer_range),
                 add_bias=self.mlp_blocks[i].get("add_bias", add_bias),
-                m_width=self.mlp_blocks[i].get("m_width", m_width),
-                m_residual=self.mlp_blocks[i].get("m_residual", m_residual),
-                init_method=self.mlp_blocks[i].get("init_method", init_method),
             )
 
             if mlp_block_type == "MLP":
