@@ -52,11 +52,9 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.scale_attn_weights = config.scale_attn_weights
         self.attention_multiplier = config.attention_multiplier
 
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:

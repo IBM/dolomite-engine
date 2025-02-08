@@ -46,12 +46,10 @@ model_args:
     normalization_function: layernorm
     layer_norm_epsilon: 1e-5
     initializer_range: 0.02
-    scale_attn_weights: true
     use_cache: true
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
-    attention_softmax_in_fp32: true
     add_bias: true
     position_embedding_type: learned_absolute
   attention_implementation: flash_attention_2

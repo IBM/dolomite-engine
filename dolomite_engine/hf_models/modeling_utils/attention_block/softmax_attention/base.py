@@ -37,11 +37,9 @@ class Attention(nn.Module):
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.scale_attn_weights = config.scale_attn_weights
         self.attention_multiplier = config.attention_multiplier
 
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.num_key_value_heads is None:
@@ -203,9 +201,7 @@ class Attention(nn.Module):
         # ==========================================================================================
 
         key = key.transpose(-1, -2)
-
         dtype = query.dtype
-        softmax_dtype = torch.float32 if self.attention_softmax_in_fp32 else dtype
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
@@ -250,7 +246,7 @@ class Attention(nn.Module):
         # hidden_states -> (batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
-        hidden_states = F.softmax(hidden_states.to(softmax_dtype), dim=-1).to(dtype)
+        hidden_states = F.softmax(hidden_states.float(), dim=-1).to(dtype)
         hidden_states = self.attn_dropout(hidden_states)
 
         # ==========================================================================================
@@ -279,12 +275,9 @@ class Attention(nn.Module):
         return hidden_states
 
     def _get_softmax_scale(self, return_none_allowed: bool = True) -> float:
-        if self.scale_attn_weights:
-            if self.attention_multiplier is None:
-                softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
-            else:
-                softmax_scale = self.attention_multiplier
+        if self.attention_multiplier is None:
+            softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
         else:
-            softmax_scale = 1
+            softmax_scale = self.attention_multiplier
 
         return softmax_scale

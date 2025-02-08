@@ -18,7 +18,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    attention_softmax_in_fp32: true
     attn_pdrop: 0
     embd_pdrop: 0
     resid_pdrop: 0
@@ -33,7 +32,6 @@ model_args:
     position_embedding_type: rope
     rope_theta: 10000
     attention_head_type: mha
-    scale_attn_weights: true
     vocab_size: 50304
     tie_word_embeddings: true
     bos_token_id: 0

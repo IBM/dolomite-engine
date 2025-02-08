@@ -61,13 +61,11 @@ class CommonConfig(PretrainedConfig):
         normalization_function: str = "layernorm",
         layer_norm_epsilon: float = 1e-5,
         initializer_range: float = 0.02,
-        scale_attn_weights: bool = True,
         attention_multiplier: float | None = None,
         use_cache: bool = True,
         bos_token_id: int = 50256,
         eos_token_id: int = 50256,
         pad_token_id: int = 50256,
-        attention_softmax_in_fp32: bool = True,
         add_bias: bool = True,
         position_embedding_type: str = "learned_absolute",
         rope_theta: int = 10000,
@@ -83,7 +81,6 @@ class CommonConfig(PretrainedConfig):
         num_experts_per_tok: int = 2,
         router_aux_loss_coef: float = 0.001,
         shared_intermediate_size: int | None = None,
-        use_aux_free_moe: bool = False,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -99,10 +96,8 @@ class CommonConfig(PretrainedConfig):
         self.normalization_function = normalization_function
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_range = initializer_range
-        self.scale_attn_weights = scale_attn_weights
         self.attention_multiplier = attention_multiplier
         self.use_cache = use_cache
-        self.attention_softmax_in_fp32 = attention_softmax_in_fp32
         self.position_embedding_type = position_embedding_type
         self.add_bias = add_bias
         self.rope_theta = rope_theta
@@ -112,9 +107,6 @@ class CommonConfig(PretrainedConfig):
         self.m_residual = m_residual
         self.init_method = init_method
         self.upcast_logits_for_loss = upcast_logits_for_loss
-
-        if self.attention_multiplier is not None:
-            assert self.scale_attn_weights
 
         # check if enums are valid
         init_method = InitMethod(init_method)
@@ -164,8 +156,6 @@ class CommonConfig(PretrainedConfig):
         assert len(self.mlp_blocks) == self.num_layers
 
         self.router_aux_loss_coef = router_aux_loss_coef
-
-        self.use_aux_free_moe = use_aux_free_moe
 
         super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
 
