@@ -105,7 +105,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
-    assert config.mlp_blocks is None or all(i["mlp_block_type"] == "MLP" for i in config.mlp_blocks)
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type")
 
     original_config = GraniteConfig(
         vocab_size=config.vocab_size,
@@ -114,7 +114,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=config.num_key_value_heads,
-        intermediate_size=4 * config.hidden_size if config.intermediate_size is None else config.intermediate_size,
+        intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks_args", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,

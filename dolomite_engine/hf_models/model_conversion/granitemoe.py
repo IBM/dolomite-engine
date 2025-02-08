@@ -18,7 +18,7 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_experts,
+        config.check_equal_for_all_and_get_value("mlp_blocks_args", "num_experts"),
         config.num_attention_heads,
         config.num_key_value_heads,
         config.hidden_size // config.num_attention_heads,
@@ -145,7 +145,7 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_experts,
+        config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts"),
         config.num_attention_heads,
         config.num_key_value_heads,
         config.hidden_size // config.num_attention_heads,
@@ -170,7 +170,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert not config.add_bias
-    assert all(i["mlp_block_type"] == "MoE" for i in config.mlp_blocks)
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type")
 
     original_config = GraniteMoeConfig(
         vocab_size=config.vocab_size,
@@ -179,7 +179,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=config.num_key_value_heads,
-        intermediate_size=4 * config.hidden_size if config.intermediate_size is None else config.intermediate_size,
+        intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks_args", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
@@ -189,8 +189,8 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
         attention_dropout=config.attn_pdrop,
-        num_local_experts=config.num_experts,
-        num_experts_per_tok=config.num_experts_per_tok,
+        num_local_experts=config.check_equal_for_all_and_get_value("mlp_blocks_args", "num_experts"),
+        num_experts_per_tok=config.check_equal_for_all_and_get_value("mlp_blocks_args", "num_experts"),
         router_aux_loss_coef=config.router_aux_loss_coef,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,

@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Any, Callable
 
 from transformers import PretrainedConfig
 
@@ -155,18 +155,13 @@ class CommonConfig(PretrainedConfig):
         assert len(self.attention_blocks) == self.num_layers
         assert len(self.mlp_blocks) == self.num_layers
 
-        self.num_experts = num_experts
-        self.num_experts_per_tok = num_experts_per_tok
-
-        self.shared_intermediate_size = shared_intermediate_size
-
         self.router_aux_loss_coef = router_aux_loss_coef
 
         self.use_aux_free_moe = use_aux_free_moe
 
         super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
 
-        self.mlp_blocks_args = []
+        self.mlp_blocks_args: list[_MLPArgs | _MoEArgs] = []
         for i in range(num_layers):
             mlp_block_type = self.mlp_blocks[i]["mlp_block_type"]
             mlp_kwargs = dict(
@@ -205,3 +200,14 @@ class CommonConfig(PretrainedConfig):
     @_hold_base_args(key="mlp_blocks_args")
     def to_json_string(self, use_diff: bool = True) -> str:
         return super().to_json_string(use_diff)
+
+    def check_equal_for_all_and_get_value(self, key: str, key_block: str) -> Any:
+        def _get(block, key):
+            return block.get(key) if isinstance(block, dict) else getattr(block, key)
+
+        blocks = getattr(self, key)
+        expected_value = _get(blocks[0], key_block)
+
+        assert all([_get(blocks[0], key_block) == expected_value for block in blocks])
+
+        return expected_value

@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
 from .....utils import ProcessGroupManager, is_cute_kernels_available
-from ....config import CommonConfig
 from ....enums import InitMethod
 from ....loss import add_aux_loss
 from ...activations import get_activation_function, is_glu

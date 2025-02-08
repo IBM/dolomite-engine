@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 
 from .....utils import is_cute_kernels_available
-from ....config import CommonConfig
 from ....enums import InitMethod
 from ...activations import get_activation_function, is_glu
 from ...linear import ParameterizedLinear
