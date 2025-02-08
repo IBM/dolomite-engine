@@ -13,7 +13,7 @@ def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, laye
         intermediate_size=block.intermediate_size,
         activation_function=block.activation_function,
         add_bias=block.add_bias,
-        residual_dropout=block.resid_pdrop,
+        dropout=block.dropout,
         init_method=block.init_method,
         initializer_range=block.initializer_range,
         m_width=block.m_width,

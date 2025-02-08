@@ -65,6 +65,8 @@ class ParameterizedExperts(nn.Module):
 
 
 class MoE(nn.Module):
+    linear_class = ParameterizedExperts
+
     def __init__(
         self,
         hidden_size: int,
@@ -74,7 +76,7 @@ class MoE(nn.Module):
         num_experts_per_tok: int,
         activation_function: str,
         add_bias: bool,
-        residual_dropout: float,
+        dropout: float,
         init_method: InitMethod,
         initializer_range: float,
         m_width: float,
@@ -104,7 +106,7 @@ class MoE(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_fc = ParameterizedExperts(
+        self.c_fc = self.linear_class(
             num_experts=num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
@@ -126,7 +128,7 @@ class MoE(nn.Module):
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedExperts(
+        self.c_proj = self.linear_class(
             num_experts=num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
@@ -141,7 +143,7 @@ class MoE(nn.Module):
                 std=std,
             )
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:

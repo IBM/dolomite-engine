@@ -24,9 +24,7 @@ class _MLPArgs(BaseArgs):
     mlp_block_type: str = "MLP"
     intermediate_size: int | None
     activation_function: str
-    resid_pdrop: float
-    embd_pdrop: float
-    attn_pdrop: float
+    dropout: float
     initializer_range: float | None
     add_bias: bool
     m_width: float | None
@@ -45,12 +43,6 @@ class _MoEArgs(_MLPArgs):
 
     def model_post_init(self, __context: Any) -> None:
         assert self.mlp_block_type == "MoE"
-
-
-_MLP_BLOCK_ARGS_CLASSES = {
-    "MLP": _MLPArgs,
-    "MoE": _MoEArgs,
-}
 
 
 class CommonConfig(PretrainedConfig):
@@ -166,9 +158,7 @@ class CommonConfig(PretrainedConfig):
         self._set_mlp_blocks(
             intermediate_size=intermediate_size,
             activation_function=activation_function,
-            resid_pdrop=resid_pdrop,
-            embd_pdrop=embd_pdrop,
-            attn_pdrop=attn_pdrop,
+            dropout=resid_pdrop,
             initializer_range=initializer_range,
             add_bias=add_bias,
             m_width=m_width,
@@ -211,9 +201,7 @@ class CommonConfig(PretrainedConfig):
         self,
         intermediate_size: int,
         activation_function: str,
-        resid_pdrop: float,
-        embd_pdrop: float,
-        attn_pdrop: float,
+        dropout: float,
         initializer_range: float | None,
         add_bias: bool,
         m_width: float | None,
@@ -234,9 +222,7 @@ class CommonConfig(PretrainedConfig):
                     "intermediate_size", 4 * self.hidden_size if intermediate_size is None else intermediate_size
                 ),
                 activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
-                resid_pdrop=self.mlp_blocks[i].get("resid_pdrop", resid_pdrop),
-                embd_pdrop=self.mlp_blocks[i].get("embd_pdrop", embd_pdrop),
-                attn_pdrop=self.mlp_blocks[i].get("attn_pdrop", attn_pdrop),
+                dropout=self.mlp_blocks[i].get("dropout", 0),
                 initializer_range=self.mlp_blocks[i].get("initializer_range", initializer_range),
                 add_bias=self.mlp_blocks[i].get("add_bias", add_bias),
                 m_width=self.mlp_blocks[i].get("m_width", m_width),

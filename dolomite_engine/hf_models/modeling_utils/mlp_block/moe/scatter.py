@@ -1,12 +1,6 @@
-import math
-
 import torch
-import torch.nn as nn
 
 from .....utils import is_cute_kernels_available
-from ....enums import InitMethod
-from ...activations import get_activation_function, is_glu
-from ...linear import ParameterizedLinear
 from .base import MoE, ParameterizedExperts
 
 
@@ -57,83 +51,7 @@ class ParameterizedScatteredExperts(ParameterizedExperts):
 
 
 class ScatterMoE(MoE):
-    def __init__(
-        self,
-        hidden_size: int,
-        activation_function: str,
-        add_bias: bool,
-        intermediate_size: int,
-        residual_dropout: float,
-        init_method: InitMethod,
-        initializer_range: float,
-        m_width: float,
-        num_layers: int,
-        shared_intermediate_size: int,
-        num_experts: int,
-        num_experts_per_tok: int,
-        use_padding_free_transformer: bool,
-    ) -> None:
-        nn.Module.__init__(self)
-
-        self.num_experts = num_experts
-        self.top_k = num_experts_per_tok
-        self.use_padding_free_transformer = use_padding_free_transformer
-
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.shared_intermediate_size = shared_intermediate_size
-
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.gate = ParameterizedLinear(
-            in_features=self.hidden_size,
-            out_features=num_experts,
-            bias=False,
-            std=std,
-        )
-
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.c_fc = ParameterizedScatteredExperts(
-            num_experts=num_experts,
-            in_features=self.hidden_size,
-            out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
-            add_bias=add_bias,
-            std=std,
-        )
-        if self.shared_intermediate_size is not None:
-            self.c_fc_shared = ParameterizedLinear(
-                in_features=self.hidden_size,
-                out_features=(
-                    2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
-                ),
-                bias=add_bias,
-                std=std,
-            )
-
-        self.act = get_activation_function(activation_function)
-
-        std = initializer_range / math.sqrt(2 * num_layers)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedScatteredExperts(
-            num_experts=num_experts,
-            in_features=self.intermediate_size,
-            out_features=self.hidden_size,
-            add_bias=add_bias,
-            std=std,
-        )
-        if self.shared_intermediate_size is not None:
-            self.c_proj_shared = ParameterizedLinear(
-                in_features=self.shared_intermediate_size,
-                out_features=self.hidden_size,
-                bias=add_bias,
-                std=std,
-            )
-
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+    linear_class = ParameterizedScatteredExperts
 
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor

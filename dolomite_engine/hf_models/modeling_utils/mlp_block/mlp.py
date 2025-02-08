@@ -15,7 +15,7 @@ class MLP(nn.Module):
         intermediate_size: int,
         activation_function: str,
         add_bias: bool,
-        residual_dropout: float,
+        dropout: float,
         init_method: InitMethod,
         initializer_range: float,
         m_width: float,
@@ -40,7 +40,7 @@ class MLP(nn.Module):
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(intermediate_size, hidden_size, bias=add_bias, std=std)
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc(hidden_states)
