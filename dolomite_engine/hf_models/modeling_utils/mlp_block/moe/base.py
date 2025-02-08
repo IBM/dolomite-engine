@@ -10,6 +10,7 @@ from ....enums import InitMethod
 from ....loss import add_aux_loss
 from ...activations import get_activation_function, is_glu
 from ...linear import ParameterizedLinear
+from ..mlp import _get_std_for_linear
 
 
 if is_cute_kernels_available():
@@ -93,9 +94,8 @@ class MoE(nn.Module):
         self.intermediate_size = intermediate_size
         self.shared_intermediate_size = shared_intermediate_size
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
+
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
             out_features=num_experts,
@@ -103,9 +103,6 @@ class MoE(nn.Module):
             std=std,
         )
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_fc = self.linear_class(
             num_experts=num_experts,
             in_features=self.hidden_size,
@@ -125,9 +122,8 @@ class MoE(nn.Module):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * num_layers)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
+        std /= math.sqrt(2 * num_layers)
+
         self.c_proj = self.linear_class(
             num_experts=num_experts,
             in_features=self.intermediate_size,
