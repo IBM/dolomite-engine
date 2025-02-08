@@ -79,31 +79,31 @@ class GenerationTest(TestCommons):
                 atol_bfloat16=5e-3,
             )
 
-    # @parameterized.expand(
-    #     TestCommons.make_args_matrix(
-    #         TestCommons.get_all_devices(),
-    #         TestCommons.get_attention_head_types(),
-    #         TestCommons.get_position_embedding_types(),
-    #         TestCommons.get_dtypes(),
-    #     )
-    # )
-    # def test_generation_works(
-    #     self,
-    #     device: torch.device,
-    #     attention_head_type: AttentionHeadType,
-    #     position_embedding_type: PositionEmbeddingType,
-    #     torch_dtype: torch.dtype,
-    # ) -> None:
-    #     self.skip_test_if_device_unavailable(device)
-    #     self.skip_test_if_layernorm_kernel_unavailable(device, torch_dtype)
+    @parameterized.expand(
+        TestCommons.make_args_matrix(
+            TestCommons.get_all_devices(),
+            TestCommons.get_attention_head_types(),
+            TestCommons.get_position_embedding_types(),
+            TestCommons.get_dtypes(),
+        )
+    )
+    def test_generation_works(
+        self,
+        device: torch.device,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        torch_dtype: torch.dtype,
+    ) -> None:
+        self.skip_test_if_device_unavailable(device)
+        self.skip_test_if_layernorm_kernel_unavailable(device, torch_dtype)
 
-    #     for config in [
-    #         self.get_dense_test_config(attention_head_type, position_embedding_type),
-    #         self.get_moe_test_config(attention_head_type, position_embedding_type),
-    #     ]:
-    #         model = self.from_config(config, torch_dtype=torch_dtype).to(device)
-    #         model.eval()
+        for config in [
+            self.get_dense_test_config(attention_head_type, position_embedding_type),
+            self.get_moe_test_config(attention_head_type, position_embedding_type),
+        ]:
+            model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+            model.eval()
 
-    #         input_ids, attention_mask, _ = self.get_dummy_inputs(device)
+            input_ids, attention_mask, _ = self.get_dummy_inputs(device)
 
-    #         model.generate(input_ids=input_ids, attention_mask=attention_mask)
+            model.generate(input_ids=input_ids, attention_mask=attention_mask)
