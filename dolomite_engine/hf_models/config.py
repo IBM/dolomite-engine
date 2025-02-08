@@ -50,7 +50,7 @@ class CommonConfig(PretrainedConfig):
 
     def __init__(
         self,
-        vocab_size: int = 50257,
+        vocab_size: int = 49152,
         max_position_embeddings: int = 1024,
         hidden_size: int = 768,
         num_layers: int = 12,
@@ -59,9 +59,9 @@ class CommonConfig(PretrainedConfig):
         intermediate_size: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         attention_head_type: str = "mqa",
-        resid_pdrop: float = 0.1,
-        embd_pdrop: float = 0.1,
-        attn_pdrop: float = 0.1,
+        resid_pdrop: float = 0,
+        embd_pdrop: float = 0,
+        attn_pdrop: float = 0,
         normalization_function: str = "layernorm",
         layer_norm_epsilon: float = 1e-5,
         initializer_range: float = 0.02,
@@ -218,11 +218,9 @@ class CommonConfig(PretrainedConfig):
         for i in range(self.num_layers):
             mlp_block_type = self.mlp_blocks[i].get("mlp_block_type", "MLP")
             mlp_kwargs = dict(
-                intermediate_size=self.mlp_blocks[i].get(
-                    "intermediate_size", 4 * self.hidden_size if intermediate_size is None else intermediate_size
-                ),
+                intermediate_size=self.mlp_blocks[i].get("intermediate_size", 4 * self.hidden_size),
                 activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
-                dropout=self.mlp_blocks[i].get("dropout", 0),
+                dropout=self.mlp_blocks[i].get("dropout", dropout),
                 initializer_range=self.mlp_blocks[i].get("initializer_range", initializer_range),
                 add_bias=self.mlp_blocks[i].get("add_bias", add_bias),
                 m_width=self.mlp_blocks[i].get("m_width", m_width),
