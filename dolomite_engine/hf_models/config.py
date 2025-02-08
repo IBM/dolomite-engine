@@ -218,7 +218,9 @@ class CommonConfig(PretrainedConfig):
         for i in range(self.num_layers):
             mlp_block_type = self.mlp_blocks[i].get("mlp_block_type", "MLP")
             mlp_kwargs = dict(
-                intermediate_size=self.mlp_blocks[i].get("intermediate_size", 4 * self.hidden_size),
+                intermediate_size=self.mlp_blocks[i].get(
+                    "intermediate_size", 4 * self.hidden_size if intermediate_size is None else intermediate_size
+                ),
                 activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
                 dropout=self.mlp_blocks[i].get("dropout", dropout),
                 initializer_range=self.mlp_blocks[i].get("initializer_range", initializer_range),
