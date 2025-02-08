@@ -193,7 +193,7 @@ class CommonConfig(PretrainedConfig):
         blocks = getattr(self, key)
         expected_value = _get(blocks[0], key_block)
 
-        assert all([_get(blocks[0], key_block) == expected_value for block in blocks])
+        assert all([_get(block, key_block) == expected_value for block in blocks])
 
         return expected_value
 
