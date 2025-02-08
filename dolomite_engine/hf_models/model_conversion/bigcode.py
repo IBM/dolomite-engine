@@ -126,13 +126,16 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
     assert config.m_width is None
     assert config.attention_multiplier is None
 
+    intermediate_size = config.mlp_blocks_args[0].intermediate_size
+    assert all([intermediate_size == config.mlp_blocks_args[i].intermediate_size for i in range(1, config.num_layers)])
+
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,
         n_positions=config.max_position_embeddings,
         n_embd=config.hidden_size,
         n_layer=config.num_layers,
         n_head=config.num_attention_heads,
-        n_inner=config.intermediate_size,
+        n_inner=intermediate_size,
         activation_function=config.activation_function,
         resid_pdrop=config.resid_pdrop,
         embd_pdrop=config.embd_pdrop,

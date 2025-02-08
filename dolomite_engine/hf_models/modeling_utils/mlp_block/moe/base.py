@@ -66,31 +66,38 @@ class ParameterizedExperts(nn.Module):
 
 
 class MoE(nn.Module):
-    def __init__(self, config: CommonConfig, use_padding_free_transformer: bool) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        shared_intermediate_size: int,
+        num_experts: int,
+        num_experts_per_tok: int,
+        activation_function: str,
+        add_bias: bool,
+        residual_dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+        use_padding_free_transformer: bool,
+    ) -> None:
         super().__init__()
 
-        self.num_experts = config.num_experts
-        self.top_k = config.num_experts_per_tok
+        self.num_experts = num_experts
+        self.top_k = num_experts_per_tok
         self.use_padding_free_transformer = use_padding_free_transformer
 
-        self.hidden_size = config.hidden_size
-        self.intermediate_size = config.intermediate_size
-        self.shared_intermediate_size = config.shared_intermediate_size
-
-        activation_function = config.activation_function
-
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        num_layers = config.num_layers
-        init_method = InitMethod(config.init_method)
-        residual_dropout = config.resid_pdrop
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
+        self.shared_intermediate_size = shared_intermediate_size
 
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
-            out_features=config.num_experts,
+            out_features=num_experts,
             bias=False,
             std=std,
         )
@@ -99,10 +106,10 @@ class MoE(nn.Module):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_fc = ParameterizedExperts(
-            num_experts=config.num_experts,
+            num_experts=num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             std=std,
         )
         if self.shared_intermediate_size is not None:
@@ -111,7 +118,7 @@ class MoE(nn.Module):
                 out_features=(
                     2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
                 ),
-                bias=config.add_bias,
+                bias=add_bias,
                 std=std,
             )
 
@@ -121,17 +128,17 @@ class MoE(nn.Module):
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedExperts(
-            num_experts=config.num_experts,
+            num_experts=num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             std=std,
         )
         if self.shared_intermediate_size is not None:
             self.c_proj_shared = ParameterizedLinear(
                 in_features=self.shared_intermediate_size,
                 out_features=self.hidden_size,
-                bias=config.add_bias,
+                bias=add_bias,
                 std=std,
             )
 

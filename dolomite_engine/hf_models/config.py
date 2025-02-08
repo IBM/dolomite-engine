@@ -1,6 +1,42 @@
+from typing import Callable
+
 from transformers import PretrainedConfig
 
+from ..utils import BaseArgs
 from .enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+
+
+def _hold_base_args(key: str) -> Callable:
+    def _holded_function(function: Callable) -> Callable:
+        def _run(self, *args, **kwargs):
+            value: list[BaseArgs] = getattr(self, key)
+            setattr(self, key, [i.to_dict() if isinstance(i, BaseArgs) else i for i in value])
+            output = function(self, *args, **kwargs)
+            setattr(self, key, value)
+            return output
+
+        return _run
+
+    return _holded_function
+
+
+class _MLPArgs(BaseArgs):
+    intermediate_size: int | None
+    activation_function: str
+    resid_pdrop: float
+    embd_pdrop: float
+    attn_pdrop: float
+    initializer_range: float | None
+    add_bias: bool
+    m_width: float | None
+    m_residual: float | None
+    init_method: InitMethod
+
+
+class _MoEArgs(_MLPArgs):
+    shared_intermediate_size: int | None
+    num_experts: int
+    num_experts_per_tok: int
 
 
 class CommonConfig(PretrainedConfig):
@@ -54,7 +90,6 @@ class CommonConfig(PretrainedConfig):
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
-        self.intermediate_size = 4 * hidden_size if intermediate_size is None else intermediate_size
         self.activation_function = activation_function
         self.attention_head_type = attention_head_type
         self.resid_pdrop = resid_pdrop
@@ -130,3 +165,43 @@ class CommonConfig(PretrainedConfig):
         self.use_aux_free_moe = use_aux_free_moe
 
         super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
+
+        self.mlp_blocks_args = []
+        for i in range(num_layers):
+            mlp_block_type = self.mlp_blocks[i]["mlp_block_type"]
+            mlp_kwargs = dict(
+                intermediate_size=self.mlp_blocks[i].get(
+                    "intermediate_size", 4 * self.hidden_size if intermediate_size is None else intermediate_size
+                ),
+                activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
+                resid_pdrop=self.mlp_blocks[i].get("resid_pdrop", resid_pdrop),
+                embd_pdrop=self.mlp_blocks[i].get("embd_pdrop", embd_pdrop),
+                attn_pdrop=self.mlp_blocks[i].get("attn_pdrop", attn_pdrop),
+                initializer_range=self.mlp_blocks[i].get("initializer_range", initializer_range),
+                add_bias=self.mlp_blocks[i].get("add_bias", add_bias),
+                m_width=self.mlp_blocks[i].get("m_width", m_width),
+                m_residual=self.mlp_blocks[i].get("m_residual", m_residual),
+                init_method=self.mlp_blocks[i].get("init_method", init_method),
+            )
+
+            if mlp_block_type == "MLP":
+                mlp_args = _MLPArgs(**mlp_kwargs)
+            elif mlp_block_type == "MoE":
+                mlp_args = _MoEArgs(
+                    **mlp_kwargs,
+                    shared_intermediate_size=self.mlp_blocks[i].get(
+                        "shared_intermediate_size", shared_intermediate_size
+                    ),
+                    num_experts=self.mlp_blocks[i].get("num_experts", num_experts),
+                    num_experts_per_tok=self.mlp_blocks[i].get("num_experts_per_tok", num_experts_per_tok),
+                )
+
+            self.mlp_blocks_args.append(mlp_args)
+
+    @_hold_base_args(key="mlp_blocks_args")
+    def save_pretrained(self, save_directory, push_to_hub=False, **kwargs) -> None:
+        return super().save_pretrained(save_directory, push_to_hub, **kwargs)
+
+    @_hold_base_args(key="mlp_blocks_args")
+    def to_json_string(self, use_diff: bool = True) -> str:
+        return super().to_json_string(use_diff)

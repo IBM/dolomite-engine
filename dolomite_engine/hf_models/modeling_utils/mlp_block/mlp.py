@@ -3,26 +3,25 @@ import math
 import torch
 import torch.nn as nn
 
-from ...config import CommonConfig
 from ...enums import InitMethod
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 
 
 class MLP(nn.Module):
-    def __init__(self, config: CommonConfig) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        activation_function: str,
+        add_bias: bool,
+        residual_dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+    ) -> None:
         super().__init__()
-
-        hidden_size = config.hidden_size
-        intermediate_size = config.intermediate_size
-        activation_function = config.activation_function
-        add_bias = config.add_bias
-        residual_dropout = config.resid_pdrop
-
-        init_method = InitMethod(config.init_method)
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        num_layers = config.num_layers
 
         std = initializer_range
         if init_method == InitMethod.mup:
