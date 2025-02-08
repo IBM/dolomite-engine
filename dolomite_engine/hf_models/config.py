@@ -92,7 +92,6 @@ class CommonConfig(PretrainedConfig):
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
-        self.activation_function = activation_function
         self.attention_head_type = attention_head_type
         self.resid_pdrop = resid_pdrop
         self.embd_pdrop = embd_pdrop

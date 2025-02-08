@@ -22,7 +22,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         num_attention_heads=original_config.num_attention_heads,
         num_key_value_heads=original_config.num_key_value_heads,
         intermediate_size=original_config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
-        activation_function=original_config.activation_function,
+        activation_function=original_config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function"),
         resid_pdrop=original_config.resid_pdrop,
         embd_pdrop=original_config.embd_pdrop,
         normalization_function=original_config.normalization_function,

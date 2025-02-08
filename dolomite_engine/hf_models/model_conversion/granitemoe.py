@@ -166,7 +166,7 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
-    assert config.activation_function == "swiglu"
+    assert config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function") == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert not config.add_bias

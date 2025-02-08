@@ -180,7 +180,7 @@ def export_to_huggingface_llama(pretrained_model_name_or_path: str, save_path: s
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
-    assert config.activation_function == "swiglu"
+    assert config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function") == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert config.m_emb is None
