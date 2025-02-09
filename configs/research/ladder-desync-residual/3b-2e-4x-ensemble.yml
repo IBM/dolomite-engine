@@ -34,7 +34,6 @@ model_args:
     position_embedding_type: rope
     rope_theta: 10000
     attention_head_type: mha
-    scale_attn_weights: true
     vocab_size: 49152
     upcast_logits_for_loss: true
     bos_token_id: 0

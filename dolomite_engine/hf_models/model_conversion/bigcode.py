@@ -33,8 +33,6 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         num_attention_heads=original_config.n_head,
         attention_head_type="mqa" if original_config.multi_query else "mha",
         position_embedding_type="learned_absolute",
-        intermediate_size=original_config.n_inner,
-        activation_function=original_config.activation_function,
         normalization_function="layernorm",
         layer_norm_epsilon=original_config.layer_norm_epsilon,
         use_cache=original_config.use_cache,
@@ -46,6 +44,14 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        mlp_blocks=[
+            {
+                "mlp_block_type": "MLP",
+                "activation_function": original_config.activation_function,
+                "intermediate_size": original_config.n_inner,
+            }
+            for _ in range(original_config.n_layer)
+        ],
     )
 
     return config
@@ -117,7 +123,6 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
-    assert config.activation_function == "gelu_pytorch_tanh"
     assert config.normalization_function == "layernorm"
     assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
     assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
@@ -132,16 +137,16 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         n_embd=config.hidden_size,
         n_layer=config.num_layers,
         n_head=config.num_attention_heads,
-        n_inner=config.intermediate_size,
-        activation_function=config.activation_function,
+        n_inner=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
+        activation_function=config.check_equal_for_all_and_get_value(
+            "mlp_blocks", "activation_function", "gelu_pytorch_tanh"
+        ),
         resid_pdrop=config.resid_pdrop,
         embd_pdrop=config.embd_pdrop,
         attn_pdrop=config.attn_pdrop,
         layer_norm_epsilon=config.layer_norm_epsilon,
         initializer_range=config.initializer_range,
-        scale_attn_weights=config.scale_attn_weights,
         use_cache=config.use_cache,
-        attention_softmax_in_fp32=config.attention_softmax_in_fp32,
         multi_query=config.multi_query,
         tie_word_embeddings=config.tie_word_embeddings,
         bos_token_id=config.bos_token_id,

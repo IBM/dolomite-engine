@@ -3,30 +3,28 @@ import math
 import torch
 import torch.nn as nn
 
-from ...config import CommonConfig
 from ...enums import InitMethod
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 
 
 class MLP(nn.Module):
-    def __init__(self, config: CommonConfig) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        activation_function: str,
+        add_bias: bool,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+    ) -> None:
         super().__init__()
 
-        hidden_size = config.hidden_size
-        intermediate_size = config.intermediate_size
-        activation_function = config.activation_function
-        add_bias = config.add_bias
-        residual_dropout = config.resid_pdrop
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
 
-        init_method = InitMethod(config.init_method)
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        num_layers = config.num_layers
-
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_fc = ParameterizedLinear(
             hidden_size,
             2 * intermediate_size if is_glu(activation_function) else intermediate_size,
@@ -36,12 +34,11 @@ class MLP(nn.Module):
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * num_layers)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedLinear(intermediate_size, hidden_size, bias=add_bias, std=std)
+        self.c_proj = ParameterizedLinear(
+            intermediate_size, hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
+        )
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc(hidden_states)
@@ -49,6 +46,16 @@ class MLP(nn.Module):
         hidden_states = self.c_proj(hidden_states)
         hidden_states = self.dropout(hidden_states)
         return hidden_states
+
+
+def _get_std_for_linear(initializer_range: float, init_method: InitMethod, m_width: float | None) -> float:
+    std = initializer_range
+    if init_method == InitMethod.mup:
+        std /= math.sqrt(m_width)
+    elif init_method != InitMethod.normal:
+        raise ValueError(f"unexpected init_method ({init_method})")
+
+    return std
 
 
 def interleave_up_gate_tensor_for_mlp(up_weight: torch.Tensor, gate_weight: torch.Tensor) -> torch.Tensor:

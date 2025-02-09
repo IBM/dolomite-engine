@@ -3,6 +3,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager
+from ...enums import InitMethod
 from ...modeling_utils_TP import get_normalization_function_TP
 from ..desync_residual import DesyncResidualConfig
 from .attention import get_sequence_mixer_TP
@@ -24,8 +25,6 @@ class DesyncResidualBlock_TP(nn.Module):
         assert not sequence_parallel
 
         hidden_size = config.hidden_size
-        self.layer_idx = layer_idx
-        self.m_residual = config.m_residual
 
         self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
         self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
@@ -63,7 +62,23 @@ class DesyncResidualBlock_TP(nn.Module):
                 config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
             )
 
-        self.mlp_block = DesyncResidualMLP_TP(config, layer_idx=layer_idx)
+        block = config.mlp_blocks[layer_idx]
+
+        self.mlp_block = DesyncResidualMLP_TP(
+            hidden_size=hidden_size,
+            intermediate_size=block.intermediate_size,
+            activation_function=block.activation_function,
+            add_bias=block.add_bias,
+            dropout=block.dropout,
+            init_method=InitMethod(config.init_method),
+            initializer_range=config.initializer_range,
+            m_width=config.m_width,
+            m_residual=config.m_residual,
+            num_layers=config.num_layers,
+            pretraining_tensor_parallel_size=config.pretraining_tensor_parallel_size,
+            all_reduce=layer_idx == config.num_layers - 1 or config.reduce_pattern[layer_idx]["mlp"],
+            attention_did_all_reduce=config.reduce_pattern[layer_idx]["attention"],
+        )
 
     def forward(
         self,

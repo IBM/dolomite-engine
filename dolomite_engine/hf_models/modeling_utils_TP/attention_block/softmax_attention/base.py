@@ -54,11 +54,9 @@ class _BaseAttention_TP(nn.Module):
         self.attention_head_type = AttentionHeadType(config.attention_head_type)
 
         self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.scale_attn_weights = config.scale_attn_weights
         self.attention_multiplier = config.attention_multiplier
 
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
         std = initializer_range
         if init_method == InitMethod.mup:

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...enums import AttentionHeadType
+from ...enums import AttentionHeadType, InitMethod
 from ...modeling_utils import get_normalization_function
 from .attention import get_sequence_mixer
 from .config import DesyncResidualConfig
@@ -16,14 +16,11 @@ class DesyncResidualBlock(nn.Module):
         config: DesyncResidualConfig,
         attention_implementation: str,
         use_padding_free_transformer: bool,
-        layer_idx: int = None,
+        layer_idx: int,
     ) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size
-        self.inner_dim = config.intermediate_size
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.m_residual = config.m_residual
 
         self.previous_mlp_all_reduce = layer_idx == 0 or config.reduce_pattern[layer_idx - 1]["mlp"]
         self.current_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
@@ -56,7 +53,22 @@ class DesyncResidualBlock(nn.Module):
                 eps=config.layer_norm_epsilon,
             )
 
-        self.mlp_block = DesyncResidualMLP(config, layer_idx=layer_idx)
+        block = config.mlp_blocks[layer_idx]
+
+        self.mlp_block = DesyncResidualMLP(
+            hidden_size=hidden_size,
+            intermediate_size=block.intermediate_size,
+            activation_function=block.activation_function,
+            add_bias=block.add_bias,
+            dropout=block.dropout,
+            init_method=InitMethod(config.init_method),
+            initializer_range=config.initializer_range,
+            m_width=config.m_width,
+            m_residual=config.m_residual,
+            num_layers=config.num_layers,
+            pretraining_tensor_parallel_size=config.pretraining_tensor_parallel_size,
+            all_reduce=layer_idx == config.num_layers - 1 or config.reduce_pattern[layer_idx]["mlp"],
+        )
 
     def forward(
         self,

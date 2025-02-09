@@ -41,7 +41,8 @@ train_config.distributed_args.stage = args.zero_stage
 train_config.model_args.pretrained_config["attention_head_type"] = args.attention_head_type
 train_config.model_args.pretrained_config["num_key_value_heads"] = num_key_value_heads
 # activation function
-train_config.model_args.pretrained_config["activation_function"] = args.activation_function
+for block in train_config.model_args.pretrained_config["mlp_blocks"]:
+    block["activation_function"] = args.activation_function
 
 ProcessGroupManager(
     tensor_parallel_world_size=train_config.distributed_args.tensor_parallel_world_size,

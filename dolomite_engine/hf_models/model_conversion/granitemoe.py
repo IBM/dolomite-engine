@@ -18,7 +18,6 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_experts,
         config.num_attention_heads,
         config.num_key_value_heads,
         config.hidden_size // config.num_attention_heads,
@@ -56,8 +55,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         num_key_value_heads=original_config.num_key_value_heads,
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
-        intermediate_size=original_config.intermediate_size,
-        activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
@@ -67,8 +64,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         rope_theta=original_config.rope_theta,
         rope_scaling=original_config.rope_scaling,
         attn_pdrop=original_config.attention_dropout,
-        num_experts=original_config.num_local_experts,
-        num_experts_per_tok=original_config.num_experts_per_tok,
         router_aux_loss_coef=original_config.router_aux_loss_coef,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
@@ -77,7 +72,16 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         attention_multiplier=original_config.attention_multiplier,
-        mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(original_config.num_hidden_layers)],
+        mlp_blocks=[
+            {
+                "mlp_block_type": "MoE",
+                "intermediate_size": original_config.intermediate_size,
+                "num_experts": original_config.num_local_experts,
+                "num_experts_per_tok": original_config.num_experts_per_tok,
+                "activation_function": "swiglu",
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
     )
 
     return config
@@ -86,7 +90,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
 def _import_state_dict_from_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
-    num_experts: int,
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
@@ -145,7 +148,6 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_experts,
         config.num_attention_heads,
         config.num_key_value_heads,
         config.hidden_size // config.num_attention_heads,
@@ -166,11 +168,12 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
-    assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert not config.add_bias
-    assert all(i["mlp_block_type"] == "MoE" for i in config.mlp_blocks)
+
+    config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type", "MoE")
 
     original_config = GraniteMoeConfig(
         vocab_size=config.vocab_size,
@@ -179,7 +182,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=config.num_key_value_heads,
-        intermediate_size=4 * config.hidden_size if config.intermediate_size is None else config.intermediate_size,
+        intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
@@ -189,8 +192,8 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
         attention_dropout=config.attn_pdrop,
-        num_local_experts=config.num_experts,
-        num_experts_per_tok=config.num_experts_per_tok,
+        num_local_experts=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts"),
+        num_experts_per_tok=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts_per_tok"),
         router_aux_loss_coef=config.router_aux_loss_coef,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
@@ -208,7 +211,6 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
 def _export_state_dict_to_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
-    num_experts: int,
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
