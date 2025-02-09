@@ -34,7 +34,7 @@ model_args:
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
-    sequence_mixers:
+    sequence_mixer_blocks:
       - sequence_mixer_block_type: softmax_attention
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
