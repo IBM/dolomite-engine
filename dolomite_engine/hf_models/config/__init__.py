@@ -25,6 +25,8 @@ def _hold_base_args(key: str) -> Callable:
 _NAKED_DISALLOWED_ARGS = [
     "activation_function",
     "attn_pdrop",
+    "embd_pdrop",
+    "resid_pdrop",
     "intermediate_size",
     "shared_intermediate_size",
     "num_experts",
