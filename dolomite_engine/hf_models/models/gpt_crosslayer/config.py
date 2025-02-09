@@ -6,14 +6,8 @@ from ...config import CommonConfig
 class GPTCrossLayerConfig(CommonConfig):
     model_type = "gpt_crosslayer"
 
-    def __init__(
-        self,
-        attention_head_type: str = "gqa",
-        num_key_value_heads: int = 12,
-        sharing_pattern: list[int] | None = None,
-        **kwargs,
-    ) -> None:
-        super().__init__(attention_head_type=attention_head_type, num_key_value_heads=num_key_value_heads, **kwargs)
+    def __init__(self, sharing_pattern: list[int] | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         if sharing_pattern is None:
             self.sharing_pattern = list(range(self.num_layers))

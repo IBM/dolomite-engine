@@ -102,7 +102,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         self._init_model(config, **kwargs)
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb

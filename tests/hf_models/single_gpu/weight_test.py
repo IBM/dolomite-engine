@@ -15,7 +15,10 @@ class WeightTest(TestCommons):
     @parameterized.expand(TestCommons.make_args_matrix(TestCommons.get_attention_head_types()))
     def test_query_key_value_weight_loading_and_saving(self, attention_head_type: AttentionHeadType) -> None:
         config = self.get_dense_test_config(attention_head_type, PositionEmbeddingType.learned_absolute)
-        attention = get_sequence_mixer(config, True, "sdpa", False, 1)
+
+        layer_idx = 1
+        attention = get_sequence_mixer(config, True, "sdpa", False, layer_idx)
+        num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
         state_dict = attention.state_dict()
 
@@ -23,7 +26,7 @@ class WeightTest(TestCommons):
         query_key_value_weight = self._split_and_interleave(
             c_attn_weight,
             config.num_attention_heads,
-            config.num_key_value_heads,
+            num_key_value_heads,
             config.hidden_size // config.num_attention_heads,
             attention_head_type,
         )
@@ -33,7 +36,7 @@ class WeightTest(TestCommons):
         query_key_value_bias = self._split_and_interleave(
             c_attn_bias,
             config.num_attention_heads,
-            config.num_key_value_heads,
+            num_key_value_heads,
             config.hidden_size // config.num_attention_heads,
             attention_head_type,
         )

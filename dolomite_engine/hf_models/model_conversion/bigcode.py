@@ -124,12 +124,15 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
     assert config.normalization_function == "layernorm"
-    assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
     assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
     assert config.m_emb is None
     assert config.m_residual is None
     assert config.m_width is None
-    assert config.attention_multiplier is None
+
+    attention_head_type = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type")
+
+    assert attention_head_type in [AttentionHeadType.mha, AttentionHeadType.mqa]
+    assert config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier") is None
 
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,
@@ -147,7 +150,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         layer_norm_epsilon=config.layer_norm_epsilon,
         initializer_range=config.initializer_range,
         use_cache=config.use_cache,
-        multi_query=config.multi_query,
+        multi_query=attention_head_type == AttentionHeadType.mqa,
         tie_word_embeddings=config.tie_word_embeddings,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,

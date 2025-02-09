@@ -20,17 +20,16 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_layers,
         num_attention_heads=original_config.num_attention_heads,
-        num_key_value_heads=original_config.num_key_value_heads,
         resid_pdrop=original_config.resid_pdrop,
         embd_pdrop=original_config.embd_pdrop,
         normalization_function=original_config.normalization_function,
         layer_norm_epsilon=original_config.layer_norm_epsilon,
-        add_bias=original_config.add_bias,
         position_embedding_type=original_config.position_embedding_type,
         rope_theta=original_config.rope_theta,
         use_cache=original_config.use_cache,
         sharing_pattern=sharing_pattern,
         tie_word_embeddings=original_config.tie_word_embeddings,
+        sequence_mixer_blocks=[i.to_dict() for i in original_config.sequence_mixer_blocks],
         mlp_blocks=[i.to_dict() for i in original_config.mlp_blocks],
     )
     model = AutoModelForCausalLM.from_config(config, torch_dtype=original_model.dtype, **kwargs)

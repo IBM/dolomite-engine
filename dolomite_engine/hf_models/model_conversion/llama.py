@@ -20,9 +20,9 @@ def import_from_huggingface_llama(pretrained_model_name_or_path: str, save_path:
         safetensors_weights_manager,
         config.num_layers,
         config.num_attention_heads,
-        config.num_key_value_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         config.hidden_size // config.num_attention_heads,
-        AttentionHeadType(config.attention_head_type),
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -53,13 +53,10 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_hidden_layers,
         num_attention_heads=original_config.num_attention_heads,
-        num_key_value_heads=original_config.num_key_value_heads,
-        attention_head_type=attention_head_type,
         position_embedding_type="rope",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
-        add_bias=original_config.attention_bias,
         tie_word_embeddings=original_config.tie_word_embeddings,
         initializer_range=original_config.initializer_range,
         rope_theta=original_config.rope_theta,
@@ -68,9 +65,19 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_block_type": "softmax_attention",
+                "add_bias": original_config.attention_bias,
+                "num_key_value_heads": original_config.num_key_value_heads,
+                "attention_head_type": attention_head_type,
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
         mlp_blocks=[
             {
                 "mlp_block_type": "MLP",
+                "add_bias": original_config.mlp_bias,
                 "activation_function": "swiglu",
                 "intermediate_size": original_config.intermediate_size,
             }
@@ -167,9 +174,9 @@ def export_to_huggingface_llama(pretrained_model_name_or_path: str, save_path: s
         safetensors_weights_manager,
         config.num_layers,
         config.num_attention_heads,
-        config.num_key_value_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         config.hidden_size // config.num_attention_heads,
-        AttentionHeadType(config.attention_head_type),
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -191,7 +198,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
     assert config.m_emb is None
     assert config.m_residual is None
     assert config.m_width is None
-    assert config.attention_multiplier is None
+    assert config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier") is None
 
     config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
 
@@ -201,18 +208,18 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
-        num_key_value_heads=config.num_key_value_heads,
+        num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
-        attention_bias=config.add_bias,
+        attention_bias=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias"),
         tie_word_embeddings=config.tie_word_embeddings,
         initializer_range=config.initializer_range,
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
         attention_dropout=config.attn_pdrop,
-        mlp_bias=config.add_bias,
+        mlp_bias=config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias"),
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
         pad_token_id=config.pad_token_id,

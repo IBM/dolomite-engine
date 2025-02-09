@@ -1,4 +1,5 @@
 from ...config import CommonConfig
+from ...enums import InitMethod
 from .softmax_attention import (
     SDPA,
     Attention,
@@ -32,18 +33,37 @@ def get_sequence_mixer(
     use_padding_free_transformer: bool,
     layer_idx: int,
 ) -> Attention:
-    attention_block_type = config.attention_blocks[layer_idx]["attention_block_type"]
+    block = config.sequence_mixer_blocks[layer_idx]
+    sequence_mixer_type = block.sequence_mixer_block_type
 
-    if attention_block_type == "softmax_attention":
+    sequence_mixer_kwargs = dict(
+        hidden_size=config.hidden_size,
+        num_attention_heads=config.num_attention_heads,
+        num_key_value_heads=block.num_key_value_heads,
+        attention_multiplier=block.attention_multiplier,
+        attention_head_type=block.attention_head_type,
+        position_embedding_type=config.position_embedding_type,
+        add_bias=block.add_bias,
+        softmax_dropout=block.softmax_dropout,
+        dropout=block.dropout,
+        init_method=InitMethod(config.init_method),
+        initializer_range=config.initializer_range,
+        m_width=config.m_width,
+        num_layers=config.num_layers,
+        causal=causal,
+        layer_idx=layer_idx,
+    )
+
+    if sequence_mixer_type == "softmax_attention":
         if use_padding_free_transformer:
             assert (
                 attention_implementation == "flash_attention_2"
             ), "padding free transformer only works with flash attention"
-            return PaddingFreeAttention(config, causal=causal, layer_idx=layer_idx)
+            return PaddingFreeAttention(**sequence_mixer_kwargs)
         else:
-            return _ATTENTION_MODULES[attention_implementation](config, causal=causal, layer_idx=layer_idx)
-    elif attention_block_type == "stickbreaking_attention":
+            return _ATTENTION_MODULES[attention_implementation](**sequence_mixer_kwargs)
+    elif sequence_mixer_type == "stickbreaking_attention":
         if use_padding_free_transformer:
-            return PaddingFreeSBAttention(config, causal=True, layer_idx=layer_idx)
+            return PaddingFreeSBAttention(**sequence_mixer_kwargs)
         else:
-            return SBAttention(config, causal=True, layer_idx=layer_idx)
+            return SBAttention(**sequence_mixer_kwargs)

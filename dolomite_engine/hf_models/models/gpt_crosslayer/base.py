@@ -21,7 +21,6 @@ class GPTCrossLayerPreTrainedModel(PreTrainedModelMixin):
 
 class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
     def _init_model(self, config: GPTCrossLayerConfig, **kwargs) -> None:
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb

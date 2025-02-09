@@ -53,14 +53,13 @@ class SDPA(Attention):
         # ==========================================================================================
 
         softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
 
         hidden_states = F.scaled_dot_product_attention(
             query,
             key,
             value,
             attn_mask=attention_mask,
-            dropout_p=dropout_p,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
             is_causal=self.causal if attention_mask is None else False,
             scale=softmax_scale,
         )
@@ -80,6 +79,6 @@ class SDPA(Attention):
         # ==========================================================================================
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
