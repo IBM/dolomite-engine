@@ -121,7 +121,12 @@ class TestCommons(TestCase):
             hidden_size=32,
             num_layers=num_layers,
             mlp_blocks=[
-                {"mlp_block_type": "MoE", "num_experts": num_experts, "num_experts_per_tok": num_experts_per_tok}
+                {
+                    "mlp_block_type": "MoE",
+                    "num_experts": num_experts,
+                    "num_experts_per_tok": num_experts_per_tok,
+                    "activation_function": activation_function,
+                }
                 for _ in range(num_layers)
             ],
             num_attention_heads=4,
@@ -129,7 +134,6 @@ class TestCommons(TestCase):
             attention_head_type=attention_head_type.value,
             position_embedding_type=position_embedding_type.value,
             add_bias=add_bias,
-            activation_function=activation_function,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,

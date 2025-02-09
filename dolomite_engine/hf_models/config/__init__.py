@@ -32,7 +32,6 @@ class CommonConfig(PretrainedConfig):
         num_layers: int = 12,
         num_attention_heads: int = 12,
         num_key_value_heads: int | None = None,
-        activation_function: str = "gelu_pytorch_tanh",
         attention_head_type: str = "mqa",
         resid_pdrop: float = 0,
         embd_pdrop: float = 0,
@@ -120,8 +119,6 @@ class CommonConfig(PretrainedConfig):
 
         self.mlp_blocks = mlp_blocks
         self._set_mlp_blocks(
-            activation_function=activation_function,
-            dropout=resid_pdrop,
             add_bias=add_bias,
             shared_intermediate_size=shared_intermediate_size,
         )
@@ -154,8 +151,6 @@ class CommonConfig(PretrainedConfig):
 
     def _set_mlp_blocks(
         self,
-        activation_function: str,
-        dropout: float,
         add_bias: bool,
         shared_intermediate_size: int | None,
     ) -> None:
@@ -167,8 +162,8 @@ class CommonConfig(PretrainedConfig):
             mlp_block_type = self.mlp_blocks[i].get("mlp_block_type", "MLP")
             mlp_kwargs = dict(
                 intermediate_size=self.mlp_blocks[i].get("intermediate_size", 4 * self.hidden_size),
-                activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
-                dropout=self.mlp_blocks[i].get("dropout", dropout),
+                activation_function=self.mlp_blocks[i].get("activation_function", "gelu_pytorch_tanh"),
+                dropout=self.mlp_blocks[i].get("dropout", 0),
                 add_bias=self.mlp_blocks[i].get("add_bias", add_bias),
             )
 

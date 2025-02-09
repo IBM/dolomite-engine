@@ -56,7 +56,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         num_key_value_heads=original_config.num_key_value_heads,
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
-        activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
@@ -80,6 +79,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
                 "intermediate_size": original_config.intermediate_size,
                 "num_experts": original_config.num_local_experts,
                 "num_experts_per_tok": original_config.num_experts_per_tok,
+                "activation_function": "swiglu",
             }
             for _ in range(original_config.num_hidden_layers)
         ],
