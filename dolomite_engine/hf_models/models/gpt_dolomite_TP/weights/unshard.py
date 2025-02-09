@@ -17,10 +17,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
 
     # word embeddings
     output_state_dict = _get_embeddings_or_lm_head(
-        tensor_parallel_state_dicts,
-        prefix=prefix + "transformer.wte.weight",
-        vocab_size=config.vocab_size,
-        check_correctness=check_correctness,
+        tensor_parallel_state_dicts, prefix=prefix + "transformer.wte.weight", vocab_size=config.vocab_size
     )
 
     # positional embeddings if using learned positional embeddings
@@ -30,7 +27,6 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
                 tensor_parallel_state_dicts,
                 prefix=prefix + "transformer.wpe.weight",
                 vocab_size=config.max_position_embeddings,
-                check_correctness=check_correctness,
             )
         )
 
@@ -69,13 +65,14 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
 
         block = config.mlp_blocks[layer_idx]
         mlp_block_type = block.mlp_block_type
+        is_glu_activation = is_glu(block.activation_function)
 
         # mlp
         if mlp_block_type == "MLP":
             output_state_dict.update(
                 _get_mlp(
                     tensor_parallel_state_dicts,
-                    is_glu=is_glu(block.activation_function),
+                    is_glu=is_glu_activation,
                     add_bias=config.add_bias,
                     prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                     check_correctness=check_correctness,
@@ -84,7 +81,10 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         elif mlp_block_type == "MoE":
             output_state_dict.update(
                 _get_moe(
-                    tensor_parallel_state_dicts, prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.", config=config
+                    tensor_parallel_state_dicts,
+                    is_glu=is_glu_activation,
+                    add_bias=block.add_bias,
+                    prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                 )
             )
 
@@ -111,12 +111,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     return output_state_dict
 
 
-def _get_embeddings_or_lm_head(
-    tensor_parallel_state_dicts: list[dict],
-    prefix: str,
-    vocab_size: int,
-    check_correctness: bool,
-) -> dict:
+def _get_embeddings_or_lm_head(tensor_parallel_state_dicts: list[dict], prefix: str, vocab_size: int) -> dict:
     output = _concatenate_tensors_from_state_dicts(tensor_parallel_state_dicts, key=prefix, dim=0)
 
     assert output.shape[0] >= vocab_size
@@ -247,8 +242,8 @@ def _concatenate_tensors_from_moe(
     return tensor
 
 
-def _get_moe(tensor_parallel_state_dicts: list[dict], config: GPTDolomiteConfig, prefix: str) -> dict:
-    assert not config.add_bias
+def _get_moe(tensor_parallel_state_dicts: list[dict], is_glu: bool, add_bias: bool, prefix: str) -> dict:
+    assert not add_bias
 
     output = {
         prefix
@@ -260,8 +255,7 @@ def _get_moe(tensor_parallel_state_dicts: list[dict], config: GPTDolomiteConfig,
     column_parallel_shard_dim = 1
     row_parallel_shard_dim = 2
 
-    if is_glu(config.activation_function):
-        # per_rank_dim = config.intermediate_size // len(tensor_parallel_state_dicts)
+    if is_glu:
         weights = [
             state_dict[prefix + "c_fc.weight"].chunk(2, dim=column_parallel_shard_dim)
             for state_dict in tensor_parallel_state_dicts
