@@ -5,7 +5,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
 from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP

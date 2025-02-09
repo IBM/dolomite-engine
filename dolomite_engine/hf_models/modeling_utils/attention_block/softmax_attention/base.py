@@ -47,7 +47,6 @@ class Attention(nn.Module):
 
         self.attention_head_type = attention_head_type
         self.position_embedding_type = position_embedding_type
-
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
 
