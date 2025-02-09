@@ -43,28 +43,57 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
 kwargs = {}
 if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
         hidden_size=128,
         num_attention_heads=16,
-        mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
+        ],
     )
     enable_kernels([Kernel.scattermoe]).__enter__()
 elif args.model_type == "desync_residual":
     config = DesyncResidualConfig(
-        attention_head_type=args.attention_head_type,
         num_layers=4,
         position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
         hidden_size=128,
         num_attention_heads=16,
         resid_pdrop=0,
         normalization_function="rmsnorm",
         pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
+        ],
         reduce_pattern=[
             {"attention": False, "mlp": False},
             {"attention": False, "mlp": True},
@@ -74,13 +103,28 @@ elif args.model_type == "desync_residual":
     )
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
-        attention_head_type=args.attention_head_type,
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
         hidden_size=128,
         num_attention_heads=16,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
+        ],
     )
 
 
