@@ -67,7 +67,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
             )
         )
 
-        mlp_block_type = config.mlp_blocks[layer_idx]["mlp_block_type"]
+        mlp_block_type = config.mlp_blocks[layer_idx].mlp_block_type
 
         # mlp
         if mlp_block_type == "MLP":

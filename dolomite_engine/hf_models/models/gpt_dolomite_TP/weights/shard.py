@@ -58,7 +58,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
 
         state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
 
-        mlp_block_type = config.mlp_blocks[layer_idx]["mlp_block_type"]
+        mlp_block_type = config.mlp_blocks[layer_idx].mlp_block_type
 
         if mlp_block_type == "MLP":
             state_dict.update(
