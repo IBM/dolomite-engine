@@ -160,7 +160,7 @@ def _get_attention(
     else:
         state_dict.update(
             _get_column_parallel(
-                config=config,
+                add_bias=config.add_bias,
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix=prefix + "c_attn.",
                 shard_dim=column_parallel_shard_dim,
