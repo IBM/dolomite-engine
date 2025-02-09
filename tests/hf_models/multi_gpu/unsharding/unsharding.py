@@ -43,8 +43,10 @@ config = GPTDolomiteConfig(
     add_bias=False,
     hidden_size=128,
     num_attention_heads=16,
-    activation_function=args.activation_function,
-    mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
+    mlp_blocks=[
+        {"mlp_block_type": "MLP", "activation_function": args.activation_function},
+        {"mlp_block_type": "MoE", "activation_function": args.activation_function},
+    ],
 )
 enable_kernels([Kernel.scattermoe]).__enter__()
 
