@@ -120,9 +120,11 @@ class TestCommons(TestCase):
             max_position_embeddings=1024,
             hidden_size=32,
             num_layers=num_layers,
-            mlp_blocks=[{"mlp_block_type": "MoE"} for _ in range(num_layers)],
+            mlp_blocks=[
+                {"mlp_block_type": "MoE", "num_experts": num_experts, "num_experts_per_tok": num_experts_per_tok}
+                for _ in range(num_layers)
+            ],
             num_attention_heads=4,
-            num_experts_per_tok=num_experts_per_tok,
             num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
             attention_head_type=attention_head_type.value,
             position_embedding_type=position_embedding_type.value,
@@ -130,7 +132,6 @@ class TestCommons(TestCase):
             activation_function=activation_function,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
-            num_experts=num_experts,
             bos_token_id=0,
             eos_token_id=1,
             pad_token_id=2,

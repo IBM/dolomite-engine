@@ -32,7 +32,6 @@ class CommonConfig(PretrainedConfig):
         num_layers: int = 12,
         num_attention_heads: int = 12,
         num_key_value_heads: int | None = None,
-        intermediate_size: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         attention_head_type: str = "mqa",
         resid_pdrop: float = 0,
@@ -57,8 +56,6 @@ class CommonConfig(PretrainedConfig):
         upcast_logits_for_loss: bool = False,
         attention_blocks: list[str] = None,
         mlp_blocks: list[str] = None,
-        num_experts: int = 8,
-        num_experts_per_tok: int = 2,
         router_aux_loss_coef: float = 0.001,
         shared_intermediate_size: int | None = None,
         **kwargs,
@@ -123,13 +120,10 @@ class CommonConfig(PretrainedConfig):
 
         self.mlp_blocks = mlp_blocks
         self._set_mlp_blocks(
-            intermediate_size=intermediate_size,
             activation_function=activation_function,
             dropout=resid_pdrop,
             add_bias=add_bias,
             shared_intermediate_size=shared_intermediate_size,
-            num_experts=num_experts,
-            num_experts_per_tok=num_experts_per_tok,
         )
 
         assert len(self.attention_blocks) == self.num_layers
@@ -160,13 +154,10 @@ class CommonConfig(PretrainedConfig):
 
     def _set_mlp_blocks(
         self,
-        intermediate_size: int,
         activation_function: str,
         dropout: float,
         add_bias: bool,
         shared_intermediate_size: int | None,
-        num_experts: int,
-        num_experts_per_tok: int,
     ) -> None:
         if self.mlp_blocks is None:
             self.mlp_blocks = [{} for _ in range(self.num_layers)]
@@ -175,9 +166,7 @@ class CommonConfig(PretrainedConfig):
         for i in range(self.num_layers):
             mlp_block_type = self.mlp_blocks[i].get("mlp_block_type", "MLP")
             mlp_kwargs = dict(
-                intermediate_size=self.mlp_blocks[i].get(
-                    "intermediate_size", 4 * self.hidden_size if intermediate_size is None else intermediate_size
-                ),
+                intermediate_size=self.mlp_blocks[i].get("intermediate_size", 4 * self.hidden_size),
                 activation_function=self.mlp_blocks[i].get("activation_function", activation_function),
                 dropout=self.mlp_blocks[i].get("dropout", dropout),
                 add_bias=self.mlp_blocks[i].get("add_bias", add_bias),
@@ -191,8 +180,8 @@ class CommonConfig(PretrainedConfig):
                     shared_intermediate_size=self.mlp_blocks[i].get(
                         "shared_intermediate_size", shared_intermediate_size
                     ),
-                    num_experts=self.mlp_blocks[i].get("num_experts", num_experts),
-                    num_experts_per_tok=self.mlp_blocks[i].get("num_experts_per_tok", num_experts_per_tok),
+                    num_experts=self.mlp_blocks[i].get("num_experts", 8),
+                    num_experts_per_tok=self.mlp_blocks[i].get("num_experts_per_tok", 2),
                 )
 
             mlp_blocks.append(mlp_args)
