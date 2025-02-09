@@ -1,5 +1,5 @@
 from ...config import CommonConfig
-from ...enums import InitMethod
+from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .softmax_attention import (
     SDPA,
     Attention,
@@ -41,8 +41,8 @@ def get_sequence_mixer(
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=block.num_key_value_heads,
         attention_multiplier=block.attention_multiplier,
-        attention_head_type=block.attention_head_type,
-        position_embedding_type=config.position_embedding_type,
+        attention_head_type=AttentionHeadType(block.attention_head_type),
+        position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
         add_bias=block.add_bias,
         softmax_dropout=block.softmax_dropout,
         dropout=block.dropout,

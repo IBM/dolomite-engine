@@ -248,9 +248,6 @@ class TestCommons(TestCase):
         config1 = json.load(open(os.path.join(path1, "config.json"), "r"))
         config2 = json.load(open(os.path.join(path2, "config.json"), "r"))
 
-        print(config1)
-        print(config2)
-
         for key in ["architectures", "torch_dtype"]:
             config1.pop(key, None)
             config2.pop(key, None)
