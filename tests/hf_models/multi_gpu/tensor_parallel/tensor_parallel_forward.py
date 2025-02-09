@@ -66,7 +66,6 @@ if args.model_type == "gpt_dolomite":
             {"mlp_block_type": "MoE", "add_bias": False},
         ],
     )
-    enable_kernels([Kernel.scattermoe]).__enter__()
 elif args.model_type == "desync_residual":
     config = DesyncResidualConfig(
         num_layers=4,
@@ -127,6 +126,7 @@ elif args.model_type == "ladder_residual":
         ],
     )
 
+enable_kernels([Kernel.scattermoe]).__enter__()
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
