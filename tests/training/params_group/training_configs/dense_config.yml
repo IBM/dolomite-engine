@@ -17,7 +17,6 @@ model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
     embedding_dropout: 0
-    resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite

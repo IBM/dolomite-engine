@@ -21,7 +21,6 @@ model_args:
     activation_function: swiglu
     add_bias: false
     embedding_dropout: 0
-    resid_pdrop: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: palm

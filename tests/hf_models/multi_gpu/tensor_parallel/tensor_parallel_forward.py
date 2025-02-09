@@ -71,7 +71,6 @@ elif args.model_type == "desync_residual":
         position_embedding_type="learned_absolute",
         hidden_size=128,
         num_attention_heads=16,
-        resid_pdrop=0,
         normalization_function="rmsnorm",
         pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
         sequence_mixer_blocks=[

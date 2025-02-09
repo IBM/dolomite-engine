@@ -37,7 +37,6 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         use_cache=original_config.use_cache,
         tie_word_embeddings=original_config.tie_word_embeddings,
         initializer_range=original_config.initializer_range,
-        resid_pdrop=original_config.resid_pdrop,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
@@ -150,7 +149,6 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         activation_function=config.check_equal_for_all_and_get_value(
             "mlp_blocks", "activation_function", "gelu_pytorch_tanh"
         ),
-        resid_pdrop=config.resid_pdrop,
         embedding_dropout=config.embedding_dropout,
         attn_pdrop=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         layer_norm_epsilon=config.layer_norm_epsilon,

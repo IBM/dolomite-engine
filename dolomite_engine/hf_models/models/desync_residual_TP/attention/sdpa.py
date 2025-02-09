@@ -126,7 +126,7 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
 
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
 
-        assert self.resid_pdrop == 0, "residual dropout is not supported with DesyncResidual"
+        assert dropout == 0, "residual dropout is not supported with DesyncResidual"
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def forward(

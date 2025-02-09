@@ -47,7 +47,6 @@ class CommonConfig(PretrainedConfig):
         hidden_size: int = 768,
         num_layers: int = 12,
         num_attention_heads: int = 12,
-        resid_pdrop: float = 0,
         embedding_dropout: float = 0,
         normalization_function: str = "layernorm",
         layer_norm_epsilon: float = 1e-5,
@@ -74,7 +73,6 @@ class CommonConfig(PretrainedConfig):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
-        self.resid_pdrop = resid_pdrop
         self.embedding_dropout = embedding_dropout
         self.normalization_function = normalization_function
         self.layer_norm_epsilon = layer_norm_epsilon
