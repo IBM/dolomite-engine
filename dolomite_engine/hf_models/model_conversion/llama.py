@@ -186,13 +186,14 @@ def export_to_huggingface_llama(pretrained_model_name_or_path: str, save_path: s
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
-    assert config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function") == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert config.m_emb is None
     assert config.m_residual is None
     assert config.m_width is None
     assert config.attention_multiplier is None
+
+    config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
 
     original_config = LlamaConfig(
         vocab_size=config.vocab_size,
