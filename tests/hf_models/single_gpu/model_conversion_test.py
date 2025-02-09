@@ -59,24 +59,24 @@ class ModelConversionTest(TestCommons):
             dolomite_config=dolomite_config, model_type="granite", device=device, exact_match=False
         )
 
-    # @parameterized.expand(
-    #     TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
-    # )
-    # def test_granitemoe_model_conversion(self, device: torch.device, attention_head_type: AttentionHeadType) -> None:
-    #     dolomite_config = self.get_moe_test_config(
-    #         attention_head_type,
-    #         PositionEmbeddingType.rope,
-    #         add_bias=False,
-    #         activation_function="swiglu",
-    #         normalization_function="rmsnorm",
-    #         m_emb=2,
-    #         m_width=2,
-    #     )
+    @parameterized.expand(
+        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
+    )
+    def test_granitemoe_model_conversion(self, device: torch.device, attention_head_type: AttentionHeadType) -> None:
+        dolomite_config = self.get_moe_test_config(
+            attention_head_type,
+            PositionEmbeddingType.rope,
+            add_bias=False,
+            activation_function="swiglu",
+            normalization_function="rmsnorm",
+            m_emb=2,
+            m_width=2,
+        )
 
-    #     self.model_conversion_test(
-    #         dolomite_config=dolomite_config,
-    #         model_type="granitemoe",
-    #         device=device,
-    #         exact_match=False,
-    #         compare_loss=False,
-    #     )
+        self.model_conversion_test(
+            dolomite_config=dolomite_config,
+            model_type="granitemoe",
+            device=device,
+            exact_match=False,
+            compare_loss=False,
+        )
