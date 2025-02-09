@@ -46,7 +46,6 @@ model_args:
     intermediate_size: null
     activation_function: gelu_pytorch_tanh
     attention_head_type: mqa
-    embedding_dropout: 0.1
     normalization_function: layernorm
     layer_norm_epsilon: 1e-5
     initializer_range: 0.02
