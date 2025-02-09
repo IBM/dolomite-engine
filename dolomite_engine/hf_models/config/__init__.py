@@ -56,8 +56,7 @@ class CommonConfig(PretrainedConfig):
         attention_blocks: list[str] = None,
         mlp_blocks: list[str] = None,
         router_aux_loss_coef: float = 0.001,
-        shared_intermediate_size: int | None = None,
-        **kwargs,
+        tie_word_embeddings: bool = True,
     ) -> None:
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
@@ -120,15 +119,15 @@ class CommonConfig(PretrainedConfig):
         self.mlp_blocks = mlp_blocks
         self._set_mlp_blocks(
             add_bias=add_bias,
-            shared_intermediate_size=shared_intermediate_size,
         )
 
         assert len(self.attention_blocks) == self.num_layers
         assert len(self.mlp_blocks) == self.num_layers
 
         self.router_aux_loss_coef = router_aux_loss_coef
+        self.tie_word_embeddings = tie_word_embeddings
 
-        super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
+        super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id)
 
     @_hold_base_args(key="mlp_blocks")
     def save_pretrained(self, save_directory, push_to_hub=False, **kwargs) -> None:
@@ -152,7 +151,6 @@ class CommonConfig(PretrainedConfig):
     def _set_mlp_blocks(
         self,
         add_bias: bool,
-        shared_intermediate_size: int | None,
     ) -> None:
         if self.mlp_blocks is None:
             self.mlp_blocks = [{} for _ in range(self.num_layers)]
@@ -172,9 +170,7 @@ class CommonConfig(PretrainedConfig):
             elif mlp_block_type == "MoE":
                 mlp_args = _MoEArgs(
                     **mlp_kwargs,
-                    shared_intermediate_size=self.mlp_blocks[i].get(
-                        "shared_intermediate_size", shared_intermediate_size
-                    ),
+                    shared_intermediate_size=self.mlp_blocks[i].get("shared_intermediate_size", None),
                     num_experts=self.mlp_blocks[i].get("num_experts", 8),
                     num_experts_per_tok=self.mlp_blocks[i].get("num_experts_per_tok", 2),
                 )

@@ -16,7 +16,6 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    activation_function: swiglu
     add_bias: true
     attn_pdrop: 0
     embd_pdrop: 0
@@ -41,6 +40,15 @@ model_args:
     m_emb: 12
     m_residual: 0.22
     init_method: mup
+    mlp_blocks:
+      - activation_function: swiglu
+        mlp_block_type: MLP
+      - activation_function: swiglu
+        mlp_block_type: MLP
+      - activation_function: swiglu
+        mlp_block_type: MLP
+      - activation_function: swiglu
+        mlp_block_type: MLP
   attention_implementation: sdpa
 
 tuning_args:

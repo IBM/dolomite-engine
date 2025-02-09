@@ -16,7 +16,6 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    activation_function: swiglu
     add_bias: true
     attn_pdrop: 0
     embd_pdrop: 0
@@ -24,15 +23,9 @@ model_args:
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
-    mlp_blocks:
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
     hidden_size: 512
     num_attention_heads: 16
     num_layers: 4
-    shared_intermediate_size: 512
     max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
@@ -47,6 +40,19 @@ model_args:
     m_emb: 12
     m_residual: 0.22
     init_method: mup
+    mlp_blocks:
+      - activation_function: swiglu
+        mlp_block_type: MoE
+        shared_intermediate_size: 512
+      - activation_function: swiglu
+        mlp_block_type: MoE
+        shared_intermediate_size: 512
+      - activation_function: swiglu
+        mlp_block_type: MoE
+        shared_intermediate_size: 512
+      - activation_function: swiglu
+        mlp_block_type: MoE
+        shared_intermediate_size: 512
   attention_implementation: sdpa
 
 tuning_args:

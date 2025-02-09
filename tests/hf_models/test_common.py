@@ -88,7 +88,6 @@ class TestCommons(TestCase):
             attention_head_type=attention_head_type.value,
             position_embedding_type=position_embedding_type.value,
             add_bias=add_bias,
-            activation_function=activation_function,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -98,6 +97,9 @@ class TestCommons(TestCase):
             m_width=m_width,
             m_residual=m_residual,
             attention_multiplier=attention_multiplier,
+            mlp_blocks=[
+                {"mlp_block_type": "MLP", "activation_function": activation_function} for _ in range(num_layers)
+            ],
         )
 
     @staticmethod
