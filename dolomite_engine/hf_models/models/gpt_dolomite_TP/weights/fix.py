@@ -27,8 +27,10 @@ def fix_gpt_dolomite_unsharded_state_dict(
                     [q_attn_w, kv_attn_w]
                 )
 
-        if is_glu(config.activation_function):
-            mlp_block_type = config.mlp_blocks[layer_idx].mlp_block_type
+        block = config.mlp_blocks[layer_idx]
+
+        if is_glu(block.activation_function):
+            mlp_block_type = block.mlp_block_type
 
             if mlp_block_type == "MLP":
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
