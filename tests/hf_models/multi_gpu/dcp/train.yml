@@ -36,76 +36,52 @@ model_args:
     pad_token_id: 0
     sequence_mixers:
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
       - sequence_mixer_block_type: softmax_attention
-        attention_head_type: mha
         add_bias: false
     mlp_blocks:
       - mlp_block_types: MLP
