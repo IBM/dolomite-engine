@@ -67,14 +67,15 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
             )
         )
 
-        mlp_block_type = config.mlp_blocks[layer_idx].mlp_block_type
+        block = config.mlp_blocks[layer_idx]
+        mlp_block_type = block.mlp_block_type
 
         # mlp
         if mlp_block_type == "MLP":
             output_state_dict.update(
                 _get_mlp(
                     tensor_parallel_state_dicts,
-                    is_glu=is_glu(config.activation_function),
+                    is_glu=is_glu(block.activation_function),
                     add_bias=config.add_bias,
                     prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                     check_correctness=check_correctness,
@@ -83,10 +84,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         elif mlp_block_type == "MoE":
             output_state_dict.update(
                 _get_moe(
-                    tensor_parallel_state_dicts,
-                    prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
-                    config=config,
-                    check_correctness=check_correctness,
+                    tensor_parallel_state_dicts, prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.", config=config
                 )
             )
 
@@ -249,7 +247,7 @@ def _concatenate_tensors_from_moe(
     return tensor
 
 
-def _get_moe(tensor_parallel_state_dicts: list[dict], config, prefix: str, check_correctness: bool) -> dict:
+def _get_moe(tensor_parallel_state_dicts: list[dict], config: GPTDolomiteConfig, prefix: str) -> dict:
     assert not config.add_bias
 
     output = {
