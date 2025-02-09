@@ -77,7 +77,7 @@ class PaddingFreeAttention(Attention):
         # ==========================================================================================
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 

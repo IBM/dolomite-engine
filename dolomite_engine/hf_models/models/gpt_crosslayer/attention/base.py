@@ -46,7 +46,7 @@ class CrossLayerAttention(nn.Module):
         self.resid_pdrop = config.resid_pdrop
 
         self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
-        self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
+        self.dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
 
         assert (
             self.num_key_value_heads is not None
@@ -110,7 +110,7 @@ class CrossLayerAttention(nn.Module):
         hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 

@@ -166,7 +166,7 @@ class PaddingFreeSBAttention(SBAttention):
         hidden_states = self.norm(hidden_states)
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 

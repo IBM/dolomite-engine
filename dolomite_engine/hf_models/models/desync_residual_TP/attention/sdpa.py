@@ -130,7 +130,7 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
         self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
 
         assert self.resid_pdrop == 0, "residual dropout is not supported with DesyncResidual"
-        self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
+        self.dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
 
     def forward(
         self,
@@ -209,6 +209,6 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
             hidden_states = self.c_proj(hidden_states)
             hidden_states = hidden_states + residual
 
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states

@@ -42,6 +42,6 @@ class CrossLayerSDPA(CrossLayerAttention):
         hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
