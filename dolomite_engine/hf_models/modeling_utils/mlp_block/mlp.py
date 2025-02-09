@@ -23,14 +23,6 @@ class MLP(nn.Module):
     ) -> None:
         super().__init__()
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        elif init_method == InitMethod.normal:
-            pass
-        else:
-            raise ValueError(f"unexpected init_method ({init_method})")
-
         std = _get_std_for_linear(initializer_range, init_method, m_width)
 
         self.c_fc = ParameterizedLinear(
