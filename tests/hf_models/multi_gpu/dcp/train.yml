@@ -16,7 +16,6 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    activation_function: swiglu
     add_bias: false
     attn_pdrop: 0
     embd_pdrop: 0
@@ -37,6 +36,55 @@ model_args:
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
+    mlp_blocks:
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
+      - mlp_block_types: MLP
+        activation_function: swiglu
   attention_implementation: flash_attention_2
 
 tuning_args:
