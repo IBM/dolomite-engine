@@ -56,8 +56,6 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
         num_key_value_heads=original_config.num_key_value_heads,
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
-        intermediate_size=original_config.intermediate_size,
-        activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
@@ -70,6 +68,14 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        mlp_blocks=[
+            {
+                "mlp_block_type": "MLP",
+                "activation_function": "swiglu",
+                "intermediate_size": original_config.intermediate_size,
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
     )
 
     return config

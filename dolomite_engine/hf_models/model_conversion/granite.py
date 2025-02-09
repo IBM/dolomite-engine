@@ -51,8 +51,6 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         num_key_value_heads=original_config.num_key_value_heads,
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
-        intermediate_size=original_config.intermediate_size,
-        activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
@@ -69,6 +67,14 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         attention_multiplier=original_config.attention_multiplier,
+        mlp_blocks=[
+            {
+                "mlp_block_type": "MLP",
+                "activation_function": "swiglu",
+                "intermediate_size": original_config.intermediate_size,
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
     )
 
     return config
