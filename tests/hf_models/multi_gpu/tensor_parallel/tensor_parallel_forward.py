@@ -88,8 +88,22 @@ elif args.model_type == "desync_residual":
                 "num_key_value_heads": num_key_value_heads,
                 "attention_head_type": args.attention_head_type,
             },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
         ],
         mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
             {"mlp_block_type": "MLP", "add_bias": False},
             {"mlp_block_type": "MoE", "add_bias": False},
         ],
