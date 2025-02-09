@@ -23,7 +23,7 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: false
-    embd_pdrop: 0
+    embedding_dropout: 0
     resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05

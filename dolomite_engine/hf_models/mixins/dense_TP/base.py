@@ -54,11 +54,11 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 sequence_parallel=self.sequence_parallel,
             )
 
-            self.drop = (
+            self.embedding_dropout = (
                 nn.Identity()
-                if config.embd_pdrop == 0
+                if config.embedding_dropout == 0
                 else Dropout_TP(
-                    config.embd_pdrop,
+                    config.embedding_dropout,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )

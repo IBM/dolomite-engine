@@ -115,7 +115,9 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
-        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
+        self.embedding_dropout = (
+            nn.Identity() if config.embedding_dropout == 0 else nn.Dropout(config.embedding_dropout)
+        )
         self.h = nn.ModuleList(
             [
                 self.layer_class(
@@ -291,7 +293,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         if token_type_ids is not None:
             inputs_embeds = inputs_embeds + self.wte(token_type_ids)
 
-        inputs_embeds = self.drop(inputs_embeds)
+        inputs_embeds = self.embedding_dropout(inputs_embeds)
 
         if self.m_emb is not None:
             inputs_embeds = inputs_embeds * self.m_emb

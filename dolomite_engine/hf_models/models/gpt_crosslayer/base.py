@@ -34,7 +34,9 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
-        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
+        self.embedding_dropout = (
+            nn.Identity() if config.embedding_dropout == 0 else nn.Dropout(config.embedding_dropout)
+        )
 
         global_index, local_index = 0, 0
         # layer_index to (global_index, local_index)

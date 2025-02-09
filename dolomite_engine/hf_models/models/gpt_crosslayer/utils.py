@@ -21,7 +21,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         num_layers=original_config.num_layers,
         num_attention_heads=original_config.num_attention_heads,
         resid_pdrop=original_config.resid_pdrop,
-        embd_pdrop=original_config.embd_pdrop,
+        embedding_dropout=original_config.embedding_dropout,
         normalization_function=original_config.normalization_function,
         layer_norm_epsilon=original_config.layer_norm_epsilon,
         position_embedding_type=original_config.position_embedding_type,

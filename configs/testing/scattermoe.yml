@@ -45,7 +45,7 @@ model_args:
     activation_function: gelu_pytorch_tanh
     attention_head_type: mqa
     resid_pdrop: 0.1
-    embd_pdrop: 0.1
+    embedding_dropout: 0.1
     normalization_function: layernorm
     layer_norm_epsilon: 1e-5
     initializer_range: 0.02

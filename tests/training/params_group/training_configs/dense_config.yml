@@ -16,7 +16,7 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    embd_pdrop: 0
+    embedding_dropout: 0
     resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05

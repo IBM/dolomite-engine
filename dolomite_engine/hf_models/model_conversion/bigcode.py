@@ -151,7 +151,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
             "mlp_blocks", "activation_function", "gelu_pytorch_tanh"
         ),
         resid_pdrop=config.resid_pdrop,
-        embd_pdrop=config.embd_pdrop,
+        embedding_dropout=config.embedding_dropout,
         attn_pdrop=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         layer_norm_epsilon=config.layer_norm_epsilon,
         initializer_range=config.initializer_range,
