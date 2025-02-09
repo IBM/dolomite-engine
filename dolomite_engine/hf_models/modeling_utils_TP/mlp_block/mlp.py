@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from ...enums import InitMethod
 from ...modeling_utils import MLP, get_activation_function, is_glu
+from ...modeling_utils.mlp_block.mlp import _get_std_for_linear
 from ..dropout import Dropout_TP
 from ..linear import ColumnParallelLinear, RowParallelLinear
 
@@ -25,7 +26,7 @@ class MLP_TP(MLP):
     ) -> None:
         nn.Module.__init__(self)
 
-        std = self._get_std_for_linear(initializer_range, init_method, m_width)
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
 
         self.c_fc = ColumnParallelLinear(
             hidden_size,
