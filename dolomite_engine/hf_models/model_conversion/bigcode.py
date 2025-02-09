@@ -33,8 +33,6 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         num_attention_heads=original_config.n_head,
         attention_head_type="mqa" if original_config.multi_query else "mha",
         position_embedding_type="learned_absolute",
-        intermediate_size=original_config.n_inner,
-        activation_function=original_config.activation_function,
         normalization_function="layernorm",
         layer_norm_epsilon=original_config.layer_norm_epsilon,
         use_cache=original_config.use_cache,
@@ -46,6 +44,14 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        mlp_blocks=[
+            {
+                "mlp_block_type": "MLP",
+                "activation_function": original_config.activation_function,
+                "intermediate_size": original_config.n_inner,
+            }
+            for _ in range(original_config.n_layer)
+        ],
     )
 
     return config
