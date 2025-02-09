@@ -26,7 +26,7 @@ class CommonConfig(PretrainedConfig):
 
     def __init__(
         self,
-        vocab_size: int = 50257,
+        vocab_size: int = 50304,
         max_position_embeddings: int = 1024,
         hidden_size: int = 768,
         num_layers: int = 12,
