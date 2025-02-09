@@ -40,7 +40,6 @@ model_args:
     activation_function: swiglu
     add_bias: true
     bos_token_id: 0
-    embedding_dropout: 0
     eos_token_id: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05

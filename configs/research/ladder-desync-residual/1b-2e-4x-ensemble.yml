@@ -20,7 +20,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: false
-    embedding_dropout: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: desync_residual
