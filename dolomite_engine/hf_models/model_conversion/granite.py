@@ -108,10 +108,11 @@ def export_to_huggingface_granite(pretrained_model_name_or_path: str, save_path:
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
-    assert config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function") == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
-    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type")
+
+    config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type", "MLP")
 
     original_config = GraniteConfig(
         vocab_size=config.vocab_size,

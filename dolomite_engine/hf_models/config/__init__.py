@@ -146,16 +146,19 @@ class CommonConfig(PretrainedConfig):
     def to_json_string(self, use_diff: bool = True) -> str:
         return super().to_json_string(use_diff)
 
-    def check_equal_for_all_and_get_value(self, key: str, key_block: str) -> Any:
+    def check_equal_for_all_and_get_value(self, key: str, key_block: str, expected_value: Any | None = None) -> Any:
         def _get(block, key):
             return block.get(key) if isinstance(block, dict) else getattr(block, key)
 
         blocks = getattr(self, key)
-        expected_value = _get(blocks[0], key_block)
+        value = _get(blocks[0], key_block)
 
-        assert all([_get(block, key_block) == expected_value for block in blocks])
+        if expected_value is not None:
+            assert value == expected_value, f"{value} {expected_value}"
 
-        return expected_value
+        assert all([_get(block, key_block) == value for block in blocks])
+
+        return value
 
     def _set_mlp_blocks(
         self,

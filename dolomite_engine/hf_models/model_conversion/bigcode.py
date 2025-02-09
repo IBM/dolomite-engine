@@ -123,7 +123,6 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
-    assert config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function") == "gelu_pytorch_tanh"
     assert config.normalization_function == "layernorm"
     assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
     assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
@@ -139,7 +138,9 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         n_layer=config.num_layers,
         n_head=config.num_attention_heads,
         n_inner=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
-        activation_function=config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function"),
+        activation_function=config.check_equal_for_all_and_get_value(
+            "mlp_blocks", "activation_function", "gelu_pytorch_tanh"
+        ),
         resid_pdrop=config.resid_pdrop,
         embd_pdrop=config.embd_pdrop,
         attn_pdrop=config.attn_pdrop,
