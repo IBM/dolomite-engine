@@ -201,9 +201,6 @@ class DesyncResidualSDPA(Attention):
         # value -> (TP * batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
-        softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
-
         if attention_mask is not None:
             # TODO avoid this repeat on every layer
             attention_mask = attention_mask.repeat(self.tp_world_size, 1, 1, 1)
@@ -213,9 +210,9 @@ class DesyncResidualSDPA(Attention):
             key,
             value,
             attn_mask=attention_mask,
-            dropout_p=dropout_p,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
             is_causal=self.causal if attention_mask is None else False,
-            scale=softmax_scale,
+            scale=self._get_softmax_scale(),
         )
 
         del query, key, value

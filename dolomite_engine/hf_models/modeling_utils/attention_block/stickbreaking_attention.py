@@ -81,7 +81,6 @@ class SBAttention(Attention):
         assert past_key_values is not None
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
         softmax_scale = self._get_softmax_scale()
-        self.attn_pdrop if self.training else 0
         key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
 
@@ -92,7 +91,6 @@ class SBAttention(Attention):
                 v=value,
                 inv_temp=softmax_scale,
             )
-
         else:
             hidden_states, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
 
@@ -105,7 +103,7 @@ class SBAttention(Attention):
         hidden_states = hidden_states.view(bsz_, length_, self.hidden_size)
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 
@@ -151,14 +149,12 @@ class PaddingFreeSBAttention(SBAttention):
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
-        softmax_scale = self._get_softmax_scale()
-
         value = value.permute(1, 0, 2)
         hidden_states, rem = sb_attn_varlen(
             q=query.permute(1, 0, 2),
             k=key.permute(1, 0, 2),
             v=value,
-            inv_temp=softmax_scale,
+            inv_temp=self._get_softmax_scale(),
             cu_seqlens=cu_seqlens,
             max_seqlens=max_seqlen,
         )

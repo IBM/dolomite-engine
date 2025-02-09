@@ -28,9 +28,6 @@ class CrossLayerFlashAttention2(CrossLayerAttention):
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             query = query.transpose(1, 2)
 
-        softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
-
         batch_size, query_length = query.shape[:2]
 
         hidden_states = _flash_attention_forward(
@@ -40,8 +37,8 @@ class CrossLayerFlashAttention2(CrossLayerAttention):
             attention_mask=attention_mask,
             query_length=query_length,
             is_causal=self.causal,
-            dropout=dropout_p,
-            softmax_scale=softmax_scale,
+            dropout=self.softmax_dropout_p if self.training else 0,
+            softmax_scale=self._get_softmax_scale(),
         )
 
         del query, key, value

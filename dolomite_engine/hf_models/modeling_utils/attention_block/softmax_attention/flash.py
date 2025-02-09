@@ -58,9 +58,6 @@ class FlashAttention2(Attention):
         # value -> (batch_size, key_length, num_heads, head_dim)
         # ==========================================================================================
 
-        softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
-
         batch_size, query_length = query.shape[:2]
 
         query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
@@ -74,8 +71,8 @@ class FlashAttention2(Attention):
             attention_mask=attention_mask,
             query_length=query_length,
             is_causal=self.causal,
-            dropout=dropout_p,
-            softmax_scale=softmax_scale,
+            dropout=self.softmax_dropout_p if self.training else 0,
+            softmax_scale=self._get_softmax_scale(),
         )
 
         del query, key, value
