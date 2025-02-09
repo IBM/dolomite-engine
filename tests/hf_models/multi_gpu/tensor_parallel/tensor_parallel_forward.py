@@ -40,7 +40,6 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-kwargs = {}
 if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
         num_layers=2,
@@ -166,7 +165,6 @@ with torch.device("meta"):
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
-        **kwargs,
     )
 
 # copy to device without copying storage
