@@ -56,7 +56,7 @@ class CommonConfig(PretrainedConfig):
         attention_blocks: list[str] = None,
         mlp_blocks: list[str] = None,
         router_aux_loss_coef: float = 0.001,
-        tie_word_embeddings: bool = True,
+        **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
@@ -125,9 +125,18 @@ class CommonConfig(PretrainedConfig):
         assert len(self.mlp_blocks) == self.num_layers
 
         self.router_aux_loss_coef = router_aux_loss_coef
-        self.tie_word_embeddings = tie_word_embeddings
 
-        super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id)
+        x = [
+            "activation_function",
+            "intermediate_size",
+            "shared_intermediate_size",
+            "num_experts",
+            "num_experts_per_tok",
+        ]
+        for i in x:
+            assert i not in kwargs, f"i found ({i})"
+
+        super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
 
     @_hold_base_args(key="mlp_blocks")
     def save_pretrained(self, save_directory, push_to_hub=False, **kwargs) -> None:
