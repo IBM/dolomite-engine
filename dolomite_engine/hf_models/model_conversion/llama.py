@@ -61,7 +61,6 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
         initializer_range=original_config.initializer_range,
         rope_theta=original_config.rope_theta,
         rope_scaling=original_config.rope_scaling,
-        attn_pdrop=original_config.attention_dropout,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
@@ -71,6 +70,7 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
                 "add_bias": original_config.attention_bias,
                 "num_key_value_heads": original_config.num_key_value_heads,
                 "attention_head_type": attention_head_type,
+                "softmax_dropout": original_config.attention_dropout,
             }
             for _ in range(original_config.num_hidden_layers)
         ],
@@ -218,7 +218,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
         initializer_range=config.initializer_range,
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
-        attention_dropout=config.attn_pdrop,
+        attention_dropout=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         mlp_bias=config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias"),
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,

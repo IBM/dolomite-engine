@@ -24,6 +24,7 @@ def _hold_base_args(key: str) -> Callable:
 
 _NAKED_DISALLOWED_ARGS = [
     "activation_function",
+    "attn_pdrop",
     "intermediate_size",
     "shared_intermediate_size",
     "num_experts",
@@ -48,7 +49,6 @@ class CommonConfig(PretrainedConfig):
         num_attention_heads: int = 12,
         resid_pdrop: float = 0,
         embd_pdrop: float = 0,
-        attn_pdrop: float = 0,
         normalization_function: str = "layernorm",
         layer_norm_epsilon: float = 1e-5,
         initializer_range: float = 0.02,
@@ -76,7 +76,6 @@ class CommonConfig(PretrainedConfig):
         self.num_attention_heads = num_attention_heads
         self.resid_pdrop = resid_pdrop
         self.embd_pdrop = embd_pdrop
-        self.attn_pdrop = attn_pdrop
         self.normalization_function = normalization_function
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_range = initializer_range

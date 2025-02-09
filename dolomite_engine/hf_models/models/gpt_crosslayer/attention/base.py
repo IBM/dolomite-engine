@@ -42,11 +42,8 @@ class CrossLayerAttention(nn.Module):
             std=(config.initializer_range / math.sqrt(2 * config.num_layers)),
         )
 
-        self.attn_pdrop = config.attn_pdrop
-        self.resid_pdrop = config.resid_pdrop
-
-        self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
-        self.dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
+        self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
         assert (
             self.num_key_value_heads is not None

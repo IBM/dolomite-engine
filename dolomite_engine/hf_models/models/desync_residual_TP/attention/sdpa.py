@@ -124,13 +124,10 @@ class DesyncResidualSDPA_TP(Attention_TP, SDPA):
                 self.hidden_size, self.global_hidden_size, bias=self.add_bias, std=std
             )
 
-        self.attn_pdrop = config.attn_pdrop
-        self.resid_pdrop = config.resid_pdrop
-
-        self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
+        self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
 
         assert self.resid_pdrop == 0, "residual dropout is not supported with DesyncResidual"
-        self.dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def forward(
         self,

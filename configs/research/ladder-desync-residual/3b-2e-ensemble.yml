@@ -20,7 +20,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: false
-    attn_pdrop: 0
     embd_pdrop: 0
     resid_pdrop: 0
     initializer_range: 0.02

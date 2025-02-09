@@ -60,7 +60,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         initializer_range=original_config.initializer_range,
         rope_theta=original_config.rope_theta,
         rope_scaling=original_config.rope_scaling,
-        attn_pdrop=original_config.attention_dropout,
         router_aux_loss_coef=original_config.router_aux_loss_coef,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
@@ -75,6 +74,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
                 "attention_head_type": attention_head_type,
                 "attention_multiplier": original_config.attention_multiplier,
                 "add_bias": False,
+                "softmax_dropout": original_config.attention_dropout,
             }
             for _ in range(original_config.num_hidden_layers)
         ],
@@ -199,7 +199,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         initializer_range=config.initializer_range,
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
-        attention_dropout=config.attn_pdrop,
+        attention_dropout=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         num_local_experts=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts"),
         num_experts_per_tok=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts_per_tok"),
         router_aux_loss_coef=config.router_aux_loss_coef,

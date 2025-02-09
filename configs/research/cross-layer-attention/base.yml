@@ -39,7 +39,6 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: true
-    attn_pdrop: 0
     bos_token_id: 0
     embd_pdrop: 0
     eos_token_id: 0
