@@ -19,9 +19,9 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
         safetensors_weights_manager,
         config.num_layers,
         config.num_attention_heads,
-        config.num_key_value_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         config.hidden_size // config.num_attention_heads,
-        AttentionHeadType(config.attention_head_type),
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -52,13 +52,10 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_hidden_layers,
         num_attention_heads=original_config.num_attention_heads,
-        num_key_value_heads=original_config.num_key_value_heads,
-        attention_head_type=attention_head_type,
         position_embedding_type="rope",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
-        add_bias=original_config.attention_bias,
         tie_word_embeddings=original_config.tie_word_embeddings,
         initializer_range=original_config.initializer_range,
         rope_theta=original_config.rope_theta,
@@ -71,7 +68,16 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         m_emb=None if original_config.embedding_multiplier == 1 else original_config.embedding_multiplier,
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
-        attention_multiplier=original_config.attention_multiplier,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_block_type": "softmax_attention",
+                "num_key_value_heads": original_config.num_key_value_heads,
+                "attention_head_type": attention_head_type,
+                "attention_multiplier": original_config.attention_multiplier,
+                "add_bias": False,
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
         mlp_blocks=[
             {
                 "mlp_block_type": "MoE",
@@ -79,6 +85,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
                 "num_experts": original_config.num_local_experts,
                 "num_experts_per_tok": original_config.num_experts_per_tok,
                 "activation_function": "swiglu",
+                "add_bias": False,
             }
             for _ in range(original_config.num_hidden_layers)
         ],
@@ -149,9 +156,9 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
         safetensors_weights_manager,
         config.num_layers,
         config.num_attention_heads,
-        config.num_key_value_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         config.hidden_size // config.num_attention_heads,
-        AttentionHeadType(config.attention_head_type),
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -170,8 +177,9 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
-    assert not config.add_bias
 
+    config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias", False)
+    config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias", False)
     config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
     config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type", "MoE")
 
@@ -181,12 +189,12 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
-        num_key_value_heads=config.num_key_value_heads,
+        num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
-        attention_bias=config.add_bias,
+        attention_bias=False,
         tie_word_embeddings=config.tie_word_embeddings,
         initializer_range=config.initializer_range,
         rope_theta=config.rope_theta,
@@ -201,7 +209,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
         embedding_multiplier=1 if config.m_emb is None else config.m_emb,
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
-        attention_multiplier=config.attention_multiplier,
+        attention_multiplier=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier"),
         architectures=[GraniteMoeForCausalLM.__name__],
     )
 
