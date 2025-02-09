@@ -30,6 +30,12 @@ def get_mlp_block_TP(
         return MLP_TP(**kwargs)
     elif mlp_block_type == "MoE":
         assert is_kernel_allowed(Kernel.scattermoe)
-        return ScatterMoE_TP(**kwargs)
+        return ScatterMoE_TP(
+            **kwargs,
+            shared_intermediate_size=block.shared_intermediate_size,
+            num_experts=block.num_experts,
+            num_experts_per_tok=block.num_experts_per_tok,
+            use_padding_free_transformer=use_padding_free_transformer,
+        )
     else:
         raise ValueError(f"invalid mlp_block_type ({mlp_block_type}) for layer ({layer_idx})")
