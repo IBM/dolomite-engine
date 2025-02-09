@@ -169,7 +169,7 @@ def _get_attention(
 
     state_dict.update(
         _get_row_parallel(
-            config=config,
+            add_bias=config.add_bias,
             safetensors_weights_manager=safetensors_weights_manager,
             prefix=prefix + "c_proj.",
             shard_dim=row_parallel_shard_dim,
