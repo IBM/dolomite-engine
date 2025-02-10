@@ -26,25 +26,7 @@ class TensorParallelTest(TestCommons):
             TestCommons.get_dtypes(),
             [False, True],
             [False, True],
-            ["dense"],
-        )
-        + TestCommons.make_args_matrix(
-            [AttentionHeadType.gqa],
-            [PositionEmbeddingType.rope],
-            ["sdpa"],
-            TestCommons.get_dtypes(),
-            [False],
-            [False, True],
-            ["moe"],
-        )
-        + TestCommons.make_args_matrix(
-            [AttentionHeadType.mha, AttentionHeadType.gqa],
-            TestCommons.get_position_embedding_types(),
-            ["sdpa"],
-            [torch.float32],
-            [False],
-            [False],
-            ["desync_residual"],
+            [GPTDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
@@ -53,7 +35,7 @@ class TensorParallelTest(TestCommons):
             [torch.float16],
             [False, True],
             [False, True],
-            ["ladder_residual"],
+            [LadderResidualConfig.model_type],
         )
     )
     @TestCommons.slow_test

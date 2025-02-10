@@ -40,59 +40,58 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-kwargs = {}
-if args.model_type == "dense":
+if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-    )
-elif args.model_type == "moe":
-    config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-        mlp_blocks=[{"mlp_block_type": "MoE"}],
-    )
-    enable_kernels([Kernel.scattermoe]).__enter__()
-elif args.model_type == "desync_residual":
-    config = DesyncResidualConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=4,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-        resid_pdrop=0,
-        normalization_function="rmsnorm",
-        pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
-        reduce_pattern=[
-            {"attention": False, "mlp": False},
-            {"attention": False, "mlp": True},
-            {"attention": False, "mlp": False},
-            {"attention": False, "mlp": True},
+        hidden_size=128,
+        num_attention_heads=16,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
         ],
     )
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=2,
+        num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        num_attention_heads=16,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
+        ],
     )
 
+enable_kernels([Kernel.scattermoe]).__enter__()
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
@@ -118,7 +117,6 @@ with torch.device("meta"):
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
-        **kwargs,
     )
 
 # copy to device without copying storage

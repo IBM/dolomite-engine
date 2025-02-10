@@ -29,9 +29,6 @@ class CrossLayerPaddingFreeAttention(CrossLayerAttention):
         if self.position_embedding_type == PositionEmbeddingType.rope:
             query = apply_rotary_pos_emb(query, rope_cos_sin)
 
-        softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
-
         hidden_states = flash_attn_varlen_func(
             query,
             key,
@@ -40,8 +37,8 @@ class CrossLayerPaddingFreeAttention(CrossLayerAttention):
             cu_seqlens_k=cu_seqlens,
             max_seqlen_q=max_seqlen,
             max_seqlen_k=max_seqlen,
-            dropout_p=dropout_p,
-            softmax_scale=softmax_scale,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
+            softmax_scale=self._get_softmax_scale(),
             causal=self.causal,
         )
 
@@ -50,7 +47,7 @@ class CrossLayerPaddingFreeAttention(CrossLayerAttention):
         hidden_states = hidden_states.view(-1, self.hidden_size)
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 

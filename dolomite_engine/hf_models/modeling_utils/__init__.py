@@ -4,7 +4,7 @@ from .attention_block import (
     Attention,
     FlashAttention2,
     PaddingFreeAttention,
-    get_attention_module,
+    get_sequence_mixer,
     interleave_query_key_value_tensor_for_attention,
     repeat_key_value,
     split_query_key_value_tensor_for_attention,

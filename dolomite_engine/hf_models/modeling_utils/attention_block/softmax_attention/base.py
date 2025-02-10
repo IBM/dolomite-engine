@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from .....utils import divide_if_divisible
-from ....config import CommonConfig
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
@@ -14,19 +13,31 @@ from .utils import repeat_key_value
 
 
 class Attention(nn.Module):
-    def __init__(self, config: CommonConfig, causal: bool, layer_idx: int | None = None) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+        causal: bool,
+        layer_idx: int,
+    ) -> None:
         super().__init__()
 
         self.causal = causal
-        self.hidden_size = config.n_embd
-        self.num_heads = config.n_head
-        self.num_key_value_heads = config.num_key_value_heads
-        self.add_bias = config.add_bias
-
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        n_layer = config.n_layer
-        init_method = InitMethod(config.init_method)
+        self.hidden_size = hidden_size
+        self.num_heads = num_attention_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.add_bias = add_bias
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,
@@ -34,14 +45,10 @@ class Attention(nn.Module):
             f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
         )
 
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
-
-        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.scale_attn_weights = config.scale_attn_weights
-        self.attention_multiplier = config.attention_multiplier
-
+        self.attention_head_type = attention_head_type
+        self.position_embedding_type = position_embedding_type
+        self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.num_key_value_heads is None:
@@ -80,16 +87,15 @@ class Attention(nn.Module):
             std=std,
         )
 
-        std = initializer_range / math.sqrt(2 * n_layer)
+        std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
 
-        self.attn_pdrop = config.attn_pdrop
-        self.resid_pdrop = config.resid_pdrop
+        self.softmax_dropout_p = softmax_dropout
 
-        self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
-        self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
+        self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # ==========================================================================================
@@ -203,9 +209,7 @@ class Attention(nn.Module):
         # ==========================================================================================
 
         key = key.transpose(-1, -2)
-
         dtype = query.dtype
-        softmax_dtype = torch.float32 if self.attention_softmax_in_fp32 else dtype
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
@@ -250,8 +254,8 @@ class Attention(nn.Module):
         # hidden_states -> (batch_size, num_heads, query_length, key_length)
         # ==========================================================================================
 
-        hidden_states = F.softmax(hidden_states.to(softmax_dtype), dim=-1).to(dtype)
-        hidden_states = self.attn_dropout(hidden_states)
+        hidden_states = F.softmax(hidden_states.float(), dim=-1).to(dtype)
+        hidden_states = self.softmax_dropout(hidden_states)
 
         # ==========================================================================================
         # value -> (batch_size, num_heads, key_length, head_dim)
@@ -274,17 +278,14 @@ class Attention(nn.Module):
         # ==========================================================================================
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 
     def _get_softmax_scale(self, return_none_allowed: bool = True) -> float:
-        if self.scale_attn_weights:
-            if self.attention_multiplier is None:
-                softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
-            else:
-                softmax_scale = self.attention_multiplier
+        if self.attention_multiplier is None:
+            softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
         else:
-            softmax_scale = 1
+            softmax_scale = self.attention_multiplier
 
         return softmax_scale

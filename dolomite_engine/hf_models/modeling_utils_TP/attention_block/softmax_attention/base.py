@@ -5,9 +5,9 @@ import torch.distributed
 import torch.nn as nn
 
 from .....utils import ProcessGroupManager, divide_if_divisible
-from ....config import CommonConfig
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention
+from ....modeling_utils.mlp_block.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
 from ...linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 
@@ -15,7 +15,58 @@ from ...linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 class _BaseAttention_TP(nn.Module):
     def __init__(
         self,
-        config: CommonConfig,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+        causal: bool,
+        layer_idx: int | None = None,
+        sequence_parallel: bool = False,
+    ) -> None:
+        self._init_attention(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            attention_multiplier=attention_multiplier,
+            attention_head_type=attention_head_type,
+            position_embedding_type=position_embedding_type,
+            add_bias=add_bias,
+            softmax_dropout=softmax_dropout,
+            dropout=dropout,
+            init_method=init_method,
+            initializer_range=initializer_range,
+            m_width=m_width,
+            num_layers=num_layers,
+            causal=causal,
+            layer_idx=layer_idx,
+            use_padding_free_transformer=False,
+            sequence_parallel=sequence_parallel,
+        )
+
+    def _init_attention(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
         causal: bool,
         layer_idx: int | None = None,
         use_padding_free_transformer: bool = False,
@@ -26,15 +77,10 @@ class _BaseAttention_TP(nn.Module):
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
         self.causal = causal
-        self.global_hidden_size = config.n_embd
-        self.global_num_heads = config.n_head
-        self.global_num_key_value_heads = config.num_key_value_heads
-        self.add_bias = config.add_bias
-
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        n_layer = config.n_layer
-        init_method = InitMethod(config.init_method)
+        self.global_hidden_size = hidden_size
+        self.global_num_heads = num_attention_heads
+        self.global_num_key_value_heads = num_key_value_heads
+        self.add_bias = add_bias
 
         divide_if_divisible(
             self.global_hidden_size,
@@ -51,18 +97,12 @@ class _BaseAttention_TP(nn.Module):
         )
 
         self.head_dim = divide_if_divisible(self.hidden_size, self.num_heads, "")
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
-
-        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.scale_attn_weights = config.scale_attn_weights
-        self.attention_multiplier = config.attention_multiplier
-
+        self.attention_head_type = attention_head_type
+        self.position_embedding_type = position_embedding_type
+        self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:
@@ -123,40 +163,42 @@ class _BaseAttention_TP(nn.Module):
             self.num_key_value_heads = 1
 
             self.c_attn = _MQA_QueryKeyValueProjection(
-                config, use_padding_free_transformer=use_padding_free_transformer, sequence_parallel=sequence_parallel
+                hidden_size=hidden_size,
+                num_attention_heads=num_attention_heads,
+                add_bias=add_bias,
+                m_width=m_width,
+                num_layers=num_layers,
+                init_method=init_method,
+                initializer_range=initializer_range,
+                use_padding_free_transformer=use_padding_free_transformer,
+                sequence_parallel=sequence_parallel,
             )
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
-        std = initializer_range / math.sqrt(2 * n_layer)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_proj = RowParallelLinear(
             self.global_hidden_size,
             self.global_hidden_size,
             bias=self.add_bias,
-            std=std,
+            std=std / math.sqrt(2 * num_layers),
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
 
-        self.attn_pdrop = config.attn_pdrop
-        self.resid_pdrop = config.resid_pdrop
-
-        self.attn_dropout = (
+        self.softmax_dropout = (
             nn.Identity()
-            if self.attn_pdrop == 0
+            if softmax_dropout == 0
             else Dropout_TP(
-                self.attn_pdrop,
+                softmax_dropout,
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
         )
-        self.resid_dropout = (
+        self.dropout = (
             nn.Identity()
-            if self.resid_pdrop == 0
+            if dropout == 0
             else Dropout_TP(
-                self.resid_pdrop,
+                dropout,
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
@@ -179,18 +221,21 @@ class _BaseAttention_TP(nn.Module):
 
 class _MQA_QueryKeyValueProjection(nn.Module):
     def __init__(
-        self, config: CommonConfig, use_padding_free_transformer: bool = False, sequence_parallel: bool = False
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        add_bias: bool,
+        m_width: int,
+        num_layers: int,
+        init_method: InitMethod,
+        initializer_range: float,
+        use_padding_free_transformer: bool = False,
+        sequence_parallel: bool = False,
     ) -> None:
         super().__init__()
 
-        self.global_hidden_size = config.n_embd
-        self.add_bias = config.add_bias
-        global_num_heads = config.n_head
-
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        n_layer = config.n_layer
-        init_method = InitMethod(config.init_method)
+        self.global_hidden_size = hidden_size
+        self.add_bias = add_bias
 
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
@@ -199,13 +244,12 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         )
 
         num_heads = divide_if_divisible(
-            global_num_heads, tp_world_size, "num_heads must be divisible by TP world size"
+            num_attention_heads, tp_world_size, "num_heads must be divisible by TP world size"
         )
         self.head_dim = divide_if_divisible(hidden_size, num_heads, "")
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
+
         self.q_attn = ColumnParallelLinear(
             self.global_hidden_size,
             self.global_hidden_size,
@@ -215,14 +259,11 @@ class _MQA_QueryKeyValueProjection(nn.Module):
             sequence_parallel=sequence_parallel,
         )
 
-        std = initializer_range / math.sqrt(2 * n_layer)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.kv_attn = ReplicatedLinear(
             self.global_hidden_size,
             2 * self.head_dim,
             bias=self.add_bias,
-            std=std,
+            std=std / math.sqrt(2 * num_layers),
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
@@ -239,15 +280,38 @@ class _MQA_QueryKeyValueProjection(nn.Module):
 class Attention_TP(_BaseAttention_TP, Attention):
     def __init__(
         self,
-        config: CommonConfig,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
         causal: bool,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
     ) -> None:
-        _BaseAttention_TP.__init__(
-            self,
-            config,
-            causal,
+        self._init_attention(
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            attention_multiplier=attention_multiplier,
+            attention_head_type=attention_head_type,
+            position_embedding_type=position_embedding_type,
+            add_bias=add_bias,
+            softmax_dropout=softmax_dropout,
+            dropout=dropout,
+            init_method=init_method,
+            initializer_range=initializer_range,
+            m_width=m_width,
+            num_layers=num_layers,
+            causal=causal,
             layer_idx=layer_idx,
             use_padding_free_transformer=False,
             sequence_parallel=sequence_parallel,

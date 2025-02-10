@@ -20,9 +20,6 @@ _Mayank Mishra_
 1. [Reducing Transformer Key-Value Cache Size with Cross-Layer Attention](https://arxiv.org/abs/2405.12981)  
 _William Brandon, Mayank Mishra, Aniruddha Nrusimha, Rameswar Panda, Jonathan Ragan Kelly_  
 ![image][Efficient Inference] ![image][Model Architecture]
-1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
-_Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
-![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
 1. [Power scheduler: a batch size and token number agnostic learning rate scheduler](https://arxiv.org/abs/2408.13359)  
 _Yikang Shen, Matthew Stallone, Mayank Mishra, Gaoyuan Zhang, Shawn Tan, Aditya Prasad, Adriana Meza Soria, David D. Cox, Rameswar Panda_  
 ![image][Learning Rate Scheduler]

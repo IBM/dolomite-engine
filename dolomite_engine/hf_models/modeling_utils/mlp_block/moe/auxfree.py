@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-from torch import Tensor
 from torch.distributed._functional_collectives import all_reduce
 
 from .....utils import ProcessGroupManager
@@ -31,7 +30,7 @@ class AuxFreeMoE(ScatterMoE):
 
         return router_logits, router_weights, selected_experts
 
-    def _compute_switch_loss(self, logits: Tensor, probs: Tensor, topk_idxs: Tensor) -> Tensor:
+    def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
         num_experts = logits.size(-1)
         freq = torch.bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
 

@@ -6,12 +6,12 @@ from dolomite_engine.hf_models import GPTDolomiteConfig
 
 config = GPTDolomiteConfig(
     vocab_size=65024,
-    n_positions=4096,
-    n_embd=8192,
-    n_layer=72,
-    n_head=64,
+    max_position_embeddings=4096,
+    hidden_size=8192,
+    num_layers=72,
+    num_attention_heads=64,
     num_key_value_heads=8,
-    n_inner=21888,
+    intermediate_size=21888,
     position_embedding_type="rope",
     activation_function="swiglu",
     normalization_function="rmsnorm",

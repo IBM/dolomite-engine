@@ -6,56 +6,56 @@ import torch.nn as nn
 from ....utils import divide_if_divisible
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
-from .config import DesyncResidualConfig
+from ...modeling_utils.mlp_block.mlp import _get_std_for_linear
 from .linear import DesyncResidualLinear
 
 
 class DesyncResidualMLP(nn.Module):
-    def __init__(self, config: DesyncResidualConfig, layer_idx: int = None) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        activation_function: str,
+        add_bias: bool,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        m_residual: float,
+        num_layers: int,
+        pretraining_tensor_parallel_size: int,
+        all_reduce: bool,
+    ) -> None:
         super().__init__()
 
-        self.layer_idx = layer_idx
-        self.m_residual = config.m_residual
-        self.tp_world_size = config.pretraining_tensor_parallel_size
-        self.n_layer = config.n_layer
-        self.current_mlp_all_reduce = layer_idx == self.n_layer - 1 or config.reduce_pattern[layer_idx]["mlp"]
+        self.m_residual = m_residual
+        self.tp_world_size = pretraining_tensor_parallel_size
+        self.num_layers = num_layers
+        self.all_reduce = all_reduce
 
-        hidden_size = config.n_embd
-        intermediate_size = divide_if_divisible(config.n_inner, config.pretraining_tensor_parallel_size, "")
-        activation_function = config.activation_function
-        add_bias = config.add_bias
-        residual_dropout = config.resid_pdrop
+        intermediate_size = divide_if_divisible(intermediate_size, pretraining_tensor_parallel_size, "")
 
-        init_method = InitMethod(config.init_method)
-        initializer_range = config.initializer_range
-        m_width = config.m_width
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_fc = DesyncResidualLinear(
             hidden_size,
             2 * intermediate_size if is_glu(activation_function) else intermediate_size,
-            tensor_parallel_size=config.pretraining_tensor_parallel_size,
+            tensor_parallel_size=pretraining_tensor_parallel_size,
             bias=add_bias,
             std=std,
         )
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * self.n_layer)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_proj = DesyncResidualLinear(
             intermediate_size,
             hidden_size,
-            tensor_parallel_size=config.pretraining_tensor_parallel_size,
+            tensor_parallel_size=pretraining_tensor_parallel_size,
             bias=add_bias,
-            std=std,
+            std=std / math.sqrt(2 * self.num_layers),
         )
 
-        assert residual_dropout == 0, "residual dropout is not supported with DesyncResidual"
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        assert dropout == 0, "residual dropout is not supported with DesyncResidual"
 
     def forward(self, hidden_states: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc(hidden_states)
@@ -65,11 +65,10 @@ class DesyncResidualMLP(nn.Module):
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual
 
-        if self.current_mlp_all_reduce:
+        if self.all_reduce:
             hidden_states = hidden_states + residual / self.tp_world_size
             hidden_states = hidden_states.sum(dim=0)
         else:
             hidden_states = hidden_states + residual
 
-        hidden_states = self.dropout(hidden_states)
         return hidden_states

@@ -5,7 +5,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
 from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
@@ -32,7 +32,6 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
 
 class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.max_position_embeddings = config.max_position_embeddings
@@ -41,7 +40,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         self.head_dim = self.embed_dim // self.num_heads
 
         self.layers_per_stage = divide_if_divisible(
-            config.n_layer, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
+            config.num_layers, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
         )
 
         self.layer_start_id = self.layers_per_stage * self.pipeline_stage_id
@@ -56,11 +55,11 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 sequence_parallel=self.sequence_parallel,
             )
 
-            self.drop = (
+            self.embedding_dropout = (
                 nn.Identity()
-                if config.embd_pdrop == 0
+                if config.embedding_dropout == 0
                 else Dropout_TP(
-                    config.embd_pdrop,
+                    config.embedding_dropout,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )

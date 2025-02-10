@@ -6,11 +6,11 @@ import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
 from .....utils import ProcessGroupManager, is_cute_kernels_available
-from ....config import CommonConfig
 from ....enums import InitMethod
 from ....loss import add_aux_loss
 from ...activations import get_activation_function, is_glu
 from ...linear import ParameterizedLinear
+from ..mlp import _get_std_for_linear
 
 
 if is_cute_kernels_available():
@@ -66,43 +66,48 @@ class ParameterizedExperts(nn.Module):
 
 
 class MoE(nn.Module):
-    def __init__(self, config: CommonConfig, use_padding_free_transformer: bool) -> None:
+    linear_class = ParameterizedExperts
+
+    def __init__(
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        shared_intermediate_size: int,
+        num_experts: int,
+        num_experts_per_tok: int,
+        activation_function: str,
+        add_bias: bool,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+        use_padding_free_transformer: bool,
+    ) -> None:
         super().__init__()
 
-        self.num_experts = config.num_experts
-        self.top_k = config.num_experts_per_tok
+        self.num_experts = num_experts
+        self.top_k = num_experts_per_tok
         self.use_padding_free_transformer = use_padding_free_transformer
 
-        self.hidden_size = config.hidden_size
-        self.intermediate_size = config.n_inner
-        self.shared_intermediate_size = config.shared_n_inner
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
+        self.shared_intermediate_size = shared_intermediate_size
 
-        activation_function = config.activation_function
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
 
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        n_layer = config.n_layer
-        init_method = InitMethod(config.init_method)
-        residual_dropout = config.resid_pdrop
-
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.gate = ParameterizedLinear(
             in_features=self.hidden_size,
-            out_features=config.num_experts,
+            out_features=num_experts,
             bias=False,
             std=std,
         )
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.c_fc = ParameterizedExperts(
-            num_experts=config.num_experts,
+        self.c_fc = self.linear_class(
+            num_experts=num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             std=std,
         )
         if self.shared_intermediate_size is not None:
@@ -111,31 +116,30 @@ class MoE(nn.Module):
                 out_features=(
                     2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
                 ),
-                bias=config.add_bias,
+                bias=add_bias,
                 std=std,
             )
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedExperts(
-            num_experts=config.num_experts,
+        std /= math.sqrt(2 * num_layers)
+
+        self.c_proj = self.linear_class(
+            num_experts=num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             std=std,
         )
         if self.shared_intermediate_size is not None:
             self.c_proj_shared = ParameterizedLinear(
                 in_features=self.shared_intermediate_size,
                 out_features=self.hidden_size,
-                bias=config.add_bias,
+                bias=add_bias,
                 std=std,
             )
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else nn.Dropout(residual_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:

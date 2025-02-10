@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...modeling_utils import get_attention_module, get_mlp_block, get_normalization_function
+from ...modeling_utils import get_mlp_block, get_normalization_function, get_sequence_mixer
 from .config import PaLMConfig
 
 
@@ -21,10 +21,10 @@ class PaLMBlock(nn.Module):
         self.ln = get_normalization_function(
             config.normalization_function, config.hidden_size, eps=config.layer_norm_epsilon
         )
-        self.attn = get_attention_module(
+        self.sequence_mixer = get_sequence_mixer(
             config, True, attention_implementation, use_padding_free_transformer, layer_idx
         )
-        self.mlp = get_mlp_block(
+        self.mlp_block = get_mlp_block(
             config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
         )
 
@@ -42,7 +42,7 @@ class PaLMBlock(nn.Module):
 
         # NOTE we can contenate the input matrices of attention and MLP here for speedup
         # but right now we avoid it since this code is only used for accuracy benchmarking at small scale
-        attention_out = self.attn(
+        attention_out = self.sequence_mixer(
             hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -51,9 +51,10 @@ class PaLMBlock(nn.Module):
             max_seqlen=max_seqlen,
         )
 
-        mlp_out = self.mlp(hidden_states)
+        mlp_out = self.mlp_block(hidden_states)
 
         hidden_states = attention_out + mlp_out
+        del attention_out, mlp_out
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual

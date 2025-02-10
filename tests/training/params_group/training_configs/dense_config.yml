@@ -16,24 +16,16 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    activation_function: swiglu
-    add_bias: true
-    attention_softmax_in_fp32: true
-    attn_pdrop: 0
-    embd_pdrop: 0
-    resid_pdrop: 0
     initializer_range: 0.1
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
-    n_embd: 512
-    n_head: 16
-    n_layer: 4
-    n_positions: 512
+    hidden_size: 512
+    num_attention_heads: 16
+    num_layers: 4
+    max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000
-    attention_head_type: mha
-    scale_attn_weights: true
     vocab_size: 50304
     tie_word_embeddings: true
     bos_token_id: 0
@@ -43,6 +35,24 @@ model_args:
     m_emb: 12
     m_residual: 0.22
     init_method: mup
+    sequence_mixer_blocks:
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+    mlp_blocks:
+      - activation_function: swiglu
+        mlp_block_type: MLP
+      - activation_function: swiglu
+        mlp_block_type: MLP
+      - activation_function: swiglu
+        mlp_block_type: MLP
+      - activation_function: swiglu
+        mlp_block_type: MLP
   attention_implementation: sdpa
 
 tuning_args:

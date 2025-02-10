@@ -78,11 +78,11 @@ def get_model_tflops(
 
     b = batch_size
     s = sequence_length
-    h = config.n_embd
-    f = config.n_inner
-    n = config.n_head
+    h = config.hidden_size
+    f = config.intermediate_size
+    n = config.num_attention_heads
     k = config.num_key_value_heads
-    l = config.n_layer
+    l = config.num_layers
     v = config.vocab_size
 
     mlp_flops = 4 * b * s * h * f

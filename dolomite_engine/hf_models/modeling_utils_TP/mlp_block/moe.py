@@ -9,7 +9,6 @@ from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....kernels import wait_for_ACT
 from ....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
-from ...config import CommonConfig
 from ...enums import InitMethod
 from ...loss import add_aux_loss
 from ...modeling_utils import (
@@ -19,6 +18,7 @@ from ...modeling_utils import (
     get_activation_function,
     is_glu,
 )
+from ...modeling_utils.mlp_block.mlp import _get_std_for_linear
 from ..dropout import Dropout_TP
 from ..dtensor_module import DTensorModule
 from ..linear import ColumnParallelLinear, RowParallelLinear
@@ -161,46 +161,48 @@ class SharedExpertsRowParallelLinear(RowParallelLinear):
 
 class ScatterMoE_TP(ScatterMoE, DTensorModule):
     def __init__(
-        self, config: CommonConfig, use_padding_free_transformer: bool, sequence_parallel: bool = False
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        shared_intermediate_size: int,
+        num_experts: int,
+        num_experts_per_tok: int,
+        activation_function: str,
+        add_bias: bool,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+        use_padding_free_transformer: bool,
+        sequence_parallel: bool = False,
     ) -> None:
         nn.Module.__init__(self)
 
-        self.num_experts = config.num_experts
-        self.top_k = config.num_experts_per_tok
+        self.num_experts = num_experts
+        self.top_k = num_experts_per_tok
         self.use_padding_free_transformer = use_padding_free_transformer
 
-        self.hidden_size = config.hidden_size
-        self.intermediate_size = config.n_inner
-        self.shared_intermediate_size = config.shared_n_inner
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
+        self.shared_intermediate_size = shared_intermediate_size
 
-        activation_function = config.activation_function
-
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        n_layer = config.n_layer
-        init_method = InitMethod(config.init_method)
-        residual_dropout = config.resid_pdrop
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
 
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.gate = ReplicatedLinear_TP(
             in_features=self.hidden_size,
-            out_features=config.num_experts,
+            out_features=num_experts,
             bias=False,
             std=std,
         )
 
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_fc = ColumnParallelScatteredExperts(
-            num_experts=config.num_experts,
+            num_experts=num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             std=std,
         )
         if self.shared_intermediate_size is not None:
@@ -209,31 +211,30 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
                 out_features=(
                     2 * self.shared_intermediate_size if is_glu(activation_function) else self.shared_intermediate_size
                 ),
-                bias=config.add_bias,
+                bias=add_bias,
                 std=std,
             )
 
         self.act = get_activation_function(activation_function)
 
-        std = initializer_range / math.sqrt(2 * n_layer)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
+        std /= math.sqrt(2 * num_layers)
+
         self.c_proj = RowParallelScatteredExperts(
-            num_experts=config.num_experts,
+            num_experts=num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             std=std,
         )
         if self.shared_intermediate_size is not None:
             self.c_proj_shared = SharedExpertsRowParallelLinear(
                 in_features=self.shared_intermediate_size,
                 out_features=self.hidden_size,
-                bias=config.add_bias,
+                bias=add_bias,
                 std=std,
             )
 
-        self.dropout = nn.Identity() if residual_dropout == 0 else Dropout_TP(residual_dropout)
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
         self.placement = Shard(0) if sequence_parallel else Replicate()
 
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
