@@ -181,7 +181,7 @@ class CommonConfig(PretrainedConfig):
                 for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
-                sequence_mixer_args = _SoftmaxAttentionArgs(**sequence_mixer_kwargs)
+                sequence_mixer_class = _SoftmaxAttentionArgs
             elif sequence_mixer_type == "mamba2":
                 sequence_mixer_kwargs = {
                     "intermediate_size": sequence_mixer_block.pop("intermediate_size", 2 * self.hidden_size),
@@ -204,7 +204,7 @@ class CommonConfig(PretrainedConfig):
                 ]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
-                sequence_mixer_args = _Mamba2Args()
+                sequence_mixer_class = _Mamba2Args
             else:
                 raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
@@ -212,7 +212,7 @@ class CommonConfig(PretrainedConfig):
                 len(sequence_mixer_block) == 0
             ), f"leftover keys in the sequence_mixer_block ({sequence_mixer_block}) at position {i}"
 
-            sequence_mixer_blocks.append(sequence_mixer_args)
+            sequence_mixer_blocks.append(sequence_mixer_class(**sequence_mixer_kwargs))
 
         self.sequence_mixer_blocks = sequence_mixer_blocks
 
