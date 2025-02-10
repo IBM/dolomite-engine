@@ -8,7 +8,7 @@ from ..gpt_dolomite.layer import GPTDolomiteBlock
 class Mamba2DolomiteBlock(GPTDolomiteBlock):
     def __init__(
         self,
-        config: Mamba2DolomiteConfig,
+        config,
         attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,

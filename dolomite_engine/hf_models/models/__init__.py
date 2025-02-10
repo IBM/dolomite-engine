@@ -14,5 +14,5 @@ from .gpt_dolomite_TP import (
 )
 from .ladder_residual import LadderResidualConfig, LadderResidualForCausalLM, LadderResidualModel
 from .ladder_residual_TP import LadderResidualForCausalLM_TP, LadderResidualModel_TP
-from .mamba2_dolomite import Mamba2DolomiteConfig, Mamba2DolomiteForCausalLM, Mamba2DolomiteModel
+from .mamba2_dolomite import Mamba2DolomiteForCausalLM, Mamba2DolomiteModel
 from .palm import PaLMConfig, PaLMForCausalLM, PaLMModel
