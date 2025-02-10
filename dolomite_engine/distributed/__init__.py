@@ -63,27 +63,6 @@ _STAGE_HYBRID_SHARDING_STRATEGY_MAP = {
 }
 
 
-def aot_backend(gm, sample_inputs):
-    # Forward compiler capture
-    def fw(gm, sample_inputs):
-        gm.print_readable()
-        with open("forward_aot.svg", "wb") as file:
-            file.write(g.get_dot_graph().create_svg())
-        return make_boxed_func(gm.forward)
-
-    # Backward compiler capture
-    def bw(gm, sample_inputs):
-        gm.print_readable()
-        with open("backward_aot.svg", "wb") as file:
-            file.write(g.get_dot_graph().create_svg())
-        return make_boxed_func(gm.forward)
-
-    # Call AOTAutograd
-    gm_forward = aot_module_simplified(gm, sample_inputs, fw_compiler=fw, bw_compiler=bw)
-
-    return gm_forward
-
-
 def wrap_model_container_for_distributed_training(
     args: TrainingArgs, model_container: ModelContainer
 ) -> tuple[ModelContainer, _PipelineSchedule]:
@@ -279,7 +258,7 @@ def wrap_model_container_for_distributed_training(
         log_rank_0(logging.INFO, "using torch compile")
 
         for i in range(len(model_container)):
-            model_container[i] = torch.compile(model_container[i], backend=aot_backend)
+            model_container[i] = torch.compile(model_container[i])
             # model_container[i] = torch._dynamo.explain(model_container[i])
             # print(model_container[i]({"text": torch.zeros(2, 4097, dtype=torch.long, device=torch.cuda.current_device())}))
             # exit()
