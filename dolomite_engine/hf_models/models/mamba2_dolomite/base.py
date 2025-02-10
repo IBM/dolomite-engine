@@ -4,12 +4,11 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from ...cache import HybridMambaAttentionDynamicCache
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...utils import is_generation_cache_enabled
-from .config import Mamba2DolomiteConfig
 from .layer import Mamba2DolomiteBlock
 
 
 class Mamba2DolomitePreTrainedModel(PreTrainedModelMixin):
-    config_class = Mamba2DolomiteConfig
+    # config_class = Mamba2DolomiteConfig
     layer_class = Mamba2DolomiteBlock
     _no_split_modules = ["Mamba2DolomiteBlock"]
 

@@ -4,12 +4,6 @@ import torch.nn as nn
 from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
 
-# from .cache import HybridMambaAttentionDynamicCache
-from .config import Mamba2DolomiteConfig
-
-
-# from .mamba2 import get_mamba2
-
 
 class Mamba2DolomiteBlock(GPTDolomiteBlock):
     def __init__(
