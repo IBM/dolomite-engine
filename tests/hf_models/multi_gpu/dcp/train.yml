@@ -32,125 +32,125 @@ model_args:
     eos_token_id: 0
     pad_token_id: 0
     sequence_mixer_blocks:
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         add_bias: false
     mlp_blocks:
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-      - mlp_block_types: MLP
+      - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
   attention_implementation: flash_attention_2

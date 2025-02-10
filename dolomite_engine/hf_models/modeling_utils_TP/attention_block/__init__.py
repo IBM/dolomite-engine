@@ -26,7 +26,7 @@ def get_sequence_mixer_TP(
     sequence_parallel: bool,
 ) -> Attention_TP:
     block = config.sequence_mixer_blocks[layer_idx]
-    sequence_mixer_type = block.sequence_mixer_block_type
+    sequence_mixer_type = block.sequence_mixer_type
 
     sequence_mixer_kwargs = dict(
         hidden_size=config.hidden_size,

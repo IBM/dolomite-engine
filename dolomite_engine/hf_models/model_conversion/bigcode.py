@@ -42,7 +42,7 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         pad_token_id=original_config.pad_token_id,
         sequence_mixer_blocks=[
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "add_bias": True,
                 "attention_head_type": "mqa" if original_config.multi_query else "mha",
             }
@@ -50,7 +50,7 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         ],
         mlp_blocks=[
             {
-                "mlp_block_type": "MLP",
+                "mlp_type": "MLP",
                 "activation_function": original_config.activation_function,
                 "intermediate_size": original_config.n_inner,
                 "add_bias": True,

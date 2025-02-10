@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Any, Callable
 
 from transformers import PretrainedConfig
@@ -20,6 +21,11 @@ def _hold_base_args(key: str) -> Callable:
         return _run
 
     return _holded_function
+
+
+def _update_with_key_value(block: dict, kwargs: dict, key: str) -> None:
+    if key in block:
+        kwargs[key] = block.pop(key)
 
 
 _NAKED_DISALLOWED_ARGS = [
@@ -138,11 +144,11 @@ class CommonConfig(PretrainedConfig):
 
         sequence_mixer_blocks: list[_SoftmaxAttentionArgs] = []
         for i in range(self.num_layers):
-            sequence_mixer_block = self.sequence_mixer_blocks[i]
-            sequence_mixer_block_type = sequence_mixer_block.get("mlp_block_type", "softmax_attention")
+            sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
+            sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
-            attention_head_type = AttentionHeadType(sequence_mixer_block.get("attention_head_type", "mqa"))
-            num_key_value_heads = sequence_mixer_block.get("num_key_value_heads", None)
+            attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
+            num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
 
             if attention_head_type == AttentionHeadType.mha:
                 if num_key_value_heads is None:
@@ -165,20 +171,24 @@ class CommonConfig(PretrainedConfig):
                     self.num_attention_heads % num_key_value_heads == 0
                 ), "GroupedQueryAttention should have more than 1 head for keys and values"
 
-            sequence_mixer_kwargs = dict(
-                num_key_value_heads=num_key_value_heads,
-                attention_head_type=attention_head_type,
-                softmax_dropout=sequence_mixer_block.get("softmax_dropout", 0),
-                dropout=sequence_mixer_block.get("dropout", 0),
-                add_bias=sequence_mixer_block.get("add_bias", True),
-                attention_multiplier=sequence_mixer_block.get("attention_multiplier", None),
-            )
+            sequence_mixer_kwargs = {
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": attention_head_type,
+            }
 
-            if sequence_mixer_block_type == "softmax_attention":
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "softmax_dropout")
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "dropout")
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "add_bias")
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "attention_multiplier")
+
+            if sequence_mixer_type == "softmax_attention":
                 sequence_mixer_args = _SoftmaxAttentionArgs(**sequence_mixer_kwargs)
             else:
-                raise ValueError(f"unexpected sequence_mixer_block_type ({sequence_mixer_block_type})")
+                raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
+            assert (
+                len(sequence_mixer_block) == 0
+            ), f"leftover keys in the sequence_mixer_block ({sequence_mixer_block}) at position {i}"
             sequence_mixer_blocks.append(sequence_mixer_args)
 
         self.sequence_mixer_blocks = sequence_mixer_blocks
@@ -189,28 +199,27 @@ class CommonConfig(PretrainedConfig):
 
         mlp_blocks: list[_MLPArgs | _MoEArgs] = []
         for i in range(self.num_layers):
-            mlp_block = self.mlp_blocks[i]
-            mlp_block_type = mlp_block.get("mlp_block_type", "MLP")
+            mlp_block = deepcopy(self.mlp_blocks[i])
+            mlp_type = mlp_block.pop("mlp_type", "MLP")
 
-            mlp_kwargs = dict(
-                intermediate_size=mlp_block.get("intermediate_size", 4 * self.hidden_size),
-                activation_function=mlp_block.get("activation_function", "gelu_pytorch_tanh"),
-                dropout=mlp_block.get("dropout", 0),
-                add_bias=mlp_block.get("add_bias", True),
-            )
+            mlp_kwargs = {"intermediate_size": mlp_block.pop("intermediate_size", 4 * self.hidden_size)}
 
-            if mlp_block_type == "MLP":
-                mlp_args = _MLPArgs(**mlp_kwargs)
-            elif mlp_block_type == "MoE":
-                mlp_args = _MoEArgs(
-                    **mlp_kwargs,
-                    shared_intermediate_size=mlp_block.get("shared_intermediate_size", None),
-                    num_experts=mlp_block.get("num_experts", 8),
-                    num_experts_per_tok=mlp_block.get("num_experts_per_tok", 2),
-                )
+            _update_with_key_value(mlp_block, mlp_kwargs, "activation_function")
+            _update_with_key_value(mlp_block, mlp_kwargs, "dropout")
+            _update_with_key_value(mlp_block, mlp_kwargs, "add_bias")
+
+            if mlp_type == "MLP":
+                mlp_class = _MLPArgs
+            elif mlp_type == "MoE":
+                _update_with_key_value(mlp_block, mlp_kwargs, "shared_intermediate_size")
+                _update_with_key_value(mlp_block, mlp_kwargs, "num_experts")
+                _update_with_key_value(mlp_block, mlp_kwargs, "num_experts_per_tok")
+
+                mlp_class = _MoEArgs
             else:
-                raise ValueError(f"unexpected mlp_block_type ({mlp_block_type})")
+                raise ValueError(f"unexpected mlp_type ({mlp_type})")
 
-            mlp_blocks.append(mlp_args)
+            assert len(mlp_block) == 0, f"leftover keys in the mlp_block ({mlp_block}) at position {i}"
+            mlp_blocks.append(mlp_class(**mlp_kwargs))
 
         self.mlp_blocks = mlp_blocks

@@ -23,18 +23,18 @@ model_args:
   pretrained_config:
     model_type: gpt_dolomite
     mlp_blocks:
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
     vocab_size: 50304
     max_position_embeddings: 2048
     hidden_size: 768

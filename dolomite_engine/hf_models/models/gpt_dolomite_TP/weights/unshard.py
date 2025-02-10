@@ -65,11 +65,11 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         )
 
         block = config.mlp_blocks[layer_idx]
-        mlp_block_type = block.mlp_block_type
+        mlp_type = block.mlp_type
         is_glu_activation = is_glu(block.activation_function)
 
         # mlp
-        if mlp_block_type == "MLP":
+        if mlp_type == "MLP":
             output_state_dict.update(
                 _get_mlp(
                     tensor_parallel_state_dicts,
@@ -79,7 +79,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
                     check_correctness=check_correctness,
                 )
             )
-        elif mlp_block_type == "MoE":
+        elif mlp_type == "MoE":
             output_state_dict.update(
                 _get_moe(
                     tensor_parallel_state_dicts,

@@ -64,9 +64,9 @@ def get_gpt_dolomite_model_parallel_state_dict(
         state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_2."))
 
         block = config.mlp_blocks[layer_idx]
-        mlp_block_type = block.mlp_block_type
+        mlp_type = block.mlp_type
 
-        if mlp_block_type == "MLP":
+        if mlp_type == "MLP":
             state_dict.update(
                 _get_mlp(
                     activation_function=block.activation_function,
@@ -77,7 +77,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
                     row_parallel_shard_dim=1,
                 )
             )
-        elif mlp_block_type == "MoE":
+        elif mlp_type == "MoE":
             state_dict.update(
                 _get_moe(
                     activation_function=block.activation_function,
@@ -89,7 +89,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
                 )
             )
         else:
-            raise ValueError(f"unexpected mlp_block_type ({mlp_block_type})")
+            raise ValueError(f"unexpected mlp_type ({mlp_type})")
 
     if is_last_pipeline_stage:
         state_dict.update(_get_layernorm(safetensors_weights_manager, prefix="transformer.ln_f."))
