@@ -3,7 +3,6 @@ import torch.nn as nn
 
 from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
-from ....config import CommonConfig
 from ....modeling_utils import get_activation_function
 from ...normalization import get_normalization_function
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum

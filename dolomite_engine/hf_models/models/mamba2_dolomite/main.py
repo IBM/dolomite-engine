@@ -1,6 +1,6 @@
+from ...cache import HybridMambaAttentionDynamicCache
 from ...mixins import CausalLMModelMixin
 from .base import Mamba2DolomiteModel, Mamba2DolomitePreTrainedModel
-from .cache import HybridMambaAttentionDynamicCache
 
 
 class Mamba2DolomiteForCausalLM(Mamba2DolomitePreTrainedModel, CausalLMModelMixin):

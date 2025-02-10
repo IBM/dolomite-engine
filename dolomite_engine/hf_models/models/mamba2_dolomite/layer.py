@@ -3,9 +3,12 @@ import torch.nn as nn
 
 from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
-from .cache import HybridMambaAttentionDynamicCache
+
+# from .cache import HybridMambaAttentionDynamicCache
 from .config import Mamba2DolomiteConfig
-from .mamba2 import get_mamba2
+
+
+# from .mamba2 import get_mamba2
 
 
 class Mamba2DolomiteBlock(GPTDolomiteBlock):
@@ -46,7 +49,7 @@ class Mamba2DolomiteBlock(GPTDolomiteBlock):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: HybridMambaAttentionDynamicCache | None = None,
+        past_key_values: None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,

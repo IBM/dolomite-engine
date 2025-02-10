@@ -5,13 +5,13 @@ from transformers.models.jamba.modeling_jamba import (
 )
 
 from ..utils import divide_if_divisible
-from .config import Mamba2DolomiteConfig
+from .config import CommonConfig
 
 
 class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
     def __init__(
         self,
-        config: Mamba2DolomiteConfig,
+        config: CommonConfig,
         batch_size: int,
         dtype: torch.dtype = torch.float16,
         device: torch.device | None = None,
@@ -25,7 +25,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
         self.conv_states = []
         self.ssm_states = []
         self.transformer_layers = []
-        for i in range(config.num_hidden_layers):
+        for i in range(config.num_layers):
             if self.layers_block_type[i] == "mamba2":
                 self.conv_states += [
                     torch.zeros(
@@ -51,5 +51,5 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                 self.ssm_states += [torch.tensor([[]] * batch_size, device=device)]
                 self.transformer_layers.append(i)
 
-        self.key_cache = [torch.tensor([[]] * batch_size, device=device) for _ in range(config.num_hidden_layers)]
-        self.value_cache = [torch.tensor([[]] * batch_size, device=device) for _ in range(config.num_hidden_layers)]
+        self.key_cache = [torch.tensor([[]] * batch_size, device=device) for _ in range(config.num_layers)]
+        self.value_cache = [torch.tensor([[]] * batch_size, device=device) for _ in range(config.num_layers)]

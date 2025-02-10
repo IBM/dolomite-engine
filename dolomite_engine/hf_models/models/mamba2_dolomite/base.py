@@ -1,9 +1,9 @@
 import torch
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
+from ...cache import HybridMambaAttentionDynamicCache
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from ...utils import is_generation_cache_enabled
-from .cache import HybridMambaAttentionDynamicCache
 from .config import Mamba2DolomiteConfig
 from .layer import Mamba2DolomiteBlock
 
