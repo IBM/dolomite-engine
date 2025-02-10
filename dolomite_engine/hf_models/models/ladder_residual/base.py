@@ -56,9 +56,9 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         clear_aux_loss()
 
         for block in self.h:
-            previous_attention_out, previous_mlp_out, hidden_states = block(
-                previous_attention_out=previous_attention_out,
-                previous_mlp_out=previous_mlp_out,
+            current_attention_out, current_mlp_out, hidden_states = block(
+                current_attention_out=current_attention_out,
+                current_mlp_out=current_mlp_out,
                 residual=hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
