@@ -48,21 +48,21 @@ if args.model_type == "gpt_dolomite":
         num_attention_heads=16,
         sequence_mixer_blocks=[
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
                 "num_key_value_heads": num_key_value_heads,
                 "attention_head_type": args.attention_head_type,
             },
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
                 "num_key_value_heads": num_key_value_heads,
                 "attention_head_type": args.attention_head_type,
             },
         ],
         mlp_blocks=[
-            {"mlp_block_type": "MLP", "add_bias": False},
-            {"mlp_block_type": "MoE", "add_bias": False},
+            {"mlp_type": "MLP", "add_bias": False},
+            {"mlp_type": "MoE", "add_bias": False},
         ],
     )
 elif args.model_type == "ladder_residual":
@@ -73,21 +73,21 @@ elif args.model_type == "ladder_residual":
         num_attention_heads=16,
         sequence_mixer_blocks=[
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
                 "num_key_value_heads": num_key_value_heads,
                 "attention_head_type": args.attention_head_type,
             },
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
                 "num_key_value_heads": num_key_value_heads,
                 "attention_head_type": args.attention_head_type,
             },
         ],
         mlp_blocks=[
-            {"mlp_block_type": "MLP", "add_bias": False},
-            {"mlp_block_type": "MoE", "add_bias": False},
+            {"mlp_type": "MLP", "add_bias": False},
+            {"mlp_type": "MoE", "add_bias": False},
         ],
     )
 

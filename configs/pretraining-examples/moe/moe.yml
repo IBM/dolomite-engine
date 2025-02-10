@@ -27,30 +27,30 @@ model_args:
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
     mlp_blocks:
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
-      - mlp_block_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
+      - mlp_type: MoE
     hidden_size: 1024
     num_attention_heads: 16
     intermediate_size: 512

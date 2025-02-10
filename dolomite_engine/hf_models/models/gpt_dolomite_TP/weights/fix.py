@@ -33,10 +33,10 @@ def fix_gpt_dolomite_unsharded_state_dict(
         block = config.mlp_blocks[layer_idx]
 
         if is_glu(block.activation_function):
-            mlp_block_type = block.mlp_block_type
+            mlp_type = block.mlp_type
             add_bias = config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias")
 
-            if mlp_block_type == "MLP":
+            if mlp_type == "MLP":
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
                 weight = state_dict[key].chunk(tensor_parallel_world_size)
                 weight = [w.chunk(2) for w in weight]
@@ -51,7 +51,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
                     w0 = torch.cat([w[0] for w in weight])
                     w1 = torch.cat([w[1] for w in weight])
                     state_dict[key] = torch.cat([w0, w1])
-            elif mlp_block_type == "MoE":
+            elif mlp_type == "MoE":
                 assert not add_bias
 
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
@@ -62,6 +62,6 @@ def fix_gpt_dolomite_unsharded_state_dict(
                 w1 = torch.cat([w[1] for w in weight], dim=1)
                 state_dict[key] = torch.cat([w0, w1], dim=1)
             else:
-                raise ValueError(f"unexpected mlp_block_type ({mlp_block_type})")
+                raise ValueError(f"unexpected mlp_type ({mlp_type})")
 
     return state_dict

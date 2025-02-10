@@ -8,7 +8,7 @@ from .moe import AuxFreeMoE, MoE, ParameterizedExperts, ParameterizedScatteredEx
 
 def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, layer_idx: int) -> MLP | MoE:
     block = config.mlp_blocks[layer_idx]
-    mlp_block_type = block.mlp_block_type
+    mlp_type = block.mlp_type
 
     kwargs = dict(
         hidden_size=config.hidden_size,
@@ -22,9 +22,9 @@ def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, laye
         num_layers=config.num_layers,
     )
 
-    if mlp_block_type == "MLP":
+    if mlp_type == "MLP":
         return MLP(**kwargs)
-    elif mlp_block_type == "MoE":
+    elif mlp_type == "MoE":
         mlp_block_class = ScatterMoE if is_kernel_allowed(Kernel.scattermoe) else MoE
         return mlp_block_class(
             **kwargs,
@@ -33,8 +33,8 @@ def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, laye
             num_experts_per_tok=block.num_experts_per_tok,
             use_padding_free_transformer=use_padding_free_transformer,
         )
-    elif mlp_block_type == "AuxFreeMoE":
+    elif mlp_type == "AuxFreeMoE":
         assert is_kernel_allowed(Kernel.scattermoe)
         return AuxFreeMoE(config, use_padding_free_transformer)
     else:
-        raise ValueError(f"invalid mlp_block_type ({mlp_block_type}) for layer ({layer_idx})")
+        raise ValueError(f"invalid mlp_type ({mlp_type}) for layer ({layer_idx})")

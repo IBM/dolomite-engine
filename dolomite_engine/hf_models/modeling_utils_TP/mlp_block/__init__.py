@@ -10,7 +10,7 @@ def get_mlp_block_TP(
     config: CommonConfig, use_padding_free_transformer: bool, sequence_parallel: bool, layer_idx: int
 ) -> MLP_TP | ScatterMoE_TP:
     block = config.mlp_blocks[layer_idx]
-    mlp_block_type = block.mlp_block_type
+    mlp_type = block.mlp_type
 
     kwargs = dict(
         hidden_size=config.hidden_size,
@@ -26,9 +26,9 @@ def get_mlp_block_TP(
         sequence_parallel=sequence_parallel,
     )
 
-    if mlp_block_type == "MLP":
+    if mlp_type == "MLP":
         return MLP_TP(**kwargs)
-    elif mlp_block_type == "MoE":
+    elif mlp_type == "MoE":
         assert is_kernel_allowed(Kernel.scattermoe)
         return ScatterMoE_TP(
             **kwargs,
@@ -37,4 +37,4 @@ def get_mlp_block_TP(
             num_experts_per_tok=block.num_experts_per_tok,
         )
     else:
-        raise ValueError(f"invalid mlp_block_type ({mlp_block_type}) for layer ({layer_idx})")
+        raise ValueError(f"invalid mlp_type ({mlp_type}) for layer ({layer_idx})")

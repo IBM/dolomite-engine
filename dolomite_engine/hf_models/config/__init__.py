@@ -145,7 +145,7 @@ class CommonConfig(PretrainedConfig):
         sequence_mixer_blocks: list[_SoftmaxAttentionArgs] = []
         for i in range(self.num_layers):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
-            sequence_mixer_block_type = sequence_mixer_block.pop("sequence_mixer_block_type", "softmax_attention")
+            sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
             attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
             num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
@@ -181,10 +181,10 @@ class CommonConfig(PretrainedConfig):
             _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "add_bias")
             _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "attention_multiplier")
 
-            if sequence_mixer_block_type == "softmax_attention":
+            if sequence_mixer_type == "softmax_attention":
                 sequence_mixer_args = _SoftmaxAttentionArgs(**sequence_mixer_kwargs)
             else:
-                raise ValueError(f"unexpected sequence_mixer_block_type ({sequence_mixer_block_type})")
+                raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
             assert (
                 len(sequence_mixer_block) == 0
@@ -200,7 +200,7 @@ class CommonConfig(PretrainedConfig):
         mlp_blocks: list[_MLPArgs | _MoEArgs] = []
         for i in range(self.num_layers):
             mlp_block = deepcopy(self.mlp_blocks[i])
-            mlp_block_type = mlp_block.pop("mlp_block_type", "MLP")
+            mlp_type = mlp_block.pop("mlp_type", "MLP")
 
             mlp_kwargs = {"intermediate_size": mlp_block.pop("intermediate_size", 4 * self.hidden_size)}
 
@@ -208,16 +208,16 @@ class CommonConfig(PretrainedConfig):
             _update_with_key_value(mlp_block, mlp_kwargs, "dropout")
             _update_with_key_value(mlp_block, mlp_kwargs, "add_bias")
 
-            if mlp_block_type == "MLP":
+            if mlp_type == "MLP":
                 mlp_class = _MLPArgs
-            elif mlp_block_type == "MoE":
+            elif mlp_type == "MoE":
                 _update_with_key_value(mlp_block, mlp_kwargs, "shared_intermediate_size")
                 _update_with_key_value(mlp_block, mlp_kwargs, "num_experts")
                 _update_with_key_value(mlp_block, mlp_kwargs, "num_experts_per_tok")
 
                 mlp_class = _MoEArgs
             else:
-                raise ValueError(f"unexpected mlp_block_type ({mlp_block_type})")
+                raise ValueError(f"unexpected mlp_type ({mlp_type})")
 
             assert len(mlp_block) == 0, f"leftover keys in the mlp_block ({mlp_block}) at position {i}"
             mlp_blocks.append(mlp_class(**mlp_kwargs))

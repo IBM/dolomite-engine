@@ -36,23 +36,23 @@ model_args:
     m_residual: 0.22
     init_method: mup
     sequence_mixer_blocks:
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         attention_head_type: mha
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         attention_head_type: mha
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         attention_head_type: mha
-      - sequence_mixer_block_type: softmax_attention
+      - sequence_mixer_type: softmax_attention
         attention_head_type: mha
     mlp_blocks:
       - activation_function: swiglu
-        mlp_block_type: MLP
+        mlp_type: MLP
       - activation_function: swiglu
-        mlp_block_type: MLP
+        mlp_type: MLP
       - activation_function: swiglu
-        mlp_block_type: MLP
+        mlp_type: MLP
       - activation_function: swiglu
-        mlp_block_type: MLP
+        mlp_type: MLP
   attention_implementation: sdpa
 
 tuning_args:
