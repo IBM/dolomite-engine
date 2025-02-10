@@ -17,34 +17,52 @@ class Mamba2Base(nn.Module):
     and is why Mamba is called **selective** state spaces)
     """
 
-    def __init__(self, config: Mamba2DolomiteConfig, layer_idx: int) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        ssm_state_size: int,
+        ssm_intermediate_size: int,
+        ssm_num_heads: int,
+        conv_kernel_size: int,
+        time_step_rank: int,
+        time_step_limit: int,
+        time_step_min: int,
+        time_step_max: int,
+        add_bias: bool,
+        use_conv_bias: bool,
+        ssm_activation_function: str,
+        num_groups: int,
+        chunk_size: int,
+        layer_norm_epsilon: float,
+        layer_idx: int,
+    ) -> None:
         super().__init__()
 
-        self.num_heads = config.ssm_num_heads
-        self.hidden_size = config.hidden_size
-        self.ssm_state_size = config.ssm_state_size
-        self.conv_kernel_size = config.conv_kernel_size
-        self.intermediate_size = config.ssm_intermediate_size
-        self.time_step_rank = int(config.time_step_rank)
+        self.num_heads = ssm_num_heads
+        self.hidden_size = hidden_size
+        self.ssm_state_size = ssm_state_size
+        self.conv_kernel_size = conv_kernel_size
+        self.intermediate_size = ssm_intermediate_size
+        self.time_step_rank = int(time_step_rank)
         self.layer_idx = layer_idx
-        self.use_conv_bias = config.use_conv_bias
+        self.use_conv_bias = use_conv_bias
 
-        self.activation_string = config.ssm_activation_function
+        self.activation_string = ssm_activation_function
         self.activation = get_activation_function(self.activation_string)
 
-        self.n_groups = config.n_groups
-        self.head_dim = divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads, "")
-        self.chunk_size = config.chunk_size
+        self.n_groups = num_groups
+        self.head_dim = divide_if_divisible(ssm_intermediate_size, ssm_num_heads, "")
+        self.chunk_size = chunk_size
 
-        self.time_step_limit = config.time_step_limit
-        self.time_step_min = config.time_step_min
-        self.time_step_max = config.time_step_max
+        self.time_step_limit = time_step_limit
+        self.time_step_min = time_step_min
+        self.time_step_max = time_step_max
 
         self.conv_dim = self.intermediate_size + 2 * self.n_groups * self.ssm_state_size
         self.conv1d = nn.Conv1d(
             in_channels=self.conv_dim,
             out_channels=self.conv_dim,
-            bias=config.use_conv_bias,
+            bias=use_conv_bias,
             kernel_size=self.conv_kernel_size,
             groups=self.conv_dim,
             padding=self.conv_kernel_size - 1,
@@ -52,9 +70,7 @@ class Mamba2Base(nn.Module):
 
         # projection of the input hidden states
         self.in_proj = nn.Linear(
-            self.hidden_size,
-            self.intermediate_size + self.conv_dim + self.num_heads,
-            bias=config.add_bias,
+            self.hidden_size, self.intermediate_size + self.conv_dim + self.num_heads, bias=add_bias
         )
         # selective projection used to make dt, B and C input dependant
 
@@ -67,13 +83,11 @@ class Mamba2Base(nn.Module):
         A = torch.arange(1, self.num_heads + 1)
         self.A_log = nn.Parameter(torch.log(A))
         self.A_log._no_weight_decay = True
-        self.norm = get_normalization_function(
-            "silu_gated_rmsnorm", self.intermediate_size, eps=config.layer_norm_epsilon
-        )
+        self.norm = get_normalization_function("silu_gated_rmsnorm", self.intermediate_size, eps=layer_norm_epsilon)
         self.D = nn.Parameter(torch.ones(self.num_heads))
         self.D._no_weight_decay = True
 
-        self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=config.add_bias)
+        self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=add_bias)
 
     def forward(
         self,
