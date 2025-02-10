@@ -20,10 +20,15 @@ class GPTCrossLayerConfig(CommonConfig):
                 assert sharing_pattern[i] <= sharing_pattern[i + 1]
 
             for i in range(len(sharing_pattern)):
-                assert sharing_pattern[i] >= 0
-                assert sharing_pattern[i] < self.num_layers
+                assert sharing_pattern[i] >= 0 and sharing_pattern[i] < self.num_layers
 
             self.sharing_pattern = sharing_pattern
+
+        for i in self.sharing_pattern:
+            for j in self.sharing_pattern:
+                if i == j:
+                    assert self.sequence_mixer_blocks[i] == self.sequence_mixer_blocks[j]
+                    assert self.mlp_blocks[i] == self.mlp_blocks[j]
 
         assert self.init_method == "normal"
 

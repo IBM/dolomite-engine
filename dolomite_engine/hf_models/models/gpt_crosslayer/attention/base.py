@@ -4,42 +4,57 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear, apply_rotary_pos_emb, get_normalization_function
-from ..config import GPTCrossLayerConfig
 
 
 class CrossLayerAttention(nn.Module):
-    def __init__(self, config: GPTCrossLayerConfig, causal: bool, layer_idx: int | None = None) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        initializer_range: float,
+        num_layers: int,
+        causal: bool,
+        layer_idx: int,
+    ) -> None:
         super().__init__()
 
         self.causal = causal
         self.mask_value = None
-        self.hidden_size = config.hidden_size
-        self.num_heads = config.num_attention_heads
-        self.num_key_value_heads = config.num_key_value_heads
-        self.add_bias = config.add_bias
+        self.hidden_size = hidden_size
+        self.num_heads = num_attention_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.add_bias = add_bias
 
         assert (
             self.hidden_size % self.num_heads == 0
         ), f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})"
 
         self.head_dim = self.hidden_size // self.num_heads
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
+        self.attention_head_type = attention_head_type
 
-        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.attention_multiplier = config.attention_multiplier
+        self.position_embedding_type = position_embedding_type
+        self.attention_multiplier = attention_multiplier
 
         self.layer_idx = layer_idx
 
         self.q_attn = ParameterizedLinear(
-            self.hidden_size, self.hidden_size, bias=self.add_bias, std=config.initializer_range
+            self.hidden_size, self.hidden_size, bias=self.add_bias, std=initializer_range
         )
         self.c_proj = ParameterizedLinear(
             self.hidden_size,
             self.hidden_size,
             bias=self.add_bias,
-            std=(config.initializer_range / math.sqrt(2 * config.num_layers)),
+            std=initializer_range / math.sqrt(2 * num_layers),
         )
 
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
@@ -97,7 +112,7 @@ class CrossLayerAttention(nn.Module):
         del query, key
 
         hidden_states = F.softmax(hidden_states.float(), dim=-1).to(dtype)
-        hidden_states = self.attn_dropout(hidden_states)
+        hidden_states = self.softmax_dropout(hidden_states)
 
         hidden_states = torch.matmul(hidden_states, value)
 
@@ -121,22 +136,27 @@ class CrossLayerAttention(nn.Module):
 
 
 class KeyValueProjection(nn.Module):
-    def __init__(self, config: GPTCrossLayerConfig) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        add_bias: bool,
+        initializer_range: float,
+        normalization_function: str,
+        layer_norm_epsilon: float,
+    ) -> None:
         super().__init__()
 
-        self.num_heads = config.num_attention_heads
-        self.num_key_value_heads = config.num_key_value_heads
+        self.num_key_value_heads = num_key_value_heads
+        head_dim = divide_if_divisible(hidden_size, num_attention_heads, "")
 
-        head_dim = config.hidden_size // self.num_heads
-
-        self.ln = get_normalization_function(
-            config.normalization_function, config.hidden_size, config.layer_norm_epsilon
-        )
+        self.ln = get_normalization_function(normalization_function, hidden_size, layer_norm_epsilon)
         self.kv_attn = ParameterizedLinear(
-            config.hidden_size,
+            hidden_size,
             2 * self.num_key_value_heads * head_dim,
-            bias=config.add_bias,
-            std=config.initializer_range,
+            bias=add_bias,
+            std=initializer_range,
         )
 
     def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
