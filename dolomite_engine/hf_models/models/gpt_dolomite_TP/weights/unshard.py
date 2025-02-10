@@ -12,7 +12,6 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
-    attention_head_type = AttentionHeadType(config.attention_head_type)
     position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
 
     # word embeddings
@@ -32,6 +31,8 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
 
     # layers
     for layer_idx in trange(config.num_layers):
+        block = config.sequence_mixer_blocks[layer_idx]
+
         # first layernorm
         output_state_dict.update(
             _get_layernorm(
@@ -46,8 +47,8 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_attention(
                 tensor_parallel_state_dicts,
-                attention_head_type=attention_head_type,
-                add_bias=config.add_bias,
+                attention_head_type=block.attention_head_type,
+                add_bias=block.add_bias,
                 prefix=prefix + f"transformer.h.{layer_idx}.sequence_mixer.",
                 check_correctness=check_correctness,
             )
@@ -73,7 +74,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
                 _get_mlp(
                     tensor_parallel_state_dicts,
                     is_glu=is_glu_activation,
-                    add_bias=config.add_bias,
+                    add_bias=block.add_bias,
                     prefix=prefix + f"transformer.h.{layer_idx}.mlp_block.",
                     check_correctness=check_correctness,
                 )
@@ -232,11 +233,7 @@ def _get_once_from_state_dicts_with_check(
     return output
 
 
-def _concatenate_tensors_from_moe(
-    tensor_parallel_state_dicts: list[dict],
-    key: str,
-    dim: int,
-) -> torch.Tensor:
+def _concatenate_tensors_from_moe(tensor_parallel_state_dicts: list[dict], key: str, dim: int) -> torch.Tensor:
     tensor_list = [state_dict[key] for state_dict in tensor_parallel_state_dicts]
     tensor = torch.cat(tensor_list, dim=dim)
     return tensor

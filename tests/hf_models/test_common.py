@@ -84,10 +84,7 @@ class TestCommons(TestCase):
             hidden_size=32,
             num_layers=num_layers,
             num_attention_heads=4,
-            num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
-            attention_head_type=attention_head_type.value,
             position_embedding_type=position_embedding_type.value,
-            add_bias=add_bias,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -96,9 +93,19 @@ class TestCommons(TestCase):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            attention_multiplier=attention_multiplier,
+            sequence_mixer_blocks=[
+                {
+                    "sequence_mixer_block_type": "softmax_attention",
+                    "add_bias": add_bias,
+                    "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
+                    "attention_head_type": attention_head_type.value,
+                    "attention_multiplier": attention_multiplier,
+                }
+                for _ in range(num_layers)
+            ],
             mlp_blocks=[
-                {"mlp_block_type": "MLP", "activation_function": activation_function} for _ in range(num_layers)
+                {"mlp_block_type": "MLP", "activation_function": activation_function, "add_bias": add_bias}
+                for _ in range(num_layers)
             ],
         )
 
@@ -122,20 +129,8 @@ class TestCommons(TestCase):
             max_position_embeddings=1024,
             hidden_size=32,
             num_layers=num_layers,
-            mlp_blocks=[
-                {
-                    "mlp_block_type": "MoE",
-                    "num_experts": num_experts,
-                    "num_experts_per_tok": num_experts_per_tok,
-                    "activation_function": activation_function,
-                }
-                for _ in range(num_layers)
-            ],
             num_attention_heads=4,
-            num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
-            attention_head_type=attention_head_type.value,
             position_embedding_type=position_embedding_type.value,
-            add_bias=add_bias,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -144,7 +139,26 @@ class TestCommons(TestCase):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            attention_multiplier=attention_multiplier,
+            sequence_mixer_blocks=[
+                {
+                    "sequence_mixer_block_type": "softmax_attention",
+                    "add_bias": add_bias,
+                    "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
+                    "attention_head_type": attention_head_type.value,
+                    "attention_multiplier": attention_multiplier,
+                }
+                for _ in range(num_layers)
+            ],
+            mlp_blocks=[
+                {
+                    "mlp_block_type": "MoE",
+                    "num_experts": num_experts,
+                    "num_experts_per_tok": num_experts_per_tok,
+                    "activation_function": activation_function,
+                    "add_bias": add_bias,
+                }
+                for _ in range(num_layers)
+            ],
         )
 
     def get_dummy_inputs(self, device: torch.device, return_list: bool = False) -> tuple[torch.Tensor | list[int]]:

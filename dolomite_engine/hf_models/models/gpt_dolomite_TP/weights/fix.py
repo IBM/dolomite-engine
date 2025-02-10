@@ -13,14 +13,17 @@ def fix_gpt_dolomite_unsharded_state_dict(
     ]
 
     for layer_idx in range(config.num_layers):
-        if AttentionHeadType(config.attention_head_type) == AttentionHeadType.mqa:
+        if (
+            config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type")
+            == AttentionHeadType.mqa
+        ):
             q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.q_attn.weight")
             kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.kv_attn.weight")
             state_dict[f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = torch.cat(
                 [q_attn_w, kv_attn_w]
             )
 
-            if config.add_bias:
+            if config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias"):
                 q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.q_attn.bias")
                 kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.kv_attn.bias")
                 state_dict[f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"] = torch.cat(
@@ -31,6 +34,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
 
         if is_glu(block.activation_function):
             mlp_block_type = block.mlp_block_type
+            add_bias = config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias")
 
             if mlp_block_type == "MLP":
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
@@ -40,7 +44,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
                 w1 = torch.cat([w[1] for w in weight])
                 state_dict[key] = torch.cat([w0, w1])
 
-                if config.add_bias:
+                if add_bias:
                     key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.bias"
                     weight = state_dict[key].chunk(tensor_parallel_world_size)
                     weight = [w.chunk(2) for w in weight]
@@ -48,7 +52,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
                     w1 = torch.cat([w[1] for w in weight])
                     state_dict[key] = torch.cat([w0, w1])
             elif mlp_block_type == "MoE":
-                assert not config.add_bias
+                assert not add_bias
 
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
                 weight = state_dict[key]

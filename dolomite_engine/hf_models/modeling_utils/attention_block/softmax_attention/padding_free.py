@@ -46,9 +46,6 @@ class PaddingFreeAttention(Attention):
         # value -> (total_q, num_key_value_heads, head_dim)
         # ==========================================================================================
 
-        softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
-
         query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
         key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
         value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
@@ -61,8 +58,8 @@ class PaddingFreeAttention(Attention):
             cu_seqlens_k=cu_seqlens,
             max_seqlen_q=max_seqlen,
             max_seqlen_k=max_seqlen,
-            dropout_p=dropout_p,
-            softmax_scale=softmax_scale,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
+            softmax_scale=self._get_softmax_scale(),
             causal=self.causal,
         )
 
@@ -80,7 +77,7 @@ class PaddingFreeAttention(Attention):
         # ==========================================================================================
 
         hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.resid_dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
 
         return hidden_states
 

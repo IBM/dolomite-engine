@@ -31,24 +31,29 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         hidden_size=original_config.n_embd,
         num_layers=original_config.n_layer,
         num_attention_heads=original_config.n_head,
-        attention_head_type="mqa" if original_config.multi_query else "mha",
         position_embedding_type="learned_absolute",
         normalization_function="layernorm",
         layer_norm_epsilon=original_config.layer_norm_epsilon,
         use_cache=original_config.use_cache,
-        add_bias=True,
         tie_word_embeddings=original_config.tie_word_embeddings,
         initializer_range=original_config.initializer_range,
-        attn_pdrop=original_config.attn_pdrop,
-        resid_pdrop=original_config.resid_pdrop,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_block_type": "softmax_attention",
+                "add_bias": True,
+                "attention_head_type": "mqa" if original_config.multi_query else "mha",
+            }
+            for _ in range(original_config.n_layer)
+        ],
         mlp_blocks=[
             {
                 "mlp_block_type": "MLP",
                 "activation_function": original_config.activation_function,
                 "intermediate_size": original_config.n_inner,
+                "add_bias": True,
             }
             for _ in range(original_config.n_layer)
         ],
@@ -124,12 +129,15 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
     assert config.normalization_function == "layernorm"
-    assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
     assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
     assert config.m_emb is None
     assert config.m_residual is None
     assert config.m_width is None
-    assert config.attention_multiplier is None
+
+    attention_head_type = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type")
+
+    assert attention_head_type in [AttentionHeadType.mha, AttentionHeadType.mqa]
+    assert config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier") is None
 
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,
@@ -141,13 +149,12 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         activation_function=config.check_equal_for_all_and_get_value(
             "mlp_blocks", "activation_function", "gelu_pytorch_tanh"
         ),
-        resid_pdrop=config.resid_pdrop,
-        embd_pdrop=config.embd_pdrop,
-        attn_pdrop=config.attn_pdrop,
+        embedding_dropout=config.embedding_dropout,
+        attn_pdrop=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         layer_norm_epsilon=config.layer_norm_epsilon,
         initializer_range=config.initializer_range,
         use_cache=config.use_cache,
-        multi_query=config.multi_query,
+        multi_query=attention_head_type == AttentionHeadType.mqa,
         tie_word_embeddings=config.tie_word_embeddings,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,

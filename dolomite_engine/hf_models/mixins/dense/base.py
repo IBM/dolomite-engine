@@ -5,7 +5,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import divide_if_divisible
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
 from ...loss import clear_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors
@@ -102,7 +102,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         self._init_model(config, **kwargs)
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb
@@ -116,7 +115,9 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
-        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
+        self.embedding_dropout = (
+            nn.Identity() if config.embedding_dropout == 0 else nn.Dropout(config.embedding_dropout)
+        )
         self.h = nn.ModuleList(
             [
                 self.layer_class(
@@ -292,7 +293,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         if token_type_ids is not None:
             inputs_embeds = inputs_embeds + self.wte(token_type_ids)
 
-        inputs_embeds = self.drop(inputs_embeds)
+        inputs_embeds = self.embedding_dropout(inputs_embeds)
 
         if self.m_emb is not None:
             inputs_embeds = inputs_embeds * self.m_emb

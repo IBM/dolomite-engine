@@ -6,14 +6,8 @@ from ...config import CommonConfig
 class GPTCrossLayerConfig(CommonConfig):
     model_type = "gpt_crosslayer"
 
-    def __init__(
-        self,
-        attention_head_type: str = "gqa",
-        num_key_value_heads: int = 12,
-        sharing_pattern: list[int] | None = None,
-        **kwargs,
-    ) -> None:
-        super().__init__(attention_head_type=attention_head_type, num_key_value_heads=num_key_value_heads, **kwargs)
+    def __init__(self, sharing_pattern: list[int] | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         if sharing_pattern is None:
             self.sharing_pattern = list(range(self.num_layers))
@@ -26,10 +20,15 @@ class GPTCrossLayerConfig(CommonConfig):
                 assert sharing_pattern[i] <= sharing_pattern[i + 1]
 
             for i in range(len(sharing_pattern)):
-                assert sharing_pattern[i] >= 0
-                assert sharing_pattern[i] < self.num_layers
+                assert sharing_pattern[i] >= 0 and sharing_pattern[i] < self.num_layers
 
             self.sharing_pattern = sharing_pattern
+
+        for i in self.sharing_pattern:
+            for j in self.sharing_pattern:
+                if i == j:
+                    assert self.sequence_mixer_blocks[i] == self.sequence_mixer_blocks[j]
+                    assert self.mlp_blocks[i] == self.mlp_blocks[j]
 
         assert self.init_method == "normal"
 

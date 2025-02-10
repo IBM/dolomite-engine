@@ -48,7 +48,12 @@ def get_gpt_dolomite_model_parallel_state_dict(
 
         state_dict.update(
             _get_attention(
-                config=config,
+                hidden_size=config.hidden_size,
+                num_attention_heads=config.num_attention_heads,
+                attention_head_type=config.check_equal_for_all_and_get_value(
+                    "sequence_mixer_blocks", "attention_head_type"
+                ),
+                add_bias=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias"),
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix=prefix + "sequence_mixer.",
                 column_parallel_shard_dim=0,
@@ -130,7 +135,10 @@ def _get_layernorm(safetensors_weights_manager: SafeTensorsWeightsManager, prefi
 
 
 def _get_attention(
-    config: GPTDolomiteConfig,
+    hidden_size: int,
+    num_attention_heads: int,
+    attention_head_type: AttentionHeadType,
+    add_bias: bool,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
     column_parallel_shard_dim: int,
@@ -138,12 +146,11 @@ def _get_attention(
 ) -> None:
     state_dict = {}
 
-    if AttentionHeadType(config.attention_head_type) == AttentionHeadType.mqa:
+    if attention_head_type == AttentionHeadType.mqa:
         tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
-        hidden_size = config.hidden_size
-        head_dim = divide_if_divisible(hidden_size, config.num_attention_heads, "")
+        head_dim = divide_if_divisible(hidden_size, num_attention_heads, "")
 
         hidden_size_per_rank = divide_if_divisible(hidden_size, tp_world_size, "")
         start_index = tp_rank * hidden_size_per_rank
@@ -153,23 +160,25 @@ def _get_attention(
         state_dict[prefix + "c_attn.q_attn.weight"] = weight[start_index:end_index, :]
         state_dict[prefix + "c_attn.kv_attn.weight"] = weight[hidden_size : hidden_size + 2 * head_dim, :]
 
-        if config.add_bias:
+        if add_bias:
             bias = safetensors_weights_manager.get_slice(prefix + "c_attn.bias")
             state_dict[prefix + "c_attn.q_attn.bias"] = bias[start_index:end_index]
             state_dict[prefix + "c_attn.kv_attn.bias"] = bias[hidden_size : hidden_size + 2 * head_dim]
-    else:
+    elif attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
         state_dict.update(
             _get_column_parallel(
-                add_bias=config.add_bias,
+                add_bias=add_bias,
                 safetensors_weights_manager=safetensors_weights_manager,
                 prefix=prefix + "c_attn.",
                 shard_dim=column_parallel_shard_dim,
             )
         )
+    else:
+        raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
 
     state_dict.update(
         _get_row_parallel(
-            add_bias=config.add_bias,
+            add_bias=add_bias,
             safetensors_weights_manager=safetensors_weights_manager,
             prefix=prefix + "c_proj.",
             shard_dim=row_parallel_shard_dim,

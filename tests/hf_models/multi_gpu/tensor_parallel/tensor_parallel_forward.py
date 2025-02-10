@@ -40,30 +40,58 @@ num_key_value_heads = None
 if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
-kwargs = {}
 if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
         hidden_size=128,
         num_attention_heads=16,
-        mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
+        ],
     )
-    enable_kernels([Kernel.scattermoe]).__enter__()
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
-        attention_head_type=args.attention_head_type,
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
         hidden_size=128,
         num_attention_heads=16,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": args.attention_head_type,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_block_type": "MLP", "add_bias": False},
+            {"mlp_block_type": "MoE", "add_bias": False},
+        ],
     )
 
+enable_kernels([Kernel.scattermoe]).__enter__()
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
@@ -89,7 +117,6 @@ with torch.device("meta"):
         attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
-        **kwargs,
     )
 
 # copy to device without copying storage
