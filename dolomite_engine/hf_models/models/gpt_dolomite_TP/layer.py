@@ -17,8 +17,8 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
         nn.Module.__init__(self)
 
         hidden_size = config.hidden_size
-        self.layer_idx = layer_idx
         self.m_residual = config.m_residual
+        self.sequence_mixer_type = config.sequence_mixer_blocks[layer_idx].sequence_mixer_type
 
         self.ln_1 = get_normalization_function_TP(
             config.normalization_function,
