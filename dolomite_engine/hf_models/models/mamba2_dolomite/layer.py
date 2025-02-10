@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 
-from ...modeling_utils import get_attention_module, get_normalization_function
+from ...modeling_utils import get_normalization_function
 from ..gpt_dolomite.layer import GPTDolomiteBlock
-from ..gpt_dolomite.mlp import MLP
 from .cache import HybridMambaAttentionDynamicCache
 from .config import Mamba2DolomiteConfig
 from .mamba2 import get_mamba2
