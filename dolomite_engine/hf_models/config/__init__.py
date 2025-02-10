@@ -145,10 +145,10 @@ class CommonConfig(PretrainedConfig):
         sequence_mixer_blocks: list[_SoftmaxAttentionArgs] = []
         for i in range(self.num_layers):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
-            sequence_mixer_block_type = sequence_mixer_block.get("mlp_block_type", "softmax_attention")
+            sequence_mixer_block_type = sequence_mixer_block.pop("sequence_mixer_block_type", "softmax_attention")
 
-            attention_head_type = AttentionHeadType(sequence_mixer_block.get("attention_head_type", "mqa"))
-            num_key_value_heads = sequence_mixer_block.get("num_key_value_heads", None)
+            attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
+            num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
 
             if attention_head_type == AttentionHeadType.mha:
                 if num_key_value_heads is None:
@@ -171,20 +171,24 @@ class CommonConfig(PretrainedConfig):
                     self.num_attention_heads % num_key_value_heads == 0
                 ), "GroupedQueryAttention should have more than 1 head for keys and values"
 
-            sequence_mixer_kwargs = dict(
-                num_key_value_heads=num_key_value_heads,
-                attention_head_type=attention_head_type,
-                softmax_dropout=sequence_mixer_block.get("softmax_dropout", 0),
-                dropout=sequence_mixer_block.get("dropout", 0),
-                add_bias=sequence_mixer_block.get("add_bias", True),
-                attention_multiplier=sequence_mixer_block.get("attention_multiplier", None),
-            )
+            sequence_mixer_kwargs = {
+                "num_key_value_heads": num_key_value_heads,
+                "attention_head_type": attention_head_type,
+            }
+
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "softmax_dropout")
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "dropout")
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "add_bias")
+            _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, "attention_multiplier")
 
             if sequence_mixer_block_type == "softmax_attention":
                 sequence_mixer_args = _SoftmaxAttentionArgs(**sequence_mixer_kwargs)
             else:
                 raise ValueError(f"unexpected sequence_mixer_block_type ({sequence_mixer_block_type})")
 
+            assert (
+                len(sequence_mixer_block) == 0
+            ), f"leftover keys in the sequence_mixer_block ({sequence_mixer_block}) at position {i}"
             sequence_mixer_blocks.append(sequence_mixer_args)
 
         self.sequence_mixer_blocks = sequence_mixer_blocks

@@ -8,9 +8,9 @@ class _SoftmaxAttentionArgs(BaseArgs):
     sequence_mixer_block_type: str = "softmax_attention"
     num_key_value_heads: int = 1
     attention_head_type: AttentionHeadType = AttentionHeadType.mqa
-    softmax_dropout: float
-    dropout: float
-    add_bias: bool
+    softmax_dropout: float = 0
+    dropout: float = 0
+    add_bias: bool = True
     attention_multiplier: float | None = None
 
     def model_post_init(self, __context: Any) -> None:
