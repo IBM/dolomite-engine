@@ -43,6 +43,13 @@ _NAKED_DISALLOWED_ARGS = [
     "num_key_value_heads",
     "attention_head_type",
     "attention_multiplier",
+    "n_embd",
+    "n_head",
+    "n_inner",
+    "n_layer",
+    "n_positions",
+    "scale_attn_weights",
+    "upcast_logits_for_loss",
 ]
 
 
@@ -75,6 +82,7 @@ class CommonConfig(PretrainedConfig):
         sequence_mixer_blocks: list[dict] = None,
         mlp_blocks: list[dict] = None,
         router_aux_loss_coef: float = 0.001,
+        tie_word_embeddings: bool = True,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -113,7 +121,13 @@ class CommonConfig(PretrainedConfig):
         for i in _NAKED_DISALLOWED_ARGS:
             assert i not in kwargs, f"found naked argument ({i})"
 
-        super().__init__(bos_token_id=bos_token_id, eos_token_id=eos_token_id, pad_token_id=pad_token_id, **kwargs)
+        super().__init__(
+            bos_token_id=bos_token_id,
+            eos_token_id=eos_token_id,
+            pad_token_id=pad_token_id,
+            tie_word_embeddings=tie_word_embeddings,
+            **kwargs,
+        )
 
     @_hold_base_args(key="sequence_mixer_blocks")
     @_hold_base_args(key="mlp_blocks")
