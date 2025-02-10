@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 
 from .....utils import divide_if_divisible
+from ....cache import HybridMambaAttentionDynamicCache
+from ....config import CommonConfig
 from ....modeling_utils import get_activation_function
-from ..cache import HybridMambaAttentionDynamicCache
-from ..config import Mamba2DolomiteConfig
-from ..gated_rmsnorm import GatedRMSNorm
+from ...normalization import get_normalization_function
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
 
 
@@ -67,7 +67,9 @@ class Mamba2Base(nn.Module):
         A = torch.arange(1, self.num_heads + 1)
         self.A_log = nn.Parameter(torch.log(A))
         self.A_log._no_weight_decay = True
-        self.norm = GatedRMSNorm(self.intermediate_size, eps=config.layer_norm_epsilon)
+        self.norm = get_normalization_function(
+            "silu_gated_rmsnorm", self.intermediate_size, eps=config.layer_norm_epsilon
+        )
         self.D = nn.Parameter(torch.ones(self.num_heads))
         self.D._no_weight_decay = True
 

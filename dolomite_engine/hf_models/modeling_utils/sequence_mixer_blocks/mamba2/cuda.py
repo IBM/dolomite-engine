@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from .....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
-from ..cache import HybridMambaAttentionDynamicCache
+from ....cache import HybridMambaAttentionDynamicCache
 from .base import Mamba2Base
 from .utils import _apply_mask_to_padding_states
 
