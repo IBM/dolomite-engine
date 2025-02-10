@@ -29,8 +29,10 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
             attention_is_x_1d,
         ) = rmsnorm_cute_forward_only(residual, ln_1_weight, self.ln_1.eps, False)
 
-
-        rmsnorm_cute_backward_only(current_mlp_x, ln_2_weight, )
+        rmsnorm_cute_backward_only(
+            current_mlp_x,
+            ln_2_weight,
+        )
 
         current_attention_out = self.sequence_mixer(
             current_attention_out,

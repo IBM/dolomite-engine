@@ -43,7 +43,9 @@ class _RMSNorm_Cute_Forward(torch.autograd.Function):
 
     @staticmethod
     @ensure_contiguous
-    def backward(ctx, output_grad: torch.Tensor, x_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
+    def backward(
+        ctx, output_grad: torch.Tensor, x_grad: torch.Tensor, weight_grad: torch.Tensor
+    ) -> tuple[torch.Tensor | None]:
         return x_grad, weight_grad, None, None
 
 
