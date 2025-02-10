@@ -1,9 +1,9 @@
 import torch
 from cute_kernels.cutotune import CutoTuneParameter
 from cute_kernels.enums import KernelBackend
-from cute_kernels.utils import ensure_contiguous
 from cute_kernels.kernels.rmsnorm.backward import _backward
 from cute_kernels.kernels.rmsnorm.forward import _forward
+from cute_kernels.utils import ensure_contiguous
 
 
 class _RMSNorm_Cute_Forward(torch.autograd.Function):
@@ -48,7 +48,14 @@ class _RMSNorm_Cute_Forward(torch.autograd.Function):
 
     @staticmethod
     @ensure_contiguous
-    def backward(ctx, output_grad: torch.Tensor, x_grad: torch.Tensor, weight_grad: torch.Tensor | None, rmsnorm_denominator: torch.Tensor | None, is_x_1d_grad: bool) -> tuple[torch.Tensor | None]:
+    def backward(
+        ctx,
+        output_grad: torch.Tensor,
+        x_grad: torch.Tensor,
+        weight_grad: torch.Tensor | None,
+        rmsnorm_denominator: torch.Tensor | None,
+        is_x_1d_grad: bool,
+    ) -> tuple[torch.Tensor | None]:
         return x_grad, weight_grad, *[None] * 5
 
 
@@ -107,7 +114,9 @@ def rmsnorm_cute_forward_only(
     BLOCK_SIZE_B_forward: int = CutoTuneParameter(),
     BLOCK_SIZE_H_forward: int = CutoTuneParameter(),
 ) -> torch.Tensor:
-    return _RMSNorm_Cute_Forward.apply(x, weight, eps, memory_efficient, kernel_backend_forward, BLOCK_SIZE_B_forward, BLOCK_SIZE_H_forward)
+    return _RMSNorm_Cute_Forward.apply(
+        x, weight, eps, memory_efficient, kernel_backend_forward, BLOCK_SIZE_B_forward, BLOCK_SIZE_H_forward
+    )
 
 
 def rmsnorm_cute_backward_only(
@@ -121,4 +130,14 @@ def rmsnorm_cute_backward_only(
     BLOCK_SIZE_H_backward: int = CutoTuneParameter(),
     is_x_1d: bool = False,
 ) -> torch.Tensor:
-    return _RMSNorm_Cute_Backward.apply(x, weight, output, rmsnorm_denominator, eps, kernel_backend_backward, BLOCK_SIZE_B_backward, BLOCK_SIZE_H_backward, is_x_1d)
+    return _RMSNorm_Cute_Backward.apply(
+        x,
+        weight,
+        output,
+        rmsnorm_denominator,
+        eps,
+        kernel_backend_backward,
+        BLOCK_SIZE_B_backward,
+        BLOCK_SIZE_H_backward,
+        is_x_1d,
+    )

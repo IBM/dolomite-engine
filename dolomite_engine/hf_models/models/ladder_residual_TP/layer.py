@@ -2,7 +2,7 @@ import torch
 from transformers import DynamicCache
 
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
-from .rmsnorm import rmsnorm_cute_forward_only, rmsnorm_cute_backward_only
+from .rmsnorm import rmsnorm_cute_backward_only, rmsnorm_cute_forward_only
 
 
 class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
@@ -21,7 +21,13 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
             residual = residual + current_attention_out
 
         ln_1_weight = self.ln_1.weight
-        current_attention_out, current_attention_x, ln_1_weight, current_attention_rmsnorm_denominator, attention_is_x_1d = rmsnorm_cute_forward_only(residual, ln_1_weight, self.ln_1.eps, False)
+        (
+            current_attention_out,
+            current_attention_x,
+            ln_1_weight,
+            current_attention_rmsnorm_denominator,
+            attention_is_x_1d,
+        ) = rmsnorm_cute_forward_only(residual, ln_1_weight, self.ln_1.eps, False)
 
         current_attention_out = self.sequence_mixer(
             current_attention_out,
@@ -39,7 +45,9 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
             residual = residual + current_mlp_out
 
         ln_2_weight = self.ln_2.weight
-        current_mlp_out, current_mlp_x, ln_2_weight, current_mlp_rmsnorm_denominator, mlp_is_x_1d = rmsnorm_cute_forward_only(residual, ln_2_weight, self.ln_2.eps, False)
+        current_mlp_out, current_mlp_x, ln_2_weight, current_mlp_rmsnorm_denominator, mlp_is_x_1d = (
+            rmsnorm_cute_forward_only(residual, ln_2_weight, self.ln_2.eps, False)
+        )
 
         current_mlp_out = self.mlp_block(current_mlp_out)
 
