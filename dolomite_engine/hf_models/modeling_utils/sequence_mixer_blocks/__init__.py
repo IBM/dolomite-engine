@@ -37,7 +37,7 @@ def get_sequence_mixer(
     layer_idx: int,
 ) -> Attention | Mamba2Base:
     block = config.sequence_mixer_blocks[layer_idx]
-    sequence_mixer_type = block.sequence_mixer_block_type
+    sequence_mixer_type = block.sequence_mixer_type
 
     if sequence_mixer_type == "mamba2":
         mamba_class = Mamba2CUDA if is_kernel_allowed(Kernel.mamba2_ssm) else Mamba2Base

@@ -95,7 +95,7 @@ class TestCommons(TestCase):
             m_residual=m_residual,
             sequence_mixer_blocks=[
                 {
-                    "sequence_mixer_block_type": "softmax_attention",
+                    "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
                     "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
                     "attention_head_type": attention_head_type.value,
@@ -104,7 +104,7 @@ class TestCommons(TestCase):
                 for _ in range(num_layers)
             ],
             mlp_blocks=[
-                {"mlp_block_type": "MLP", "activation_function": activation_function, "add_bias": add_bias}
+                {"mlp_type": "MLP", "activation_function": activation_function, "add_bias": add_bias}
                 for _ in range(num_layers)
             ],
         )
@@ -141,7 +141,7 @@ class TestCommons(TestCase):
             m_residual=m_residual,
             sequence_mixer_blocks=[
                 {
-                    "sequence_mixer_block_type": "softmax_attention",
+                    "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
                     "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
                     "attention_head_type": attention_head_type.value,
@@ -151,7 +151,7 @@ class TestCommons(TestCase):
             ],
             mlp_blocks=[
                 {
-                    "mlp_block_type": "MoE",
+                    "mlp_type": "MoE",
                     "num_experts": num_experts,
                     "num_experts_per_tok": num_experts_per_tok,
                     "activation_function": activation_function,
@@ -297,7 +297,7 @@ class TestCommons(TestCase):
                 assert "ScatterMoE" in str(model)
             elif moe_implementation == "eager":
                 mlp_blocks = getattr(config, "mlp_blocks")
-                if len(mlp_blocks) > 0 and all([i.mlp_block_type == "MoE" for i in mlp_blocks]):
+                if len(mlp_blocks) > 0 and all([i.mlp_type == "MoE" for i in mlp_blocks]):
                     assert "MoE" in str(model)
 
             assert len(kwargs) == 0

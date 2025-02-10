@@ -69,7 +69,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         sequence_mixer_blocks=[
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "num_key_value_heads": original_config.num_key_value_heads,
                 "attention_head_type": attention_head_type,
                 "attention_multiplier": original_config.attention_multiplier,
@@ -80,7 +80,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
         ],
         mlp_blocks=[
             {
-                "mlp_block_type": "MoE",
+                "mlp_type": "MoE",
                 "intermediate_size": original_config.intermediate_size,
                 "num_experts": original_config.num_local_experts,
                 "num_experts_per_tok": original_config.num_experts_per_tok,
@@ -181,7 +181,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
     config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias", False)
     config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias", False)
     config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
-    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type", "MoE")
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_type", "MoE")
 
     original_config = GraniteMoeConfig(
         vocab_size=config.vocab_size,

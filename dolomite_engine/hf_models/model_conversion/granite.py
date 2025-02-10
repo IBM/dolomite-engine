@@ -64,7 +64,7 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         sequence_mixer_blocks=[
             {
-                "sequence_mixer_block_type": "softmax_attention",
+                "sequence_mixer_type": "softmax_attention",
                 "add_bias": original_config.attention_bias,
                 "num_key_value_heads": original_config.num_key_value_heads,
                 "attention_head_type": attention_head_type,
@@ -75,7 +75,7 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         ],
         mlp_blocks=[
             {
-                "mlp_block_type": "MLP",
+                "mlp_type": "MLP",
                 "add_bias": original_config.mlp_bias,
                 "activation_function": "swiglu",
                 "intermediate_size": original_config.intermediate_size,
@@ -119,7 +119,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
     assert config.position_embedding_type == "rope"
 
     config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
-    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_block_type", "MLP")
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_type", "MLP")
 
     original_config = GraniteConfig(
         vocab_size=config.vocab_size,

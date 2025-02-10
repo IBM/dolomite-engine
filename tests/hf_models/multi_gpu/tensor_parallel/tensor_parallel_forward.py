@@ -61,8 +61,8 @@ if args.model_type == "gpt_dolomite":
             },
         ],
         mlp_blocks=[
-            {"mlp_block_type": "MLP", "add_bias": False},
-            {"mlp_block_type": "MoE", "add_bias": False},
+            {"mlp_type": "MLP", "add_bias": False},
+            {"mlp_type": "MoE", "add_bias": False},
         ],
     )
 elif args.model_type == "ladder_residual":
@@ -86,8 +86,8 @@ elif args.model_type == "ladder_residual":
             },
         ],
         mlp_blocks=[
-            {"mlp_block_type": "MLP", "add_bias": False},
-            {"mlp_block_type": "MoE", "add_bias": False},
+            {"mlp_type": "MLP", "add_bias": False},
+            {"mlp_type": "MoE", "add_bias": False},
         ],
     )
 

@@ -46,16 +46,16 @@ model_args:
         attention_head_type: mha
     mlp_blocks:
       - activation_function: swiglu
-        mlp_block_type: MoE
+        mlp_type: MoE
         shared_intermediate_size: 512
       - activation_function: swiglu
-        mlp_block_type: MoE
+        mlp_type: MoE
         shared_intermediate_size: 512
       - activation_function: swiglu
-        mlp_block_type: MoE
+        mlp_type: MoE
         shared_intermediate_size: 512
       - activation_function: swiglu
-        mlp_block_type: MoE
+        mlp_type: MoE
         shared_intermediate_size: 512
   attention_implementation: sdpa
 

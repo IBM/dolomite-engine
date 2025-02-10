@@ -21,7 +21,7 @@ def get_sequence_mixer(
     layer_idx: int,
 ) -> CrossLayerAttention:
     block = config.sequence_mixer_blocks[layer_idx]
-    assert block.sequence_mixer_block_type == "softmax_attention"
+    assert block.sequence_mixer_type == "softmax_attention"
 
     sequence_mixer_kwargs = dict(
         hidden_size=config.hidden_size,
