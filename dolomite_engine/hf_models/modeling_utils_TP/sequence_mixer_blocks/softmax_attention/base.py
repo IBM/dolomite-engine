@@ -185,6 +185,8 @@ class _BaseAttention_TP(nn.Module):
             sequence_parallel=sequence_parallel,
         )
 
+        self.softmax_dropout_p = softmax_dropout
+
         self.softmax_dropout = (
             nn.Identity()
             if softmax_dropout == 0
