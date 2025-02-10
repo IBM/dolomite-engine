@@ -11,7 +11,7 @@ from .attention_block import (
 )
 from .embedding import ParameterizedEmbedding
 from .linear import ParameterizedLinear
-from .mlp_block import (
+from .mlp_blocks import (
     MLP,
     MoE,
     ParameterizedExperts,

@@ -7,7 +7,7 @@ import torch.nn as nn
 from .....utils import ProcessGroupManager, divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention
-from ....modeling_utils.mlp_block.mlp import _get_std_for_linear
+from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
 from ...linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 

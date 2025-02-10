@@ -9,7 +9,7 @@ from transformers import DynamicCache
 from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
-from ....modeling_utils.mlp_block.mlp import _get_std_for_linear
+from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..linear import DesyncResidualLinear
 
 

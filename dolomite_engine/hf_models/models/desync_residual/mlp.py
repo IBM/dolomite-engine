@@ -6,7 +6,7 @@ import torch.nn as nn
 from ....utils import divide_if_divisible
 from ...enums import InitMethod
 from ...modeling_utils import get_activation_function, is_glu
-from ...modeling_utils.mlp_block.mlp import _get_std_for_linear
+from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from .linear import DesyncResidualLinear
 
 
