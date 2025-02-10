@@ -1,10 +1,4 @@
 from .desync_residual import DesyncResidualConfig, DesyncResidualForCausalLM, DesyncResidualModel
-from .desync_residual_TP import (
-    DesyncResidualForCausalLM_TP,
-    DesyncResidualModel_TP,
-    fix_desync_residual_unsharded_state_dict,
-    unshard_desync_residual_tensor_parallel_state_dicts,
-)
 from .gpt_crosslayer import (
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,

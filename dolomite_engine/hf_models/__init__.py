@@ -4,9 +4,7 @@ from .model_conversion import export_to_huggingface, import_from_huggingface
 from .models import (
     DesyncResidualConfig,
     DesyncResidualForCausalLM,
-    DesyncResidualForCausalLM_TP,
     DesyncResidualModel,
-    DesyncResidualModel_TP,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
