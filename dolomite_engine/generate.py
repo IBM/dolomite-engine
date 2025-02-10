@@ -98,10 +98,8 @@ def main() -> None:
                 efficient_initialization=False,
                 attention_implementation=args.model_args.attention_implementation,
                 use_padding_free_transformer=False,
-                tensor_parallel_word_embeddings=False,
                 sequence_parallel=False,
                 random_seed=args.random_args.seed,
-                neft_alpha=None,
                 trust_remote_code=args.model_args.trust_remote_code,
                 tokenizer_name=args.tokenizer_args.tokenizer_name,
                 additional_special_tokens=args.tokenizer_args.additional_special_tokens,
@@ -132,8 +130,6 @@ def main() -> None:
     model = model.to(torch.cuda.current_device())
 
     generate(args, model, datasets_list, mode)
-
-    ProcessGroupManager.destroy_process_groups()
 
 
 if __name__ == "__main__":

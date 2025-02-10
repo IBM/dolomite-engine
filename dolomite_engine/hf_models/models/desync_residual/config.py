@@ -1,5 +1,4 @@
 from ...config import CommonConfig
-from ...enums import PositionEmbeddingType
 
 
 class DesyncResidualConfig(CommonConfig):
@@ -15,11 +14,8 @@ class DesyncResidualConfig(CommonConfig):
 
         self.pretraining_tensor_parallel_size = pretraining_tensor_parallel_size
 
-        if PositionEmbeddingType(self.position_embedding_type) == PositionEmbeddingType.alibi:
-            raise NotImplementedError("currently DesyncResidual doesn't support alibi")
-
         self.reduce_pattern = (
-            [{"attention": True, "mlp": True} for i in range(self.n_layer)]
+            [{"attention": True, "mlp": True} for i in range(self.num_layers)]
             if reduce_pattern is None
             else reduce_pattern
         )

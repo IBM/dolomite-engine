@@ -5,15 +5,16 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
+from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
-from ...modeling_utils_TP import Alibi_TP, Dropout_TP, Embedding_TP, get_normalization_function_TP
+from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
+from ...utils import is_generation_cache_enabled
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
-        self.tensor_parallel_word_embeddings = kwargs.get("tensor_parallel_word_embeddings", False)
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
 
         self.num_pipeline_stages = kwargs.get("num_pipeline_stages", 1)
@@ -31,7 +32,6 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
 
 class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.max_position_embeddings = config.max_position_embeddings
@@ -40,7 +40,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         self.head_dim = self.embed_dim // self.num_heads
 
         self.layers_per_stage = divide_if_divisible(
-            config.n_layer, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
+            config.num_layers, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
         )
 
         self.layer_start_id = self.layers_per_stage * self.pipeline_stage_id
@@ -51,16 +51,15 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 config.vocab_size,
                 self.embed_dim,
                 std=self.initializer_range,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
 
-            self.drop = (
+            self.embedding_dropout = (
                 nn.Identity()
-                if config.embd_pdrop == 0
+                if config.embedding_dropout == 0
                 else Dropout_TP(
-                    config.embd_pdrop,
+                    config.embedding_dropout,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
@@ -103,14 +102,11 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
-        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> BaseModelOutputWithPast:
         if self.is_first_stage:
             (
-                output_hidden_states,
                 use_cache,
                 hidden_states,
                 attention_mask,
@@ -125,7 +121,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 position_ids=position_ids,
                 inputs_embeds=inputs_embeds,
                 use_cache=use_cache,
-                output_hidden_states=output_hidden_states,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
@@ -151,17 +146,14 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             position_ids = torch.arange(past_length, key_length, dtype=torch.long, device=hidden_states.device)
             position_ids = position_ids.unsqueeze(0).view(-1, query_length)
 
-            rope_cos_sin = self._get_rope_cos_sin(
-                key_length, position_ids, dtype=hidden_states.dtype, device=hidden_states.device
-            )
+            rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_hidden_states = () if output_hidden_states else None
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+
+        clear_aux_loss()
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-
             hidden_states = self.h[str(layer_idx)](
                 hidden_states,
                 past_key_values=past_key_values,
@@ -174,15 +166,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         if self.is_last_stage:
             hidden_states = self.ln_f(hidden_states)
 
-        # Add last hidden state
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        return BaseModelOutputWithPast(
-            last_hidden_state=hidden_states,
-            past_key_values=past_key_values,
-            hidden_states=all_hidden_states,
-        )
+        return BaseModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)
 
     def _setup_positional_encoding(self) -> None:
         max_position_embeddings = self.config.max_position_embeddings
@@ -193,15 +177,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     max_position_embeddings,
                     self.embed_dim,
                     std=self.initializer_range,
-                    tensor_parallel_word_embeddings=False,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
-        elif self.position_embedding_type == PositionEmbeddingType.alibi:
-            if self.is_pipeline_parallel_enabled:
-                raise NotImplementedError()
-
-            self.alibi = Alibi_TP(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
@@ -215,5 +193,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     scale=self.config.rope_scaling["factor"],
                     original_max_position_embeddings=self.config.rope_scaling["original_max_position_embeddings"],
                 )
+        elif self.position_embedding_type == PositionEmbeddingType.nope:
+            pass
         else:
             raise NotImplementedError()

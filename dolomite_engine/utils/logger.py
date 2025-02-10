@@ -17,9 +17,11 @@ def set_logger(level: int = logging.INFO, colored_log: bool = False) -> None:
         from colorlog import ColoredFormatter
 
         stream.setFormatter(ColoredFormatter("%(asctime)s - %(log_color)s[%(levelname)-8s] ▶%(reset)s %(message)s"))
-        logging.basicConfig(level=level, handlers=[stream])
+        logging.basicConfig(level=level, handlers=[stream], force=True)
     else:
-        logging.basicConfig(level=level, handlers=[stream], format="%(asctime)s - [%(levelname)-8s] ▶ %(message)s")
+        logging.basicConfig(
+            level=level, handlers=[stream], format="%(asctime)s - [%(levelname)-8s] ▶ %(message)s", force=True
+        )
 
     global _LOGGER
     _LOGGER = logging.getLogger()

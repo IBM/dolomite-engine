@@ -5,7 +5,11 @@ import torch
 import torch.distributed
 
 from dolomite_engine.arguments import TrainingArgs, UnshardingArgs
-from dolomite_engine.checkpointing import load_checkpoint_for_inference, save_checkpoint
+from dolomite_engine.checkpointing import (
+    ensure_last_checkpoint_is_saved,
+    load_checkpoint_for_inference,
+    save_checkpoint,
+)
 from dolomite_engine.distributed import wrap_model_container_for_distributed_training
 from dolomite_engine.enums import Mode
 from dolomite_engine.hf_models import AttentionHeadType
@@ -19,7 +23,6 @@ parser.add_argument("--unshard-config", type=str)
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
 parser.add_argument("--tmp-path", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--zero-stage", type=int)
 parser.add_argument("--data-parallel-replication-world-size", type=int)
 parser.add_argument("--data-parallel-sharding-world-size", type=int)
@@ -34,13 +37,13 @@ unshard_config = UnshardingArgs(**load_yaml(args.unshard_config))
 
 # set zero stage
 train_config.distributed_args.stage = args.zero_stage
-# set tensor parallel embeddings
-train_config.distributed_args.tensor_parallel_word_embeddings = args.tensor_parallel_word_embeddings
 # attention head type
-train_config.model_args.pretrained_config["attention_head_type"] = args.attention_head_type
-train_config.model_args.pretrained_config["num_key_value_heads"] = num_key_value_heads
+for block in train_config.model_args.pretrained_config["sequence_mixer_blocks"]:
+    block["attention_head_type"] = args.attention_head_type
+    block["num_key_value_heads"] = num_key_value_heads
 # activation function
-train_config.model_args.pretrained_config["activation_function"] = args.activation_function
+for block in train_config.model_args.pretrained_config["mlp_blocks"]:
+    block["activation_function"] = args.activation_function
 
 ProcessGroupManager(
     tensor_parallel_world_size=train_config.distributed_args.tensor_parallel_world_size,
@@ -91,6 +94,8 @@ save_checkpoint(
     metadata=None,
 )
 
+ensure_last_checkpoint_is_saved()
+
 torch.distributed.barrier()
 
 _, _, consolidated_state_dict = load_checkpoint_for_inference(unshard_config, mode=Mode.unsharding, use_meta=False)
@@ -101,5 +106,3 @@ if global_rank == 0:
     assert consolidated_state_dict.keys() == original_state_dict.keys()
     for key in original_state_dict:
         assert original_state_dict[key].equal(consolidated_state_dict[key])
-
-ProcessGroupManager.destroy_process_groups()

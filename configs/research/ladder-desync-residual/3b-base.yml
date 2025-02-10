@@ -20,21 +20,17 @@ model_args:
   pretrained_config:
     activation_function: swiglu
     add_bias: false
-    attn_pdrop: 0
-    embd_pdrop: 0
-    resid_pdrop: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
-    n_embd: 2304
-    n_head: 36
-    n_layer: 40
-    n_positions: 2048
+    hidden_size: 2304
+    num_attention_heads: 36
+    num_layers: 40
+    max_position_embeddings: 2048
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000
     attention_head_type: mha
-    scale_attn_weights: true
     vocab_size: 49152
     upcast_logits_for_loss: true
     bos_token_id: 0

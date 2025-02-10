@@ -9,18 +9,15 @@ from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import (
     AttentionImplementation,
     ExperimentsTrackerName,
-    FP8Backend,
     GradientCheckpointingMethod,
     Kernel,
     KLDivergenceMethod,
     LossMask,
     LRDecaySchedule,
     Mode,
-    MoEImplementation,
     ParamsGroupMethod,
     TuningMethod,
 )
-from .kernels import add_kernel
 from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
@@ -52,8 +49,6 @@ class ModelArgs(BaseArgs):
     trust_remote_code: bool = False
     # attention implementation
     attention_implementation: AttentionImplementation | None = None
-    # moe implementation (only works with MoEDolomiteForCausalLM)
-    moe_implementation: MoEImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
@@ -80,30 +75,12 @@ class ModelArgs(BaseArgs):
         self.model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM = getattr(transformers, self.model_class)
 
 
-class LoRAArgs(BaseArgs):
-    # lora rank
-    lora_rank: int = None
-    # the scaling factor for the low-rank matrices
-    lora_alpha: float = 32.0
-    # the dropout probability of the LoRA layers
-    lora_dropout: float = 0.1
-
-    def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.lora_rank, "lora_rank")])
-
-
 class TuningArgs(BaseArgs):
-    # type of tuning, full finetuning or PEFT
+    # type of tuning, full finetuning / pretraining / distillation
     tuning_method: TuningMethod = None
-    # lora related arguments
-    lora_args: LoRAArgs | None = None
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.tuning_method, "tuning_method")])
-
-        # check whether the arguments specified are valid
-        if self.tuning_method in [TuningMethod.full_finetuning, TuningMethod.pretraining]:
-            assert self.lora_args is None, "load_args should not be specified with full_finetuning or pretraining"
 
 
 class TrainingParameters(BaseArgs):
@@ -139,6 +116,8 @@ class SaveArgs(BaseArgs):
     save_interval: int = None
     # whether to save optimizer
     save_optimizer: bool = True
+    # whether to use async checkpointing
+    async_checkpointing: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.save_path, "save_path"), (self.save_interval, "save_interval")])
@@ -239,16 +218,14 @@ class LRSchedulerArgs(BaseArgs):
 class MixedPrecisionArgs(BaseArgs):
     # dtype to use for training / inference
     dtype: str = "fp32"
-    # fp8 backend
-    fp8_backend: FP8Backend | None = None
+    # fp8
+    scaling_type_input: str = "dynamic"
+    scaling_type_weight: str = "dynamic"
+    scaling_type_grad_output: str = "dynamic"
 
     def model_post_init(self, __context: Any) -> None:
         # dtype
         self.dtype = normalize_dtype_string(self.dtype)
-
-        # fp8_backend
-        if self.dtype != "fp8":
-            assert self.fp8_backend is None, "fp8_backend specified without fp8 dtype"
 
 
 class ZeroTopologyArgs(BaseArgs):
@@ -271,10 +248,6 @@ class ZeroTopologyArgs(BaseArgs):
 class DistributedArgs(BaseArgs):
     # ZeRO stage
     stage: int = 3
-    # overlap communication with computation
-    overlap_comm: bool = False
-    # use contiguous buffers for gradients, requires more memory if enabled
-    contiguous_gradients: bool = False
     # train with CPU offloading to save GPU memory
     cpu_offload: bool = False
     # whether to use gradient checkpointing, enabling leads to lower memory usage with increased step time
@@ -291,8 +264,6 @@ class DistributedArgs(BaseArgs):
     dispatching_dataloader: bool = False
     # tensor parallel world size
     tensor_parallel_world_size: int = 1
-    # tensor parallel embeddings
-    tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
     # pipeline parallel world size
@@ -319,11 +290,6 @@ class DistributedArgs(BaseArgs):
 
         if self.sequence_parallel:
             assert self.tensor_parallel_world_size > 1, "tensor parallel needs to be enabled for sequence parallel"
-
-        if self.tensor_parallel_word_embeddings:
-            assert (
-                self.tensor_parallel_world_size > 1
-            ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
         if self.tensor_parallel_world_size > 1:
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
@@ -385,21 +351,9 @@ class LoggingArgs(BaseArgs):
             _check_not_None([(self.wandb_args, "wandb_args")])
 
 
-class ResearchArgs(BaseArgs):
-    # Scalar of noise to inject into input embeddings
-    # https://arxiv.org/abs/2310.05914
-    neft_alpha: float | None = None
-
-
 class KernelArgs(BaseArgs):
-    # Scalar of noise to inject into input embeddings
-    # https://arxiv.org/abs/2310.05914
-    kernels: list[Kernel] | None = None
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.kernels is not None:
-            for kernel in self.kernels:
-                add_kernel(kernel)
+    # custom kernels
+    kernels: list[Kernel] = []
 
 
 class TeacherArgs(BaseArgs):
@@ -455,8 +409,6 @@ class TrainingArgs(BaseArgs):
     mixed_precision_args: MixedPrecisionArgs = MixedPrecisionArgs()
     # distributed training related arguments
     distributed_args: DistributedArgs = DistributedArgs()
-    # research args
-    research_args: ResearchArgs = ResearchArgs()
     # kernel args
     kernel_args: KernelArgs = KernelArgs()
 

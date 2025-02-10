@@ -58,6 +58,9 @@ NNODES=$(echo ${LSB_MCPU_HOSTS} | tr ' ' '\n' | sed 'n; d' | wc -w)
 GPUS_PER_NODE=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -w)
 NODE_RANK=$(($(echo ${LSB_MCPU_HOSTS} | tr ' ' '\n' | sed 'n; d' | grep -n -m1 $(echo $HOSTNAME | cut -d'.' -f1) | cut -d':' -f1)-1))
 
+#track the LSF/Slurm job in W&B per run - bobcalio
+export JOB_ID=$LSB_JOBID 
+
 TOKENIZERS_PARALLELISM=false \
 torchrun --nnodes=$NNODES \
     --node_rank=$NODE_RANK \

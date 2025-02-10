@@ -8,7 +8,8 @@ from torch.distributed.tensor.parallel import loss_parallel
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
-from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..enums import AttentionImplementation, Mode
+from ..hf_models import get_aux_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -23,15 +24,12 @@ class ModelWrapperForPretraining(ModelWrapper):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
         num_pipeline_stages: int,
         pipeline_stage_id: int,
-        neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
@@ -49,13 +47,11 @@ class ModelWrapperForPretraining(ModelWrapper):
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
             attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
-            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
@@ -76,13 +72,10 @@ class ModelWrapperForPretraining(ModelWrapper):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
-            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             num_pipeline_stages=num_pipeline_stages,
             pipeline_stage_id=pipeline_stage_id,
-            neft_alpha=neft_alpha,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
@@ -92,7 +85,9 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert not self.reset_attention_mask, "reset_attention_mask is not supported with pipeline parallelism"
             assert not self.reset_position_ids, "reset_position_ids is not supported with pipeline parallelism"
 
-    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
+            self._extra_metrics = MetricsTrackingDict({})
+
+    def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -111,7 +106,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"text": batch}
 
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids)
+        batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
 
         output = self.model(**batch, return_dict=True)
 
@@ -121,43 +116,47 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return output
 
-    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor:
-        if isinstance(model_outputs, torch.Tensor):
-            logits = model_outputs
-        else:
-            logits: torch.Tensor = model_outputs.logits
+    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
+        logits: torch.Tensor = model_outputs.logits
+        aux_loss = get_aux_loss()
 
         if self.upcast_logits_for_loss:
             logits = logits.float()
 
         loss_context = nullcontext
+        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
 
-        if ProcessGroupManager.is_tensor_parallel_enabled():
-            logits = tensor_to_dtensor(
-                logits,
-                device_mesh=self.tp_mesh,
-                current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
-            )
+        if is_tensor_parallel_enabled:
+            loss_context = loss_parallel
+
+            logits = tensor_to_dtensor(logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
             labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
-
-            if self.tensor_parallel_word_embeddings:
-                loss_context = loss_parallel
 
         with loss_context():
             lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
 
         lm_loss = lm_loss * lm_loss_multiplier
 
-        if hasattr(model_outputs, "aux_loss"):
-            aux_loss = model_outputs.aux_loss
-            loss = lm_loss + self.router_aux_loss_coef * aux_loss
-
-            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
-        else:
+        if aux_loss == 0:
             loss = lm_loss
             output = {"loss": loss}
+        else:
+            if self.is_pipeline_parallel_enabled:
+                self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
+
+            if is_tensor_parallel_enabled:
+                aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
+
+            loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)
+            output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
 
         return output
+
+    def get_extra_metrics(self) -> dict:
+        return self._extra_metrics
+
+    def reset_extra_metrics(self) -> None:
+        self._extra_metrics = MetricsTrackingDict({})
 
     def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
         if ProcessGroupManager.is_tensor_parallel_first_rank():
@@ -173,7 +172,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return tokens
 
-    def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
+    def _prepare_model_inputs(self, input_ids: torch.Tensor, prev_aux_loss: torch.Tensor | None = None) -> dict:
         batch = {}
 
         if self.use_padding_free_transformer:
@@ -212,7 +211,11 @@ class ModelWrapperForPretraining(ModelWrapper):
         batch["input_ids"] = input_ids
 
         if ProcessGroupManager.is_tensor_parallel_enabled():
-            batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
+            batch["output_parallel_lm_logits"] = True
+
+        if prev_aux_loss is not None:
+            # past_key_values is used to send prev_aux_loss
+            batch["past_key_values"] = prev_aux_loss
 
         return batch
 
@@ -281,3 +284,15 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
+
+
+class _F(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, lm_loss: torch.Tensor, aux_loss: torch.Tensor, router_aux_loss_coef: float) -> torch.Tensor:
+        ctx.router_aux_loss_coef = router_aux_loss_coef
+        return lm_loss + router_aux_loss_coef * aux_loss
+
+    @staticmethod
+    @torch._dynamo.disable
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
+        return grad_output, ctx.router_aux_loss_coef * grad_output, None

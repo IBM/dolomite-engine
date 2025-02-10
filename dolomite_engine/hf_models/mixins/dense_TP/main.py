@@ -26,9 +26,9 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             if not self._tied_word_embeddings:
                 self.lm_head = LMHead_TP(
                     self.vocab_size,
-                    config.n_embd,
+                    config.hidden_size,
                     std=config.initializer_range,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
 
@@ -50,14 +50,14 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         inputs_embeds: torch.Tensor | list[list[float]] | None = None,
         labels: torch.Tensor | list[list[int]] | None = None,
         use_cache: bool | None = None,
-        output_attentions: bool | None = None,
-        output_hidden_states: bool | None = None,
         return_dict: bool = True,
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
     ) -> CausalLMOutputWithPast | torch.Tensor:
+        assert return_dict
+
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
@@ -70,7 +70,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
                 use_cache=use_cache,
-                output_attentions=output_attentions,
             )
 
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
@@ -81,7 +80,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
@@ -102,17 +100,12 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
-                    tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 )
 
-        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            if output_parallel_lm_logits:
-                assert self.tensor_parallel_word_embeddings
-            else:
-                if self.tensor_parallel_word_embeddings:
-                    # all gather
-                    lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-                    lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+        if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
+            # all gather
+            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+            lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
         if not self.is_pipeline_parallel_enabled:
             output = CausalLMOutputWithPast(
@@ -134,7 +127,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             LMHead_TP.compute_with_weight(
                 hidden_states,
                 weight=self.transformer.wte.weight,
-                tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
                 tp_mesh=self.tp_mesh,
@@ -145,18 +137,14 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     @classmethod
     def from_pretrained(
-        cls,
-        pretrained_model_name_or_path: str,
-        torch_dtype: torch.dtype = torch.float32,
-        tensor_parallel_word_embeddings: bool = False,
-        **kwargs,
+        cls, pretrained_model_name_or_path: str, torch_dtype: torch.dtype = torch.float32, **kwargs
     ) -> CausalLMModelMixin_TP:
         config: CommonConfig = cls.config_class.from_pretrained(pretrained_model_name_or_path)
 
         # use dummy tensors to avoid initializing model here
         with torch.device("meta"):
             # try sharding vocab matrices if really struggling for memory
-            model = cls._from_config(config, tensor_parallel_word_embeddings=tensor_parallel_word_embeddings, **kwargs)
+            model = cls._from_config(config, **kwargs)
             model = model.to(dtype=torch_dtype)
 
         # copy to device without copying storage
@@ -169,15 +157,12 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         with torch.device(torch.cuda.current_device()):
             position_embedding_type = PositionEmbeddingType(self.config.position_embedding_type)
 
-            if position_embedding_type == PositionEmbeddingType.alibi:
-                self.transformer.alibi.reset_parameters()
-            elif position_embedding_type == PositionEmbeddingType.rope:
+            if position_embedding_type == PositionEmbeddingType.rope:
                 self.transformer.rope.reset_parameters()
 
         state_dict = self.__class__.model_parallel_state_dict_function(
             config=self.config,
             safetensors_weights_manager=safetensors_weights_manager,
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
             num_pipeline_stages=self.num_pipeline_stages,
             pipeline_stage_id=self.pipeline_stage_id,
         )
@@ -186,7 +171,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     def get_dummy_input_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
-    ) -> tuple[int]:
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_first_stage:
             # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
             tensor = torch.empty(
@@ -205,10 +190,10 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         sequence_length: int,
         intermediate_dtype: torch.dtype,
         output_parallel_lm_logits_if_possible: bool,
-    ) -> tuple[int]:
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_last_stage:
             vocab_size = self.config.vocab_size
-            if self.tensor_parallel_word_embeddings and output_parallel_lm_logits_if_possible:
+            if output_parallel_lm_logits_if_possible:
                 vocab_size = divide_if_divisible(vocab_size, ProcessGroupManager.get_tensor_parallel_world_size(), "")
 
             if self._use_padding_free_transformer:
@@ -235,7 +220,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     def _get_dummy_intermediate_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
-    ) -> tuple[int]:
+    ) -> tuple[torch.Tensor] | torch.Tensor:
         sharded_sequence_length = (
             divide_if_divisible(sequence_length, ProcessGroupManager.get_tensor_parallel_world_size(), "")
             if self.sequence_parallel

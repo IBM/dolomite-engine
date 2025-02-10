@@ -7,7 +7,7 @@ from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..models import MoEDolomiteConfig
+from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -17,12 +17,11 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
     safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
-        config.n_layer,
-        config.num_experts,
-        config.n_head,
-        config.num_key_value_heads,
-        config.n_embd // config.n_head,
-        AttentionHeadType(config.attention_head_type),
+        config.num_layers,
+        config.num_attention_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
+        config.hidden_size // config.num_attention_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -35,7 +34,7 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDolomiteConfig:
     assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
@@ -47,29 +46,20 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
 
     assert not original_config.attention_bias
 
-    config = MoEDolomiteConfig(
+    config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
-        n_positions=original_config.max_position_embeddings,
-        n_embd=original_config.hidden_size,
-        n_layer=original_config.num_hidden_layers,
-        n_head=original_config.num_attention_heads,
-        num_key_value_heads=original_config.num_key_value_heads,
-        attention_head_type=attention_head_type,
+        max_position_embeddings=original_config.max_position_embeddings,
+        hidden_size=original_config.hidden_size,
+        num_layers=original_config.num_hidden_layers,
+        num_attention_heads=original_config.num_attention_heads,
         position_embedding_type="rope",
-        n_inner=original_config.intermediate_size,
-        activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
         use_cache=original_config.use_cache,
-        add_bias=original_config.attention_bias,
         tie_word_embeddings=original_config.tie_word_embeddings,
         initializer_range=original_config.initializer_range,
         rope_theta=original_config.rope_theta,
         rope_scaling=original_config.rope_scaling,
-        attn_pdrop=original_config.attention_dropout,
-        num_experts=original_config.num_local_experts,
-        num_experts_per_tok=original_config.num_experts_per_tok,
-        output_router_logits=original_config.output_router_logits,
         router_aux_loss_coef=original_config.router_aux_loss_coef,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
@@ -77,7 +67,28 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         m_emb=None if original_config.embedding_multiplier == 1 else original_config.embedding_multiplier,
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
-        attention_multiplier=original_config.attention_multiplier,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "num_key_value_heads": original_config.num_key_value_heads,
+                "attention_head_type": attention_head_type,
+                "attention_multiplier": original_config.attention_multiplier,
+                "add_bias": False,
+                "softmax_dropout": original_config.attention_dropout,
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
+        mlp_blocks=[
+            {
+                "mlp_type": "MoE",
+                "intermediate_size": original_config.intermediate_size,
+                "num_experts": original_config.num_local_experts,
+                "num_experts_per_tok": original_config.num_experts_per_tok,
+                "activation_function": "swiglu",
+                "add_bias": False,
+            }
+            for _ in range(original_config.num_hidden_layers)
+        ],
     )
 
     return config
@@ -86,7 +97,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
 def _import_state_dict_from_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
-    num_experts: int,
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
@@ -108,27 +118,29 @@ def _import_state_dict_from_huggingface(
             f"model.layers.{layer_idx}.post_attention_layernorm.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.gate.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = _split_and_reorder_for_glu(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = _split_and_reorder_for_glu(
             safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight")
         )
-        state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
         )
 
-        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
-            num_heads,
-            num_key_value_heads,
-            head_dim,
-            attention_head_type,
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = (
+            interleave_query_key_value_tensor_for_attention(
+                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
+                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
+                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
+                num_heads,
+                num_key_value_heads,
+                head_dim,
+                attention_head_type,
+            )
         )
-        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = safetensors_weights_manager.get_tensor(
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = safetensors_weights_manager.get_tensor(
             f"model.layers.{layer_idx}.self_attn.o_proj.weight"
         )
 
@@ -136,18 +148,17 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: MoEDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
-        config.n_layer,
-        config.num_experts,
-        config.n_head,
-        config.num_key_value_heads,
-        config.n_embd // config.n_head,
-        AttentionHeadType(config.attention_head_type),
+        config.num_layers,
+        config.num_attention_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
+        config.hidden_size // config.num_attention_heads,
+        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -163,32 +174,34 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
         pass
 
 
-def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig:
-    assert config.activation_function == "swiglu"
+def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
-    assert not config.add_bias
+
+    config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias", False)
+    config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias", False)
+    config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
+    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_type", "MoE")
 
     original_config = GraniteMoeConfig(
         vocab_size=config.vocab_size,
-        max_position_embeddings=config.n_positions,
-        hidden_size=config.n_embd,
-        num_hidden_layers=config.n_layer,
-        num_attention_heads=config.n_head,
-        num_key_value_heads=config.num_key_value_heads,
-        intermediate_size=4 * config.n_embd if config.n_inner is None else config.n_inner,
+        max_position_embeddings=config.max_position_embeddings,
+        hidden_size=config.hidden_size,
+        num_hidden_layers=config.num_layers,
+        num_attention_heads=config.num_attention_heads,
+        num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
+        intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
-        attention_bias=config.add_bias,
+        attention_bias=False,
         tie_word_embeddings=config.tie_word_embeddings,
         initializer_range=config.initializer_range,
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
-        attention_dropout=config.attn_pdrop,
-        num_local_experts=config.num_experts,
-        num_experts_per_tok=config.num_experts_per_tok,
-        output_router_logits=config.output_router_logits,
+        attention_dropout=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
+        num_local_experts=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts"),
+        num_experts_per_tok=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts_per_tok"),
         router_aux_loss_coef=config.router_aux_loss_coef,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
@@ -196,7 +209,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
         embedding_multiplier=1 if config.m_emb is None else config.m_emb,
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
-        attention_multiplier=config.attention_multiplier,
+        attention_multiplier=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier"),
         architectures=[GraniteMoeForCausalLM.__name__],
     )
 
@@ -206,7 +219,6 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
 def _export_state_dict_to_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
-    num_experts: int,
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
@@ -229,18 +241,18 @@ def _export_state_dict_to_huggingface(
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.gate.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.gate.weight")
         )
 
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight")
         )
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
         )
 
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),
+            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"),
             num_heads,
             num_key_value_heads,
             head_dim,
@@ -251,7 +263,7 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = value_weight
 
         state_dict[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.attn.c_proj.weight"
+            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
         )
 
     return state_dict

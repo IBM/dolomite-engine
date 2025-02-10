@@ -9,28 +9,46 @@ from transformers import DynamicCache
 from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
-from ..config import DesyncResidualConfig
+from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..linear import DesyncResidualLinear
 
 
 class DesyncResidualSDPA(Attention):
-    def __init__(self, config: DesyncResidualConfig, causal: bool, layer_idx: int = None) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        pretraining_tensor_parallel_size: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        m_residual: float,
+        num_layers: int,
+        causal: bool,
+        layer_idx: int,
+        all_reduce: bool,
+    ) -> None:
         nn.Module.__init__(self)
 
-        self.tp_world_size = config.pretraining_tensor_parallel_size
+        self.tp_world_size = pretraining_tensor_parallel_size
 
         self.causal = causal
-        self.global_hidden_size = config.n_embd
-        self.global_num_heads = config.n_head
-        self.global_num_key_value_heads = config.num_key_value_heads
-        self.add_bias = config.add_bias
-        self.m_residual = config.m_residual
-        self.curent_attention_all_reduce = config.reduce_pattern[layer_idx]["attention"]
+        self.global_hidden_size = hidden_size
+        self.global_num_heads = num_attention_heads
+        self.global_num_key_value_heads = num_key_value_heads
+        self.add_bias = add_bias
+        self.curent_attention_all_reduce = all_reduce
 
-        initializer_range = config.initializer_range
-        m_width = config.m_width
-        n_layer = config.n_layer
-        init_method = InitMethod(config.init_method)
+        initializer_range = initializer_range
+        self.m_residual = m_residual
+        num_layers = num_layers
 
         divide_if_divisible(
             self.global_hidden_size,
@@ -47,14 +65,11 @@ class DesyncResidualSDPA(Attention):
         )
 
         self.head_dim = divide_if_divisible(self.hidden_size, self.num_heads, "")
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
-
-        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-        self.scale_attn_weights = config.scale_attn_weights
-        self.attention_multiplier = config.attention_multiplier
+        self.attention_head_type = attention_head_type
+        self.position_embedding_type = position_embedding_type
+        self.attention_multiplier = attention_multiplier
 
         self.layer_idx = layer_idx
-        self.attention_softmax_in_fp32 = config.attention_softmax_in_fp32
 
         if self.attention_head_type == AttentionHeadType.mha:
             if self.global_num_key_value_heads is None:
@@ -93,9 +108,8 @@ class DesyncResidualSDPA(Attention):
 
         # note that the actual layout is different for the output and depends on whether we are using MHA, MQA or GQA
         # (self.hidden_size + 2 * self.num_key_value_heads * self.head_dim) is just the actual number output features
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
+
         self.c_attn = DesyncResidualLinear(
             self.global_hidden_size,
             self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
@@ -104,24 +118,18 @@ class DesyncResidualSDPA(Attention):
             std=std,
         )
 
-        std = initializer_range / math.sqrt(2 * n_layer)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.c_proj = DesyncResidualLinear(
             self.hidden_size,
             self.global_hidden_size,
             tensor_parallel_size=self.tp_world_size,
             bias=self.add_bias,
-            std=std,
+            std=std / math.sqrt(2 * num_layers),
         )
 
-        self.attn_pdrop = config.attn_pdrop
-        self.resid_pdrop = config.resid_pdrop
+        self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
 
-        self.attn_dropout = nn.Identity() if self.attn_pdrop == 0 else nn.Dropout(self.attn_pdrop)
-
-        assert self.resid_pdrop == 0, "residual dropout is not supported with DesyncResidual"
-        self.resid_dropout = nn.Identity() if self.resid_pdrop == 0 else nn.Dropout(self.resid_pdrop)
+        assert dropout == 0, "residual dropout is not supported with DesyncResidual"
+        self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # ==========================================================================================
@@ -203,45 +211,44 @@ class DesyncResidualSDPA(Attention):
         # value -> (TP * batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
-        softmax_scale = self._get_softmax_scale()
-        dropout_p = self.attn_pdrop if self.training else 0
-
         if attention_mask is not None:
             # TODO avoid this repeat on every layer
             attention_mask = attention_mask.repeat(self.tp_world_size, 1, 1, 1)
 
-        attn_output = F.scaled_dot_product_attention(
+        hidden_states = F.scaled_dot_product_attention(
             query,
             key,
             value,
             attn_mask=attention_mask,
-            dropout_p=dropout_p,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
             is_causal=self.causal if attention_mask is None else False,
-            scale=softmax_scale,
+            scale=self._get_softmax_scale(),
         )
 
-        # ==========================================================================================
-        # attn_output -> (TP * batch_size, num_heads, query_length, head_dim)
-        # ==========================================================================================
-
-        query_length = attn_output.shape[2]
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
+        del query, key, value
 
         # ==========================================================================================
-        # attn_output -> (TP, batch_size, query_length, num_heads * head_dim)
+        # hidden_states -> (TP * batch_size, num_heads, query_length, head_dim)
         # ==========================================================================================
 
-        attn_output = self.c_proj(attn_output)
+        query_length = hidden_states.shape[2]
+        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states = hidden_states.reshape(self.tp_world_size, -1, query_length, self.num_heads * self.head_dim)
+
+        # ==========================================================================================
+        # hidden_states -> (TP, batch_size, query_length, num_heads * head_dim)
+        # ==========================================================================================
+
+        hidden_states = self.c_proj(hidden_states)
 
         if self.m_residual is not None:
-            attn_output = attn_output * self.m_residual
+            hidden_states = hidden_states * self.m_residual
 
         if self.curent_attention_all_reduce:
-            attn_output = attn_output + residual / self.tp_world_size
-            attn_output = attn_output.sum(dim=0)
+            hidden_states = hidden_states + residual / self.tp_world_size
+            hidden_states = hidden_states.sum(dim=0)
         else:
-            attn_output = attn_output + residual
+            hidden_states = hidden_states + residual
 
-        attn_output = self.resid_dropout(attn_output)
-        return attn_output
+        hidden_states = self.dropout(hidden_states)
+        return hidden_states

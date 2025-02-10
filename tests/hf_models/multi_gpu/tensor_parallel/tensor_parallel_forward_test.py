@@ -10,7 +10,6 @@ from dolomite_engine.hf_models import (
     DesyncResidualConfig,
     GPTDolomiteConfig,
     LadderResidualConfig,
-    MoEDolomiteConfig,
     PositionEmbeddingType,
 )
 from dolomite_engine.utils import torch_dtype_to_string
@@ -28,24 +27,6 @@ class TensorParallelTest(TestCommons):
             [False, True],
             [False, True],
             [GPTDolomiteConfig.model_type],
-        )
-        + TestCommons.make_args_matrix(
-            [AttentionHeadType.gqa],
-            [PositionEmbeddingType.rope],
-            ["sdpa"],
-            TestCommons.get_dtypes(),
-            [False, True],
-            [False, True],
-            [MoEDolomiteConfig.model_type],
-        )
-        + TestCommons.make_args_matrix(
-            [AttentionHeadType.mha, AttentionHeadType.gqa],
-            [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope],
-            ["sdpa"],
-            [torch.float32],
-            [False],
-            [False],
-            [DesyncResidualConfig.model_type],
         )
         + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
@@ -69,8 +50,6 @@ class TensorParallelTest(TestCommons):
         model_type: str,
     ) -> None:
         self.skip_test_if_device_unavailable(torch.device("cuda"))
-        if attention_implementation == "flash_attention_2" and position_embedding_type == PositionEmbeddingType.alibi:
-            self.skipTest("skipping test because Alibi is not supported with flash attention")
 
         if (attention_implementation, torch_dtype) not in [
             ("eager", torch.float32),

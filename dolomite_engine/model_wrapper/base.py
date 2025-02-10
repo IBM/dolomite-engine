@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
-from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..enums import AttentionImplementation, Mode
 from ..hf_models import get_model_parallel_class, is_custom_model
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
@@ -21,13 +21,10 @@ class ModelWrapper(nn.Module):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         num_pipeline_stages: int,
         pipeline_stage_id: int,
-        neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
@@ -43,11 +40,9 @@ class ModelWrapper(nn.Module):
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
             attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
-            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
@@ -62,9 +57,7 @@ class ModelWrapper(nn.Module):
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
         self.attention_implementation = attention_implementation
-        self.moe_implementation = moe_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
@@ -94,10 +87,6 @@ class ModelWrapper(nn.Module):
 
         self._setup_tokenizer()
         self._setup_model()
-
-        if self.mode == Mode.training:
-            if neft_alpha is not None and neft_alpha > 0:
-                self._override_embedding_forward_with_neft_forward(neft_alpha)
 
         if additional_special_tokens is not None and len(additional_special_tokens) > 0:
             original_vocab_size = len(self.tokenizer)
@@ -170,7 +159,7 @@ class ModelWrapper(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
         self.eos_token_id = self.tokenizer.eos_token_id
 
-    def _setup_model(self) -> None:
+    def _get_model_kwargs(self) -> dict:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:
@@ -178,12 +167,8 @@ class ModelWrapper(nn.Module):
 
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
-        if self.moe_implementation is not None:
-            model_kwargs["moe_implementation"] = self.moe_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
-        if self.tensor_parallel_word_embeddings:
-            model_kwargs["tensor_parallel_word_embeddings"] = True
         if self.sequence_parallel:
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
@@ -191,6 +176,11 @@ class ModelWrapper(nn.Module):
         if self.is_pipeline_parallel_enabled:
             model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
             model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
+
+        return model_kwargs
+
+    def _setup_model(self) -> None:
+        model_kwargs = self._get_model_kwargs()
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:
@@ -236,34 +226,14 @@ class ModelWrapper(nn.Module):
 
             self.model = _get_model(torch_dtype=torch_dtype)
 
-    def _override_embedding_forward_with_neft_forward(self, neft_alpha: float) -> None:
-        if not hasattr(self.model, "get_input_embeddings"):
-            raise Exception(
-                "`get_input_embeddings` is not implemented for this model so its not possible to inject noise to input"
-                " embeddings. Please implement `get_input_embeddings` ot set `neft_alpha` to None"
-            )
-
-        original_forward = self.model.get_input_embeddings().forward
-
-        def _noisy_forward(x: torch.Tensor) -> torch.Tensor:
-            x = original_forward(x)
-
-            # to check if we are in eval mode we use self.training instead of self.model.training
-            if self.training:
-                mag_norm = neft_alpha / torch.sqrt(torch.tensor(torch.numel(x)))
-                return x + torch.zeros_like(x).uniform_(-mag_norm, mag_norm)
-
-            return x
-
-        # overrides the forward function of torch.nn.Embedding
-        self.model.get_input_embeddings().forward = _noisy_forward
-
     def calculate_num_parameters(self) -> int:
+        model_kwargs = self._get_model_kwargs()
+
         with torch.device("meta"):
             if self.model_name is None:
-                model = self.model_class.from_config(config=self.config)
+                model = self.model_class.from_config(**model_kwargs)
             else:
-                model = self.model_class.from_pretrained(pretrained_model_name_or_path=self.model_name)
+                model = self.model_class.from_pretrained(**model_kwargs)
 
             num_parameters = 0
             for param in model.parameters():
