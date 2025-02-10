@@ -41,7 +41,24 @@ def get_sequence_mixer(
 
     if sequence_mixer_type == "mamba2":
         mamba_class = Mamba2CUDA if is_kernel_allowed(Kernel.mamba2_ssm) else Mamba2Base
-        return mamba_class(hidden_size=config.hidden_size)
+        return mamba_class(
+            hidden_size=config.hidden_size,
+            ssm_state_size=block.state_size,
+            ssm_intermediate_size=block.intermediate_size,
+            ssm_num_heads=block.num_heads,
+            conv_kernel_size=block.conv_kernel_size,
+            time_step_rank=block.time_step_rank,
+            time_step_limit=block.time_step_limit,
+            time_step_min=block.time_step_min,
+            time_step_max=block.time_step_max,
+            add_bias=block.add_bias,
+            use_conv_bias=block.use_conv_bias,
+            ssm_activation_function=block.activation_function,
+            num_groups=block.num_groups,
+            chunk_size=block.chunk_size,
+            layer_norm_epsilon=config.layer_norm_epsilon,
+            layer_idx=layer_idx,
+        )
     else:
         sequence_mixer_kwargs = dict(
             hidden_size=config.hidden_size,

@@ -27,7 +27,6 @@ class _Mamba2Args(BaseArgs):
     time_step_limit: tuple[float, float] = (0, float("inf"))
     time_step_min: float = 0.001
     time_step_max: float = 0.1
-    time_step_floor: float = 1e-4
     add_bias: bool = True
     use_conv_bias: bool = True
     activation_function: str = "silu"
