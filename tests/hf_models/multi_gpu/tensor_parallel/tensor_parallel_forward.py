@@ -65,53 +65,6 @@ if args.model_type == "gpt_dolomite":
             {"mlp_block_type": "MoE", "add_bias": False},
         ],
     )
-elif args.model_type == "desync_residual":
-    config = DesyncResidualConfig(
-        num_layers=4,
-        position_embedding_type="learned_absolute",
-        hidden_size=128,
-        num_attention_heads=16,
-        normalization_function="rmsnorm",
-        pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
-        sequence_mixer_blocks=[
-            {
-                "sequence_mixer_type": "softmax_attention",
-                "add_bias": False,
-                "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
-            },
-            {
-                "sequence_mixer_type": "softmax_attention",
-                "add_bias": False,
-                "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
-            },
-            {
-                "sequence_mixer_type": "softmax_attention",
-                "add_bias": False,
-                "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
-            },
-            {
-                "sequence_mixer_type": "softmax_attention",
-                "add_bias": False,
-                "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
-            },
-        ],
-        mlp_blocks=[
-            {"mlp_block_type": "MLP", "add_bias": False},
-            {"mlp_block_type": "MoE", "add_bias": False},
-            {"mlp_block_type": "MLP", "add_bias": False},
-            {"mlp_block_type": "MoE", "add_bias": False},
-        ],
-        reduce_pattern=[
-            {"attention": False, "mlp": False},
-            {"attention": False, "mlp": True},
-            {"attention": False, "mlp": False},
-            {"attention": False, "mlp": True},
-        ],
-    )
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
         num_layers=2,
