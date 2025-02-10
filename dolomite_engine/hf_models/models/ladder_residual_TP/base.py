@@ -63,9 +63,9 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
             past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
-            previous_attention_out, previous_mlp_out, hidden_states = self.h[str(layer_idx)](
-                previous_attention_out=previous_attention_out,
-                previous_mlp_out=previous_mlp_out,
+            current_attention_out, current_mlp_out, hidden_states = self.h[str(layer_idx)](
+                current_attention_out=current_attention_out,
+                current_mlp_out=current_mlp_out,
                 residual=hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
