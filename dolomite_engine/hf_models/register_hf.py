@@ -3,7 +3,6 @@ from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 from .models import (
     DesyncResidualConfig,
     DesyncResidualForCausalLM,
-    DesyncResidualForCausalLM_TP,
     DesyncResidualModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
@@ -48,7 +47,6 @@ def is_custom_model(model_type: str) -> bool:
 
 _MODEL_PARALLEL_CLASS_MAPPING = {
     GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
-    DesyncResidualConfig.model_type: DesyncResidualForCausalLM_TP,
     LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
 }
 
