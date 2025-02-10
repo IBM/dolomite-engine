@@ -143,7 +143,7 @@ class CommonConfig(PretrainedConfig):
         if self.sequence_mixer_blocks is None:
             self.sequence_mixer_blocks = [{} for _ in range(self.num_layers)]
 
-        sequence_mixer_blocks: list[_SoftmaxAttentionArgs] = []
+        sequence_mixer_blocks: list[_SoftmaxAttentionArgs | _Mamba2Args] = []
         for i in range(self.num_layers):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")

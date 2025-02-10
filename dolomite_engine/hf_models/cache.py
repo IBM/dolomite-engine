@@ -18,19 +18,19 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
     ) -> None:
         DynamicCache.__init__(self)
 
-        self.layers_block_type = config.layer_map
         self.has_previous_state = False  # only used by mamba
-        ssm_state_size = config.ssm_state_size
 
         self.conv_states = []
         self.ssm_states = []
         self.transformer_layers = []
         for i in range(config.num_layers):
-            if self.layers_block_type[i] == "mamba2":
+            block = config.sequence_mixer_blocks[i]
+
+            if block.sequence_mixer_type == "mamba2":
                 self.conv_states += [
                     torch.zeros(
                         batch_size,
-                        (config.ssm_intermediate_size + 2 * config.n_groups * ssm_state_size),
+                        (block.intermediate_size + 2 * block.num_groups * block.state_size),
                         config.conv_kernel_size,
                         device=device,
                         dtype=dtype,
@@ -39,9 +39,9 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                 self.ssm_states += [
                     torch.zeros(
                         batch_size,
-                        config.ssm_num_heads,
-                        divide_if_divisible(config.ssm_intermediate_size, config.ssm_num_heads, ""),
-                        ssm_state_size,
+                        block.num_heads,
+                        divide_if_divisible(block.intermediate_size, block.num_heads, ""),
+                        block.state_size,
                         device=device,
                         dtype=dtype,
                     )
