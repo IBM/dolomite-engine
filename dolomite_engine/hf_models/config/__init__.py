@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Any, Callable
 
 from transformers import PretrainedConfig
@@ -20,6 +21,11 @@ def _hold_base_args(key: str) -> Callable:
         return _run
 
     return _holded_function
+
+
+def _update_with_key_value(block: dict, kwargs: dict, key: str) -> None:
+    if key in block:
+        kwargs[key] = block.pop(key)
 
 
 _NAKED_DISALLOWED_ARGS = [
@@ -138,7 +144,7 @@ class CommonConfig(PretrainedConfig):
 
         sequence_mixer_blocks: list[_SoftmaxAttentionArgs] = []
         for i in range(self.num_layers):
-            sequence_mixer_block = self.sequence_mixer_blocks[i]
+            sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
             sequence_mixer_block_type = sequence_mixer_block.get("mlp_block_type", "softmax_attention")
 
             attention_head_type = AttentionHeadType(sequence_mixer_block.get("attention_head_type", "mqa"))
@@ -189,28 +195,27 @@ class CommonConfig(PretrainedConfig):
 
         mlp_blocks: list[_MLPArgs | _MoEArgs] = []
         for i in range(self.num_layers):
-            mlp_block = self.mlp_blocks[i]
-            mlp_block_type = mlp_block.get("mlp_block_type", "MLP")
+            mlp_block = deepcopy(self.mlp_blocks[i])
+            mlp_block_type = mlp_block.pop("mlp_block_type", "MLP")
 
-            mlp_kwargs = dict(
-                intermediate_size=mlp_block.get("intermediate_size", 4 * self.hidden_size),
-                activation_function=mlp_block.get("activation_function", "gelu_pytorch_tanh"),
-                dropout=mlp_block.get("dropout", 0),
-                add_bias=mlp_block.get("add_bias", True),
-            )
+            mlp_kwargs = {"intermediate_size": mlp_block.pop("intermediate_size", 4 * self.hidden_size)}
+
+            _update_with_key_value(mlp_block, mlp_kwargs, "activation_function")
+            _update_with_key_value(mlp_block, mlp_kwargs, "dropout")
+            _update_with_key_value(mlp_block, mlp_kwargs, "add_bias")
 
             if mlp_block_type == "MLP":
-                mlp_args = _MLPArgs(**mlp_kwargs)
+                mlp_class = _MLPArgs
             elif mlp_block_type == "MoE":
-                mlp_args = _MoEArgs(
-                    **mlp_kwargs,
-                    shared_intermediate_size=mlp_block.get("shared_intermediate_size", None),
-                    num_experts=mlp_block.get("num_experts", 8),
-                    num_experts_per_tok=mlp_block.get("num_experts_per_tok", 2),
-                )
+                _update_with_key_value(mlp_block, mlp_kwargs, "shared_intermediate_size")
+                _update_with_key_value(mlp_block, mlp_kwargs, "num_experts")
+                _update_with_key_value(mlp_block, mlp_kwargs, "num_experts_per_tok")
+
+                mlp_class = _MoEArgs
             else:
                 raise ValueError(f"unexpected mlp_block_type ({mlp_block_type})")
 
-            mlp_blocks.append(mlp_args)
+            assert len(mlp_block) == 0, f"leftover keys in the mlp_block ({mlp_block}) at position {i}"
+            mlp_blocks.append(mlp_class(**mlp_kwargs))
 
         self.mlp_blocks = mlp_blocks
