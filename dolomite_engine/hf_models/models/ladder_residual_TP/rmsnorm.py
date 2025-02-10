@@ -14,10 +14,7 @@ class _RMSNorm_Cute_Forward(torch.autograd.Function):
         x: torch.Tensor,
         weight: torch.Tensor | None,
         eps: float | None,
-        memory_efficient: bool,
-        kernel_backend_forward: KernelBackend,
-        BLOCK_SIZE_B_forward: int,
-        BLOCK_SIZE_H_forward: int,
+        context,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None, bool]:
         if weight is not None:
             assert weight.dim() == 1, "weight should be 1D"
@@ -31,32 +28,23 @@ class _RMSNorm_Cute_Forward(torch.autograd.Function):
         if eps is None:
             eps = torch.finfo(x.dtype).eps
 
-        output, rmsnorm_denominator = _forward(
-            x=x,
-            weight=weight,
-            eps=eps,
-            memory_efficient=memory_efficient,
-            kernel_backend=kernel_backend_forward,
-            BLOCK_SIZE_B=BLOCK_SIZE_B_forward,
-            BLOCK_SIZE_H=BLOCK_SIZE_H_forward,
-        )
+        output, rmsnorm_denominator = _forward(x=x, weight=weight, eps=eps, memory_efficient=False)
 
         if is_x_1d:
             output = output.squeeze(0)
 
-        return output, x, weight, rmsnorm_denominator, is_x_1d
+        context.x = x
+        context.weight = weight
+        context.rmsnorm_denominator = rmsnorm_denominator
+        context.is_x_1d = is_x_1d
+        context.eps = eps
+
+        return output, x, weight
 
     @staticmethod
     @ensure_contiguous
-    def backward(
-        ctx,
-        output_grad: torch.Tensor,
-        x_grad: torch.Tensor,
-        weight_grad: torch.Tensor | None,
-        rmsnorm_denominator: torch.Tensor | None,
-        is_x_1d_grad: bool,
-    ) -> tuple[torch.Tensor | None]:
-        return x_grad, weight_grad, *[None] * 5
+    def backward(ctx, output_grad: torch.Tensor, x_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
+        return x_grad, weight_grad, None, None
 
 
 class _RMSNorm_Cute_Backward(torch.autograd.Function):
@@ -67,19 +55,11 @@ class _RMSNorm_Cute_Backward(torch.autograd.Function):
         x: torch.Tensor,
         weight: torch.Tensor | None,
         output: torch.Tensor,
-        rmsnorm_denominator: torch.Tensor | None,
-        eps: float | None,
-        kernel_backend_backward: KernelBackend,
-        BLOCK_SIZE_B_backward: int,
-        BLOCK_SIZE_H_backward: int,
-        is_x_1d: bool,
+        context,
     ) -> torch.Tensor:
-        ctx.save_for_backward(x, weight, rmsnorm_denominator)
-        ctx.eps = eps
-        ctx.is_x_1d = is_x_1d
-        ctx.kernel_backend_backward = kernel_backend_backward
-        ctx.BLOCK_SIZE_B_backward = BLOCK_SIZE_B_backward
-        ctx.BLOCK_SIZE_H_backward = BLOCK_SIZE_H_backward
+        ctx.save_for_backward(x, weight, context.rmsnorm_denominator)
+        ctx.eps = context.eps
+        ctx.is_x_1d = context.is_x_1d
 
         return output
 
@@ -94,50 +74,27 @@ class _RMSNorm_Cute_Backward(torch.autograd.Function):
             eps=ctx.eps,
             rmsnorm_denominator=rmsnorm_denominator,
             output_grad=output_grad,
-            kernel_backend=ctx.kernel_backend_backward,
-            BLOCK_SIZE_B=ctx.BLOCK_SIZE_B_backward,
-            BLOCK_SIZE_H=ctx.BLOCK_SIZE_H_backward,
         )
 
         if ctx.is_x_1d:
             x_grad = x_grad.squeeze(0)
 
-        return x_grad, weight_grad, *[None] * 7
+        return x_grad, weight_grad, output_grad, None
 
 
 def rmsnorm_cute_forward_only(
     x: torch.Tensor,
     weight: torch.Tensor | None,
     eps: float | None,
-    memory_efficient: bool = False,
-    kernel_backend_forward: KernelBackend = CutoTuneParameter(),
-    BLOCK_SIZE_B_forward: int = CutoTuneParameter(),
-    BLOCK_SIZE_H_forward: int = CutoTuneParameter(),
+    context,
 ) -> torch.Tensor:
-    return _RMSNorm_Cute_Forward.apply(
-        x, weight, eps, memory_efficient, kernel_backend_forward, BLOCK_SIZE_B_forward, BLOCK_SIZE_H_forward
-    )
+    return _RMSNorm_Cute_Forward.apply(x, weight, eps, context)
 
 
 def rmsnorm_cute_backward_only(
     x: torch.Tensor,
     weight: torch.Tensor | None,
     output: torch.Tensor,
-    rmsnorm_denominator: torch.Tensor | None,
-    eps: float | None,
-    kernel_backend_backward: KernelBackend = CutoTuneParameter(),
-    BLOCK_SIZE_B_backward: int = CutoTuneParameter(),
-    BLOCK_SIZE_H_backward: int = CutoTuneParameter(),
-    is_x_1d: bool = False,
+    context,
 ) -> torch.Tensor:
-    return _RMSNorm_Cute_Backward.apply(
-        x,
-        weight,
-        output,
-        rmsnorm_denominator,
-        eps,
-        kernel_backend_backward,
-        BLOCK_SIZE_B_backward,
-        BLOCK_SIZE_H_backward,
-        is_x_1d,
-    )
+    return _RMSNorm_Cute_Backward.apply(x, weight, output, context)
