@@ -36,16 +36,25 @@ if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
     num_key_value_heads = 8
 
 config = GPTDolomiteConfig(
-    attention_head_type=args.attention_head_type,
     num_layers=2,
     position_embedding_type="learned_absolute",
-    num_key_value_heads=num_key_value_heads,
-    add_bias=False,
     hidden_size=128,
     num_attention_heads=16,
     mlp_blocks=[
-        {"mlp_block_type": "MLP", "activation_function": args.activation_function},
-        {"mlp_block_type": "MoE", "activation_function": args.activation_function},
+        {
+            "mlp_block_type": "MLP",
+            "activation_function": args.activation_function,
+            "add_bias": False,
+            "num_key_value_heads": num_key_value_heads,
+            "attention_head_type": args.attention_head_type,
+        },
+        {
+            "mlp_block_type": "MoE",
+            "activation_function": args.activation_function,
+            "add_bias": False,
+            "num_key_value_heads": num_key_value_heads,
+            "attention_head_type": args.attention_head_type,
+        },
     ],
 )
 enable_kernels([Kernel.scattermoe]).__enter__()
