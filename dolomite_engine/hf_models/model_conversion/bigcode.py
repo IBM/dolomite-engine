@@ -201,4 +201,8 @@ def _export_state_dict_to_huggingface(safetensors_weights_manager: SafeTensorsWe
             f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"
         )
 
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp_block.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.bias"] = bias
+
     return state_dict

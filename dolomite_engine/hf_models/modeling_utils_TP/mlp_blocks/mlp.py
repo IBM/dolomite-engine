@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from ...enums import InitMethod
 from ...modeling_utils import MLP, get_activation_function, is_glu
-from ...modeling_utils.mlp_block.mlp import _get_std_for_linear
+from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..dropout import Dropout_TP
 from ..linear import ColumnParallelLinear, RowParallelLinear
 

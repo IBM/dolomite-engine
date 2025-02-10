@@ -18,6 +18,7 @@ class GPTDolomiteBlock(nn.Module):
 
         hidden_size = config.hidden_size
         self.m_residual = config.m_residual
+        self.sequence_mixer_type = config.sequence_mixer_blocks[layer_idx].sequence_mixer_type
 
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
@@ -44,14 +45,21 @@ class GPTDolomiteBlock(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
 
-        hidden_states = self.sequence_mixer(
-            hidden_states,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            rope_cos_sin=rope_cos_sin,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
+        if self.sequence_mixer_type == "softmax_attention":
+            hidden_states = self.sequence_mixer(
+                hidden_states,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
+        elif self.sequence_mixer_type == "mamba2":
+            hidden_states = self.sequence_mixer(
+                hidden_states, cache_params=past_key_values, attention_mask=attention_mask
+            )
+        else:
+            raise ValueError(f"unexpected sequence_mixer_type ({self.sequence_mixer_type})")
 
         if self.m_residual is not None:
             hidden_states = hidden_states * self.m_residual

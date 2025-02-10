@@ -4,11 +4,12 @@ from transformers import DynamicCache, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import divide_if_divisible
+from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
 from ...loss import clear_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
-from ...utils import convert_padding_free_lists_to_tensors
+from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 
 
 class PreTrainedModelMixin(PreTrainedModel):
@@ -106,6 +107,9 @@ class BaseModelMixin(PreTrainedModelMixin):
         self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
+        self.sequence_mixer_block_types = [
+            config.sequence_mixer_blocks[i].sequence_mixer_type for i in range(config.num_layers)
+        ]
 
         self.head_dim = divide_if_divisible(
             self.embed_dim,
@@ -160,7 +164,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         (
             use_cache,
             hidden_states,
-            attention_mask,
+            causal_mask,
             position_ids,
             rope_cos_sin,
             past_key_values,
@@ -185,14 +189,24 @@ class BaseModelMixin(PreTrainedModelMixin):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        clear_aux_loss()
+        if is_generation_cache_enabled():
+            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
 
-        for block in self.h:
+        clear_aux_loss()
+        mamba_mask = None
+        mamba_mask_computed = False
+
+        for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
+            is_mamba_layer = sequence_mixer_type == "mamba2"
+
+            if is_mamba_layer and not mamba_mask_computed:
+                mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
+                mamba_mask_computed = True
+
             hidden_states = block(
                 hidden_states,
                 past_key_values=past_key_values,
-                attention_mask=attention_mask,
+                attention_mask=mamba_mask if is_mamba_layer else causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
@@ -496,3 +510,16 @@ class BaseModelMixin(PreTrainedModelMixin):
             )
 
         return attention_mask
+
+    def _get_mamba_mask(
+        self, attention_mask: torch.Tensor | None, past_key_values: HybridMambaAttentionDynamicCache
+    ) -> torch.Tensor | None:
+        mamba_mask = attention_mask
+        if (
+            past_key_values is None
+            or past_key_values.get_seq_length() > 0
+            or (attention_mask is not None and torch.all(attention_mask == 1))
+        ):
+            mamba_mask = None
+
+        return mamba_mask
