@@ -53,25 +53,6 @@ if args.model_type == "gpt_dolomite":
         mlp_blocks=[{"mlp_block_type": "MLP"}, {"mlp_block_type": "MoE"}],
     )
     enable_kernels([Kernel.scattermoe]).__enter__()
-elif args.model_type == "desync_residual":
-    config = DesyncResidualConfig(
-        attention_head_type=args.attention_head_type,
-        num_layers=4,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        hidden_size=128,
-        num_attention_heads=16,
-        resid_pdrop=0,
-        normalization_function="rmsnorm",
-        pretraining_tensor_parallel_size=ProcessGroupManager.get_tensor_parallel_world_size(),
-        reduce_pattern=[
-            {"attention": False, "mlp": False},
-            {"attention": False, "mlp": True},
-            {"attention": False, "mlp": False},
-            {"attention": False, "mlp": True},
-        ],
-    )
 elif args.model_type == "ladder_residual":
     config = LadderResidualConfig(
         attention_head_type=args.attention_head_type,

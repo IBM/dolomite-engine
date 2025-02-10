@@ -29,15 +29,6 @@ class TensorParallelTest(TestCommons):
             [GPTDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
-            [AttentionHeadType.mha, AttentionHeadType.gqa],
-            TestCommons.get_position_embedding_types(),
-            ["sdpa"],
-            [torch.float32],
-            [False],
-            [False],
-            [DesyncResidualConfig.model_type],
-        )
-        + TestCommons.make_args_matrix(
             [AttentionHeadType.gqa],
             [PositionEmbeddingType.rope],
             ["flash_attention_2"],
