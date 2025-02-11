@@ -19,21 +19,26 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
     @staticmethod
     @ensure_contiguous
     def forward(
-        ctx, x: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context: str
+        ctx,
+        residual: torch.Tensor,
+        weight: torch.Tensor | None,
+        eps: float | None,
+        sequence_parallel: bool,
+        context: str,
     ) -> torch.Tensor:
         if weight is not None:
             device_mesh = weight.device_mesh
             weight = dtensor_to_tensor(weight)
 
             assert weight.dim() == 1, "weight should be 1D"
-            assert weight.size(-1) == x.size(-1), "hidden size for x and weight tensor is different"
-            assert weight.type() == x.type(), "tensors weight and y should have same dtype"
+            assert weight.size(-1) == residual.size(-1), "hidden size for x and weight tensor is different"
+            assert weight.type() == residual.type(), "tensors weight and y should have same dtype"
 
-        is_x_1d = x.dim() == 1
-        x_input = x.unsqueeze(0) if is_x_1d else x
+        is_x_1d = residual.dim() == 1
+        x_input = residual.unsqueeze(0) if is_x_1d else residual
 
         if eps is None:
-            eps = torch.finfo(x.dtype).eps
+            eps = torch.finfo(residual.dtype).eps
 
         output, rmsnorm_denominator = _forward(
             x=x_input,
@@ -51,7 +56,7 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
         ctx.context = context
 
         (_MLP_F if context == "mlp" else _ATTN_F).append(
-            (x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh)
+            (residual, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh)
         )
 
         return output
@@ -64,13 +69,15 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
 
 class _RMSNorm_Cute_B(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, weight: torch.Tensor | None, eps: float | None, context: str) -> torch.Tensor:
+    def forward(
+        ctx, residual: torch.Tensor, weight: torch.Tensor | None, eps: float | None, context: str
+    ) -> torch.Tensor:
         ctx.context = context
-        return x, weight
+        return residual, weight
 
     @staticmethod
-    def backward(ctx, x_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
-        x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh = (
+    def backward(ctx, residual_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
+        residual, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh = (
             _MLP_F if ctx.context == "mlp" else _ATTN_F
         ).pop()
         output_grad = (_MLP_B if ctx.context == "mlp" else _ATTN_B).pop()
@@ -80,7 +87,7 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
         output_grad = wait_for_ACT(output_grad, wait_in_forward=True, wait_in_backward=False)
 
-        x_grad, weight_grad = _backward(
+        residual_grad, weight_grad = _backward(
             x=x,
             weight=weight,
             eps=eps,
@@ -92,24 +99,24 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         )
 
         if is_x_1d:
-            x_grad = x_grad.squeeze(0)
+            residual = residual.squeeze(0)
 
         weight_grad = tensor_to_dtensor(
             weight_grad, device_mesh=device_mesh, current_placement=Partial() if sequence_parallel else Replicate()
         )
 
-        return x_grad, weight_grad, None, None
+        return residual, weight_grad, None, None
 
 
 def rmsnorm_cute_forward(
-    x: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context
+    residual: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context
 ) -> torch.Tensor:
-    x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
-    x = _RMSNorm_Cute_F.apply(x, weight, eps, sequence_parallel, context)
-    return x
+    residual = wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False)
+    residual = _RMSNorm_Cute_F.apply(residual, weight, eps, sequence_parallel, context)
+    return residual
 
 
 def rmsnorm_cute_backward(
-    x: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context
+    residual: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context
 ) -> torch.Tensor:
-    return _RMSNorm_Cute_B.apply(x, weight, eps, context)
+    return _RMSNorm_Cute_B.apply(residual, weight, eps, context)
