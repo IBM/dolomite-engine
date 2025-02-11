@@ -1,25 +1,7 @@
 import torch
-from cute_kernels import rmsnorm_cute
-from torch.distributed._tensor.placement_types import Partial, Replicate
 from transformers import DynamicCache
 
-from ....distributed import dtensor_to_tensor
-from ....kernels import wait_for_ACT
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
-from .rmsnorm import rmsnorm_cute_backward, rmsnorm_cute_forward
-
-
-def rmsnorm_cute_wrapper(
-    input: torch.Tensor, weight: torch.Tensor, eps: float, sequence_parallel: bool
-) -> torch.Tensor:
-    input = wait_for_ACT(input, wait_in_forward=True, wait_in_backward=False)
-    input = rmsnorm_cute(
-        x=input,
-        weight=dtensor_to_tensor(weight, grad_placement=Partial() if sequence_parallel else Replicate()),
-        eps=eps,
-    )
-    input = wait_for_ACT(input, wait_in_forward=False, wait_in_backward=True)
-    return input
 
 
 class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
