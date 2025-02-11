@@ -1,12 +1,11 @@
 import torch
-from cute_kernels import rmsnorm_cute
 from torch.distributed._tensor.placement_types import Partial, Replicate
 from transformers import DynamicCache
 
 from ....distributed import dtensor_to_tensor
 from ....kernels import wait_for_ACT
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
-from .rmsnorm import rmsnorm_cute_backward_only, rmsnorm_cute_forward_only
+from .rmsnorm import rmsnorm_cute
 
 
 def rmsnorm_cute_wrapper(
@@ -17,7 +16,6 @@ def rmsnorm_cute_wrapper(
         x=input,
         weight=dtensor_to_tensor(weight, grad_placement=Partial() if sequence_parallel else Replicate()),
         eps=eps,
-        memory_efficient=False,
     )
     input = wait_for_ACT(input, wait_in_forward=False, wait_in_backward=True)
     return input
