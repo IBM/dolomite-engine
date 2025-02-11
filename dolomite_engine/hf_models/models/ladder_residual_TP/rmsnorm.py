@@ -99,13 +99,13 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         )
 
         if is_x_1d:
-            residual = residual.squeeze(0)
+            residual_grad = residual_grad.squeeze(0)
 
         weight_grad = tensor_to_dtensor(
             weight_grad, device_mesh=device_mesh, current_placement=Partial() if sequence_parallel else Replicate()
         )
 
-        return residual, weight_grad, None, None
+        return residual_grad, weight_grad, None, None
 
 
 def rmsnorm_cute_forward(
