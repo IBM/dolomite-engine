@@ -8,7 +8,6 @@ from transformers import DynamicCache
 from ...enums import InitMethod
 from ...modeling_utils import Attention, ParameterizedLinear
 from .config import StickBreakingConfig
-from .stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
 # torch._dynamo.config.cache_size_limit = 16
