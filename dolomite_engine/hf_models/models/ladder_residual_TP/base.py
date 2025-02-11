@@ -2,6 +2,7 @@ import torch
 from transformers import DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 
+from ...loss import clear_aux_loss
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
 from ...utils import is_generation_cache_enabled
 from ..ladder_residual import LadderResidualConfig
@@ -62,6 +63,8 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
         if is_generation_cache_enabled():
             past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
 
+        clear_aux_loss()
+
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             current_attention_out, current_mlp_out, hidden_states = self.h[str(layer_idx)](
                 current_attention_out=current_attention_out,
@@ -73,10 +76,6 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-        if self.m_residual is not None:
-            current_attention_out = current_attention_out * self.m_residual
-            current_mlp_out = current_mlp_out * self.m_residual
 
         hidden_states = hidden_states + current_attention_out + current_mlp_out
         hidden_states = self.ln_f(hidden_states)
