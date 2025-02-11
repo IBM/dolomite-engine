@@ -4,8 +4,6 @@ from cute_kernels.kernels.rmsnorm.backward import _backward
 from cute_kernels.kernels.rmsnorm.forward import _forward
 from cute_kernels.utils import ensure_contiguous
 
-from ...utils import ensure_contiguous
-
 
 class _RMSNorm_Cute(torch.autograd.Function):
     @staticmethod
