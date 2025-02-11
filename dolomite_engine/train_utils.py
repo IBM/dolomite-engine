@@ -5,7 +5,7 @@ from torch.distributed import ReduceOp
 from transformers import AutoConfig
 
 from .enums import GradientCheckpointingMethod
-from .hf_models import is_custom_model
+from .hf_models import CommonConfig, is_custom_model
 from .hf_models.modeling_utils import is_glu
 from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics
 
@@ -67,34 +67,42 @@ def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile
 
 
 def get_model_tflops(
-    config: AutoConfig,
+    config: AutoConfig | CommonConfig,
     batch_size: int,
     sequence_length: int,
     gradient_checkpointing_method: GradientCheckpointingMethod | None,
     gradient_checkpointing_args: dict,
 ) -> None:
-    return 0
-    # if not is_custom_model(config.model_type):
+    if not is_custom_model(config.model_type):
+        return 0
 
     b = batch_size
     s = sequence_length
     h = config.hidden_size
-    f = config.intermediate_size
     n = config.num_attention_heads
-    k = config.num_key_value_heads
     l = config.num_layers
     v = config.vocab_size
 
-    mlp_flops = 4 * b * s * h * f
-    if config.model_type == "moe_dolomite":
-        mlp_flops *= config.num_experts_per_tok
+    forward_flops = 0
+    for layer_idx in range(config.num_layers):
+        block = config.sequence_mixer_blocks[layer_idx]
+        sequence_mixer_type = block.sequence_mixer_type
 
-    if is_glu(config.activation_function):
-        mlp_flops *= 1.5
+        if sequence_mixer_type == "softmax_attention":
+            attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / n) + s)
+        else:
+            raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
-    attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
+        block = config.mlp_blocks[layer_idx]
 
-    forward_flops = attention_flops + mlp_flops
+        mlp_flops = 4 * b * s * h * block.intermediate_size
+        if block.mlp_type == "MoE":
+            mlp_flops *= block.num_experts_per_tok
+
+        if is_glu(block.activation_function):
+            mlp_flops *= 1.5
+
+        forward_flops += attention_flops + mlp_flops
 
     if gradient_checkpointing_method == GradientCheckpointingMethod.block:
         num_layers_checkpointed = gradient_checkpointing_args.get("num_blocks", l)
