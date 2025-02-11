@@ -6,6 +6,7 @@ from transformers import DynamicCache
 from ....distributed import dtensor_to_tensor
 from ....kernels import wait_for_ACT
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
+from .rmsnorm import rmsnorm_cute_backward, rmsnorm_cute_forward
 
 
 def rmsnorm_cute_wrapper(
@@ -42,6 +43,8 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         if current_attention_out is not None:
             residual = residual + current_attention_out
 
+        ln_2_weight = self.ln_2.weight
+
         current_attention_out = rmsnorm_cute_wrapper(residual, self.ln_1.weight, self.ln_1.eps, self.sequence_parallel)
         current_attention_out = self.sequence_mixer(
             current_attention_out,
@@ -58,7 +61,8 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         if current_mlp_out is not None:
             residual = residual + current_mlp_out
 
-        current_mlp_out = rmsnorm_cute_wrapper(residual, self.ln_2.weight, self.ln_2.eps, self.sequence_parallel)
+        # current_mlp_out = rmsnorm_cute_wrapper(residual, self.ln_2.weight, self.ln_2.eps, self.sequence_parallel)
+        current_mlp_out = rmsnorm_cute_forward(residual, ln_2_weight, self.ln_2.eps, self.sequence_parallel)
         current_mlp_out = wait_for_ACT(current_mlp_out, wait_in_forward=False, wait_in_backward=True)
 
         current_mlp_out = self.mlp_block(current_mlp_out)

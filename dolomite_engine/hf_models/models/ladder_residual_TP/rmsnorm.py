@@ -3,6 +3,10 @@ from cute_kernels.cutotune import CutoTuneParameter
 from cute_kernels.kernels.rmsnorm.backward import _backward
 from cute_kernels.kernels.rmsnorm.forward import _forward
 from cute_kernels.utils import ensure_contiguous
+from torch.distributed._tensor.placement_types import Partial, Replicate
+
+from ....distributed import dtensor_to_tensor
+from ....kernels import wait_for_ACT
 
 
 _MLP_F = []
@@ -77,8 +81,15 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         return x_grad, weight_grad, None
 
 
-def rmsnorm_cute_forward(x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
-    return _RMSNorm_Cute_F.apply(x, weight, eps)
+def rmsnorm_cute_forward(
+    x: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool
+) -> torch.Tensor:
+    x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
+    x = _RMSNorm_Cute_F.apply(
+        x, dtensor_to_tensor(weight, grad_placement=Partial() if sequence_parallel else Replicate()), eps
+    )
+    x = wait_for_ACT(x, wait_in_forward=False, wait_in_backward=True)
+    return x
 
 
 def rmsnorm_cute_backward(x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
