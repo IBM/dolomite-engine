@@ -63,7 +63,7 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         x_grad, weight_grad = _backward(
             x=x,
             weight=weight,
-            eps=ctx.eps,
+            eps=eps,
             rmsnorm_denominator=rmsnorm_denominator,
             output_grad=output_grad,
             kernel_backend=CutoTuneParameter(),
@@ -71,7 +71,7 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
             BLOCK_SIZE_H=CutoTuneParameter(),
         )
 
-        if ctx.is_x_1d:
+        if is_x_1d:
             x_grad = x_grad.squeeze(0)
 
         return x_grad, weight_grad, None
