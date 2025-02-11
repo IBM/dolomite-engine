@@ -63,7 +63,6 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
 
         # current_mlp_out = rmsnorm_cute_wrapper(residual, self.ln_2.weight, self.ln_2.eps, self.sequence_parallel)
         current_mlp_out = rmsnorm_cute_forward(residual, ln_2_weight, self.ln_2.eps, self.sequence_parallel)
-        current_mlp_out = wait_for_ACT(current_mlp_out, wait_in_forward=False, wait_in_backward=True)
 
         current_mlp_out = self.mlp_block(current_mlp_out)
 
