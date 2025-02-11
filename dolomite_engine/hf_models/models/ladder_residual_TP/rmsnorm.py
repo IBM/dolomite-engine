@@ -64,6 +64,9 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         x, weight, rmsnorm_denominator, is_x_1d, eps = _MLP_F.pop()
         output_grad = _MLP_B.pop()
 
+        x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
+        output_grad = wait_for_ACT(output_grad, wait_in_forward=True, wait_in_backward=False)
+
         x_grad, weight_grad = _backward(
             x=x,
             weight=weight,
