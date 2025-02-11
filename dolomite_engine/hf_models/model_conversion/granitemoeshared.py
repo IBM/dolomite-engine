@@ -1,5 +1,11 @@
 import torch
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeSharedConfig
+from transformers import (
+    AutoConfig,
+    AutoTokenizer,
+    GenerationConfig,
+    GraniteMoeSharedConfig,
+    GraniteMoeSharedForCausalLM,
+)
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
@@ -208,7 +214,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeShared
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.attention_multiplier,
-        architectures=[GraniteMoeSharedConfig.__name__],
+        architectures=[GraniteMoeSharedForCausalLM.__name__],
     )
 
     return original_config
