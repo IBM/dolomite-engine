@@ -5,7 +5,11 @@ from cute_kernels.kernels.rmsnorm.forward import _forward
 from cute_kernels.utils import ensure_contiguous
 
 
-class _RMSNorm_Cute(torch.autograd.Function):
+_MLP_F = []
+_MLP_B = []
+
+
+class _RMSNorm_Cute_F(torch.autograd.Function):
     @staticmethod
     @ensure_contiguous
     def forward(ctx, x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
@@ -15,14 +19,13 @@ class _RMSNorm_Cute(torch.autograd.Function):
             assert weight.type() == x.type(), "tensors weight and y should have same dtype"
 
         is_x_1d = x.dim() == 1
-        if is_x_1d:
-            x = x.unsqueeze(0)
+        x_input = x.unsqueeze(0) if is_x_1d else x
 
         if eps is None:
             eps = torch.finfo(x.dtype).eps
 
         output, rmsnorm_denominator = _forward(
-            x=x,
+            x=x_input,
             weight=weight,
             eps=eps,
             memory_efficient=False,
@@ -34,16 +37,28 @@ class _RMSNorm_Cute(torch.autograd.Function):
         if is_x_1d:
             output = output.squeeze(0)
 
-        ctx.save_for_backward(x, weight, rmsnorm_denominator)
-        ctx.is_x_1d = is_x_1d
-        ctx.eps = eps
+        _MLP_F.append((x, weight, rmsnorm_denominator, is_x_1d, eps))
 
         return output
 
     @staticmethod
     @ensure_contiguous
     def backward(ctx, output_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
-        x, weight, rmsnorm_denominator = ctx.saved_tensors
+        _MLP_B.append(output_grad)
+        return None, None, None
+
+
+class _RMSNorm_Cute_B(torch.autograd.Function):
+    @staticmethod
+    @ensure_contiguous
+    def forward(ctx, x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
+        return x, weight
+
+    @staticmethod
+    @ensure_contiguous
+    def backward(ctx, output_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
+        x, weight, rmsnorm_denominator, is_x_1d, eps = _MLP_F.pop()
+        output_grad = _MLP_B.pop()
 
         x_grad, weight_grad = _backward(
             x=x,
@@ -59,8 +74,12 @@ class _RMSNorm_Cute(torch.autograd.Function):
         if ctx.is_x_1d:
             x_grad = x_grad.squeeze(0)
 
-        return x_grad, weight_grad, *[None] * 8
+        return x_grad, weight_grad, None
 
 
-def rmsnorm_cute(x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
-    return _RMSNorm_Cute.apply(x, weight, eps)
+def rmsnorm_cute_forward(x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
+    return _RMSNorm_Cute_F.apply(x, weight, eps)
+
+
+def rmsnorm_cute_backward(x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
+    return _RMSNorm_Cute_B.apply(x, weight, eps)

@@ -1,11 +1,11 @@
 import torch
+from cute_kernels import rmsnorm_cute
 from torch.distributed._tensor.placement_types import Partial, Replicate
 from transformers import DynamicCache
 
 from ....distributed import dtensor_to_tensor
 from ....kernels import wait_for_ACT
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
-from .rmsnorm import rmsnorm_cute
 
 
 def rmsnorm_cute_wrapper(
