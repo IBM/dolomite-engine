@@ -58,17 +58,11 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
             max_seqlen=max_seqlen,
         )
 
-        if self.m_residual is not None:
-            current_attention_out = current_attention_out * self.m_residual
-
         if current_mlp_out is not None:
             residual = residual + current_mlp_out
 
         # current_mlp_out = rmsnorm_cute_wrapper(residual, self.ln_2.weight, self.ln_2.eps, self.sequence_parallel)
         current_mlp_out = rmsnorm_cute_forward(residual, ln_2_weight, self.ln_2.eps, self.sequence_parallel)
         current_mlp_out = self.mlp_block(current_mlp_out)
-
-        if self.m_residual is not None:
-            current_mlp_out = current_mlp_out * self.m_residual
 
         return current_attention_out, current_mlp_out, residual
