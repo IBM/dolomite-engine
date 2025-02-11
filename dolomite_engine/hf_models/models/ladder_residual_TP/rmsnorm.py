@@ -50,7 +50,9 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
 
         ctx.context = context
 
-        (_MLP_F if context == "mlp" else _ATTN_F).append((x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh))
+        (_MLP_F if context == "mlp" else _ATTN_F).append(
+            (x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh)
+        )
 
         return output
 
@@ -68,7 +70,9 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, x_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
-        x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh = (_MLP_F if context == "mlp" else _ATTN_F).pop()
+        x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh = (
+            _MLP_F if ctx.context == "mlp" else _ATTN_F
+        ).pop()
         output_grad = (_MLP_B if ctx.context == "mlp" else _ATTN_B).pop()
 
         output_grad = output_grad.contiguous()
