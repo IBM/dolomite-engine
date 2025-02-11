@@ -46,7 +46,6 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
         return output
 
     @staticmethod
-    @ensure_contiguous
     def backward(ctx, output_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
         _MLP_B.append(output_grad)
         return None, None, None
@@ -54,7 +53,6 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
 
 class _RMSNorm_Cute_B(torch.autograd.Function):
     @staticmethod
-    @ensure_contiguous
     def forward(ctx, x: torch.Tensor, weight: torch.Tensor | None, eps: float | None) -> torch.Tensor:
         return x, weight
 
@@ -63,6 +61,8 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
     def backward(ctx, x_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
         x, weight, rmsnorm_denominator, is_x_1d, eps = _MLP_F.pop()
         output_grad = _MLP_B.pop()
+
+        output_grad = output_grad.contiguous()
 
         x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
         output_grad = wait_for_ACT(output_grad, wait_in_forward=True, wait_in_backward=False)
