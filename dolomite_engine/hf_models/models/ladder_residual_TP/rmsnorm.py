@@ -69,9 +69,7 @@ class _RMSNorm_Cute_F(torch.autograd.Function):
 
 class _RMSNorm_Cute_B(torch.autograd.Function):
     @staticmethod
-    def forward(
-        ctx, residual: torch.Tensor, weight: torch.Tensor | None, eps: float | None, context: str
-    ) -> torch.Tensor:
+    def forward(ctx, residual: torch.Tensor, weight: torch.Tensor | None, context: str) -> tuple[torch.Tensor]:
         ctx.context = context
         return residual, weight
 
@@ -109,14 +107,16 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
 
 
 def rmsnorm_cute_forward(
-    residual: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context
+    residual: torch.Tensor,
+    weight: torch.Tensor | None,
+    eps: float | None,
+    sequence_parallel: bool,
+    context: str,
 ) -> torch.Tensor:
     residual = wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False)
     residual = _RMSNorm_Cute_F.apply(residual, weight, eps, sequence_parallel, context)
     return residual
 
 
-def rmsnorm_cute_backward(
-    residual: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool, context
-) -> torch.Tensor:
-    return _RMSNorm_Cute_B.apply(residual, weight, eps, context)
+def rmsnorm_cute_backward(residual: torch.Tensor, weight: torch.Tensor | None, context: str) -> tuple[torch.Tensor]:
+    return _RMSNorm_Cute_B.apply(residual, weight, context)

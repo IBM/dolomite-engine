@@ -46,9 +46,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         ln_2_weight = self.ln_2.weight
 
         current_attention_out = self.ln_1(residual)
-        residual, ln_2_weight = rmsnorm_cute_backward(
-            residual, ln_2_weight, self.ln_2.eps, self.sequence_parallel, "mlp"
-        )
+        residual, ln_2_weight = rmsnorm_cute_backward(residual, ln_2_weight, "mlp")
         current_attention_out = self.sequence_mixer(
             current_attention_out,
             past_key_values=past_key_values,
