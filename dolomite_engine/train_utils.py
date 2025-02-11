@@ -73,8 +73,8 @@ def get_model_tflops(
     gradient_checkpointing_method: GradientCheckpointingMethod | None,
     gradient_checkpointing_args: dict,
 ) -> None:
-    if not is_custom_model(config.model_type):
-        return 0
+    return 0
+    # if not is_custom_model(config.model_type):
 
     b = batch_size
     s = sequence_length
