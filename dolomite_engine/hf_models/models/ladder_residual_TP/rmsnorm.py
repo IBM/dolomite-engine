@@ -97,8 +97,4 @@ def rmsnorm_cute_forward(
 def rmsnorm_cute_backward(
     x: torch.Tensor, weight: torch.Tensor | None, eps: float | None, sequence_parallel: bool
 ) -> torch.Tensor:
-    x, weight = _RMSNorm_Cute_B.apply(
-        x, dtensor_to_tensor(weight, grad_placement=Partial() if sequence_parallel else Replicate()), eps
-    )
-    x = wait_for_ACT(x, wait_in_forward=False, wait_in_backward=True)
-    return x, weight
+    return _RMSNorm_Cute_B.apply(x, weight, eps)
