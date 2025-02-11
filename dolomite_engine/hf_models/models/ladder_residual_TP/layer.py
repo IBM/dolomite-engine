@@ -43,7 +43,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         if current_attention_out is not None:
             residual = residual + current_attention_out
 
-        current_attention_out = rmsnorm_cute_wrapper(residual, self.ln_1.weight, self.ln_1.eps, self.sequence_parallel)
+        current_attention_out = self.ln_1(residual)
         current_attention_out = self.sequence_mixer(
             current_attention_out,
             past_key_values=past_key_values,
@@ -56,7 +56,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         if current_mlp_out is not None:
             residual = residual + current_mlp_out
 
-        current_mlp_out = rmsnorm_cute_wrapper(residual, self.ln_2.weight, self.ln_2.eps, self.sequence_parallel)
+        current_mlp_out = self.ln_1(residual)
         current_mlp_out = self.mlp_block(current_mlp_out)
 
         return current_attention_out, current_mlp_out, residual
