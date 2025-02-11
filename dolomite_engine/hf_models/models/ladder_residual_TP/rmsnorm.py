@@ -62,7 +62,6 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
         return x, weight
 
     @staticmethod
-    @ensure_contiguous
     def backward(ctx, x_grad: torch.Tensor, weight_grad: torch.Tensor) -> tuple[torch.Tensor | None]:
         x, weight, rmsnorm_denominator, is_x_1d, eps, sequence_parallel, device_mesh = _MLP_F.pop()
         output_grad = _MLP_B.pop()
