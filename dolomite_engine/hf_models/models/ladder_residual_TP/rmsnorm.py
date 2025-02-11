@@ -84,7 +84,7 @@ class _RMSNorm_Cute_B(torch.autograd.Function):
 
         output_grad = output_grad.contiguous()
 
-        x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
+        residual = wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False)
         output_grad = wait_for_ACT(output_grad, wait_in_forward=True, wait_in_backward=False)
 
         residual_grad, weight_grad = _backward(
