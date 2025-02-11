@@ -111,7 +111,7 @@ def get_model_tflops(
     else:
         backward_flops = 2 * forward_flops
 
-    model_flops = l * (forward_flops + backward_flops)
+    model_flops = forward_flops + backward_flops
     model_flops += 6 * b * s * h * v
     model_flops /= 10**12
 
