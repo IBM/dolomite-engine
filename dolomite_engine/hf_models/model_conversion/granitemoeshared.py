@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig, GraniteMoeForCausalLM
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeSharedConfig
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
@@ -34,7 +34,7 @@ def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str,
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> MoEDolomiteConfig:
     assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
@@ -173,13 +173,13 @@ def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, s
         pass
 
 
-def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig:
+def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeSharedConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
     assert not config.add_bias
 
-    original_config = GraniteMoeConfig(
+    original_config = GraniteMoeSharedConfig(
         vocab_size=config.vocab_size,
         max_position_embeddings=config.n_positions,
         hidden_size=config.n_embd,
@@ -208,7 +208,7 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.attention_multiplier,
-        architectures=[GraniteMoeForCausalLM.__name__],
+        architectures=[GraniteMoeSharedConfig.__name__],
     )
 
     return original_config

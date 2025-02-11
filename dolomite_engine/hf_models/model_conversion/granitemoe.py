@@ -41,7 +41,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         attention_head_type = "gqa"
 
     assert not original_config.attention_bias
-    assert original_config.shared_intermediate_size is None
 
     config = MoEDolomiteConfig(
         vocab_size=original_config.vocab_size,
