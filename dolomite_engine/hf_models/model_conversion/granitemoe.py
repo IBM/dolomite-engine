@@ -1,13 +1,9 @@
-import torch
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig, GraniteMoeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..enums import AttentionHeadType
-from ..modeling_utils import (
-    interleave_query_key_value_tensor_for_attention,
-    split_query_key_value_tensor_for_attention,
-)
 from ..models import MoEDolomiteConfig
+from .granitemoeshared import _export_state_dict_to_huggingface, _import_state_dict_from_huggingface
 
 
 def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -45,6 +41,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         attention_head_type = "gqa"
 
     assert not original_config.attention_bias
+    assert original_config.shared_intermediate_size is None
 
     config = MoEDolomiteConfig(
         vocab_size=original_config.vocab_size,
@@ -56,9 +53,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
         attention_head_type=attention_head_type,
         position_embedding_type="rope",
         n_inner=original_config.intermediate_size,
-        shared_n_inner=(
-            None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
-        ),
         activation_function="swiglu",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
@@ -83,67 +77,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> MoEDol
     )
 
     return config
-
-
-def _import_state_dict_from_huggingface(
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    num_layers: int,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: AttentionHeadType,
-) -> None:
-    state_dict = {
-        "transformer.wte.weight": safetensors_weights_manager.get_tensor("model.embed_tokens.weight"),
-        "transformer.ln_f.weight": safetensors_weights_manager.get_tensor("model.norm.weight"),
-    }
-
-    if safetensors_weights_manager.has_tensor("lm_head.weight"):
-        state_dict["lm_head.weight"] = safetensors_weights_manager.get_tensor("lm_head.weight")
-
-    for layer_idx in range(num_layers):
-        state_dict[f"transformer.h.{layer_idx}.ln_1.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.input_layernorm.weight"
-        )
-        state_dict[f"transformer.h.{layer_idx}.ln_2.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.post_attention_layernorm.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.moe.gate.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.moe.c_fc.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"),
-            dim=1,
-        )
-        state_dict[f"transformer.h.{layer_idx}.moe.c_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
-        )
-
-        if safetensors_weights_manager.has_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"):
-            state_dict[f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"] = _split_and_reorder_for_glu(
-                safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"),
-                dim=0,
-            )
-            state_dict[f"transformer.h.{layer_idx}.moe.c_proj_shared.weight"] = safetensors_weights_manager.get_tensor(
-                f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"
-            )
-
-        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = interleave_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
-            safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
-            num_heads,
-            num_key_value_heads,
-            head_dim,
-            attention_head_type,
-        )
-        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.self_attn.o_proj.weight"
-        )
-
-    return state_dict
 
 
 def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -187,7 +120,6 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
         num_attention_heads=config.n_head,
         num_key_value_heads=config.num_key_value_heads,
         intermediate_size=4 * config.n_embd if config.n_inner is None else config.n_inner,
-        shared_intermediate_size=0 if config.shared_n_inner is None else config.shared_n_inner,
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
         use_cache=config.use_cache,
@@ -212,70 +144,3 @@ def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeConfig
     )
 
     return original_config
-
-
-def _export_state_dict_to_huggingface(
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    num_layers: int,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: AttentionHeadType,
-) -> None:
-    state_dict = {
-        "model.embed_tokens.weight": safetensors_weights_manager.get_tensor("transformer.wte.weight"),
-        "model.norm.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight"),
-    }
-
-    if safetensors_weights_manager.has_tensor("lm_head.weight"):
-        state_dict["lm_head.weight"] = safetensors_weights_manager.get_tensor("lm_head.weight")
-
-    for layer_idx in range(num_layers):
-        state_dict[f"model.layers.{layer_idx}.input_layernorm.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.ln_1.weight"
-        )
-        state_dict[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
-        )
-
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.gate.weight")
-        )
-
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc.weight"), dim=1
-        )
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj.weight")
-        )
-
-        if safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"):
-            state_dict[f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"] = _split_and_reorder_for_glu(
-                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_fc_shared.weight"), dim=0
-            )
-            state_dict[f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"] = (
-                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.moe.c_proj_shared.weight")
-            )
-
-        query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.attn.c_attn.weight"),
-            num_heads,
-            num_key_value_heads,
-            head_dim,
-            attention_head_type,
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.q_proj.weight"] = query_weight
-        state_dict[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = key_weight
-        state_dict[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = value_weight
-
-        state_dict[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.attn.c_proj.weight"
-        )
-
-    return state_dict
-
-
-def _split_and_reorder_for_glu(weight: torch.Tensor, dim: int) -> torch.Tensor:
-    x, y = weight.chunk(2, dim=dim)
-    weight = torch.cat([y, x], dim=dim)
-    return weight
