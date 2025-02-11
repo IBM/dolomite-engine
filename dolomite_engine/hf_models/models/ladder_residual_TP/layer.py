@@ -5,12 +5,6 @@ from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 
 
 class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
-    def __init__(
-        self, config, attention_implementation, use_padding_free_transformer, layer_idx=None, sequence_parallel=False
-    ):
-        super().__init__(config, attention_implementation, use_padding_free_transformer, layer_idx, sequence_parallel)
-        self.sequence_parallel = sequence_parallel
-
     def forward(
         self,
         current_attention_out: torch.Tensor,

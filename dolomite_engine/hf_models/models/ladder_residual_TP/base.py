@@ -22,10 +22,6 @@ class LadderResidualPreTrainedModel_TP(PreTrainedModelMixin_TP):
 
 
 class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP):
-    def __init__(self, config: LadderResidualConfig, *args, **kwargs) -> None:
-        super().__init__(config, *args, **kwargs)
-        self.m_residual = config.m_residual
-
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
