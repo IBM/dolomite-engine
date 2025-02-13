@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 
@@ -5,6 +7,8 @@ from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
 from ....modeling_utils import get_activation_function
 from ...normalization import get_normalization_function
+from ...linear import ParameterizedLinear
+from ....enums import InitMethod
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
 
 
@@ -34,6 +38,10 @@ class Mamba2Base(nn.Module):
         chunk_size: int,
         layer_norm_epsilon: float,
         layer_idx: int,
+        initializer_range: float,
+        m_width: float,
+        init_method: InitMethod,
+        num_layers: int,
     ) -> None:
         super().__init__()
 
@@ -68,14 +76,34 @@ class Mamba2Base(nn.Module):
         )
 
         # projection of the input hidden states
-        self.in_proj = nn.Linear(
-            self.hidden_size, self.intermediate_size + self.conv_dim + self.num_heads, bias=add_bias
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
+        self.in_proj = ParameterizedLinear(
+            self.hidden_size,
+            self.intermediate_size + self.conv_dim + self.num_heads,
+            bias=add_bias,
+            std=std,
         )
+        # self.in_proj = nn.Linear(
+        #     self.hidden_size, self.intermediate_size + self.conv_dim + self.num_heads, bias=add_bias
+        # )
         # selective projection used to make dt, B and C input dependant
 
         # time step projection (discretization)
         # instantiate once and copy inv_dt in init_weights of PretrainedModel
-        self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
+        # Initialize log dt bias
+        dt = torch.exp(
+            torch.rand(self.num_heads) * (math.log(time_step_max) - math.log(time_step_min))
+            + math.log(time_step_min)
+        )
+        dt_init_floor = 1e-4
+        dt = torch.clamp(dt, min=dt_init_floor)
+        # Inverse of softplus: https://github.com/pytorch/pytorch/issues/72759
+        inv_dt = dt + torch.log(-torch.expm1(-dt))
+        self.dt_bias = nn.Parameter(inv_dt)
+        # self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
+
 
         # S4D real initialization. These are not discretized!
         # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
@@ -86,7 +114,11 @@ class Mamba2Base(nn.Module):
         self.D = nn.Parameter(torch.ones(self.num_heads))
         self.D._no_weight_decay = True
 
-        self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=add_bias)
+        std = initializer_range / math.sqrt(2 * num_layers)
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
+        self.out_proj = ParameterizedLinear(self.intermediate_size, self.hidden_size, bias=add_bias, std=std)
+        # self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=add_bias)
 
     def forward(
         self,

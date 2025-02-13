@@ -58,6 +58,10 @@ def get_sequence_mixer(
             chunk_size=block.chunk_size,
             layer_norm_epsilon=config.layer_norm_epsilon,
             layer_idx=layer_idx,
+            initializer_range=config.initializer_range,
+            init_method=InitMethod(config.init_method),
+            m_width=config.m_width,
+            num_layers=config.num_layers,
         )
     else:
         sequence_mixer_kwargs = dict(
