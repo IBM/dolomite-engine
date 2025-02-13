@@ -47,8 +47,8 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        previous_attention_out = None
-        previous_mlp_out = None
+        current_attention_out = None
+        current_mlp_out = None
 
         if is_generation_cache_enabled():
             past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
@@ -56,9 +56,9 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         clear_aux_loss()
 
         for block in self.h:
-            previous_attention_out, previous_mlp_out, hidden_states = block(
-                previous_attention_out=previous_attention_out,
-                previous_mlp_out=previous_mlp_out,
+            current_attention_out, current_mlp_out, hidden_states = block(
+                current_attention_out=current_attention_out,
+                current_mlp_out=current_mlp_out,
                 residual=hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=attention_mask,
@@ -67,7 +67,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
                 max_seqlen=max_seqlen,
             )
 
-        hidden_states = hidden_states + previous_attention_out + previous_mlp_out
+        hidden_states = hidden_states + current_attention_out + current_mlp_out
         hidden_states = self.ln_f(hidden_states)
 
         return BaseModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)
