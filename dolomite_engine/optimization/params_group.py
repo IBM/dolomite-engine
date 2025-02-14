@@ -10,7 +10,7 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
 )
-from ..hf_models.modeling_utils import MLP, Attention, MoE, Mamba2Base
+from ..hf_models.modeling_utils import MLP, Attention, Mamba2Base, MoE
 from ..model_wrapper import ModelWrapper
 from ..utils import log_rank_0
 
@@ -132,10 +132,6 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         )
         names["mup"] = list(mup_params.keys())
 
-    # log_rank_0(logging.INFO, 'normal:\n' + str(names['normal']))
-    # log_rank_0(logging.INFO, 'no_weight_decay:\n' + str(names['no_weight_decay']))
-    # log_rank_0(logging.INFO, 'mup:\n' + str(names['mup']))
-    # exit()
     return trainable_parameters_or_param_groups, names
 
 

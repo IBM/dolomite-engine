@@ -5,10 +5,10 @@ import torch.nn as nn
 
 from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
-from ....modeling_utils import get_activation_function
-from ...normalization import get_normalization_function
-from ...linear import ParameterizedLinear
 from ....enums import InitMethod
+from ....modeling_utils import get_activation_function
+from ...linear import ParameterizedLinear
+from ...normalization import get_normalization_function
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
 
 
@@ -94,8 +94,7 @@ class Mamba2Base(nn.Module):
         # instantiate once and copy inv_dt in init_weights of PretrainedModel
         # Initialize log dt bias
         dt = torch.exp(
-            torch.rand(self.num_heads) * (math.log(time_step_max) - math.log(time_step_min))
-            + math.log(time_step_min)
+            torch.rand(self.num_heads) * (math.log(time_step_max) - math.log(time_step_min)) + math.log(time_step_min)
         )
         dt_init_floor = 1e-4
         dt = torch.clamp(dt, min=dt_init_floor)
