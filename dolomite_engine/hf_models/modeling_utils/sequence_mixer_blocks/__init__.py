@@ -57,6 +57,10 @@ def get_sequence_mixer(
             num_groups=block.num_groups,
             chunk_size=block.chunk_size,
             layer_norm_epsilon=config.layer_norm_epsilon,
+            initializer_range=config.initializer_range,
+            init_method=InitMethod(config.init_method),
+            m_width=config.m_width,
+            num_layers=config.num_layers,
             layer_idx=layer_idx,
         )
     else:

@@ -38,8 +38,7 @@ model_args:
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
-      - sequence_mixer_type: softmax_attention
-        attention_head_type: mha
+      - sequence_mixer_type: mamba2
     mlp_blocks:
       - activation_function: swiglu
         mlp_type: MLP

@@ -17,6 +17,7 @@ from .sequence_mixer_blocks import (
     SDPA,
     Attention,
     FlashAttention2,
+    Mamba2Base,
     PaddingFreeAttention,
     get_sequence_mixer,
     interleave_query_key_value_tensor_for_attention,
