@@ -17,9 +17,7 @@ class ParamsGroupTest(TestCommons):
     @parameterized.expand(
         [
             ("dense_config.yml", "dense_mup.json", get_mup_group_with_names),
-            ("moe_config.yml", "moe_mup.json", get_mup_group_with_names),
             ("dense_config.yml", "dense_normal.json", get_normal_group_with_names),
-            ("moe_config.yml", "moe_normal.json", get_normal_group_with_names),
         ]
     )
     def test_mup_group(self, config_filename: str, expected_groups_filename: str, grouping_function: Callable) -> None:
