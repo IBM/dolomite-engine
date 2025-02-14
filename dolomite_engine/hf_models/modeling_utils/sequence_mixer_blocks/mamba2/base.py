@@ -104,7 +104,6 @@ class Mamba2Base(nn.Module):
         self.dt_bias = nn.Parameter(inv_dt)
         # self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
 
-
         # S4D real initialization. These are not discretized!
         # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
         A = torch.arange(1, self.num_heads + 1)

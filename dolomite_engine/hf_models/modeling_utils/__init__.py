@@ -18,6 +18,7 @@ from .sequence_mixer_blocks import (
     Attention,
     FlashAttention2,
     PaddingFreeAttention,
+    Mamba2Base,
     get_sequence_mixer,
     interleave_query_key_value_tensor_for_attention,
     repeat_key_value,

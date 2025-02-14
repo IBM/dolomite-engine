@@ -10,7 +10,7 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
 )
-from ..hf_models.modeling_utils import MLP, Attention, MoE
+from ..hf_models.modeling_utils import MLP, Attention, MoE, Mamba2Base
 from ..model_wrapper import ModelWrapper
 from ..utils import log_rank_0
 
@@ -89,10 +89,12 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 
     # collect parameters with mup learning rate
     for module_name, module in model.named_modules():
-        if isinstance(module, (Attention, MLP, MoE)):
+        if isinstance(module, (Attention, MLP, MoE, Mamba2Base)):
             for param_name, param in module.named_parameters():
                 # we don't add bias or norms to mup group
-                if not (param_name.endswith("bias") or "norm" in param_name):
+                if param_name.endswith("A_log") or param_name.endswith("D"):
+                    no_weight_decay_params[f"{module_name}.{param_name}"] = param
+                elif not (param_name.endswith("bias") or "norm" in param_name):
                     # add name of module to name of subparam
                     mup_params[f"{module_name}.{param_name}"] = param
         elif isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
@@ -130,6 +132,10 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         )
         names["mup"] = list(mup_params.keys())
 
+    # log_rank_0(logging.INFO, 'normal:\n' + str(names['normal']))
+    # log_rank_0(logging.INFO, 'no_weight_decay:\n' + str(names['no_weight_decay']))
+    # log_rank_0(logging.INFO, 'mup:\n' + str(names['mup']))
+    # exit()
     return trainable_parameters_or_param_groups, names
 
 
