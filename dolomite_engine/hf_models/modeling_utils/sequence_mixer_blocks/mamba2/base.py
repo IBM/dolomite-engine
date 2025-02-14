@@ -109,11 +109,9 @@ class Mamba2Base(nn.Module):
         self.D = nn.Parameter(torch.ones(self.num_heads))
         self.D._no_weight_decay = True
 
-        std = initializer_range / math.sqrt(2 * num_layers)
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
-        self.out_proj = ParameterizedLinear(self.intermediate_size, self.hidden_size, bias=add_bias, std=std)
-        # self.out_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=add_bias)
+        self.out_proj = ParameterizedLinear(
+            self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
+        )
 
     def forward(
         self,
