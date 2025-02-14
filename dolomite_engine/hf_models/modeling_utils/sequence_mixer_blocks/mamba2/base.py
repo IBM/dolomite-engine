@@ -37,11 +37,11 @@ class Mamba2Base(nn.Module):
         num_groups: int,
         chunk_size: int,
         layer_norm_epsilon: float,
-        layer_idx: int,
         initializer_range: float,
         m_width: float,
         init_method: InitMethod,
         num_layers: int,
+        layer_idx: int,
     ) -> None:
         super().__init__()
 
