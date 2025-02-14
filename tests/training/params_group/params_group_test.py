@@ -14,18 +14,9 @@ from ..test_commons import TestCommons
 
 
 class ParamsGroupTest(TestCommons):
-    @parameterized.expand(
-        [
-            ("dense_config.yml", "dense_mup.json", get_mup_group_with_names),
-            ("moe_config.yml", "moe_mup.json", get_mup_group_with_names),
-            ("dense_config.yml", "dense_normal.json", get_normal_group_with_names),
-            ("moe_config.yml", "moe_normal.json", get_normal_group_with_names),
-        ]
-    )
-    def test_mup_group(self, config_filename: str, expected_groups_filename: str, grouping_function: Callable) -> None:
-        args = TestCommons.load_training_args_for_unit_tests(
-            os.path.join("params_group/training_configs", config_filename)
-        )
+    @parameterized.expand([("mup.json", get_mup_group_with_names), ("normal.json", get_normal_group_with_names)])
+    def test_mup_group(self, expected_groups_filename: str, grouping_function: Callable) -> None:
+        args = TestCommons.load_training_args_for_unit_tests("params_group/training_config.yml")
 
         with (
             torch.device("meta"),

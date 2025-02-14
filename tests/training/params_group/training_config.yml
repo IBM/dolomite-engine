@@ -21,7 +21,7 @@ model_args:
     model_type: gpt_dolomite
     hidden_size: 512
     num_attention_heads: 16
-    num_layers: 4
+    num_layers: 2
     max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
@@ -40,19 +40,12 @@ model_args:
         attention_head_type: mha
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
-      - sequence_mixer_type: softmax_attention
-        attention_head_type: mha
-      - sequence_mixer_type: softmax_attention
-        attention_head_type: mha
     mlp_blocks:
       - activation_function: swiglu
         mlp_type: MLP
       - activation_function: swiglu
-        mlp_type: MLP
-      - activation_function: swiglu
-        mlp_type: MLP
-      - activation_function: swiglu
-        mlp_type: MLP
+        mlp_type: MoE
+        shared_intermediate_size: 512
   attention_implementation: sdpa
 
 tuning_args:
