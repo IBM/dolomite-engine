@@ -7,7 +7,7 @@ from transformers import DynamicCache
 
 from ....utils import is_stickbreaking_available
 from ...config import CommonConfig
-from ...enums import InitMethod
+from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ..linear import ParameterizedLinear
 from .softmax_attention import Attention
 
@@ -47,25 +47,30 @@ def decoding_stickbreaking(q, k, v, scale=None):
 
 
 class SBAttention(Attention):
-    def __init__(self, config: CommonConfig, causal: bool, layer_idx: int | None = None) -> None:
-        super().__init__(config, causal, layer_idx)
-        self.sb_remainder = config.sb_remainder
-        if self.sb_remainder:
-            self.head_bias = torch.nn.Parameter(torch.zeros(self.hidden_size // self.head_dim, self.head_dim))
-        if config.add_qkv_bias:
-            init_method = InitMethod(config.init_method)
-            initializer_range = config.initializer_range
-            m_width = config.m_width
-            std = initializer_range
-            if init_method == InitMethod.mup:
-                std /= math.sqrt(m_width)
-            self.c_attn = ParameterizedLinear(
-                self.hidden_size,
-                self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
-                bias=True,
-                std=std,
-            )
-
+    def __init__(
+        self,
+        hidden_size: int,
+        num_attention_heads: int,
+        num_key_value_heads: int,
+        attention_multiplier: float,
+        attention_head_type: AttentionHeadType,
+        position_embedding_type: PositionEmbeddingType,
+        add_bias: bool,
+        softmax_dropout: float,
+        dropout: float,
+        init_method: InitMethod,
+        initializer_range: float,
+        m_width: float,
+        num_layers: int,
+        causal: bool,
+        layer_idx: int,
+    ) -> None:
+        super().__init__(
+            hidden_size, num_attention_heads, num_key_value_heads, attention_multiplier, 
+            attention_head_type, position_embedding_type, add_bias, softmax_dropout, dropout, 
+            init_method, initializer_range, m_width, num_layers, causal, layer_idx
+        )
+        self.head_bias = torch.nn.Parameter(torch.zeros(self.hidden_size // self.head_dim, self.head_dim))
         self.norm = torch.nn.GroupNorm(self.num_heads, self.hidden_size)
 
     def forward(
@@ -78,10 +83,11 @@ class SBAttention(Attention):
         max_seqlen: torch.Tensor | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
-        assert past_key_values is not None
+        assert past_key_values is None
+
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
         softmax_scale = self._get_softmax_scale()
-        key, value = past_key_values.update(key, value, self.layer_idx)
+        # key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
 
         if query.size(2) == key.size(2):
@@ -94,8 +100,7 @@ class SBAttention(Attention):
         else:
             hidden_states, rem = decoding_stickbreaking(q=query, k=key, v=value, scale=softmax_scale)
 
-        if self.sb_remainder:
-            hidden_states = hidden_states + rem[..., None] * self.head_bias[None, :, None, :]
+        hidden_states = hidden_states + rem[..., None] * self.head_bias[None, :, None, :]
 
         hidden_states = hidden_states.permute(0, 2, 1, 3)
         hidden_states = hidden_states.view(bsz_ * length_, self.hidden_size)
@@ -158,8 +163,7 @@ class PaddingFreeSBAttention(SBAttention):
             cu_seqlens=cu_seqlens,
             max_seqlens=max_seqlen,
         )
-        if self.sb_remainder:
-            hidden_states = hidden_states + rem[..., None] * self.head_bias[:, None, :]
+        hidden_states = hidden_states + rem[..., None] * self.head_bias[:, None, :]
         hidden_states = hidden_states.permute(1, 0, 2)
 
         hidden_states = hidden_states.view(-1, self.hidden_size)

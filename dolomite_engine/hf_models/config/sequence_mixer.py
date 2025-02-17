@@ -17,6 +17,19 @@ class _SoftmaxAttentionArgs(BaseArgs):
         assert self.sequence_mixer_type == "softmax_attention"
 
 
+class _StickbreakingAttentionArgs(BaseArgs):
+    sequence_mixer_type: str = "stickbreaking_attention"
+    num_key_value_heads: int = 1
+    attention_head_type: AttentionHeadType = AttentionHeadType.mqa
+    softmax_dropout: float = 0
+    dropout: float = 0
+    add_bias: bool = True
+    attention_multiplier: float | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        assert self.sequence_mixer_type == "stickbreaking_attention"
+
+
 class _Mamba2Args(BaseArgs):
     sequence_mixer_type: str = "mamba2"
     state_size: int = 128
