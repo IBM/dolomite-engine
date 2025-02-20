@@ -116,6 +116,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         logits: torch.Tensor = model_outputs.logits
         aux_loss = get_aux_loss()
 
+        tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+
         lm_loss = get_autoregressive_language_modeling_loss(
             lm_logits=logits,
             labels=labels,
@@ -124,6 +126,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             reduction="sum",
             fix_padding_free_logits=False,
             shift_logits_and_labels=False,
+            tensor_parallel_enabled=tensor_parallel_enabled,
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
@@ -135,7 +138,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             if self.is_pipeline_parallel_enabled:
                 self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
 
-            if ProcessGroupManager.is_tensor_parallel_enabled():
+            if tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)

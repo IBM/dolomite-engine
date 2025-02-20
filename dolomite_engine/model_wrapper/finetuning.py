@@ -40,12 +40,17 @@ class ModelWrapperForFinetuning(ModelWrapper):
         logits: torch.Tensor = model_outputs.logits
         aux_loss = get_aux_loss()
 
+        tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+
         lm_loss = get_autoregressive_language_modeling_loss(
             lm_logits=logits,
             labels=labels,
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
+            fix_padding_free_logits=True,
+            shift_logits_and_labels=True,
+            tensor_parallel_enabled=tensor_parallel_enabled,
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
@@ -54,7 +59,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
             loss = lm_loss
             output = {"loss": loss}
         else:
-            if ProcessGroupManager.is_tensor_parallel_enabled():
+            if tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             loss = lm_loss + self.router_aux_loss_coef * aux_loss

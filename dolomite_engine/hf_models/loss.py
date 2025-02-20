@@ -18,6 +18,7 @@ def get_autoregressive_language_modeling_loss(
     reduction: str = "mean",
     fix_padding_free_logits: bool = True,
     shift_logits_and_labels: bool = True,
+    tensor_parallel_enabled: bool = False,
 ) -> torch.Tensor | DTensor:
     if use_padding_free_transformer:
         if fix_padding_free_logits:
@@ -43,7 +44,7 @@ def get_autoregressive_language_modeling_loss(
 
     loss_context = nullcontext
 
-    if ProcessGroupManager.is_initialized() and ProcessGroupManager.is_tensor_parallel_enabled():
+    if tensor_parallel_enabled:
         loss_context = loss_parallel
         tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
