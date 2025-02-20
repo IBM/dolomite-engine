@@ -33,7 +33,6 @@ model_args:
     rope_theta: 10000
     attention_head_type: mha
     vocab_size: 49152
-    upcast_logits_for_loss: true
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0

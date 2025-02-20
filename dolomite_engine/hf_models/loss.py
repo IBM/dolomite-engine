@@ -13,26 +13,33 @@ from ..utils import ProcessGroupManager
 def get_autoregressive_language_modeling_loss(
     lm_logits: torch.Tensor,
     labels: torch.Tensor,
-    upcast_logits_for_loss: bool,
     cu_seqlens: torch.Tensor | None = None,
     use_padding_free_transformer: bool = False,
     reduction: str = "mean",
+    fix_padding_free_logits: bool = True,
+    shift_logits_and_labels: bool = True,
 ) -> torch.Tensor | DTensor:
     if use_padding_free_transformer:
-        assert cu_seqlens is not None
+        if fix_padding_free_logits:
+            assert shift_logits_and_labels
+            assert cu_seqlens is not None
 
-        shift_logits = lm_logits[:-1, :]
-        shift_labels = labels[1:].to(shift_logits.device)
+            shift_logits = lm_logits[:-1, :]
+            shift_labels = labels[1:].to(shift_logits.device)
 
-        # this is needed so that the last token of current example doesn't predict first token of next example
-        drop_loss_positions = cu_seqlens[1:-1] - 1
-        shift_labels[drop_loss_positions] = -100
+            # this is needed so that the last token of current example doesn't predict first token of next example
+            drop_loss_positions = cu_seqlens[1:-1] - 1
+            shift_labels[drop_loss_positions] = -100
     else:
         assert cu_seqlens is None
 
+        if shift_logits_and_labels:
+            lm_logits = lm_logits[..., :-1, :]
+            labels = labels[..., 1:]
+
         # Shift so that tokens < n predict n
-        shift_logits = lm_logits[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous().to(shift_logits.device)
+        shift_logits = lm_logits.contiguous()
+        shift_labels = labels.contiguous().to(shift_logits.device)
 
     loss_context = nullcontext
 
@@ -43,8 +50,7 @@ def get_autoregressive_language_modeling_loss(
         shift_logits = tensor_to_dtensor(shift_logits, device_mesh=tp_mesh, current_placement=Shard(-1))
         shift_labels = tensor_to_dtensor(shift_labels, device_mesh=tp_mesh, current_placement=Replicate())
 
-    if upcast_logits_for_loss:
-        shift_logits = shift_logits.float()
+    shift_logits = shift_logits.float()
 
     with loss_context():
         loss = F.cross_entropy(

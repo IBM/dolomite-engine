@@ -65,7 +65,6 @@ model_args:
     attention_head_type: gqa
     vocab_size: 49152
     tie_word_embeddings: true
-    upcast_logits_for_loss: true
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0

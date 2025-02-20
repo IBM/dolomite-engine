@@ -1,15 +1,11 @@
-from contextlib import nullcontext
-
 import torch
 import torch.distributed
-import torch.nn.functional as F
-from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed.tensor.parallel import loss_parallel
+from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Mode
-from ..hf_models import get_aux_loss
+from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -120,20 +116,15 @@ class ModelWrapperForPretraining(ModelWrapper):
         logits: torch.Tensor = model_outputs.logits
         aux_loss = get_aux_loss()
 
-        if self.upcast_logits_for_loss:
-            logits = logits.float()
-
-        loss_context = nullcontext
-        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
-
-        if is_tensor_parallel_enabled:
-            loss_context = loss_parallel
-
-            logits = tensor_to_dtensor(logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
-
-        with loss_context():
-            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
+        lm_loss = get_autoregressive_language_modeling_loss(
+            lm_logits=logits,
+            labels=labels,
+            cu_seqlens=None,
+            use_padding_free_transformer=self.use_padding_free_transformer,
+            reduction="sum",
+            fix_padding_free_logits=False,
+            shift_logits_and_labels=False,
+        )
 
         lm_loss = lm_loss * lm_loss_multiplier
 
@@ -144,7 +135,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             if self.is_pipeline_parallel_enabled:
                 self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
 
-            if is_tensor_parallel_enabled:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)
