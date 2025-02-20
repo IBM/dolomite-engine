@@ -60,11 +60,10 @@ class Mamba2Base(nn.Module):
 
         self.time_step_limit = time_step_limit
 
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
+
         # 1D convolutional layer
         self.conv_dim = self.intermediate_size + 2 * self.n_groups * self.ssm_state_size
-        std = initializer_range
-        if init_method == InitMethod.mup:
-            std /= math.sqrt(m_width)
         self.conv1d = ParameterizedConv1d(
             in_channels=self.conv_dim,
             out_channels=self.conv_dim,
@@ -76,8 +75,6 @@ class Mamba2Base(nn.Module):
         )
 
         # projection of the input hidden states
-        std = _get_std_for_linear(initializer_range, init_method, m_width)
-
         self.in_proj = ParameterizedLinear(
             self.hidden_size,
             self.intermediate_size + self.conv_dim + self.num_heads,
