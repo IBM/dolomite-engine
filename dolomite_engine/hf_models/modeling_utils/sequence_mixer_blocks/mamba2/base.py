@@ -81,6 +81,7 @@ class Mamba2Base(nn.Module):
             bias=add_bias,
             std=std,
         )
+
         # selective projection used to make dt, B and C input dependant
 
         # time step projection (discretization)
