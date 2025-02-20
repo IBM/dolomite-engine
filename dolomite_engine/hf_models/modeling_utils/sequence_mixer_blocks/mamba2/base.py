@@ -28,10 +28,7 @@ class Mamba2Base(nn.Module):
         ssm_intermediate_size: int,
         ssm_num_heads: int,
         conv_kernel_size: int,
-        time_step_rank: int,
         time_step_limit: int,
-        time_step_min: int,
-        time_step_max: int,
         add_bias: bool,
         use_conv_bias: bool,
         ssm_activation_function: str,
@@ -51,7 +48,6 @@ class Mamba2Base(nn.Module):
         self.ssm_state_size = ssm_state_size
         self.conv_kernel_size = conv_kernel_size
         self.intermediate_size = ssm_intermediate_size
-        self.time_step_rank = int(time_step_rank)
         self.layer_idx = layer_idx
         self.use_conv_bias = use_conv_bias
 
@@ -63,8 +59,6 @@ class Mamba2Base(nn.Module):
         self.chunk_size = chunk_size
 
         self.time_step_limit = time_step_limit
-        self.time_step_min = time_step_min
-        self.time_step_max = time_step_max
 
         self.conv_dim = self.intermediate_size + 2 * self.n_groups * self.ssm_state_size
         self.conv1d = nn.Conv1d(
@@ -85,20 +79,12 @@ class Mamba2Base(nn.Module):
             bias=add_bias,
             std=std,
         )
-
         # selective projection used to make dt, B and C input dependant
 
         # time step projection (discretization)
         # instantiate once and copy inv_dt in init_weights of PretrainedModel
         # Initialize log dt bias
-        dt = torch.exp(
-            torch.rand(self.num_heads) * (math.log(time_step_max) - math.log(time_step_min)) + math.log(time_step_min)
-        )
-        dt_init_floor = 1e-4
-        dt = torch.clamp(dt, min=dt_init_floor)
-        # Inverse of softplus: https://github.com/pytorch/pytorch/issues/72759
-        inv_dt = dt + torch.log(-torch.expm1(-dt))
-        self.dt_bias = nn.Parameter(inv_dt)
+        self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
 
         # S4D real initialization. These are not discretized!
         # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
