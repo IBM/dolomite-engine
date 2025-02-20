@@ -7,7 +7,7 @@ from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
 from ....enums import InitMethod
 from ...activations import get_activation_function
-from ...linear import ParameterizedLinear
+from ...linear import ParameterizedLinear, ParameterizedConv1d
 from ...mlp_blocks.mlp import _get_std_for_linear
 from ...normalization import get_normalization_function
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
@@ -60,14 +60,19 @@ class Mamba2Base(nn.Module):
 
         self.time_step_limit = time_step_limit
 
+        # 1D convolutional layer
         self.conv_dim = self.intermediate_size + 2 * self.n_groups * self.ssm_state_size
-        self.conv1d = nn.Conv1d(
+        std = initializer_range
+        if init_method == InitMethod.mup:
+            std /= math.sqrt(m_width)
+        self.conv1d = ParameterizedConv1d(
             in_channels=self.conv_dim,
             out_channels=self.conv_dim,
             bias=use_conv_bias,
             kernel_size=self.conv_kernel_size,
             groups=self.conv_dim,
             padding=self.conv_kernel_size - 1,
+            std=std,
         )
 
         # projection of the input hidden states
@@ -90,14 +95,18 @@ class Mamba2Base(nn.Module):
         # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
         A = torch.arange(1, self.num_heads + 1)
         self.A_log = nn.Parameter(torch.log(A))
-        self.A_log._no_weight_decay = True
         self.norm = get_normalization_function("silu_gated_rmsnorm", self.intermediate_size, eps=layer_norm_epsilon)
         self.D = nn.Parameter(torch.ones(self.num_heads))
-        self.D._no_weight_decay = True
 
         self.out_proj = ParameterizedLinear(
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log.data = torch.log(A)
+        nn.init.ones_(self.D)
 
     def forward(
         self,
