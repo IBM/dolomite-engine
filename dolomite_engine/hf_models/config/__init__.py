@@ -233,7 +233,6 @@ class CommonConfig(PretrainedConfig):
             elif sequence_mixer_type == "mamba2":
                 sequence_mixer_kwargs = {
                     "intermediate_size": sequence_mixer_block.pop("intermediate_size", 2 * self.hidden_size),
-                    "time_step_rank": sequence_mixer_block.pop("time_step_rank", math.ceil(self.hidden_size / 16)),
                 }
 
                 for key in [
@@ -241,9 +240,6 @@ class CommonConfig(PretrainedConfig):
                     "num_heads",
                     "conv_kernel_size",
                     "time_step_limit",
-                    "time_step_min",
-                    "time_step_max",
-                    "time_step_floor",
                     "add_bias",
                     "use_conv_bias",
                     "activation_function",

@@ -36,10 +36,7 @@ class _Mamba2Args(BaseArgs):
     intermediate_size: int
     num_heads: int = 128
     conv_kernel_size: int = 4
-    time_step_rank: int
     time_step_limit: tuple[float, float] = (0, float("inf"))
-    time_step_min: float = 0.001
-    time_step_max: float = 0.1
     add_bias: bool = True
     use_conv_bias: bool = True
     activation_function: str = "silu"
