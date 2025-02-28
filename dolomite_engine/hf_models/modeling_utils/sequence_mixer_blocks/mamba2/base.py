@@ -101,12 +101,6 @@ class Mamba2Base(nn.Module):
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
 
-    @torch.no_grad()
-    def reset_parameters(self) -> None:
-        A = torch.arange(1, self.num_heads + 1)
-        self.A_log.data = torch.log(A)
-        nn.init.ones_(self.D)
-
     def forward(
         self,
         input_states: torch.Tensor,
@@ -323,3 +317,9 @@ class Mamba2Base(nn.Module):
         contextualized_states = self.out_proj(scan_output.to(dtype))  # [batch, seq_len, hidden_size]
 
         return contextualized_states
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log.data = torch.log(A)
+        nn.init.ones_(self.D)
