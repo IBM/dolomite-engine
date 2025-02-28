@@ -69,7 +69,6 @@ def get_sequence_mixer(
             attention_head_type=AttentionHeadType(block.attention_head_type),
             position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
             add_bias=block.add_bias,
-            softmax_dropout=block.softmax_dropout,
             dropout=block.dropout,
             init_method=InitMethod(config.init_method),
             initializer_range=config.initializer_range,
@@ -80,6 +79,8 @@ def get_sequence_mixer(
         )
 
         if sequence_mixer_type == "softmax_attention":
+            sequence_mixer_kwargs["softmax_dropout"] = block.softmax_dropout
+
             if use_padding_free_transformer:
                 assert (
                     attention_implementation == "flash_attention_2"
