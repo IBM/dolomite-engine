@@ -90,8 +90,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 
     normal_params = {}
     mup_params = {}
-    normal_no_weight_decay_params = {}
-    mup_no_weight_decay_params = {}
+    no_weight_decay_params = {}
 
     # collect parameters with mup learning rate
     for module_name, module in model.named_modules():
@@ -103,31 +102,25 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
                     mup_params[f"{module_name}.{param_name}"] = param
         elif isinstance(module, Mamba2Base):
             for param_name, param in module.named_parameters():
-                if param_name in ["A_log", "D"]:
-                    mup_params[f"{module_name}.{param_name}"] = param
-                elif not (param_name.endswith("bias") or "norm" in param_name):
+                if param_name in ["A_log", "D"] or not (param_name.endswith("bias") or "norm" in param_name):
                     mup_params[f"{module_name}.{param_name}"] = param
         elif isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
             for param_name, param in module.named_parameters():
-                normal_no_weight_decay_params[f"{module_name}.{param_name}"] = param
+                no_weight_decay_params[f"{module_name}.{param_name}"] = param
 
     # remove biases from weight decay
     for param_name, param in model.named_parameters():
-        if param_name not in normal_no_weight_decay_params and param_name.endswith("bias"):
-            normal_no_weight_decay_params[param_name] = param
+        if param_name not in no_weight_decay_params and param_name.endswith("bias"):
+            no_weight_decay_params[param_name] = param
 
     # collect parameters without mup learning rate
     for param_name, param in model.named_parameters():
-        if (
-            param_name not in mup_params
-            and param_name not in normal_no_weight_decay_params
-            and param_name not in mup_no_weight_decay_params
-        ):
+        if param_name not in mup_params and param_name not in no_weight_decay_params:
             normal_params[param_name] = param
 
-    assert len(normal_params) + len(normal_no_weight_decay_params) + len(mup_params) + len(
-        mup_no_weight_decay_params
-    ) == len(list(model.parameters())), "params in groups don't sum up to total parameters"
+    assert len(normal_params) + len(no_weight_decay_params) + len(mup_params) == len(
+        list(model.parameters())
+    ), "params in groups don't sum up to total parameters"
 
     trainable_parameters_or_param_groups = []
     names = {}
@@ -135,25 +128,16 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
     if len(normal_params) > 0:
         trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
         names["normal"] = list(normal_params.keys())
-    if len(normal_no_weight_decay_params) > 0:
+    if len(no_weight_decay_params) > 0:
         trainable_parameters_or_param_groups.append(
-            {"params": list(normal_no_weight_decay_params.values()), "weight_decay": 0}
+            {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
         )
-        names["normal_no_weight_decay"] = list(normal_no_weight_decay_params.keys())
+        names["no_weight_decay"] = list(no_weight_decay_params.keys())
     if len(mup_params) > 0:
         trainable_parameters_or_param_groups.append(
             {"params": list(mup_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width}
         )
         names["mup"] = list(mup_params.keys())
-    if len(mup_no_weight_decay_params) > 0:
-        trainable_parameters_or_param_groups.append(
-            {
-                "params": list(mup_no_weight_decay_params.values()),
-                "lr": optimizer_class_args["lr"] / model.config.m_width,
-                "weight_decay": 0,
-            }
-        )
-        names["mup_no_weight_decay"] = list(mup_no_weight_decay_params.keys())
 
     return trainable_parameters_or_param_groups, names
 
