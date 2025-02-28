@@ -7,7 +7,8 @@ from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
 from ....enums import InitMethod
 from ...activations import get_activation_function
-from ...linear import ParameterizedConv1d, ParameterizedLinear
+from ...convolution import ParameterizedConv1d
+from ...linear import ParameterizedLinear
 from ...mlp_blocks.mlp import _get_std_for_linear
 from ...normalization import get_normalization_function
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
