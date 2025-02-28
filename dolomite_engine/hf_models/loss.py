@@ -43,6 +43,7 @@ def get_autoregressive_language_modeling_loss(
 
     if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
         assert lm_logits is None
+        assert not tensor_parallel_enabled
 
         loss = fused_linear_cross_entropy_cute(
             x=hidden_states,
