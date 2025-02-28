@@ -83,11 +83,11 @@ class SBAttention(Attention):
         max_seqlen: torch.Tensor | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
-        assert past_key_values is None
+        # assert past_key_values is None
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
         softmax_scale = self._get_softmax_scale()
-        # key, value = past_key_values.update(key, value, self.layer_idx)
+        key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
 
         if query.size(2) == key.size(2):
@@ -197,9 +197,11 @@ class PaddingFreeSBAttention(SBAttention):
 
         # this needs to be a reshape instead of view sadly
         query = query.reshape(total_q, -1, self.head_dim)
-        key = key.repeat(1, self.num_heads // self.num_key_value_heads, 1)
-        value = value.repeat(1, self.num_heads // self.num_key_value_heads, 1)
-
+        # key = key.repeat(1, self.num_heads // self.num_key_value_heads, 1)
+        # value = value.repeat(1, self.num_heads // self.num_key_value_heads, 1)
+        group_size = self.num_heads // self.num_key_value_heads
+        key = key.repeat_interleave(repeats=group_size, dim=1)
+        value = value.repeat_interleave(repeats=group_size, dim=1)
         return query, key, value
 
     def _prepare_qkv_for_forward_mqa(

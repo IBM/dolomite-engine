@@ -88,8 +88,10 @@ def get_model_tflops(
         block = config.sequence_mixer_blocks[layer_idx]
         sequence_mixer_type = block.sequence_mixer_type
 
-        if sequence_mixer_type == "softmax_attention":
+        if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
             attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / n) + s)
+        elif sequence_mixer_type in "mamba2":
+            attention_flops = 4 * b * s * h * h * block.num_heads / n
         else:
             raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
