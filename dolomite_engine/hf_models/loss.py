@@ -7,7 +7,8 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 
 from ..distributed import tensor_to_dtensor
-from ..kernels import Kernel, is_kernel_allowed
+from ..enums import Kernel
+from ..kernels import is_kernel_allowed
 from ..utils import ProcessGroupManager, is_cute_kernels_available
 
 
