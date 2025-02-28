@@ -18,6 +18,8 @@ if is_cute_kernels_available():
 def get_autoregressive_language_modeling_loss(
     lm_logits: torch.Tensor,
     labels: torch.Tensor,
+    hidden_states: torch.Tensor | None = None,
+    vocab_weight: torch.Tensor | None = None,
     logits_multiplier: float = 1,
     cu_seqlens: torch.Tensor | None = None,
     use_padding_free_transformer: bool = False,
@@ -40,8 +42,18 @@ def get_autoregressive_language_modeling_loss(
         assert cu_seqlens is None
 
     if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
-        pass
+        assert lm_logits is None
+
+        loss = fused_linear_cross_entropy_cute(
+            x=hidden_states,
+            weight=vocab_weight,
+            labels=labels,
+            reduction=reduction,
+            logits_multiplier=logits_multiplier,
+        )
     elif is_kernel_allowed(Kernel.cross_entropy_cute):
+        assert hidden_states is None
+        assert vocab_weight is None
         assert not tensor_parallel_enabled
 
         loss = cross_entropy_cute(
