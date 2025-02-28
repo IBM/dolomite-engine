@@ -54,6 +54,15 @@ class GPTDolomiteBlock(nn.Module):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
+        elif self.sequence_mixer_type == "stickbreaking_attention":
+            hidden_states = self.sequence_mixer(
+                hidden_states,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                rope_cos_sin=rope_cos_sin,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
         elif self.sequence_mixer_type == "mamba2":
             hidden_states = self.sequence_mixer(
                 hidden_states, cache_params=past_key_values, attention_mask=attention_mask

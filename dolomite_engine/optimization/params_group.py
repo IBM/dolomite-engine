@@ -102,9 +102,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
                     mup_params[f"{module_name}.{param_name}"] = param
         elif isinstance(module, Mamba2Base):
             for param_name, param in module.named_parameters():
-                if param_name in ["A_log", "D"]:
-                    no_weight_decay_params[f"{module_name}.{param_name}"] = param
-                elif not (param_name.endswith("bias") or "norm" in param_name):
+                if param_name in ["A_log", "D"] or not (param_name.endswith("bias") or "norm" in param_name):
                     mup_params[f"{module_name}.{param_name}"] = param
         elif isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
             for param_name, param in module.named_parameters():
