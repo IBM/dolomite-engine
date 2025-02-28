@@ -102,7 +102,7 @@ def get_normalization_function_TP(
     use_padding_free_transformer: bool = False,
     sequence_parallel: bool = False,
 ) -> nn.LayerNorm:
-    if is_kernel_allowed(Kernel.cute_rmsnorm) and normalization_function == "rmsnorm":
+    if is_kernel_allowed(Kernel.rmsnorm_cute) and normalization_function == "rmsnorm":
         normalization = CuteRMSNorm_TP(
             normalized_shape,
             eps=eps,

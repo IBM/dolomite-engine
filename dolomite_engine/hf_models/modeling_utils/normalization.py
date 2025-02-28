@@ -41,7 +41,7 @@ class CuteRMSNorm(nn.RMSNorm):
 def get_normalization_function(
     normalization_function: str, normalized_shape: int, eps: float = 1e-5
 ) -> nn.LayerNorm | nn.RMSNorm:
-    if is_kernel_allowed(Kernel.cute_rmsnorm) and normalization_function == "rmsnorm":
+    if is_kernel_allowed(Kernel.rmsnorm_cute) and normalization_function == "rmsnorm":
         normalization = CuteRMSNorm(normalized_shape, eps=eps)
     else:
         if normalization_function in _NORMALIZATION_FUNCTIONS:
