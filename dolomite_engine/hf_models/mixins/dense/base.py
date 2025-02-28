@@ -152,7 +152,7 @@ class BaseModelMixin(PreTrainedModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: HybridMambaAttentionDynamicCache | None = None,
+        past_key_values: DynamicCache | HybridMambaAttentionDynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -191,14 +191,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if is_generation_cache_enabled():
             past_key_values = (
-                HybridMambaAttentionDynamicCache(
-                    config=self.config,
-                    batch_size=input_ids.size(0),
-                    dtype=self.wte.weight.dtype,
-                    device=self.wte.weight.device,
-                )
-                if use_cache and past_key_values is None
-                else past_key_values
+                self._get_empty_cache(input_ids) if use_cache and past_key_values is None else past_key_values
             )
 
         clear_aux_loss()
@@ -532,3 +525,16 @@ class BaseModelMixin(PreTrainedModelMixin):
             mamba_mask = None
 
         return mamba_mask
+
+    def _get_empty_cache(self, input_ids: torch.Tensor) -> DynamicCache | HybridMambaAttentionDynamicCache:
+        if any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks]):
+            past_key_values = HybridMambaAttentionDynamicCache(
+                config=self.config,
+                batch_size=input_ids.size(0),
+                dtype=self.wte.weight.dtype,
+                device=self.wte.weight.device,
+            )
+        else:
+            past_key_values = DynamicCache()
+
+        return past_key_values
