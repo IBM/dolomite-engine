@@ -124,7 +124,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             cu_seqlens=None,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
-            fix_padding_free_logits=False,
             shift_logits_and_labels=False,
             tensor_parallel_enabled=tensor_parallel_enabled,
         )

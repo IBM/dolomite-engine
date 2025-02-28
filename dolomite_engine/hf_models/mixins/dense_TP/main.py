@@ -98,7 +98,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
-                    fix_padding_free_logits=True,
                     shift_logits_and_labels=True,
                     tensor_parallel_enabled=True,
                 )
