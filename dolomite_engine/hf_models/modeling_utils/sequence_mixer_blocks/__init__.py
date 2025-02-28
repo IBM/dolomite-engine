@@ -47,10 +47,7 @@ def get_sequence_mixer(
             ssm_intermediate_size=block.intermediate_size,
             ssm_num_heads=block.num_heads,
             conv_kernel_size=block.conv_kernel_size,
-            time_step_rank=block.time_step_rank,
             time_step_limit=block.time_step_limit,
-            time_step_min=block.time_step_min,
-            time_step_max=block.time_step_max,
             add_bias=block.add_bias,
             use_conv_bias=block.use_conv_bias,
             ssm_activation_function=block.activation_function,
@@ -72,7 +69,6 @@ def get_sequence_mixer(
             attention_head_type=AttentionHeadType(block.attention_head_type),
             position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
             add_bias=block.add_bias,
-            softmax_dropout=block.softmax_dropout,
             dropout=block.dropout,
             init_method=InitMethod(config.init_method),
             initializer_range=config.initializer_range,
@@ -83,6 +79,8 @@ def get_sequence_mixer(
         )
 
         if sequence_mixer_type == "softmax_attention":
+            sequence_mixer_kwargs["softmax_dropout"] = block.softmax_dropout
+
             if use_padding_free_transformer:
                 assert (
                     attention_implementation == "flash_attention_2"

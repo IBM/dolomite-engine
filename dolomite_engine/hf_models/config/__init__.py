@@ -1,4 +1,3 @@
-import math
 from copy import deepcopy
 from typing import Any, Callable
 
@@ -7,7 +6,7 @@ from transformers import PretrainedConfig
 from ...utils import BaseArgs
 from ..enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mlp import _MLPArgs, _MoEArgs
-from .sequence_mixer import _Mamba2Args, _SoftmaxAttentionArgs
+from .sequence_mixer import _Mamba2Args, _SoftmaxAttentionArgs, _StickbreakingAttentionArgs
 
 
 def _hold_base_args(key: str) -> Callable:
@@ -162,7 +161,7 @@ class CommonConfig(PretrainedConfig):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
-            if sequence_mixer_type == "softmax_attention":
+            if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
                 attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
                 num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
 
@@ -195,11 +194,13 @@ class CommonConfig(PretrainedConfig):
                 for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
-                sequence_mixer_class = _SoftmaxAttentionArgs
+                if sequence_mixer_type == "softmax_attention":
+                    sequence_mixer_class = _SoftmaxAttentionArgs
+                elif sequence_mixer_type == "stickbreaking_attention":
+                    sequence_mixer_class = _StickbreakingAttentionArgs
             elif sequence_mixer_type == "mamba2":
                 sequence_mixer_kwargs = {
                     "intermediate_size": sequence_mixer_block.pop("intermediate_size", 2 * self.hidden_size),
-                    "time_step_rank": sequence_mixer_block.pop("time_step_rank", math.ceil(self.hidden_size / 16)),
                 }
 
                 for key in [
@@ -207,9 +208,6 @@ class CommonConfig(PretrainedConfig):
                     "num_heads",
                     "conv_kernel_size",
                     "time_step_limit",
-                    "time_step_min",
-                    "time_step_max",
-                    "time_step_floor",
                     "add_bias",
                     "use_conv_bias",
                     "activation_function",

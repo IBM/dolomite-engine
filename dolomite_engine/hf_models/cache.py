@@ -31,7 +31,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
                     torch.zeros(
                         batch_size,
                         (block.intermediate_size + 2 * block.num_groups * block.state_size),
-                        config.conv_kernel_size,
+                        block.conv_kernel_size,
                         device=device,
                         dtype=dtype,
                     )

@@ -7,6 +7,7 @@ from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
 from ....enums import InitMethod
 from ...activations import get_activation_function
+from ...convolution import ParameterizedConv1d
 from ...linear import ParameterizedLinear
 from ...mlp_blocks.mlp import _get_std_for_linear
 from ...normalization import get_normalization_function
@@ -28,10 +29,7 @@ class Mamba2Base(nn.Module):
         ssm_intermediate_size: int,
         ssm_num_heads: int,
         conv_kernel_size: int,
-        time_step_rank: int,
         time_step_limit: int,
-        time_step_min: int,
-        time_step_max: int,
         add_bias: bool,
         use_conv_bias: bool,
         ssm_activation_function: str,
@@ -51,7 +49,6 @@ class Mamba2Base(nn.Module):
         self.ssm_state_size = ssm_state_size
         self.conv_kernel_size = conv_kernel_size
         self.intermediate_size = ssm_intermediate_size
-        self.time_step_rank = int(time_step_rank)
         self.layer_idx = layer_idx
         self.use_conv_bias = use_conv_bias
 
@@ -63,22 +60,22 @@ class Mamba2Base(nn.Module):
         self.chunk_size = chunk_size
 
         self.time_step_limit = time_step_limit
-        self.time_step_min = time_step_min
-        self.time_step_max = time_step_max
 
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
+
+        # 1D convolutional layer
         self.conv_dim = self.intermediate_size + 2 * self.n_groups * self.ssm_state_size
-        self.conv1d = nn.Conv1d(
+        self.conv1d = ParameterizedConv1d(
             in_channels=self.conv_dim,
             out_channels=self.conv_dim,
             bias=use_conv_bias,
             kernel_size=self.conv_kernel_size,
             groups=self.conv_dim,
             padding=self.conv_kernel_size - 1,
+            std=std,
         )
 
         # projection of the input hidden states
-        std = _get_std_for_linear(initializer_range, init_method, m_width)
-
         self.in_proj = ParameterizedLinear(
             self.hidden_size,
             self.intermediate_size + self.conv_dim + self.num_heads,
@@ -91,23 +88,14 @@ class Mamba2Base(nn.Module):
         # time step projection (discretization)
         # instantiate once and copy inv_dt in init_weights of PretrainedModel
         # Initialize log dt bias
-        dt = torch.exp(
-            torch.rand(self.num_heads) * (math.log(time_step_max) - math.log(time_step_min)) + math.log(time_step_min)
-        )
-        dt_init_floor = 1e-4
-        dt = torch.clamp(dt, min=dt_init_floor)
-        # Inverse of softplus: https://github.com/pytorch/pytorch/issues/72759
-        inv_dt = dt + torch.log(-torch.expm1(-dt))
-        self.dt_bias = nn.Parameter(inv_dt)
+        self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
 
         # S4D real initialization. These are not discretized!
         # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
         A = torch.arange(1, self.num_heads + 1)
         self.A_log = nn.Parameter(torch.log(A))
-        self.A_log._no_weight_decay = True
         self.norm = get_normalization_function("silu_gated_rmsnorm", self.intermediate_size, eps=layer_norm_epsilon)
         self.D = nn.Parameter(torch.ones(self.num_heads))
-        self.D._no_weight_decay = True
 
         self.out_proj = ParameterizedLinear(
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
@@ -329,3 +317,9 @@ class Mamba2Base(nn.Module):
         contextualized_states = self.out_proj(scan_output.to(dtype))  # [batch, seq_len, hidden_size]
 
         return contextualized_states
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log.data = torch.log(A)
+        nn.init.ones_(self.D)

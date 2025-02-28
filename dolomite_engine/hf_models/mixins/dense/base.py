@@ -43,6 +43,8 @@ class PreTrainedModelMixin(PreTrainedModel):
         if self._use_padding_free_transformer:
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
+        self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
+
     def _init_weights(self, module: nn.Module) -> None:
         if hasattr(module, "reset_parameters"):
             module.reset_parameters()
@@ -152,7 +154,7 @@ class BaseModelMixin(PreTrainedModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: DynamicCache | HybridMambaAttentionDynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -190,7 +192,9 @@ class BaseModelMixin(PreTrainedModelMixin):
         # ==========================================================================================
 
         if is_generation_cache_enabled():
-            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+            past_key_values = (
+                self._get_empty_cache(input_ids) if use_cache and past_key_values is None else past_key_values
+            )
 
         clear_aux_loss()
         mamba_mask = None
@@ -523,3 +527,16 @@ class BaseModelMixin(PreTrainedModelMixin):
             mamba_mask = None
 
         return mamba_mask
+
+    def _get_empty_cache(self, input_ids: torch.Tensor) -> DynamicCache | HybridMambaAttentionDynamicCache:
+        if self._has_mamba2:
+            past_key_values = HybridMambaAttentionDynamicCache(
+                config=self.config,
+                batch_size=input_ids.size(0),
+                dtype=self.wte.weight.dtype,
+                device=self.wte.weight.device,
+            )
+        else:
+            past_key_values = DynamicCache()
+
+        return past_key_values
