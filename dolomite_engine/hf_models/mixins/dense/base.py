@@ -43,6 +43,8 @@ class PreTrainedModelMixin(PreTrainedModel):
         if self._use_padding_free_transformer:
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
+        self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
+
     def _init_weights(self, module: nn.Module) -> None:
         if hasattr(module, "reset_parameters"):
             module.reset_parameters()
@@ -527,7 +529,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         return mamba_mask
 
     def _get_empty_cache(self, input_ids: torch.Tensor) -> DynamicCache | HybridMambaAttentionDynamicCache:
-        if any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks]):
+        if self._has_mamba2:
             past_key_values = HybridMambaAttentionDynamicCache(
                 config=self.config,
                 batch_size=input_ids.size(0),
