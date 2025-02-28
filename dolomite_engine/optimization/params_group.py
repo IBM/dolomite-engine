@@ -118,12 +118,16 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 
     # collect parameters without mup learning rate
     for param_name, param in model.named_parameters():
-        if param_name not in mup_params and param_name not in normal_no_weight_decay_params and param_name not in mup_no_weight_decay_params:
+        if (
+            param_name not in mup_params
+            and param_name not in normal_no_weight_decay_params
+            and param_name not in mup_no_weight_decay_params
+        ):
             normal_params[param_name] = param
 
-    assert len(normal_params) + len(normal_no_weight_decay_params) + len(mup_params) + len(mup_no_weight_decay_params) == len(
-        list(model.parameters())
-    ), "params in groups don't sum up to total parameters"
+    assert len(normal_params) + len(normal_no_weight_decay_params) + len(mup_params) + len(
+        mup_no_weight_decay_params
+    ) == len(list(model.parameters())), "params in groups don't sum up to total parameters"
 
     trainable_parameters_or_param_groups = []
     names = {}
@@ -143,7 +147,11 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         names["mup"] = list(mup_params.keys())
     if len(mup_no_weight_decay_params) > 0:
         trainable_parameters_or_param_groups.append(
-            {"params": list(mup_no_weight_decay_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width, "weight_decay": 0}
+            {
+                "params": list(mup_no_weight_decay_params.values()),
+                "lr": optimizer_class_args["lr"] / model.config.m_width,
+                "weight_decay": 0,
+            }
         )
         names["mup_no_weight_decay"] = list(mup_no_weight_decay_params.keys())
 

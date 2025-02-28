@@ -46,7 +46,17 @@ class ParameterizedConv1d(nn.Conv1d):
     ):
         self.std = std
         super().__init__(
-            in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode, device, dtype
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+            device,
+            dtype,
         )
 
     @torch.no_grad()

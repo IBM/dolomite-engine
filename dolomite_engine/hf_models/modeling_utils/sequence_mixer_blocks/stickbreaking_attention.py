@@ -66,9 +66,21 @@ class SBAttention(Attention):
         layer_idx: int,
     ) -> None:
         super().__init__(
-            hidden_size, num_attention_heads, num_key_value_heads, attention_multiplier, 
-            attention_head_type, position_embedding_type, add_bias, softmax_dropout, dropout, 
-            init_method, initializer_range, m_width, num_layers, causal, layer_idx
+            hidden_size,
+            num_attention_heads,
+            num_key_value_heads,
+            attention_multiplier,
+            attention_head_type,
+            position_embedding_type,
+            add_bias,
+            softmax_dropout,
+            dropout,
+            init_method,
+            initializer_range,
+            m_width,
+            num_layers,
+            causal,
+            layer_idx,
         )
         self.head_bias = torch.nn.Parameter(torch.zeros(self.hidden_size // self.head_dim, self.head_dim))
         self.norm = torch.nn.GroupNorm(self.num_heads, self.hidden_size)
