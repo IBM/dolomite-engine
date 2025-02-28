@@ -41,7 +41,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         self.transformer.wte = value
 
     def get_output_embeddings(self) -> ParameterizedLinear:
-        return self.transformer.wte.weight if self._tied_word_embeddings else self.lm_head
+        return self.transformer.wte if self._tied_word_embeddings else self.lm_head
 
     def set_output_embeddings(self, new_embeddings: ParameterizedLinear) -> None:
         if not self._tied_word_embeddings:
