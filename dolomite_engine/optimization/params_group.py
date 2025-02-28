@@ -89,8 +89,8 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         model = model.model
 
     normal_params = {}
-    mup_params = {}
     no_weight_decay_params = {}
+    mup_params = {}
 
     # collect parameters with mup learning rate
     for module_name, module in model.named_modules():
