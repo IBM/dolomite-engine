@@ -4,7 +4,9 @@ from torch.distributed._tensor.placement_types import Replicate
 
 from ..communication import Communication
 from ..distributed import tensor_to_dtensor
+from ..enums import Kernel
 from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
+from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -37,14 +39,15 @@ class ModelWrapperForFinetuning(ModelWrapper):
     def get_loss(
         self, model_outputs, labels: torch.Tensor, cu_seqlens: torch.Tensor | None, lm_loss_multiplier: float = 1
     ) -> torch.Tensor | dict:
-        logits: torch.Tensor = model_outputs.logits
-        aux_loss = get_aux_loss()
-
         tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
 
         lm_loss = get_autoregressive_language_modeling_loss(
-            lm_logits=logits,
+            lm_logits=None if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute) else model_outputs.logits,
             labels=labels,
+            hidden_states=(
+                model_outputs.hidden_state if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute) else None
+            ),
+            vocab_weight=self.model.get_output_embeddings().weight,
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
@@ -53,6 +56,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
+        aux_loss = get_aux_loss()
 
         if aux_loss == 0:
             loss = lm_loss
