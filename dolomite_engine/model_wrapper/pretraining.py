@@ -122,6 +122,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             labels=labels,
             hidden_states=model_outputs.last_hidden_state if use_fused_linear_cross_entropy_kernel else None,
             vocab_weight=self.model.get_output_embeddings().weight if use_fused_linear_cross_entropy_kernel else None,
+            logits_multiplier=1 / getattr(self.model, "m_width", 1),
             cu_seqlens=None,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
