@@ -69,15 +69,13 @@ def get_autoregressive_language_modeling_loss(
             loss_context = loss_parallel
             tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
-            shift_logits = tensor_to_dtensor(shift_logits, device_mesh=tp_mesh, current_placement=Shard(-1))
-            shift_labels = tensor_to_dtensor(shift_labels, device_mesh=tp_mesh, current_placement=Replicate())
+            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=tp_mesh, current_placement=Shard(-1))
+            labels = tensor_to_dtensor(labels, device_mesh=tp_mesh, current_placement=Replicate())
 
-        shift_logits = shift_logits.float()
+        lm_logits = lm_logits.float()
 
         with loss_context():
-            loss = F.cross_entropy(
-                shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1), reduction=reduction
-            )
+            loss = F.cross_entropy(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1), reduction=reduction)
 
     return loss
 
