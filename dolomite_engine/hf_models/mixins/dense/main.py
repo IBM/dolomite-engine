@@ -1,13 +1,13 @@
 import torch
 import torch.nn.functional as F
 from transformers import DynamicCache, GenerationMixin
-from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
 from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
+from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 from .base import PreTrainedModelMixin
 
 
@@ -153,8 +153,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             loss=loss,
             logits=lm_logits,
             past_key_values=transformer_outputs.past_key_values,
-            hidden_states=transformer_outputs.hidden_states,
-            attentions=transformer_outputs.attentions,
+            last_hidden_state=transformer_outputs.last_hidden_state,
         )
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:

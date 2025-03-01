@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from transformers import DynamicCache, PreTrainedModel
-from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import divide_if_divisible
 from ...cache import HybridMambaAttentionDynamicCache
@@ -10,6 +9,7 @@ from ...enums import PositionEmbeddingType
 from ...loss import clear_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
+from ..modeling_outputs import BaseModelOutputWithPast
 
 
 class PreTrainedModelMixin(PreTrainedModel):
