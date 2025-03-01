@@ -4,8 +4,9 @@ from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
-from ..enums import AttentionImplementation, Mode
+from ..enums import AttentionImplementation, Kernel, Mode
 from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
+from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -113,14 +114,14 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
-        logits: torch.Tensor = model_outputs.logits
-        aux_loss = get_aux_loss()
-
         tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
         lm_loss = get_autoregressive_language_modeling_loss(
-            lm_logits=logits,
+            lm_logits=None if use_fused_linear_cross_entropy_kernel else model_outputs.logits,
             labels=labels,
+            hidden_states=model_outputs.hidden_state if use_fused_linear_cross_entropy_kernel else None,
+            vocab_weight=self.model.get_output_embeddings().weight,
             cu_seqlens=None,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
@@ -129,6 +130,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
+        aux_loss = get_aux_loss()
 
         if aux_loss == 0:
             loss = lm_loss

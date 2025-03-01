@@ -40,13 +40,12 @@ class ModelWrapperForFinetuning(ModelWrapper):
         self, model_outputs, labels: torch.Tensor, cu_seqlens: torch.Tensor | None, lm_loss_multiplier: float = 1
     ) -> torch.Tensor | dict:
         tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
         lm_loss = get_autoregressive_language_modeling_loss(
-            lm_logits=None if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute) else model_outputs.logits,
+            lm_logits=None if use_fused_linear_cross_entropy_kernel else model_outputs.logits,
             labels=labels,
-            hidden_states=(
-                model_outputs.hidden_state if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute) else None
-            ),
+            hidden_states=model_outputs.hidden_state if use_fused_linear_cross_entropy_kernel else None,
             vocab_weight=self.model.get_output_embeddings().weight,
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
