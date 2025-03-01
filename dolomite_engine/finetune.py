@@ -13,6 +13,7 @@ from .data import ResumableDataLoader, custom_iterator, get_finetuning_dataloade
 from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
 from .enums import DatasetSplit, Mode, TuningMethod
 from .hf_models import disable_generation_cache
+from .kernels import enable_kernels
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
@@ -395,7 +396,7 @@ def main() -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    with disable_generation_cache():
+    with disable_generation_cache(), enable_kernels(args.kernel_args):
         train(
             args,
             model_container=model_container,
