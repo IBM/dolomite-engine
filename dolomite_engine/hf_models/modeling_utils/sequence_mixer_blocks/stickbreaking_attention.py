@@ -16,7 +16,6 @@ if is_stickbreaking_available():
     from stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
-@torch.compile
 def decoding_stickbreaking(q, k, v, scale=None):
     """
     Stick-breaking attention weights.
@@ -29,20 +28,14 @@ def decoding_stickbreaking(q, k, v, scale=None):
     original_dtype = q.dtype
     q = q.float()
     k = k.float()
-    # logits = torch.einsum('bhid,bhjd->bhij', q, k[..., :-1, :]) * scale
     logits = q @ k[..., :-1, :].transpose(-1, -2) * scale
-    # logits = logits.float()
     log_z = F.logsigmoid(logits).to(original_dtype)
     log_beta = F.logsigmoid(-logits).to(original_dtype)
-    # re_cum_log_beta = log_beta.sum(dim=-1, keepdim=True) - log_beta.cumsum(dim=-1)
     re_cum_log_beta = log_beta.flip(-1).cumsum(dim=-1).flip(-1) - log_beta
-    # re_cum_log_beta = log_beta.sum(dim=-1, keepdim=True) - log_beta.cumsum(dim=-1)
     log_att = log_z + re_cum_log_beta
-    # print("log_att", log_att[0, 0, 0, -20:])
-    att = log_att.exp()
-    #  print("att    ", att[0, 0, 0, -20:])
-    out = torch.einsum("bhij,bhjd->bhid", att, v[..., :-1, :])
-    # out = att @ v[..., :-1, :]
+    att: torch.Tensor = log_att.exp()
+    v = v[..., :-1, :]
+    out = torch.einsum("bhij,bhjd->bhid", att, v)
     return out, 1 - att.sum(dim=-1)
 
 
