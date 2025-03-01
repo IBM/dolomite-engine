@@ -78,7 +78,9 @@ def get_autoregressive_language_modeling_loss(
         lm_logits = lm_logits.float()
 
         with loss_context():
-            loss = F.cross_entropy(lm_logits.reshape(-1, lm_logits.size(-1)), labels.reshape(-1), reduction=reduction)
+            loss = F.cross_entropy(
+                input=lm_logits.reshape(-1, lm_logits.size(-1)), target=labels.reshape(-1), reduction=reduction
+            )
 
     return loss
 
