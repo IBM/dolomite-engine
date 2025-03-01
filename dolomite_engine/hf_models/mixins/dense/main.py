@@ -100,7 +100,9 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             max_seqlen=max_seqlen,
         )
 
+        lm_logits = None
         loss = None
+
         if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
             if labels is not None:
                 loss = get_autoregressive_language_modeling_loss(
