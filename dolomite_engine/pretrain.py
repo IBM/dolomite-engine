@@ -598,7 +598,7 @@ def main(mode: Mode = Mode.training) -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    with disable_generation_cache(), enable_kernels(args.kernel_args):
+    with disable_generation_cache(), enable_kernels(args.kernel_args.kernels):
         train(
             args,
             model_container=model_container,
