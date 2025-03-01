@@ -38,7 +38,7 @@ def get_autoregressive_language_modeling_loss(
 
             # this is needed so that the last token of current example doesn't predict first token of next example
             drop_loss_positions = cu_seqlens[1:-1] - 1
-            shift_labels[drop_loss_positions] = -100
+            labels[drop_loss_positions] = -100
     else:
         assert cu_seqlens is None
 
@@ -59,7 +59,7 @@ def get_autoregressive_language_modeling_loss(
         assert not tensor_parallel_enabled
 
         loss = cross_entropy_cute(
-            x=lm_logits.view(-1, lm_logits.size(-1)), labels=labels.view(-1), logits_multiplier=logits_multiplier
+            x=lm_logits.reshape(-1, lm_logits.size(-1)), labels=labels.reshape(-1), logits_multiplier=logits_multiplier
         )
     else:
         assert logits_multiplier == 1
