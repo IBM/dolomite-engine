@@ -7,7 +7,8 @@ from .....utils import divide_if_divisible
 from ....cache import HybridMambaAttentionDynamicCache
 from ....enums import InitMethod
 from ...activations import get_activation_function
-from ...linear import ParameterizedLinear, ParameterizedConv1d
+from ...convolution import ParameterizedConv1d
+from ...linear import ParameterizedLinear
 from ...mlp_blocks.mlp import _get_std_for_linear
 from ...normalization import get_normalization_function
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
@@ -59,8 +60,7 @@ class Mamba2Base(nn.Module):
         self.chunk_size = chunk_size
 
         self.time_step_limit = time_step_limit
-        # [bsz, intermediate_size] -> [bsz, num_heads, head_dim]
-        assert ssm_intermediate_size == ssm_num_heads * head_dim
+
         std = _get_std_for_linear(initializer_range, init_method, m_width)
 
         # 1D convolutional layer
@@ -329,3 +329,9 @@ class Mamba2Base(nn.Module):
         contextualized_states = self.out_proj(scan_output.to(dtype))  # [batch, seq_len, hidden_size]
 
         return contextualized_states
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log.data = torch.log(A)
+        nn.init.ones_(self.D)

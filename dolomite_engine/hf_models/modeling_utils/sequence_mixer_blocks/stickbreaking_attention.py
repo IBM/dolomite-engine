@@ -6,9 +6,7 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....utils import is_stickbreaking_available
-from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ..linear import ParameterizedLinear
 from .softmax_attention import Attention
 
 
@@ -49,7 +47,6 @@ class SBAttention(Attention):
         attention_head_type: AttentionHeadType,
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
-        softmax_dropout: float,
         dropout: float,
         init_method: InitMethod,
         initializer_range: float,
@@ -59,10 +56,23 @@ class SBAttention(Attention):
         layer_idx: int,
     ) -> None:
         super().__init__(
-            hidden_size, num_attention_heads, num_key_value_heads, attention_multiplier, 
-            attention_head_type, position_embedding_type, add_bias, softmax_dropout, dropout, 
-            init_method, initializer_range, m_width, num_layers, causal, layer_idx
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_key_value_heads=num_key_value_heads,
+            attention_multiplier=attention_multiplier,
+            attention_head_type=attention_head_type,
+            position_embedding_type=position_embedding_type,
+            add_bias=add_bias,
+            softmax_dropout=0,
+            dropout=dropout,
+            init_method=init_method,
+            initializer_range=initializer_range,
+            m_width=m_width,
+            num_layers=num_layers,
+            causal=causal,
+            layer_idx=layer_idx,
         )
+
         self.head_bias = torch.nn.Parameter(torch.zeros(self.hidden_size // self.head_dim, self.head_dim))
         self.norm = torch.nn.GroupNorm(self.num_heads, self.hidden_size)
 
@@ -80,7 +90,7 @@ class SBAttention(Attention):
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
         softmax_scale = self._get_softmax_scale()
-        key, value = past_key_values.update(key, value, self.layer_idx)
+        # key, value = past_key_values.update(key, value, self.layer_idx)
         bsz_, _, length_, _ = query.size()
 
         if query.size(2) == key.size(2):

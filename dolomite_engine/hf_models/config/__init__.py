@@ -1,4 +1,3 @@
-import math
 from copy import deepcopy
 from typing import Any, Callable
 
@@ -162,7 +161,7 @@ class CommonConfig(PretrainedConfig):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
-            if sequence_mixer_type == "softmax_attention":
+            if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
                 attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
                 num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
 
@@ -195,41 +194,10 @@ class CommonConfig(PretrainedConfig):
                 for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
-                sequence_mixer_class = _SoftmaxAttentionArgs
-            elif sequence_mixer_type == "stickbreaking_attention":
-                attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
-                num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
-
-                if attention_head_type == AttentionHeadType.mha:
-                    if num_key_value_heads is None:
-                        num_key_value_heads = self.num_attention_heads
-
-                    assert (
-                        self.num_attention_heads == num_key_value_heads
-                    ), "MultiHeadAttention should have same number of heads for query, keys and values"
-                elif attention_head_type == AttentionHeadType.mqa:
-                    if num_key_value_heads is None:
-                        num_key_value_heads = 1
-
-                    assert num_key_value_heads == 1, "MultiQueryAttention should have 1 head for keys and values"
-                elif attention_head_type == AttentionHeadType.gqa:
-                    assert (
-                        num_key_value_heads is not None
-                    ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
-
-                    assert (
-                        self.num_attention_heads % num_key_value_heads == 0
-                    ), "GroupedQueryAttention should have more than 1 head for keys and values"
-
-                sequence_mixer_kwargs = {
-                    "num_key_value_heads": num_key_value_heads,
-                    "attention_head_type": attention_head_type,
-                }
-
-                for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
-                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
-
-                sequence_mixer_class = _StickbreakingAttentionArgs
+                if sequence_mixer_type == "softmax_attention":
+                    sequence_mixer_class = _SoftmaxAttentionArgs
+                elif sequence_mixer_type == "stickbreaking_attention":
+                    sequence_mixer_class = _StickbreakingAttentionArgs
             elif sequence_mixer_type == "mamba2":
                 sequence_mixer_kwargs = {
                     "intermediate_size": sequence_mixer_block.pop("intermediate_size", 2 * self.hidden_size),
