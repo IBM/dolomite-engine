@@ -59,7 +59,10 @@ def get_autoregressive_language_modeling_loss(
         assert not tensor_parallel_enabled
 
         loss = cross_entropy_cute(
-            x=lm_logits.reshape(-1, lm_logits.size(-1)), labels=labels.reshape(-1), logits_multiplier=logits_multiplier
+            x=lm_logits.reshape(-1, lm_logits.size(-1)),
+            labels=labels.reshape(-1),
+            reduction=reduction,
+            logits_multiplier=logits_multiplier,
         )
     else:
         assert logits_multiplier == 1
