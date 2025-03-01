@@ -49,7 +49,7 @@ def get_autoregressive_language_modeling_loss(
         loss = fused_linear_cross_entropy_cute(
             x=hidden_states.reshape(-1, hidden_states.size(-1)),
             weight=vocab_weight,
-            labels=labels,
+            labels=labels.reshape(-1),
             reduction=reduction,
             logits_multiplier=logits_multiplier,
         )
