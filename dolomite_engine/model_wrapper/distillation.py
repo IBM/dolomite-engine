@@ -5,7 +5,9 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, KLDivergenceMethod, Mode
+from ..enums import AttentionImplementation, Kernel, KLDivergenceMethod, Mode
+from ..hf_models import get_autoregressive_language_modeling_loss
+from ..kernels import is_kernel_allowed
 from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
@@ -111,9 +113,22 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         model_outputs = self.model(**batch)
         logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
 
-        logits = logits.float()
+        assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+        assert False, "need to add lm_loss multiplier here"
+
+        lm_loss = get_autoregressive_language_modeling_loss(
+            lm_logits=logits,
+            labels=labels,
+            hidden_states=None,
+            vocab_weight=None,
+            logits_multiplier=1,
+            cu_seqlens=None,
+            use_padding_free_transformer=self.use_padding_free_transformer,
+            reduction="sum",
+            shift_logits_and_labels=False,
+            tensor_parallel_enabled=False,
+        )
 
         with torch.inference_mode():
             model_outputs = self.teacher_model(**batch)

@@ -5,7 +5,7 @@ from transformers import DynamicCache, GenerationMixin
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
-from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
+from ...loss import clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
 from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 from .base import PreTrainedModelMixin
@@ -61,6 +61,8 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
+        apply_output_projection: bool = True,
+        apply_logits_multiplier: bool = True,
     ) -> CausalLMOutputWithPast:
         assert return_dict
 
@@ -88,6 +90,8 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         #     position_ids -> None or (batch_size, key_length)
         # ==========================================================================================
 
+        clear_aux_loss()
+
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids,
             past_key_values=past_key_values,
@@ -103,38 +107,41 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         lm_logits = None
         loss = None
 
-        if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
-            if labels is not None:
+        if labels is None:
+            if apply_output_projection:
+                lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+
+            if apply_logits_multiplier and self.m_width is not None:
+                lm_logits = lm_logits / self.m_width
+        else:
+            assert apply_output_projection
+            assert apply_logits_multiplier
+
+            if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
                 loss = get_autoregressive_language_modeling_loss(
                     lm_logits=None,
                     labels=labels,
                     hidden_states=transformer_outputs.last_hidden_state,
                     vocab_weight=self.transformer.wte.weight if self._tied_word_embeddings else self.lm_head.weight,
-                    logits_multiplier=logits_multiplier,
+                    logits_multiplier=1 if self.m_width is None else 1 / self.m_width,
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
                     shift_logits_and_labels=True,
                     tensor_parallel_enabled=False,
                 )
-        else:
-            lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
-
-            if is_kernel_allowed(Kernel.cross_entropy_cute):
-                logits_multiplier = 1 / self.m_width
             else:
+                lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+
                 if self.m_width is not None:
                     lm_logits = lm_logits / self.m_width
 
-                logits_multiplier = 1
-
-            if labels is not None:
                 loss = get_autoregressive_language_modeling_loss(
                     lm_logits=lm_logits,
                     labels=labels,
                     hidden_states=None,
                     vocab_weight=None,
-                    logits_multiplier=logits_multiplier,
+                    logits_multiplier=1,
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
