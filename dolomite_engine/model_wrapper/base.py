@@ -147,11 +147,9 @@ class ModelWrapper(nn.Module):
 
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
-        self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
         self.router_aux_loss_coef = getattr(self.config, "router_aux_loss_coef", None)
 
         log_rank_0(logging.INFO, self.config)
-        log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
 
     def _setup_tokenizer(self) -> None:
         assert self.tokenizer_name is not None, "pass a tokenizer"

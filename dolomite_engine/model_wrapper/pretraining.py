@@ -120,8 +120,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         logits: torch.Tensor = model_outputs.logits
         aux_loss = get_aux_loss()
 
-        if self.upcast_logits_for_loss:
-            logits = logits.float()
+        logits = logits.float()
 
         loss_context = nullcontext
         is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()

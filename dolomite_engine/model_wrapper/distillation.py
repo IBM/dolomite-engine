@@ -111,8 +111,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         model_outputs = self.model(**batch)
         logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
 
-        if self.upcast_logits_for_loss:
-            logits = logits.float()
+        logits = logits.float()
 
         lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
 
@@ -122,8 +121,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
                 model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
             )
 
-            if self.upcast_logits_for_loss:
-                teacher_logits = teacher_logits.float()
+            teacher_logits = teacher_logits.float()
 
         teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1).view(-1, teacher_logits.size(-1))
         student_log_softmax = F.log_softmax(logits, dim=-1).view(-1, logits.size(-1))
