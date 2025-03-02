@@ -43,7 +43,6 @@ class ModelWrapperForFinetuning(ModelWrapper):
         lm_loss = get_autoregressive_language_modeling_loss(
             lm_logits=logits,
             labels=labels,
-            upcast_logits_for_loss=self.upcast_logits_for_loss,
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",

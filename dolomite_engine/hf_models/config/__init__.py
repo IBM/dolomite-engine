@@ -48,7 +48,6 @@ _NAKED_DISALLOWED_ARGS = [
     "n_layer",
     "n_positions",
     "scale_attn_weights",
-    "upcast_logits_for_loss",
 ]
 
 
@@ -77,7 +76,6 @@ class CommonConfig(PretrainedConfig):
         m_width: float | None = None,
         m_residual: float | None = None,
         init_method: str = "normal",
-        upcast_logits_for_loss: bool = False,
         sequence_mixer_blocks: list[dict] = None,
         mlp_blocks: list[dict] = None,
         router_aux_loss_coef: float = 0.001,
@@ -101,7 +99,6 @@ class CommonConfig(PretrainedConfig):
         self.m_width = m_width
         self.m_residual = m_residual
         self.init_method = init_method
-        self.upcast_logits_for_loss = upcast_logits_for_loss
 
         # check if enums are valid
         init_method = InitMethod(init_method)

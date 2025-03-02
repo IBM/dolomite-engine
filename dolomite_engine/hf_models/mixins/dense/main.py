@@ -28,7 +28,6 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             )
 
         self.m_width = config.m_width
-        self.upcast_logits_for_loss = config.upcast_logits_for_loss
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -110,7 +109,6 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             loss = get_autoregressive_language_modeling_loss(
                 lm_logits=lm_logits,
                 labels=labels,
-                upcast_logits_for_loss=self.upcast_logits_for_loss,
                 cu_seqlens=cu_seqlens,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 reduction=reduction,

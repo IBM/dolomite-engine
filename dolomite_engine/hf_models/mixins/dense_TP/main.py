@@ -33,7 +33,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 )
 
             self.m_width = config.m_width
-            self.upcast_logits_for_loss = config.upcast_logits_for_loss
 
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
@@ -96,7 +95,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 loss = get_autoregressive_language_modeling_loss(
                     lm_logits=lm_logits,
                     labels=labels,
-                    upcast_logits_for_loss=self.upcast_logits_for_loss,
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
