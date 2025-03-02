@@ -48,7 +48,6 @@ _NAKED_DISALLOWED_ARGS = [
     "n_layer",
     "n_positions",
     "scale_attn_weights",
-    "upcast_logits_for_loss",
 ]
 
 

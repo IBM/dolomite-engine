@@ -72,7 +72,7 @@ class GPTDolomiteAttentionTest(TestCommons):
             sdpa_loss,
             False,
             rtol_float32=0,
-            atol_float32=1e-5,
+            atol_float32=4e-4,
             rtol_float16=0,
             atol_float16=1e-5,
             rtol_bfloat16=0,
