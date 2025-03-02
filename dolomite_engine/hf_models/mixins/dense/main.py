@@ -112,6 +112,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
             if apply_logits_multiplier and self.m_width is not None:
+                assert apply_output_projection
                 lm_logits = lm_logits / self.m_width
         else:
             assert apply_output_projection
