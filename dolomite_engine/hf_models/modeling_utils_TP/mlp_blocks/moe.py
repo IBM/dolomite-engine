@@ -19,7 +19,6 @@ from ...modeling_utils import (
     is_glu,
 )
 from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
-from ..dropout import Dropout_TP
 from ..dtensor_module import DTensorModule
 from ..linear import ColumnParallelLinear, RowParallelLinear
 
