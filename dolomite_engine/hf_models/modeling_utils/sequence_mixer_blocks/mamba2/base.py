@@ -308,6 +308,7 @@ class Mamba2Base(nn.Module):
             # Init cache
             if ssm_state is not None and cache_params is not None:
                 cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
+                cache_params.has_previous_state = True
 
         scan_output = self.norm(y, gate)
 
