@@ -51,7 +51,7 @@ class Mamba2CUDA(Mamba2Base):
                 cache_params.conv_states[self.layer_idx],
                 self.conv1d.weight.squeeze(1),
                 self.conv1d.bias,
-                self.activation,
+                self.activation_string,
             )
 
             hidden_states, B, C = torch.split(
@@ -170,6 +170,7 @@ class Mamba2CUDA(Mamba2Base):
                 # Init cache
                 if ssm_state is not None and cache_params is not None:
                     cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
+                    cache_params.has_previous_state = True
 
                 scan_output = scan_output.view(batch_size, seq_len, -1)
                 # Multiply "gate" branch and apply extra normalization layer
