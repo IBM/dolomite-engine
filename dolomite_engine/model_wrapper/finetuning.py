@@ -26,8 +26,14 @@ class ModelWrapperForFinetuning(ModelWrapper):
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
         labels = batch.pop("labels")
+        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        model_outputs = self.model(**batch)
+        model_outputs = self.model(
+            **batch,
+            apply_output_projection=not use_fused_linear_cross_entropy_kernel,
+            apply_logits_multiplier=not use_fused_linear_cross_entropy_kernel
+            and not is_kernel_allowed(Kernel.cross_entropy_cute),
+        )
 
         return self.get_loss(
             model_outputs=model_outputs,
