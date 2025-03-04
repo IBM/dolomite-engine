@@ -14,7 +14,6 @@ if is_stickbreaking_available():
     from stickbreaking_attention import sb_attn, sb_attn_varlen
 
 
-@torch.compile
 def decoding_stickbreaking(q, k, v, scale=None):
     """
     Stick-breaking attention weights.
@@ -27,20 +26,14 @@ def decoding_stickbreaking(q, k, v, scale=None):
     original_dtype = q.dtype
     q = q.float()
     k = k.float()
-    # logits = torch.einsum('bhid,bhjd->bhij', q, k[..., :-1, :]) * scale
     logits = q @ k[..., :-1, :].transpose(-1, -2) * scale
-    # logits = logits.float()
     log_z = F.logsigmoid(logits).to(original_dtype)
     log_beta = F.logsigmoid(-logits).to(original_dtype)
-    # re_cum_log_beta = log_beta.sum(dim=-1, keepdim=True) - log_beta.cumsum(dim=-1)
     re_cum_log_beta = log_beta.flip(-1).cumsum(dim=-1).flip(-1) - log_beta
-    # re_cum_log_beta = log_beta.sum(dim=-1, keepdim=True) - log_beta.cumsum(dim=-1)
     log_att = log_z + re_cum_log_beta
-    # print("log_att", log_att[0, 0, 0, -20:])
-    att = log_att.exp()
-    #  print("att    ", att[0, 0, 0, -20:])
-    out = torch.einsum("bhij,bhjd->bhid", att, v[..., :-1, :])
-    # out = att @ v[..., :-1, :]
+    att: torch.Tensor = log_att.exp()
+    v = v[..., :-1, :]
+    out = torch.einsum("bhij,bhjd->bhid", att, v)
     return out, 1 - att.sum(dim=-1)
 
 
@@ -93,7 +86,7 @@ class SBAttention(Attention):
         max_seqlen: torch.Tensor | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
-        assert past_key_values is None
+        # assert past_key_values is None
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
         softmax_scale = self._get_softmax_scale()
@@ -207,9 +200,11 @@ class PaddingFreeSBAttention(SBAttention):
 
         # this needs to be a reshape instead of view sadly
         query = query.reshape(total_q, -1, self.head_dim)
-        key = key.repeat(1, self.num_heads // self.num_key_value_heads, 1)
-        value = value.repeat(1, self.num_heads // self.num_key_value_heads, 1)
-
+        # key = key.repeat(1, self.num_heads // self.num_key_value_heads, 1)
+        # value = value.repeat(1, self.num_heads // self.num_key_value_heads, 1)
+        group_size = self.num_heads // self.num_key_value_heads
+        key = key.repeat_interleave(repeats=group_size, dim=1)
+        value = value.repeat_interleave(repeats=group_size, dim=1)
         return query, key, value
 
     def _prepare_qkv_for_forward_mqa(
