@@ -15,6 +15,7 @@ from ..mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
+    from cute_kernels.kernels.scattermoe.triton_implementation import bincount
 
 
 class ParameterizedExperts(nn.Module):
@@ -253,10 +254,10 @@ class MoE(nn.Module):
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        if topk_idxs.is_cuda and is_cute_kernels_available():
+        if topk_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
             freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
         else:
-            freq = topk_idxs.flatten().bincount(minlength=num_experts).to(dtype=logits.dtype)
+            freq = bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
