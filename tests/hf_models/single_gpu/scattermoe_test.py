@@ -4,7 +4,7 @@ from transformers import set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 
-from ...test_common import TestCommons
+from ..test_common import TestCommons
 
 
 SEED = 1234
