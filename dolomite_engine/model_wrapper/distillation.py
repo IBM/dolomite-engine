@@ -114,7 +114,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
 
         assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
-
         assert False, "need to add lm_loss multiplier here"
 
         lm_loss = get_autoregressive_language_modeling_loss(
