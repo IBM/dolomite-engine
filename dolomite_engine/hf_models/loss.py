@@ -29,7 +29,12 @@ def get_autoregressive_language_modeling_loss(
     tensor_parallel_enabled: bool = False,
 ) -> torch.Tensor | DTensor:
     if shift_logits_and_labels:
-        lm_logits = lm_logits[..., :-1, :]
+        if lm_logits is not None:
+            lm_logits = lm_logits[..., :-1, :]
+
+        if hidden_states is not None:
+            hidden_states = hidden_states[..., :-1, :]
+
         labels = labels[..., 1:]
 
     if use_padding_free_transformer:
@@ -65,6 +70,8 @@ def get_autoregressive_language_modeling_loss(
             logits_multiplier=logits_multiplier,
         )
     else:
+        assert hidden_states is None
+        assert vocab_weight is None
         assert logits_multiplier == 1
         loss_context = nullcontext
 
