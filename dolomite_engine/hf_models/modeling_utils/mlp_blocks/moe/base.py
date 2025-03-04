@@ -141,6 +141,10 @@ class MoE(nn.Module):
 
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
+        self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
+            torch.cuda.current_device()
+        ) >= (9, 0)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
