@@ -101,6 +101,12 @@ class Mamba2Base(nn.Module):
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
 
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log.data = torch.log(A)
+        nn.init.ones_(self.D)
+
     def forward(
         self,
         input_states: torch.Tensor,
@@ -177,14 +183,16 @@ class Mamba2Base(nn.Module):
             # for batched generation
             dt = dt[:, 0, :][:, None, ...]
             dt = dt.transpose(1, 2).expand(batch_size, dt.shape[-1], self.head_dim)
-            # [num_heads] -> [num_heads, head_dim]
+            # [batch_size, num_heads] -> [batch_size, num_heads, head_dim]
             dt_bias = self.dt_bias[..., None].expand(self.dt_bias.shape[0], self.head_dim)
+
 
             dt = torch.nn.functional.softplus(dt + dt_bias.to(dt.dtype))
             dt = torch.clamp(dt, self.time_step_limit[0], self.time_step_limit[1])
             A = A[..., None, None].expand(self.num_heads, self.head_dim, self.ssm_state_size).to(dtype=torch.float32)
-            # [bsz, num_heads, head_dim, state_size]
+            # [num_heads, head_dim, state_size]
             dA = (torch.exp(dt[..., None] * A)).to(device=cache_device)
+            # [bsz, num_heads, head_dim, state_size]
 
             # Discretize B
             # [bsz, n_groups * state_size] -> [bsz, n_groups, 1, state_size] ->
@@ -231,19 +239,23 @@ class Mamba2Base(nn.Module):
         else:
             # begin ssd naive implementation without einsums
             dt = nn.functional.softplus(dt + self.dt_bias)
+            # dt: [batch_size, seq_len, num_heads]
             dt = torch.clamp(dt, self.time_step_limit[0], self.time_step_limit[1])
             hidden_states = hidden_states.reshape(batch_size, seq_len, -1, self.head_dim).float()
+            # hidden_states: [batch_size, seq_len, num_heads, head_dim]
             B = B.reshape(batch_size, seq_len, -1, self.ssm_state_size).float()
             C = C.reshape(batch_size, seq_len, -1, self.ssm_state_size).float()
+            # B, C: [batch_size, seq_len, n_groups, ssm_state_size]
             B = B.repeat(1, 1, self.num_heads // self.n_groups, 1)
             C = C.repeat(1, 1, self.num_heads // self.n_groups, 1)
+            # B, C: [batch_size, seq_len, num_heads, ssm_state_size]
             pad_size = (self.chunk_size - seq_len % self.chunk_size) % self.chunk_size
-
             D_residual = self.D[..., None] * _pad_tensor_by_size(hidden_states, pad_size)
 
             # Discretize x and A
             hidden_states = hidden_states * dt[..., None]
             A = A.to(hidden_states.dtype) * dt
+            # A: [batch_size, seq_len, num_heads]
 
             # Rearrange into blocks/chunks
             hidden_states, A, B, C = [
