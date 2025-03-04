@@ -6,7 +6,7 @@ from .base import MoE, ParameterizedExperts
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
+    from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
 
 
 class ParameterizedScatteredExperts(ParameterizedExperts):
@@ -59,10 +59,10 @@ class ScatterMoE(MoE):
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
-            if sorted_expert_idxs.is_cuda and is_cute_kernels_available():
+            if sorted_expert_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
                 expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
             else:
-                expert_offsets = sorted_expert_idxs.bincount(minlength=self.num_experts).cumsum(-1)
+                expert_offsets = bincount(sorted_expert_idxs, minlength=self.num_experts).cumsum(-1)
 
         hidden_states = self.c_fc(
             hidden_states,
