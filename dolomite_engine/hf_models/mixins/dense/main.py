@@ -118,7 +118,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         else:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-            lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+            lm_logits = self.get_lm_logits(hidden_states)
 
             if self.m_width is not None:
                 lm_logits = lm_logits / self.m_width
