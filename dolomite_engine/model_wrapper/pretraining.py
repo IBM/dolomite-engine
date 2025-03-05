@@ -105,6 +105,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
 
+        if not self.is_custom_model:
+            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
         output = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
