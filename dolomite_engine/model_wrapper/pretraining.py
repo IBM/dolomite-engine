@@ -84,7 +84,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             self._extra_metrics = MetricsTrackingDict({})
 
-    def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
+    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -103,7 +103,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"text": batch}
 
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
+        batch = self._prepare_model_inputs(input_ids)
 
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
@@ -111,7 +111,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         output = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
-        if not self.is_pipeline_parallel_enabled:
+        if self.is_pipeline_parallel_enabled:
+            output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
+        else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
         return output
@@ -170,7 +172,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return tokens
 
-    def _prepare_model_inputs(self, input_ids: torch.Tensor, prev_aux_loss: torch.Tensor | None = None) -> dict:
+    def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
         batch = {}
 
         if self.use_padding_free_transformer:
@@ -210,10 +212,6 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if ProcessGroupManager.is_tensor_parallel_enabled():
             batch["output_parallel_lm_logits"] = True
-
-        if prev_aux_loss is not None:
-            # past_key_values is used to send prev_aux_loss
-            batch["past_key_values"] = prev_aux_loss
 
         return batch
 
