@@ -62,13 +62,13 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
         pipeline_parallel_input: PipelineParallelInput | None = None,
-    ) -> CausalLMOutputWithPast | torch.Tensor:
+    ) -> CausalLMOutputWithPast | PipelineParallelOutput:
         assert return_dict
 
         if self.is_pipeline_parallel_enabled:
             past_key_values = None
 
-        if not self.is_pipeline_parallel_enabled or self.is_first_stage:
+        if self.is_first_stage:
             assert pipeline_parallel_input is None, "first stage should not get pipeline_parallel_input"
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
@@ -82,7 +82,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 attention_mask=attention_mask,
                 use_cache=use_cache,
             )
-        elif not self.is_first_stage:
+        else:
             assert input_ids is None
 
         kwargs = {
@@ -105,26 +105,34 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         past_key_values = transformer_outputs.past_key_values
         del transformer_outputs
 
-        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
-                if self.m_width is not None:
-                    hidden_states = hidden_states / self.m_width
+        lm_logits = None
+        loss = None
+
+        if self.is_pipeline_parallel_enabled:
+            assert labels is None
+        else:
+            if labels is None:
+                if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
+                    if self.m_width is not None:
+                        hidden_states = hidden_states / self.m_width
+                else:
+                    lm_logits = self.get_lm_logits(hidden_states)
+
+                    if self.m_width is not None:
+                        lm_logits = lm_logits / self.m_width
             else:
+                assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
                 lm_logits = self.get_lm_logits(hidden_states)
 
                 if self.m_width is not None:
                     lm_logits = lm_logits / self.m_width
 
-        if self.is_pipeline_parallel_enabled:
-            assert labels is None
-        else:
-            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
-
-            loss = None
-            if labels is not None:
                 loss = get_autoregressive_language_modeling_loss(
                     lm_logits=lm_logits,
                     labels=labels,
+                    hidden_states=None,
+                    vocab_weight=None,
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
@@ -139,15 +147,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         aux_loss = get_aux_loss()
 
-        if self.is_pipeline_parallel_enabled:
-            if aux_loss != 0:
-                aux_loss = aux_loss.unsqueeze(0)
-
-                if self.is_last_stage:
-                    output = (lm_logits, aux_loss)
-                else:
-                    output = (hidden_states, aux_loss)
-        else:
+        if self.is_last_stage:
             if loss is not None and aux_loss != 0:
                 loss = loss + self.router_aux_loss_coef * aux_loss
 
@@ -157,6 +157,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 past_key_values=past_key_values,
                 last_hidden_state=hidden_states,
             )
+        else:
+            output = PipelineParallelOutput(hidden_states=lm_logits if self.is_last_stage else hidden_states)
 
         return output
 
