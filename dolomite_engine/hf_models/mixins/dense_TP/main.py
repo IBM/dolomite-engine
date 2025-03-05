@@ -5,6 +5,8 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
 
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
@@ -58,7 +60,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         assert return_dict
 
         if self.is_pipeline_parallel_enabled:
-            prev_aux_loss = past_key_values
             past_key_values = None
 
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
@@ -87,13 +88,23 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             max_seqlen=max_seqlen,
         )
 
+        hidden_states = transformer_outputs.last_hidden_state
+        past_key_values = transformer_outputs.past_key_values
+        del transformer_outputs
+
         if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+            if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
+                if self.m_width is not None:
+                    hidden_states = hidden_states / self.m_width
+            else:
+                lm_logits = self.get_lm_logits(hidden_states)
 
-            if self.m_width is not None:
-                lm_logits = lm_logits / self.m_width
+                if self.m_width is not None:
+                    lm_logits = lm_logits / self.m_width
 
-        if not self.is_pipeline_parallel_enabled:
+        if self.is_pipeline_parallel_enabled:
+            assert labels is None
+        else:
             loss = None
             if labels is not None:
                 loss = get_autoregressive_language_modeling_loss(
@@ -103,11 +114,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
                     shift_logits_and_labels=True,
-                    tensor_parallel_enabled=True,
+                    tensor_parallel_enabled=ProcessGroupManager.is_tensor_parallel_enabled(),
                 )
-
-        if self.is_pipeline_parallel_enabled and not self.is_first_stage:
-            add_aux_loss(prev_aux_loss)
 
         if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
             # all gather
@@ -117,12 +125,13 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         aux_loss = get_aux_loss()
 
         if self.is_pipeline_parallel_enabled:
-            aux_loss = aux_loss.unsqueeze(0)
+            if aux_loss != 0:
+                aux_loss = aux_loss.unsqueeze(0)
 
-            if self.is_last_stage:
-                output = (lm_logits, aux_loss)
-            else:
-                output = (transformer_outputs.last_hidden_state, aux_loss)
+                if self.is_last_stage:
+                    output = (lm_logits, aux_loss)
+                else:
+                    output = (hidden_states, aux_loss)
         else:
             if loss is not None and aux_loss != 0:
                 loss = loss + self.router_aux_loss_coef * aux_loss
@@ -130,8 +139,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             output = CausalLMOutputWithPast(
                 loss=loss,
                 logits=lm_logits,
-                past_key_values=transformer_outputs.past_key_values,
-                last_hidden_state=transformer_outputs.last_hidden_state,
+                past_key_values=past_key_values,
+                last_hidden_state=hidden_states,
             )
 
         return output
