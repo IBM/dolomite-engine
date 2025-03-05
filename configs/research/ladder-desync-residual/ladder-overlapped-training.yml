@@ -15,11 +15,6 @@ datasets:
 tokenizer_args:
   tokenizer_name: bigcode/starcoder
 
-# kernel_args:
-#   kernels:
-#     - cute_swiglu
-#     - cute_rmsnorm
-
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:

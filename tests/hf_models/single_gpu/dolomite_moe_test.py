@@ -4,7 +4,7 @@ from transformers import set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 
-from ...test_common import TestCommons
+from ..test_common import TestCommons
 
 
 SEED = 1234
@@ -129,7 +129,7 @@ class MoEDolomiteAttentionTest(TestCommons):
             rtol_bfloat16=5e-3,
             atol_bfloat16=5e-3,
         )
-        self.assert_equal_tensors(sdpa_loss, flash_loss, False)
+        self.assert_equal_tensors(sdpa_loss.to(torch_dtype), flash_loss.to(torch_dtype), False)
 
     @parameterized.expand(
         TestCommons.make_args_matrix(
@@ -184,4 +184,4 @@ class MoEDolomiteAttentionTest(TestCommons):
             rtol_bfloat16=5e-3,
             atol_bfloat16=5e-3,
         )
-        self.assert_equal_tensors(sdpa_loss, flash_loss, False)
+        self.assert_equal_tensors(sdpa_loss.to(torch_dtype), flash_loss.to(torch_dtype), False)

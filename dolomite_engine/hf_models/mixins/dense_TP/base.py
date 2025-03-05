@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
@@ -11,6 +10,7 @@ from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ...utils import is_generation_cache_enabled
 from ..dense import BaseModelMixin, PreTrainedModelMixin
+from ..modeling_outputs import BaseModelOutputWithPast
 
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):

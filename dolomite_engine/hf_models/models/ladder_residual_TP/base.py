@@ -1,9 +1,8 @@
 import torch
 from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPast
 
 from ...loss import clear_aux_loss
-from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
+from ...mixins import BaseModelMixin_TP, BaseModelOutputWithPast, PreTrainedModelMixin_TP
 from ...utils import is_generation_cache_enabled
 from ..ladder_residual import LadderResidualConfig
 from .layer import LadderResidualBlock_TP

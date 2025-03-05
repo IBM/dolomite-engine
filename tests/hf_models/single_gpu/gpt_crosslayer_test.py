@@ -5,7 +5,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, set_seed
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType, convert_gpt_dolomite_to_gpt_crosslayer
 
-from ...test_common import TestCommons
+from ..test_common import TestCommons
 
 
 SEED = 42

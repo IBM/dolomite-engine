@@ -74,7 +74,9 @@ class ExperimentsTrackerName(Enum):
 
 
 class Kernel(Enum):
-    cute_rmsnorm = "cute_rmsnorm"
-    cute_swiglu_unchunked = "cute_swiglu_unchunked"
+    rmsnorm_cute = "rmsnorm_cute"
+    swiglu_unchunked_cute = "swiglu_unchunked_cute"
     mamba2_ssm = "mamba2_ssm"
     scattermoe = "scattermoe"
+    cross_entropy_cute = "cross_entropy_cute"
+    fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"

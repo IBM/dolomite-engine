@@ -46,7 +46,7 @@ def get_glu_activation(name: str) -> nn.Module:
     # for glu and sigmoid_glu, we directly return the pytorch's GLU
     if name in ["glu", "sigmoid_glu"]:
         activation_function = nn.GLU()
-    elif is_kernel_allowed(Kernel.cute_swiglu_unchunked) and name in ["swiglu", "swish_glu"]:
+    elif is_kernel_allowed(Kernel.swiglu_unchunked_cute) and name in ["swiglu", "swish_glu"]:
         activation_function = CuteSwiGLUUnchunked()
     else:
         if name in _GLU_BASE_MAPPING:

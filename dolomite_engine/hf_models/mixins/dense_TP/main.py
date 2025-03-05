@@ -3,7 +3,6 @@ from __future__ import annotations
 import torch
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
-from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
@@ -12,6 +11,7 @@ from ...enums import PositionEmbeddingType
 from ...loss import get_autoregressive_language_modeling_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
+from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 from .base import PreTrainedModelMixin_TP
 
 
@@ -98,6 +98,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
+                    shift_logits_and_labels=True,
+                    tensor_parallel_enabled=True,
                 )
 
         if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
@@ -110,8 +112,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 loss=loss,
                 logits=lm_logits,
                 past_key_values=transformer_outputs.past_key_values,
-                hidden_states=transformer_outputs.hidden_states,
-                attentions=transformer_outputs.attentions,
+                last_hidden_state=transformer_outputs.last_hidden_state,
             )
         elif self.is_last_stage:
             output = lm_logits

@@ -1,15 +1,12 @@
-from contextlib import nullcontext
-
 import torch
 import torch.distributed
-import torch.nn.functional as F
-from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed.tensor.parallel import loss_parallel
+from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
-from ..enums import AttentionImplementation, Mode
-from ..hf_models import get_aux_loss
+from ..enums import AttentionImplementation, Kernel, Mode
+from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
+from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -108,6 +105,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
 
+        if not self.is_custom_model:
+            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
         output = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
@@ -117,24 +117,23 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
-        logits: torch.Tensor = model_outputs.logits
-        aux_loss = get_aux_loss()
+        tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        logits = logits.float()
-
-        loss_context = nullcontext
-        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
-
-        if is_tensor_parallel_enabled:
-            loss_context = loss_parallel
-
-            logits = tensor_to_dtensor(logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
-
-        with loss_context():
-            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
+        lm_loss = get_autoregressive_language_modeling_loss(
+            lm_logits=None if use_fused_linear_cross_entropy_kernel else model_outputs.logits,
+            labels=labels,
+            hidden_states=model_outputs.last_hidden_state if use_fused_linear_cross_entropy_kernel else None,
+            vocab_weight=self.model.get_output_embeddings().weight if use_fused_linear_cross_entropy_kernel else None,
+            cu_seqlens=None,
+            use_padding_free_transformer=self.use_padding_free_transformer,
+            reduction="sum",
+            shift_logits_and_labels=False,
+            tensor_parallel_enabled=tensor_parallel_enabled,
+        )
 
         lm_loss = lm_loss * lm_loss_multiplier
+        aux_loss = get_aux_loss()
 
         if aux_loss == 0:
             loss = lm_loss
@@ -143,7 +142,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             if self.is_pipeline_parallel_enabled:
                 self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
 
-            if is_tensor_parallel_enabled:
+            if tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)
