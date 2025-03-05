@@ -24,8 +24,6 @@ class CausalLMMoEModelMixin_TP(CausalLMModelMixin_TP):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-        apply_output_projection: bool = True,
-        apply_logits_multiplier: bool = True,
     ) -> tuple | MoeCausalLMOutputWithPast:
         assert return_dict
 
