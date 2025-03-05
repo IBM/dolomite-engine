@@ -8,7 +8,7 @@ from ....distributed import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
-from ...loss import get_autoregressive_language_modeling_loss
+from ...loss import add_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
@@ -57,6 +57,10 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
     ) -> CausalLMOutputWithPast | torch.Tensor:
         assert return_dict
 
+        if self.is_pipeline_parallel_enabled:
+            prev_aux_loss = past_key_values
+            past_key_values = None
+
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
@@ -102,22 +106,33 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     tensor_parallel_enabled=True,
                 )
 
+        if self.is_pipeline_parallel_enabled and not self.is_first_stage:
+            add_aux_loss(prev_aux_loss)
+
         if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
             # all gather
             lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
             lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-        if not self.is_pipeline_parallel_enabled:
+        aux_loss = get_aux_loss()
+
+        if self.is_pipeline_parallel_enabled:
+            aux_loss = aux_loss.unsqueeze(0)
+
+            if self.is_last_stage:
+                output = (lm_logits, aux_loss)
+            else:
+                output = (transformer_outputs.last_hidden_state, aux_loss)
+        else:
+            if loss is not None and aux_loss != 0:
+                loss = loss + self.router_aux_loss_coef * aux_loss
+
             output = CausalLMOutputWithPast(
                 loss=loss,
                 logits=lm_logits,
                 past_key_values=transformer_outputs.past_key_values,
                 last_hidden_state=transformer_outputs.last_hidden_state,
             )
-        elif self.is_last_stage:
-            output = lm_logits
-        else:
-            output = transformer_outputs.last_hidden_state
 
         return output
 
@@ -173,15 +188,19 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
     ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_first_stage:
             # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
-            tensor = torch.empty(
+            dummy_input = torch.empty(
                 micro_batch_size, sequence_length + 1, device=torch.cuda.current_device(), dtype=torch.long
             )
         else:
-            tensor = self._get_dummy_intermediate_tensor(
+            dummy_input = self._get_dummy_intermediate_tensor(
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
 
-        return tensor
+        if not self.is_first_stage:
+            aux_loss_dummy = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype).squeeze(0)
+            dummy_input = (dummy_input, aux_loss_dummy)
+
+        return dummy_input
 
     def get_dummy_output_tensor(
         self,
@@ -215,7 +234,9 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
 
-        return tensor
+        aux_loss_dummy = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype)
+
+        return tensor, aux_loss_dummy
 
     def _get_dummy_intermediate_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
