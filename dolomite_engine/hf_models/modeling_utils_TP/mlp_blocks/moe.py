@@ -236,6 +236,10 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
         self.placement = Shard(0) if sequence_parallel else Replicate()
 
+        self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
+            torch.cuda.current_device()
+        ) >= (9, 0)
+
     def _compute_routing_weights(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor]:
         # hidden_states -> (total_q, hidden_size)
         router_logits = self.gate(hidden_states)
