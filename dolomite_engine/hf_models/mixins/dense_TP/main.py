@@ -13,7 +13,12 @@ from ...enums import PositionEmbeddingType
 from ...loss import add_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
-from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
+from ..modeling_outputs import (
+    BaseModelOutputWithPast,
+    CausalLMOutputWithPast,
+    PipelineParallelInput,
+    PipelineParallelOutput,
+)
 from .base import PreTrainedModelMixin_TP
 
 
@@ -56,6 +61,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
+        pipeline_parallel_input: PipelineParallelInput | None = None,
     ) -> CausalLMOutputWithPast | torch.Tensor:
         assert return_dict
 
@@ -63,6 +69,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             past_key_values = None
 
         if not self.is_pipeline_parallel_enabled or self.is_first_stage:
+            assert pipeline_parallel_input is None, "first stage should not get pipeline_parallel_input"
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
@@ -75,18 +82,24 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 attention_mask=attention_mask,
                 use_cache=use_cache,
             )
+        elif not self.is_first_stage:
+            assert input_ids is None
 
-        transformer_outputs: BaseModelOutputWithPast = self.transformer(
-            input_ids,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
+        kwargs = {
+            "past_key_values": past_key_values,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+            "position_ids": position_ids,
+            "inputs_embeds": inputs_embeds,
+            "use_cache": use_cache,
+            "cu_seqlens": cu_seqlens,
+            "max_seqlen": max_seqlen,
+            "input_ids": input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
+        }
+
+        del pipeline_parallel_input
+        transformer_outputs: BaseModelOutputWithPast = self.transformer(**kwargs)
+        del kwargs
 
         hidden_states = transformer_outputs.last_hidden_state
         past_key_values = transformer_outputs.past_key_values
@@ -105,6 +118,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         if self.is_pipeline_parallel_enabled:
             assert labels is None
         else:
+            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
             loss = None
             if labels is not None:
                 loss = get_autoregressive_language_modeling_loss(
