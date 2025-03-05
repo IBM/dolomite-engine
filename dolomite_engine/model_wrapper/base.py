@@ -76,10 +76,10 @@ class ModelWrapper(nn.Module):
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_model_parallel_class(self.config.model_type)
 
+        self.is_custom_model = is_custom_model(self.config.model_type)
+
         if self.use_padding_free_transformer:
-            assert is_custom_model(
-                self.config.model_type
-            ), "padding free transformer is not supported with the specified model"
+            assert self.is_custom_model, "padding free transformer is not supported with the specified model"
 
             assert (
                 self.attention_implementation == AttentionImplementation.flash_attention_2

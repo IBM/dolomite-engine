@@ -104,15 +104,8 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
         batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
-        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        output = self.model(
-            **batch,
-            return_dict=True,
-            apply_output_projection=not use_fused_linear_cross_entropy_kernel,
-            apply_logits_multiplier=not use_fused_linear_cross_entropy_kernel
-            and not is_kernel_allowed(Kernel.cross_entropy_cute),
-        )
+        output = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
         if not self.is_pipeline_parallel_enabled:
@@ -129,11 +122,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             labels=labels,
             hidden_states=model_outputs.last_hidden_state if use_fused_linear_cross_entropy_kernel else None,
             vocab_weight=self.model.get_output_embeddings().weight if use_fused_linear_cross_entropy_kernel else None,
-            logits_multiplier=(
-                1 / getattr(self.model, "m_width", 1)
-                if use_fused_linear_cross_entropy_kernel or is_kernel_allowed(Kernel.cross_entropy_cute)
-                else 1
-            ),
             cu_seqlens=None,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",

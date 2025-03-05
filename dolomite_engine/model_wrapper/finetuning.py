@@ -26,14 +26,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
         labels = batch.pop("labels")
-        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
-
-        model_outputs = self.model(
-            **batch,
-            apply_output_projection=not use_fused_linear_cross_entropy_kernel,
-            apply_logits_multiplier=not use_fused_linear_cross_entropy_kernel
-            and not is_kernel_allowed(Kernel.cross_entropy_cute),
-        )
+        model_outputs = self.model(**batch)
 
         return self.get_loss(
             model_outputs=model_outputs,
@@ -53,11 +46,6 @@ class ModelWrapperForFinetuning(ModelWrapper):
             labels=labels,
             hidden_states=model_outputs.last_hidden_state if use_fused_linear_cross_entropy_kernel else None,
             vocab_weight=self.model.get_output_embeddings().weight if use_fused_linear_cross_entropy_kernel else None,
-            logits_multiplier=(
-                1 / getattr(self.model, "m_width", 1)
-                if use_fused_linear_cross_entropy_kernel or is_kernel_allowed(Kernel.cross_entropy_cute)
-                else 1
-            ),
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",

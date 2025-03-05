@@ -61,8 +61,6 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-        apply_output_projection: bool = True,
-        apply_logits_multiplier: bool = True,
     ) -> CausalLMOutputWithPast:
         assert return_dict
 
@@ -104,21 +102,21 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             max_seqlen=max_seqlen,
         )
 
+        hidden_states = transformer_outputs.last_hidden_state
         lm_logits = None
         loss = None
 
         if labels is None:
-            if apply_output_projection:
-                lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+            if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute) and self.m_width is not None:
+                if self.m_width is not None:
+                    hidden_states = hidden_states / self.m_width
+            else:
+                lm_logits = self.get_lm_logits(hidden_states)
 
-            if apply_logits_multiplier and self.m_width is not None:
-                assert apply_output_projection
-                lm_logits = lm_logits / self.m_width
+                if self.m_width is not None:
+                    lm_logits = lm_logits / self.m_width
         else:
-            assert apply_output_projection
-            assert apply_logits_multiplier
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
-            assert not is_kernel_allowed(Kernel.cross_entropy_cute)
 
             lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
 
@@ -130,7 +128,6 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 labels=labels,
                 hidden_states=None,
                 vocab_weight=None,
-                logits_multiplier=1,
                 cu_seqlens=cu_seqlens,
                 use_padding_free_transformer=self._use_padding_free_transformer,
                 reduction=reduction,
@@ -149,7 +146,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             loss=loss,
             logits=lm_logits,
             past_key_values=transformer_outputs.past_key_values,
-            last_hidden_state=transformer_outputs.last_hidden_state,
+            last_hidden_state=hidden_states,
         )
 
     def get_lm_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:

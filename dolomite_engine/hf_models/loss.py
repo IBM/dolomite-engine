@@ -21,7 +21,6 @@ def get_autoregressive_language_modeling_loss(
     labels: torch.Tensor,
     hidden_states: torch.Tensor | None = None,
     vocab_weight: torch.Tensor | None = None,
-    logits_multiplier: float = 1,
     cu_seqlens: torch.Tensor | None = None,
     use_padding_free_transformer: bool = False,
     reduction: str = "mean",
@@ -56,7 +55,6 @@ def get_autoregressive_language_modeling_loss(
             weight=vocab_weight,
             labels=labels.reshape(-1),
             reduction=reduction,
-            logits_multiplier=logits_multiplier,
         )
     elif is_kernel_allowed(Kernel.cross_entropy_cute):
         assert hidden_states is None
@@ -64,15 +62,11 @@ def get_autoregressive_language_modeling_loss(
         assert not tensor_parallel_enabled
 
         loss = cross_entropy_cute(
-            x=lm_logits.reshape(-1, lm_logits.size(-1)),
-            labels=labels.reshape(-1),
-            reduction=reduction,
-            logits_multiplier=logits_multiplier,
+            x=lm_logits.reshape(-1, lm_logits.size(-1)), labels=labels.reshape(-1), reduction=reduction
         )
     else:
         assert hidden_states is None
         assert vocab_weight is None
-        assert logits_multiplier == 1
         loss_context = nullcontext
 
         if tensor_parallel_enabled:
