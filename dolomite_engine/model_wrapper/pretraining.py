@@ -189,10 +189,12 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             if self.is_first_stage:
                 input_ids = tokens[:, :-1]
+                pipeline_parallel_input = None
             else:
-                input_ids = tokens
+                input_ids = None
+                pipeline_parallel_input = PipelineParallelInput(hidden_states=tokens)
 
-            labels = None
+            batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
         else:
             if ProcessGroupManager.is_tensor_parallel_enabled():
                 tokens = self.broadcast_tensor_parallel_input(
@@ -203,9 +205,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 tokens = tokens.to(torch.cuda.current_device())
 
             input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
-
-        batch = {"labels": labels}
+            batch = {"labels": tokens[:, 1:]}
 
         if self.use_padding_free_transformer:
             batch_size, sequence_length = input_ids.shape
