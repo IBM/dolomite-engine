@@ -18,30 +18,6 @@ if is_cute_kernels_available():
     from cute_kernels.kernels.scattermoe.triton_implementation import bincount
 
 
-class _AuxLossBackprop(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, hidden_states: torch.Tensor, aux_loss: torch.Tensor, router_aux_loss_coef: float) -> torch.Tensor:
-        ctx.router_aux_loss_coef = router_aux_loss_coef
-        ctx.dtype = aux_loss.dtype
-        return hidden_states, aux_loss
-
-    @staticmethod
-    def backward(ctx, hidden_states_grad: torch.Tensor, aux_loss_grad: torch.Tensor) -> tuple[torch.Tensor]:
-        return (
-            hidden_states_grad,
-            torch.tensor(ctx.router_aux_loss_coef, dtype=ctx.dtype, device=torch.cuda.current_device()),
-            None,
-        )
-
-
-def aux_loss_backprop(
-    hidden_states: torch.Tensor, aux_loss: torch.Tensor, router_aux_loss_coef: float
-) -> torch.Tensor:
-    hidden_states, aux_loss = _AuxLossBackprop.apply(hidden_states, aux_loss, router_aux_loss_coef)
-    aux_loss = aux_loss.detach()
-    return hidden_states, aux_loss
-
-
 class ParameterizedExperts(nn.Module):
     def __init__(
         self,
@@ -196,8 +172,6 @@ class MoE(nn.Module):
             aux_loss = self._compute_switch_loss(
                 logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
             )
-
-            hidden_states, aux_loss = aux_loss_backprop(hidden_states, aux_loss, self.router_aux_loss_coef)
 
         add_aux_loss(aux_loss)
 
