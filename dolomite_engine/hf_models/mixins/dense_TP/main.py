@@ -85,24 +85,22 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         else:
             assert input_ids is None
 
-        kwargs = {
-            "past_key_values": past_key_values,
-            "attention_mask": attention_mask,
-            "token_type_ids": token_type_ids,
-            "position_ids": position_ids,
-            "inputs_embeds": inputs_embeds,
-            "use_cache": use_cache,
-            "cu_seqlens": cu_seqlens,
-            "max_seqlen": max_seqlen,
-            "input_ids": input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
-        }
-
-        del pipeline_parallel_input
-        transformer_outputs: BaseModelOutputWithPast = self.transformer(**kwargs)
-        del kwargs
+        transformer_outputs: BaseModelOutputWithPast = self.transformer(
+            input_ids=input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+        )
 
         hidden_states = transformer_outputs.last_hidden_state
         past_key_values = transformer_outputs.past_key_values
+
+        del pipeline_parallel_input
         del transformer_outputs
 
         lm_logits = None

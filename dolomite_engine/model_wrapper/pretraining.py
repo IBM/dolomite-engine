@@ -5,7 +5,13 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from ..distributed import tensor_to_dtensor
 from ..enums import AttentionImplementation, Kernel, Mode
-from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
+from ..hf_models import (
+    CausalLMOutputWithPast,
+    PipelineParallelInput,
+    PipelineParallelOutput,
+    get_autoregressive_language_modeling_loss,
+    get_aux_loss,
+)
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
@@ -108,17 +114,20 @@ class ModelWrapperForPretraining(ModelWrapper):
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        output = self.model(**batch, return_dict=True)
+        output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
         if self.is_pipeline_parallel_enabled:
-            output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
+            if not self.is_last_stage:
+                output = output.hidden_states
         else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
         return output
 
-    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
+    def get_loss(
+        self, model_outputs: CausalLMOutputWithPast, labels: torch.Tensor, lm_loss_multiplier: float = 1
+    ) -> torch.Tensor | dict:
         tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
         use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
