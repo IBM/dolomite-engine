@@ -305,6 +305,7 @@ def wrap_model_container_for_distributed_training(
             pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,
             gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
             pipeline_stages=pipeline_stages,
+            # use no op for loss, since we compute loss inside the model
             loss_fn=lambda *args: args,
         )
 
