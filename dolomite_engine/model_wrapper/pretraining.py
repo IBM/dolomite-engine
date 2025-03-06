@@ -108,8 +108,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         if isinstance(batch, torch.Tensor):
             batch = {"text": batch}
 
-        input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids)
+        batch = self._prepare_model_inputs(batch)
+        labels = batch.pop("labels")
 
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
@@ -181,8 +181,31 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return tokens
 
-    def _prepare_model_inputs(self, input_ids: torch.Tensor) -> dict:
-        batch = {}
+    def _prepare_model_inputs(self, batch: dict) -> dict:
+        if self.is_pipeline_parallel_enabled:
+            # when using pipeline parallel, we broadcast the input outside the model function
+            tokens = batch["text"]
+            tokens = tokens.to(torch.cuda.current_device())
+
+            if self.is_first_stage:
+                input_ids = tokens[:, :-1]
+            else:
+                input_ids = tokens
+
+            labels = None
+        else:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
+                tokens = self.broadcast_tensor_parallel_input(
+                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
+                )
+            else:
+                tokens = batch["text"]
+                tokens = tokens.to(torch.cuda.current_device())
+
+            input_ids = tokens[:, :-1]
+            labels = tokens[:, 1:]
+
+        batch = {"labels": labels}
 
         if self.use_padding_free_transformer:
             batch_size, sequence_length = input_ids.shape
@@ -223,32 +246,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch["output_parallel_lm_logits"] = True
 
         return batch
-
-    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> tuple[torch.Tensor]:
-        if self.is_pipeline_parallel_enabled:
-            # when using pipeline parallel, we broadcast the input outside the model function
-            tokens = batch["text"]
-            tokens = tokens.to(torch.cuda.current_device())
-
-            if self.pipeline_stage_id == 0:
-                input_ids = tokens[:, :-1]
-            else:
-                input_ids = tokens
-
-            labels = None
-        else:
-            if ProcessGroupManager.is_tensor_parallel_enabled():
-                tokens = self.broadcast_tensor_parallel_input(
-                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
-                )
-            else:
-                tokens = batch["text"]
-                tokens = tokens.to(torch.cuda.current_device())
-
-            input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
-
-        return input_ids, labels
 
     def _setup_model(self) -> None:
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
