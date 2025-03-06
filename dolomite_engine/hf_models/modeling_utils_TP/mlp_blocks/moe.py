@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
-from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ....kernels import wait_for_ACT
 from ....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
 from ...enums import InitMethod

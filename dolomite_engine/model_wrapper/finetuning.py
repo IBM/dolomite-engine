@@ -3,7 +3,7 @@ import torch.distributed
 from torch.distributed._tensor.placement_types import Replicate
 
 from ..communication import Communication
-from ..distributed import tensor_to_dtensor
+from ..dtensors import tensor_to_dtensor
 from ..enums import Kernel
 from ..hf_models import CausalLMOutputWithPast, get_autoregressive_language_modeling_loss, get_aux_loss
 from ..kernels import is_kernel_allowed

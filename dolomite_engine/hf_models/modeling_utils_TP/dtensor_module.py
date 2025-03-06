@@ -2,7 +2,7 @@ from typing import Any, Mapping
 
 import torch.nn as nn
 
-from ...distributed import modify_state_dict_to_dtensor_dict
+from ...dtensors import modify_state_dict_to_dtensor_dict
 
 
 class DTensorModule(nn.Module):
