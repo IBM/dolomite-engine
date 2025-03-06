@@ -194,7 +194,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 input_ids = None
                 pipeline_parallel_input = PipelineParallelInput(hidden_states=tokens)
 
-            batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
+            batch = {"pipeline_parallel_input": pipeline_parallel_input}
         else:
             if ProcessGroupManager.is_tensor_parallel_enabled():
                 tokens = self.broadcast_tensor_parallel_input(
