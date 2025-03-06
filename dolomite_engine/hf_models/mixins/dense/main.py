@@ -103,6 +103,9 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         )
 
         hidden_states = transformer_outputs.last_hidden_state
+        past_key_values = transformer_outputs.past_key_values
+        del transformer_outputs
+
         lm_logits = None
         loss = None
 
@@ -137,15 +140,13 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
         aux_loss = get_aux_loss()
 
-        if loss is None:
-            loss = None
-        elif aux_loss != 0:
+        if loss is not None and aux_loss != 0:
             loss = loss + self.router_aux_loss_coef * aux_loss
 
         return CausalLMOutputWithPast(
             loss=loss,
             logits=lm_logits,
-            past_key_values=transformer_outputs.past_key_values,
+            past_key_values=past_key_values,
             last_hidden_state=hidden_states,
         )
 

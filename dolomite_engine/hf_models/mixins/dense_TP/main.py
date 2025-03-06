@@ -5,13 +5,20 @@ from torch.distributed._tensor.placement_types import Replicate, Shard
 from transformers import DynamicCache
 
 from ....distributed import dtensor_to_tensor, tensor_to_dtensor
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
-from ...loss import get_autoregressive_language_modeling_loss
+from ...loss import add_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
-from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
+from ..modeling_outputs import (
+    BaseModelOutputWithPast,
+    CausalLMOutputWithPast,
+    PipelineParallelInput,
+    PipelineParallelOutput,
+)
 from .base import PreTrainedModelMixin_TP
 
 
@@ -54,10 +61,15 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
-    ) -> CausalLMOutputWithPast | torch.Tensor:
+        pipeline_parallel_input: PipelineParallelInput | None = None,
+    ) -> CausalLMOutputWithPast | PipelineParallelOutput:
         assert return_dict
 
-        if not self.is_pipeline_parallel_enabled or self.is_first_stage:
+        if self.is_pipeline_parallel_enabled:
+            past_key_values = None
+
+        if self.is_first_stage:
+            assert pipeline_parallel_input is None, "first stage should not get pipeline_parallel_input"
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
@@ -70,9 +82,11 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 attention_mask=attention_mask,
                 use_cache=use_cache,
             )
+        else:
+            assert input_ids is None
 
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
-            input_ids,
+            input_ids=input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -83,41 +97,64 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        if not self.is_pipeline_parallel_enabled or self.is_last_stage:
-            lm_logits = self.get_lm_logits(transformer_outputs.last_hidden_state)
+        hidden_states = transformer_outputs.last_hidden_state
+        past_key_values = transformer_outputs.past_key_values
 
-            if self.m_width is not None:
-                lm_logits = lm_logits / self.m_width
+        del pipeline_parallel_input
+        del transformer_outputs
 
-        if not self.is_pipeline_parallel_enabled:
-            loss = None
-            if labels is not None:
+        lm_logits = None
+        loss = None
+
+        if self.is_last_stage:
+            if labels is None:
+                if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
+                    if self.m_width is not None:
+                        hidden_states = hidden_states / self.m_width
+                else:
+                    lm_logits = self.get_lm_logits(hidden_states)
+
+                    if self.m_width is not None:
+                        lm_logits = lm_logits / self.m_width
+            else:
+                assert not self.is_pipeline_parallel_enabled
+                assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
+                lm_logits = self.get_lm_logits(hidden_states)
+
+                if self.m_width is not None:
+                    lm_logits = lm_logits / self.m_width
+
                 loss = get_autoregressive_language_modeling_loss(
                     lm_logits=lm_logits,
                     labels=labels,
+                    hidden_states=None,
+                    vocab_weight=None,
                     cu_seqlens=cu_seqlens,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     reduction=reduction,
                     shift_logits_and_labels=True,
-                    tensor_parallel_enabled=True,
+                    tensor_parallel_enabled=ProcessGroupManager.is_tensor_parallel_enabled(),
                 )
 
-        if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
-            # all gather
-            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-            lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+            if not output_parallel_lm_logits:
+                # all gather
+                lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+                lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-        if not self.is_pipeline_parallel_enabled:
+            aux_loss = get_aux_loss()
+
+            if loss is not None and aux_loss != 0:
+                loss = loss + self.router_aux_loss_coef * aux_loss
+
             output = CausalLMOutputWithPast(
                 loss=loss,
                 logits=lm_logits,
-                past_key_values=transformer_outputs.past_key_values,
-                last_hidden_state=transformer_outputs.last_hidden_state,
+                past_key_values=past_key_values,
+                last_hidden_state=hidden_states,
             )
-        elif self.is_last_stage:
-            output = lm_logits
         else:
-            output = transformer_outputs.last_hidden_state
+            output = PipelineParallelOutput(hidden_states=hidden_states)
 
         return output
 
@@ -173,15 +210,15 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
     ) -> tuple[torch.Tensor] | torch.Tensor:
         if self.is_first_stage:
             # 1 is added to sequence length since megatron's dataloader gives an extra token and for good reason
-            tensor = torch.empty(
+            dummy_input = torch.empty(
                 micro_batch_size, sequence_length + 1, device=torch.cuda.current_device(), dtype=torch.long
             )
         else:
-            tensor = self._get_dummy_intermediate_tensor(
+            dummy_input = self._get_dummy_intermediate_tensor(
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
 
-        return tensor
+        return dummy_input
 
     def get_dummy_output_tensor(
         self,

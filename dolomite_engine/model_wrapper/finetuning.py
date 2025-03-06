@@ -5,7 +5,7 @@ from torch.distributed._tensor.placement_types import Replicate
 from ..communication import Communication
 from ..distributed import tensor_to_dtensor
 from ..enums import Kernel
-from ..hf_models import get_autoregressive_language_modeling_loss, get_aux_loss
+from ..hf_models import CausalLMOutputWithPast, get_autoregressive_language_modeling_loss, get_aux_loss
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
@@ -29,7 +29,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
         labels = batch.pop("labels")
-        model_outputs = self.model(**batch)
+        model_outputs: CausalLMOutputWithPast = self.model(**batch)
 
         return self.get_loss(
             model_outputs=model_outputs,
@@ -39,7 +39,11 @@ class ModelWrapperForFinetuning(ModelWrapper):
         )
 
     def get_loss(
-        self, model_outputs, labels: torch.Tensor, cu_seqlens: torch.Tensor | None, lm_loss_multiplier: float = 1
+        self,
+        model_outputs: CausalLMOutputWithPast,
+        labels: torch.Tensor,
+        cu_seqlens: torch.Tensor | None,
+        lm_loss_multiplier: float = 1,
     ) -> torch.Tensor | dict:
         tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
         use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)

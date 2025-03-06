@@ -23,7 +23,9 @@ from torch.distributed.pipelining.schedules import (
 
 from ..arguments import TrainingArgs
 from ..containers import ModelContainer
+from ..enums import Kernel
 from ..gradient_checkpointing import apply_gradient_checkpointing
+from ..kernels import is_kernel_allowed
 from ..utils import (
     ProcessGroupManager,
     get_module_class_from_name,
@@ -304,11 +306,22 @@ def wrap_model_container_for_distributed_training(
         lm_loss_multiplier = 1 / (
             args.training_parameters.micro_batch_size * args.datasets[0].class_args.get("sequence_length")
         )
+
+        from ..hf_models import CausalLMOutputWithPast
+
+        def _pipeline_parallel_loss(input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+            use_fused_linear_cross_entropy = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+            output = CausalLMOutputWithPast(
+                logits=None if use_fused_linear_cross_entropy else input,
+                last_hidden_state=input if use_fused_linear_cross_entropy else None,
+            )
+            return model.get_loss(output, target, lm_loss_multiplier)
+
         pipeline_schedule = _get_pipeline_parallel_schedule(
             pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,
             gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
             pipeline_stages=pipeline_stages,
-            loss_fn=partial(model.get_loss, lm_loss_multiplier=lm_loss_multiplier),
+            loss_fn=_pipeline_parallel_loss,
         )
 
     return model_container, pipeline_schedule

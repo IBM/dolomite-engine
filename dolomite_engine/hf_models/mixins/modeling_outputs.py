@@ -16,3 +16,13 @@ class CausalLMOutputWithPast(ModelOutput):
     logits: torch.Tensor | None = None
     past_key_values: tuple[tuple[torch.Tensor]] | None = None
     last_hidden_state: torch.Tensor | None = None
+
+
+@dataclass
+class PipelineParallelInput(ModelOutput):
+    hidden_states: torch.Tensor | None = None
+
+
+@dataclass
+class PipelineParallelOutput(ModelOutput):
+    hidden_states: torch.Tensor | None = None
