@@ -137,7 +137,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     tensor_parallel_enabled=ProcessGroupManager.is_tensor_parallel_enabled(),
                 )
 
-        if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
+        if self.is_last_stage and not output_parallel_lm_logits:
             # all gather
             lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
             lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
