@@ -167,11 +167,13 @@ class MoE(nn.Module):
 
         hidden_states = self.dropout(hidden_states)
 
-        aux_loss = 0
-        if self.training:
-            aux_loss = self._compute_switch_loss(
+        aux_loss = (
+            self._compute_switch_loss(
                 logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
             )
+            if self.training
+            else 0
+        )
 
         add_aux_loss(aux_loss)
 
