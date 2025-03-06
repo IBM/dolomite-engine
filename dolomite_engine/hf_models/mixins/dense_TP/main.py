@@ -137,14 +137,14 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     tensor_parallel_enabled=ProcessGroupManager.is_tensor_parallel_enabled(),
                 )
 
-        if self.is_last_stage and not output_parallel_lm_logits:
-            # all gather
-            lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
-            lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
-
-        aux_loss = get_aux_loss()
-
         if self.is_last_stage:
+            if not output_parallel_lm_logits:
+                # all gather
+                lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
+                lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
+
+            aux_loss = get_aux_loss()
+
             if loss is not None and aux_loss != 0:
                 loss = loss + self.router_aux_loss_coef * aux_loss
 
