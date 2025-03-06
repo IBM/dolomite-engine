@@ -3,7 +3,7 @@ import torch.distributed
 from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..distributed import tensor_to_dtensor
+from ..dtensors import tensor_to_dtensor
 from ..enums import AttentionImplementation, Kernel, Mode
 from ..hf_models import (
     CausalLMOutputWithPast,

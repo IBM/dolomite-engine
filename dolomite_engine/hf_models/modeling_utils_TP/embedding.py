@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.distributed._tensor.placement_types import Replicate, Shard
 
-from ...distributed import dtensor_to_tensor, tensor_to_dtensor
+from ...dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedEmbedding
 from .dtensor_module import DTensorModule

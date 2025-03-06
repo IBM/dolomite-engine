@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributed._tensor.placement_types import Partial, Replicate
 
-from ...distributed import dtensor_to_tensor, tensor_to_dtensor
+from ...dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ...enums import Kernel
 from ...kernels import is_kernel_allowed, wait_for_ACT
 from ...utils import ProcessGroupManager, is_cute_kernels_available

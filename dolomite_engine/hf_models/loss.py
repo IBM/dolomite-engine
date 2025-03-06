@@ -6,7 +6,7 @@ from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.tensor.parallel import loss_parallel
 
-from ..distributed import tensor_to_dtensor
+from ..dtensors import tensor_to_dtensor
 from ..enums import Kernel
 from ..kernels import is_kernel_allowed
 from ..utils import ProcessGroupManager, is_cute_kernels_available

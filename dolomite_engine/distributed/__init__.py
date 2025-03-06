@@ -25,6 +25,7 @@ from ..arguments import TrainingArgs
 from ..containers import ModelContainer
 from ..enums import Kernel
 from ..gradient_checkpointing import apply_gradient_checkpointing
+from ..hf_models import CausalLMOutputWithPast
 from ..kernels import is_kernel_allowed
 from ..utils import (
     ProcessGroupManager,
@@ -32,12 +33,6 @@ from ..utils import (
     is_torchao_available,
     log_rank_0,
     string_to_torch_dtype,
-)
-from .dtensors import (
-    dtensor_to_tensor,
-    modify_state_dict_to_dtensor_dict,
-    tensor_to_dtensor,
-    use_async_tensor_parallel,
 )
 
 
@@ -306,8 +301,6 @@ def wrap_model_container_for_distributed_training(
         lm_loss_multiplier = 1 / (
             args.training_parameters.micro_batch_size * args.datasets[0].class_args.get("sequence_length")
         )
-
-        from ..hf_models import CausalLMOutputWithPast
 
         def _pipeline_parallel_loss(input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
             use_fused_linear_cross_entropy = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
