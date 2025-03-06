@@ -118,8 +118,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         # without pipeline parallel, we compute the loss outside
         if self.is_pipeline_parallel_enabled:
-            if not self.is_last_stage:
-                output = output.hidden_states
+            output = output.logits if self.is_last_stage else output.hidden_states
         else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
