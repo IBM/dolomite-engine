@@ -109,7 +109,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"text": batch}
 
         batch = self._prepare_model_inputs(batch)
-        batch.pop("labels")
 
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
