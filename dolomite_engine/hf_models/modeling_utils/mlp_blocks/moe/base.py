@@ -108,7 +108,6 @@ class MoE(nn.Module):
         m_width: float,
         num_layers: int,
         use_padding_free_transformer: bool,
-        router_aux_loss_coef: float,
     ) -> None:
         super().__init__()
 
@@ -170,8 +169,6 @@ class MoE(nn.Module):
         self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
             torch.cuda.current_device()
         ) >= (9, 0)
-
-        self.router_aux_loss_coef = router_aux_loss_coef
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
