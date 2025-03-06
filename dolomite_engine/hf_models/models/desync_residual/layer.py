@@ -4,10 +4,10 @@ from transformers import DynamicCache
 
 from ...enums import AttentionHeadType, InitMethod
 from ...modeling_utils import get_normalization_function
-from .attention import get_sequence_mixer
 from .config import DesyncResidualConfig
 from .mlp import DesyncResidualMLP
 from .normalization import get_desync_residual_normalization_function
+from .sequence_mixers import get_sequence_mixer
 
 
 class DesyncResidualBlock(nn.Module):

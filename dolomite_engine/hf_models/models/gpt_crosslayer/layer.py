@@ -5,8 +5,8 @@ from transformers import DynamicCache
 from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
-from .attention import get_key_value_projection, get_sequence_mixer
 from .config import GPTCrossLayerConfig
+from .sequence_mixers import get_key_value_projection, get_sequence_mixer
 
 
 class GPTCrossLayerBlock(nn.Module):
