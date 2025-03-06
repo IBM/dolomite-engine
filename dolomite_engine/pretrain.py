@@ -15,7 +15,8 @@ from .checkpointing import ensure_last_checkpoint_is_saved, load_checkpoint_for_
 from .communication import Communication
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import ResumableDataLoader, get_next_batch, get_pretraining_dataloaders
-from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
+from .distributed import wrap_model_container_for_distributed_training
+from .dtensors import dtensor_to_tensor
 from .enums import Mode, TuningMethod
 from .hf_models import disable_generation_cache
 from .kernels import enable_kernels
