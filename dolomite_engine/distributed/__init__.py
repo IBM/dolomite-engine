@@ -301,12 +301,14 @@ def wrap_model_container_for_distributed_training(
             )
             pipeline_stages.append(stage)
 
+        lm_loss_multiplier = 1 / (
+            args.training_parameters.micro_batch_size * args.datasets[0].class_args.get("sequence_length")
+        )
         pipeline_schedule = _get_pipeline_parallel_schedule(
             pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,
             gradient_accumulation_steps=args.training_parameters.gradient_accumulation_steps,
             pipeline_stages=pipeline_stages,
-            # use no op for loss, since we compute loss inside the model
-            loss_fn=lambda *args: args,
+            loss_fn=partial(model.get_loss, lm_loss_multiplier=lm_loss_multiplier),
         )
 
     return model_container, pipeline_schedule

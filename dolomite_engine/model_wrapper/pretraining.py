@@ -109,7 +109,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"text": batch}
 
         batch = self._prepare_model_inputs(batch)
-        labels = batch.pop("labels")
+        batch.pop("labels")
 
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
@@ -117,7 +117,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
         if self.is_last_stage:
-            output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
+            assert isinstance(output, CausalLMOutputWithPast)
+            output = output.logits
         else:
             assert isinstance(output, PipelineParallelOutput)
             output = output.hidden_states
