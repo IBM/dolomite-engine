@@ -106,35 +106,36 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         lm_logits = None
         loss = None
 
-        if labels is None:
-            if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
-                if self.m_width is not None:
-                    hidden_states = hidden_states / self.m_width
+        if self.is_last_stage:
+            if labels is None:
+                if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
+                    if self.m_width is not None:
+                        hidden_states = hidden_states / self.m_width
+                else:
+                    lm_logits = self.get_lm_logits(hidden_states)
+
+                    if self.m_width is not None:
+                        lm_logits = lm_logits / self.m_width
             else:
+                assert not self.is_pipeline_parallel_enabled
+                assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
                 lm_logits = self.get_lm_logits(hidden_states)
 
                 if self.m_width is not None:
                     lm_logits = lm_logits / self.m_width
-        else:
-            assert not self.is_pipeline_parallel_enabled
-            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-            lm_logits = self.get_lm_logits(hidden_states)
-
-            if self.m_width is not None:
-                lm_logits = lm_logits / self.m_width
-
-            loss = get_autoregressive_language_modeling_loss(
-                lm_logits=lm_logits,
-                labels=labels,
-                hidden_states=None,
-                vocab_weight=None,
-                cu_seqlens=cu_seqlens,
-                use_padding_free_transformer=self._use_padding_free_transformer,
-                reduction=reduction,
-                shift_logits_and_labels=True,
-                tensor_parallel_enabled=ProcessGroupManager.is_tensor_parallel_enabled(),
-            )
+                loss = get_autoregressive_language_modeling_loss(
+                    lm_logits=lm_logits,
+                    labels=labels,
+                    hidden_states=None,
+                    vocab_weight=None,
+                    cu_seqlens=cu_seqlens,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    reduction=reduction,
+                    shift_logits_and_labels=True,
+                    tensor_parallel_enabled=ProcessGroupManager.is_tensor_parallel_enabled(),
+                )
 
         if (not self.is_pipeline_parallel_enabled or self.is_last_stage) and not output_parallel_lm_logits:
             # all gather
