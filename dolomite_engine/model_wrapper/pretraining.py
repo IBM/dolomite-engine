@@ -116,7 +116,6 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
-        # without pipeline parallel, we compute the loss outside
         if self.is_last_stage:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
         else:
