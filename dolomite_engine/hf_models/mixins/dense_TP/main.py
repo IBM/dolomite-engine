@@ -154,7 +154,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 last_hidden_state=hidden_states,
             )
         else:
-            output = PipelineParallelOutput(hidden_states=lm_logits if self.is_last_stage else hidden_states)
+            output = PipelineParallelOutput(hidden_states=hidden_states)
 
         return output
 
