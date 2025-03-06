@@ -109,18 +109,22 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"text": batch}
 
         batch = self._prepare_model_inputs(batch)
+        labels = batch.pop("labels")
 
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
-        if self.is_last_stage:
-            assert isinstance(output, CausalLMOutputWithPast)
-            output = output.logits
+        if self.is_pipeline_parallel_enabled:
+            if self.is_last_stage:
+                assert isinstance(output, CausalLMOutputWithPast)
+                output = output.logits
+            else:
+                assert isinstance(output, PipelineParallelOutput)
+                output = output.hidden_states
         else:
-            assert isinstance(output, PipelineParallelOutput)
-            output = output.hidden_states
+            output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
         return output
 
@@ -193,7 +197,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 input_ids = None
                 pipeline_parallel_input = PipelineParallelInput(hidden_states=tokens)
 
-            batch = {"pipeline_parallel_input": pipeline_parallel_input}
+            batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
         else:
             if ProcessGroupManager.is_tensor_parallel_enabled():
                 tokens = self.broadcast_tensor_parallel_input(
