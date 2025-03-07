@@ -25,18 +25,27 @@ class ModelWrapperForFinetuning(ModelWrapper):
         if ProcessGroupManager.is_tensor_parallel_enabled():
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
-        if not self.is_custom_model:
+        if self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        labels = batch.pop("labels")
-        model_outputs: CausalLMOutputWithPast = self.model(**batch)
+            labels = batch.pop("labels")
+            model_outputs: CausalLMOutputWithPast = self.model(**batch)
 
-        return self.get_loss(
-            model_outputs=model_outputs,
-            labels=labels,
-            cu_seqlens=batch.get("cu_seqlens", None),
-            lm_loss_multiplier=lm_loss_multiplier,
-        )
+            output = self.get_loss(
+                model_outputs=model_outputs,
+                labels=labels,
+                cu_seqlens=batch.get("cu_seqlens", None),
+                lm_loss_multiplier=lm_loss_multiplier,
+            )
+        else:
+            # use HF loss API for HF model since we can't get the aux loss outside
+            model_outputs: CausalLMOutputWithPast = self.model(**batch)
+            output = {"loss": model_outputs.loss}
+
+            if hasattr(model_outputs, "aux_loss"):
+                output["aux_loss"] = model_outputs.aux_loss
+
+        return output
 
     def get_loss(
         self,

@@ -3,7 +3,7 @@ from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
 from ...enums import InitMethod
 from .mlp import MLP, interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
-from .moe import AuxFreeMoE, MoE, ParameterizedExperts, ParameterizedScatteredExperts, ScatterMoE
+from .moe import MoE, ParameterizedExperts, ParameterizedScatteredExperts, ScatterMoE
 
 
 def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, layer_idx: int) -> MLP | MoE:
@@ -33,8 +33,5 @@ def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, laye
             num_experts_per_tok=block.num_experts_per_tok,
             use_padding_free_transformer=use_padding_free_transformer,
         )
-    elif mlp_type == "AuxFreeMoE":
-        assert is_kernel_allowed(Kernel.scattermoe)
-        return AuxFreeMoE(config, use_padding_free_transformer)
     else:
         raise ValueError(f"invalid mlp_type ({mlp_type}) for layer ({layer_idx})")
