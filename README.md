@@ -33,6 +33,83 @@ _Shawn Tan, Yikang Shen, Songlin Yang, Aaron Courville, Rameswar Panda_
 # Getting Started
 About how to install the dolomite correctly!
 
+
+# Support more model architecture
+We can add the code following the architecture below:
+```bash
+dolomite_engine/
+├── hf_models/
+│   ├── config/
+│   │   ├── __init__.py            # Main configuration classes
+│   │   └── mlp.py                 # MLP and MoE configuration definitions
+│   │
+│   ├── enums/
+│   │   └── __init__.py            # Contains enums like AttentionHeadType, InitMethod, etc.
+│   │
+│   ├── modeling_utils/
+│   │   ├── __init__.py
+│   │   ├── linear.py              # Linear layer implementations
+│   │   ├── position_embedding.py  # Position embedding implementations
+│   │   │
+│   │   ├── mlp_blocks/
+│   │   │   ├── __init__.py        # MLP block factory methods
+│   │   │   ├── mlp.py             # Standard MLP implementation
+│   │   │   │
+│   │   │   └── moe/              
+│   │   │       ├── __init__.py    # MOE imports and factory
+│   │   │       ├── auxfree.py     # AuxFreeMoE implementation
+│   │   │       ├── base.py        # Base MoE implementation
+│   │   │       └── scatter.py     # ScatterMoE implementation
+│   │   │
+│   │   └── sequence_mixer_blocks/
+│   │       ├── __init__.py
+│   │       ├── mamba.py           # Mamba implementation
+│   │       ├── stickbreaking_attention.py  # Stickbreaking attention
+│   │       │
+│   │       └── softmax_attention/
+│   │           ├── __init__.py    # Attention imports and factory
+│   │           ├── base.py        # Base attention implementation
+│   │           ├── flash.py       # Flash attention implementation
+│   │           ├── padding_free.py # Padding-free attention
+│   │           ├── sdpa.py        # SDPA attention implementation
+│   │           └── utils.py       # Attention utilities
+│   │
+│   ├── modeling_utils_TP/         # Tensor-parallel versions of modeling_utils
+│   │   ├── mlp_blocks/
+│   │   │   ├── __init__.py
+│   │   │   ├── mlp.py
+│   │   │   └── moe.py            # Tensor-parallel MoE implementation
+│   │   │
+│   │   └── sequence_mixer_blocks/
+│   │       ├── __init__.py
+│   │       └── softmax_attention/
+│   │           ├── __init__.py
+│   │           ├── base.py
+│   │           ├── flash.py
+│   │           ├── padding_free.py
+│   │           └── sdpa.py
+│   │
+│   ├── model_conversion/          # Code for converting from other model formats
+│   │   ├── __init__.py
+│   │   ├── granite.py
+│   │   ├── granitemoe.py         # GraniteMoE model conversion
+│   │   └── llama.py
+│   │
+│   └── models/                   # Actual model implementations
+│       ├── __init__.py
+│       ├── common/
+│       ├── gpt/
+│       │   ├── __init__.py
+│       │   ├── attention.py
+│       │   ├── block.py          # Transformer blocks
+│       │   └── model.py          # Model architecture 
+│       └── ladder_residual/
+│
+└── kernels/                      # Custom kernel implementations
+    └── ...
+```
+
+
 # Distributed finetuning
 This repository is meant for pretraining and finetuning large language models.
 
