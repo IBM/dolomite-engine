@@ -142,6 +142,21 @@ class Attention(nn.Module):
                 bias=self.add_bias,
                 std=std,
             )
+            
+        # Add to the __init__ method in Attention class
+        if self.use_sparse_attention:
+            # Register MoBA with standard configurations
+            from .moba import register_moba
+            from .moba.config import MoBAConfig
+            
+            # Configure MoBA with user parameters
+            moba_config = MoBAConfig(
+                moba_chunk_size=self.sparse_block_size,
+                moba_topk=min(4, self.sparse_block_size // 4),  # Sensible default based on block size
+            )
+            
+            # Register MoBA implementations
+            register_moba(moba_config)
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
