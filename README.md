@@ -109,6 +109,20 @@ dolomite_engine/
     └── ...
 ```
 
+# Docker image
+For the [dolomite-engine](https://github.com/NexaAI/dolomite-engine), You can pull from dockerhub and run this 
+```bash
+docker run --gpus all -it \
+    -d \
+    --name nexa_dolomite \
+    -p 8000-8010:8000-8010 \
+    zhiyuan88/dolomite
+```
+
+Or build the docker image from scratch:
+```bash
+docker build -t dolomite .
+```
 
 # Distributed finetuning
 This repository is meant for pretraining and finetuning large language models.
