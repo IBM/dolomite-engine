@@ -30,6 +30,8 @@ class Attention(nn.Module):
         num_layers: int,
         causal: bool,
         layer_idx: int,
+        kv_compression_dim: int = None,
+        use_latent_attention: bool = False,
     ) -> None:
         super().__init__()
 
@@ -80,12 +82,48 @@ class Attention(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_attn = ParameterizedLinear(
-            self.hidden_size,
-            self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
-            bias=self.add_bias,
-            std=std,
-        )
+            
+        
+        # add the latent attention layer here
+        if self.use_latent_attention:
+            assert self.kv_compression_dim is not None, "kv_compression_dim must be specified when using latent attention"
+            
+            # For latent attention, we have separate projections
+            self.q_proj = ParameterizedLinear(
+                self.hidden_size, 
+                self.num_heads * self.head_dim, 
+                bias=self.add_bias,
+                std=std,
+            )
+            
+            self.kv_down_proj = ParameterizedLinear(
+                self.hidden_size,
+                self.kv_compression_dim,
+                bias=self.add_bias,
+                std=std,
+            )
+            
+            self.k_up_proj = ParameterizedLinear(
+                self.kv_compression_dim,
+                self.num_key_value_heads * self.head_dim,
+                bias=self.add_bias,
+                std=std,
+            )
+            
+            self.v_up_proj = ParameterizedLinear(
+                self.kv_compression_dim,
+                self.num_key_value_heads * self.head_dim,
+                bias=self.add_bias,
+                std=std,
+            )
+        else:
+            # Original implementation for non-latent attention
+            self.c_attn = ParameterizedLinear(
+                self.hidden_size,
+                self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+                bias=self.add_bias,
+                std=std,
+            )
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
@@ -97,35 +135,65 @@ class Attention(nn.Module):
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
+
+
+    ## TODO: Need to verify if the current implementation is correct or not.
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
-        # the output of following is a tuple if using MQA with tensor parallel
-        hidden_states = self.c_attn(hidden_states)
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, [num_heads + num_key_value_heads * 2] * head_dim)
-        # ==========================================================================================
-
-        # for MHA, we can get away with doing just 1 transpose which is not true for GQA
-        if self.attention_head_type == AttentionHeadType.mha:
-            query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.gqa:
-            query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.mqa:
-            query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
+        if self.use_latent_attention:
+            # Latent attention flow
+            query = self.q_proj(hidden_states)
+            kv_latent = self.kv_down_proj(hidden_states)
+            key = self.k_up_proj(kv_latent)
+            value = self.v_up_proj(kv_latent)
+            
+            batch_size, query_length = hidden_states.shape[:-1]
+            
+            # Reshape query
+            query = query.view(batch_size, query_length, self.num_heads, self.head_dim)
+            query = query.transpose(1, 2)
+            
+            # Reshape key and value based on attention head type
+            if self.attention_head_type == AttentionHeadType.mha:
+                key = key.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
+                value = value.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
+                key = key.transpose(1, 2)
+                value = value.transpose(1, 2)
+            elif self.attention_head_type == AttentionHeadType.gqa:
+                key = key.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
+                value = value.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
+                key = key.transpose(1, 2)
+                value = value.transpose(1, 2)
+            elif self.attention_head_type == AttentionHeadType.mqa:
+                key = key.view(batch_size, query_length, 1, self.head_dim)
+                value = value.view(batch_size, query_length, 1, self.head_dim)
+                key = key.transpose(1, 2)
+                value = value.transpose(1, 2)
         else:
-            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
+            # Original attention flow
+            hidden_states = self.c_attn(hidden_states)
+            
+            # Use existing methods based on attention head type
+            if self.attention_head_type == AttentionHeadType.mha:
+                query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
+            elif self.attention_head_type == AttentionHeadType.gqa:
+                query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
+            elif self.attention_head_type == AttentionHeadType.mqa:
+                query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
+            else:
+                raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
         # key -> (batch_size, num_key_value_heads, query_length, head_dim)
         # value -> (batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
-
         return query, key, value
+
+
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor
