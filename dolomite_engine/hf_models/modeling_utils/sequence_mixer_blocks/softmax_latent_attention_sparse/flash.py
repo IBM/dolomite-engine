@@ -11,6 +11,7 @@ from .base import Attention
 # Add imports
 from .moba.wrapper import moba_layer
 from .moba.config import MoBAConfig
+from .moba.moba_efficient import moba_attn_varlen
 
 
 
@@ -50,42 +51,69 @@ class FlashAttention2(Attention):
         # value -> (batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
-        # TODO avoid this extra transpose
-        query = query.transpose(1, 2)
-        if self.attention_head_type == AttentionHeadType.mqa:
-            key = key.squeeze(1).unsqueeze(2)
-            value = value.squeeze(1).unsqueeze(2)
+        batch_size, _, query_length, _ = query.shape
+        
+        # Sparse attention path using MoBA when enabled and in padding-free mode
+        if self.use_sparse_attention and cu_seqlens is not None:
+            # Prepare inputs for MoBA format (seq_len first)
+            # Convert from (batch, heads, seq_len, dim) to (seq_len*batch, heads, dim)
+            query_moba = query.transpose(1, 2).reshape(-1, self.num_heads, self.head_dim).contiguous()
+            key_moba = key.transpose(1, 2).reshape(-1, self.num_key_value_heads, self.head_dim).contiguous()
+            value_moba = value.transpose(1, 2).reshape(-1, self.num_key_value_heads, self.head_dim).contiguous()
+            
+            # Apply MoBA sparse attention
+            hidden_states = moba_attn_varlen(
+                q=query_moba,
+                k=key_moba,
+                v=value_moba,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                moba_chunk_size=self.sparse_block_size,
+                moba_topk=min(4, self.sparse_block_size // 4),  # Controls sparsity level
+                causal=self.causal,
+            )
+            
+            # Reshape back to expected format: (batch_size, query_length, num_heads*head_dim)
+            hidden_states = hidden_states.view(batch_size, query_length, self.num_heads, self.head_dim)
+            hidden_states = hidden_states.reshape(batch_size, query_length, -1)
+            
         else:
-            key = key.transpose(1, 2)
-            value = value.transpose(1, 2)
+            # Original flash attention path
+            # TODO avoid this extra transpose
+            query = query.transpose(1, 2)
+            if self.attention_head_type == AttentionHeadType.mqa:
+                key = key.squeeze(1).unsqueeze(2)
+                value = value.squeeze(1).unsqueeze(2)
+            else:
+                key = key.transpose(1, 2)
+                value = value.transpose(1, 2)
 
-        # ==========================================================================================
-        # query -> (batch_size, query_length, num_heads, head_dim)
-        # key -> (batch_size, key_length, num_heads, head_dim)
-        # value -> (batch_size, key_length, num_heads, head_dim)
-        # ==========================================================================================
+            # ==========================================================================================
+            # query -> (batch_size, query_length, num_heads, head_dim)
+            # key -> (batch_size, key_length, num_heads, head_dim)
+            # value -> (batch_size, key_length, num_heads, head_dim)
+            # ==========================================================================================
 
-        batch_size, query_length = query.shape[:2]
+            query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
+            key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
+            value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
-        query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
-        key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
-        value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
+            hidden_states = _flash_attention_forward(
+                query_states=query,
+                key_states=key,
+                value_states=value,
+                attention_mask=attention_mask,
+                query_length=query_length,
+                is_causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
-        hidden_states = _flash_attention_forward(
-            query_states=query,
-            key_states=key,
-            value_states=value,
-            attention_mask=attention_mask,
-            query_length=query_length,
-            is_causal=self.causal,
-            dropout=self.softmax_dropout_p if self.training else 0,
-            softmax_scale=self._get_softmax_scale(),
-        )
+            del query, key, value
 
-        del query, key, value
+            hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
+            hidden_states = hidden_states.view(batch_size, query_length, -1)
 
-        hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
-        hidden_states = hidden_states.view(batch_size, query_length, -1)
 
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
