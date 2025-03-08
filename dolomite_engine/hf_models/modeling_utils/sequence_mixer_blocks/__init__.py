@@ -89,6 +89,8 @@ def get_sequence_mixer(
             if block.use_sparse_attention:
                 sequence_mixer_kwargs["sparse_block_size"] = block.sparse_block_size
                 sequence_mixer_kwargs["sparse_pattern"] = block.sparse_pattern
+                sequence_mixer_kwargs["moba_chunk_size"] = getattr(block, "moba_chunk_size", 1024)
+                sequence_mixer_kwargs["moba_topk"] = getattr(block, "moba_topk", 8)
 
         if sequence_mixer_type == "softmax_attention":
             sequence_mixer_kwargs["softmax_dropout"] = block.softmax_dropout
