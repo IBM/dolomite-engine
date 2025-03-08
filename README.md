@@ -31,7 +31,7 @@ _Shawn Tan, Yikang Shen, Songlin Yang, Aaron Courville, Rameswar Panda_
 ![image][Model Architecture]
 
 # Getting Started
-Run `make install` to install the requirements for this repository. You might need to install `flash-attn`.
+About how to install the dolomite correctly!
 
 # Distributed finetuning
 This repository is meant for pretraining and finetuning large language models.
