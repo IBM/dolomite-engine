@@ -32,6 +32,9 @@ class Attention(nn.Module):
         layer_idx: int,
         kv_compression_dim: int = None,
         use_latent_attention: bool = False,
+        use_sparse_attention: bool = False,
+        sparse_block_size: int = 16,
+        sparse_pattern: str = "block_local",
     ) -> None:
         super().__init__()
 
@@ -40,6 +43,15 @@ class Attention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
+        
+        self.kv_compression_dim = kv_compression_dim
+        self.use_latent_attention = use_latent_attention
+        
+        # Sparse attention params
+        self.use_sparse_attention = use_sparse_attention
+        self.sparse_block_size = sparse_block_size
+        self.sparse_pattern = sparse_pattern
+
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,

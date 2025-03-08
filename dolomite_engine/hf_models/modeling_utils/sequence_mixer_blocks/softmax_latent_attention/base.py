@@ -40,6 +40,9 @@ class Attention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
+        
+        self.kv_compression_dim = kv_compression_dim
+        self.use_latent_attention = use_latent_attention
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,
