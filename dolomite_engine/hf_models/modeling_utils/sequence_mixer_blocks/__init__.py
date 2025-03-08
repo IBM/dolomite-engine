@@ -77,6 +77,18 @@ def get_sequence_mixer(
             causal=causal,
             layer_idx=layer_idx,
         )
+        
+        # Add latent and sparse attention parameters
+        if hasattr(block, "use_latent_attention"):
+            sequence_mixer_kwargs["use_latent_attention"] = block.use_latent_attention
+            if block.use_latent_attention:
+                sequence_mixer_kwargs["kv_compression_dim"] = block.kv_compression_dim
+        
+        if hasattr(block, "use_sparse_attention"):
+            sequence_mixer_kwargs["use_sparse_attention"] = block.use_sparse_attention
+            if block.use_sparse_attention:
+                sequence_mixer_kwargs["sparse_block_size"] = block.sparse_block_size
+                sequence_mixer_kwargs["sparse_pattern"] = block.sparse_pattern
 
         if sequence_mixer_type == "softmax_attention":
             sequence_mixer_kwargs["softmax_dropout"] = block.softmax_dropout
@@ -86,6 +98,14 @@ def get_sequence_mixer(
                     attention_implementation == "flash_attention_2"
                 ), "padding free transformer only works with flash attention"
                 return PaddingFreeAttention(**sequence_mixer_kwargs)
+            elif block.use_sparse_attention:
+                # Use sparse attention implementation
+                from .softmax_latent_attention_sparse import _ATTENTION_MODULES as SPARSE_MODULES
+                return SPARSE_MODULES[attention_implementation](**sequence_mixer_kwargs)
+            elif block.use_latent_attention:
+                # Use latent attention implementation
+                from .softmax_latent_attention import _ATTENTION_MODULES as LATENT_MODULES
+                return LATENT_MODULES[attention_implementation](**sequence_mixer_kwargs)
             else:
                 return _ATTENTION_MODULES[attention_implementation](**sequence_mixer_kwargs)
         elif sequence_mixer_type == "stickbreaking_attention":
