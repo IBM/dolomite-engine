@@ -41,6 +41,8 @@ class Attention(nn.Module):
         use_sparse_attention: bool = False,
         sparse_block_size: int = 16,
         sparse_pattern: str = "block_local",
+        moba_chunk_size: int = 1024, 
+        moba_topk: int = 8, 
     ) -> None:
         super().__init__()
 
