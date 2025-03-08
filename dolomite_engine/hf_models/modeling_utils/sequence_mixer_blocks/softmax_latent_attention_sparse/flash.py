@@ -8,6 +8,7 @@ from ...position_embedding import apply_rotary_pos_emb
 from .base import Attention
 
 
+## For the latent attention implementation, we don't need to change anything in the flash attention part!
 class FlashAttention2(Attention):
     def forward(
         self,
