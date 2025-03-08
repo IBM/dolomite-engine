@@ -248,11 +248,13 @@ class MoE(nn.Module):
         return x, indices
 
     def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
+        # Get target device from input tensors
+        device = logits.device
         logits = logits.view(-1, logits.size(-1))
         probs = probs.view(-1, probs.size(-1))
 
         num_experts = logits.size(1)
-        acc_probs = probs.sum(0)
+        acc_probs = probs.sum(0).to(device)
 
         if topk_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
             freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
@@ -261,7 +263,8 @@ class MoE(nn.Module):
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
-
+            # Fix the error of torch.compile error
+            freq = freq.to(acc_probs.device)
         switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
 
