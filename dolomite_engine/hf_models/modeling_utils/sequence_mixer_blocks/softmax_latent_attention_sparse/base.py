@@ -60,12 +60,16 @@ class Attention(nn.Module):
         self.moba_chunk_size = moba_chunk_size
         self.moba_topk = moba_topk
 
-
-        self.head_dim = divide_if_divisible(
-            self.hidden_size,
-            self.num_heads,
-            f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
-        )
+        if not use_latent_attention:
+            ## For the latent attention work, we don't need to check this division
+            self.head_dim = divide_if_divisible(
+                self.hidden_size,
+                self.num_heads,
+                f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
+            )
+        else:
+            # Just hardcode here, need to pass dimenstion later.
+            self.head_dim = 64
 
         self.attention_head_type = attention_head_type
         self.position_embedding_type = position_embedding_type
@@ -107,7 +111,6 @@ class Attention(nn.Module):
         # add the latent attention layer here
         if self.use_latent_attention:
             assert self.kv_compression_dim is not None, "kv_compression_dim must be specified when using latent attention"
-            
             # For latent attention, we have separate projections
             self.q_proj = ParameterizedLinear(
                 self.hidden_size, 
@@ -121,7 +124,7 @@ class Attention(nn.Module):
                 self.kv_compression_dim,
                 bias=self.add_bias,
                 std=std,
-            )
+            )      
             
             self.k_up_proj = ParameterizedLinear(
                 self.kv_compression_dim,
@@ -163,7 +166,7 @@ class Attention(nn.Module):
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
+        self.c_proj = ParameterizedLinear(self.num_heads * self.head_dim, self.hidden_size, bias=self.add_bias, std=std)
 
         self.softmax_dropout_p = softmax_dropout
 
