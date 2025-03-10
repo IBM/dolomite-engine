@@ -200,7 +200,6 @@ class CommonConfig(PretrainedConfig):
                 use_sparse_attention = sequence_mixer_block.pop("use_sparse_attention", False)
                 sequence_mixer_kwargs["use_sparse_attention"] = use_sparse_attention
                 if use_sparse_attention:
-                    sequence_mixer_kwargs["sparse_block_size"] = sequence_mixer_block.pop("sparse_block_size", 16)
                     sequence_mixer_kwargs["sparse_pattern"] = sequence_mixer_block.pop("sparse_pattern", "block_local")
                     sequence_mixer_kwargs["moba_chunk_size"] = sequence_mixer_block.pop("moba_chunk_size", 1024)
                     sequence_mixer_kwargs["moba_topk"] = sequence_mixer_block.pop("moba_topk", 8)

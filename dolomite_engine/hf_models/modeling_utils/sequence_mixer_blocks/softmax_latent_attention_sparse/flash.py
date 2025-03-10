@@ -68,8 +68,8 @@ class FlashAttention2(Attention):
                 v=value_moba,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
-                moba_chunk_size=self.sparse_block_size,
-                moba_topk=min(4, self.sparse_block_size // 4),  # Controls sparsity level
+                moba_chunk_size=self.moba_chunk_size,
+                moba_topk=self.moba_topk,
                 causal=self.causal,
             )
             
