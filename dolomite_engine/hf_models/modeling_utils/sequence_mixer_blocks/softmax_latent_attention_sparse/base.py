@@ -39,10 +39,9 @@ class Attention(nn.Module):
         kv_compression_dim: int = None,
         use_latent_attention: bool = False,
         use_sparse_attention: bool = False,
-        sparse_block_size: int = 16,
         sparse_pattern: str = "block_local",
         moba_chunk_size: int = 1024, 
-        moba_topk: int = 8, 
+        moba_topk: int = 8
     ) -> None:
         super().__init__()
 
@@ -57,8 +56,9 @@ class Attention(nn.Module):
         
         # Sparse attention params
         self.use_sparse_attention = use_sparse_attention
-        self.sparse_block_size = sparse_block_size
         self.sparse_pattern = sparse_pattern
+        self.moba_chunk_size = moba_chunk_size
+        self.moba_topk = moba_topk
 
 
         self.head_dim = divide_if_divisible(
@@ -153,8 +153,8 @@ class Attention(nn.Module):
             
             # Configure MoBA with user parameters
             moba_config = MoBAConfig(
-                moba_chunk_size=self.sparse_block_size,
-                moba_topk=min(4, self.sparse_block_size // 4),  # Sensible default based on block size
+                moba_chunk_size=self.moba_chunk_size,  # Sensible default based on block size
+                moba_topk=self.moba_topk  # Sensible default based on sparsity level
             )
             
             # Register MoBA implementations
@@ -310,8 +310,8 @@ class Attention(nn.Module):
         if self.use_sparse_attention and cu_seqlens is not None:
             # Configure MoBA
             moba_config = MoBAConfig(
-                moba_chunk_size=self.sparse_block_size,
-                moba_topk=4,  # This controls sparsity level - can be made configurable
+                moba_chunk_size=self.moba_chunk_size,  # Sensible default based on block size
+                moba_topk=self.moba_topk  # Sensible default based on sparsity level
             )
             
             # Use MoBA for sparse attention
@@ -338,7 +338,7 @@ class Attention(nn.Module):
                 v=reshaped_value,
                 cu_seqlens=adjusted_cu_seqlens,
                 max_seqlen=max_seqlen,
-                moba_chunk_size=self.sparse_block_size,
+                moba_chunk_size=self.moba_chunk_size,  # Configurable chunk size
                 moba_topk=4  # Configurable sparsity level
             )
             
