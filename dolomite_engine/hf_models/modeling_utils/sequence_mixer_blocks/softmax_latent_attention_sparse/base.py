@@ -197,16 +197,9 @@ class Attention(nn.Module):
                 value = value.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
                 key = key.transpose(1, 2)
                 value = value.transpose(1, 2)
-            elif self.attention_head_type == AttentionHeadType.gqa:
-                key = key.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
-                value = value.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
-                key = key.transpose(1, 2)
-                value = value.transpose(1, 2)
-            elif self.attention_head_type == AttentionHeadType.mqa:
-                key = key.view(batch_size, query_length, 1, self.head_dim)
-                value = value.view(batch_size, query_length, 1, self.head_dim)
-                key = key.transpose(1, 2)
-                value = value.transpose(1, 2)
+            else: 
+                raise ValueError(f"unexpected attention_head_type ({self.attention_head_type}). \
+                                   The only supported attention_head_type is mha")
         else:
             # Original attention flow
             hidden_states = self.c_attn(hidden_states)
@@ -367,7 +360,8 @@ class Attention(nn.Module):
             batch_size = query.shape[0]
             query_length = query.shape[2]
             key_length = key.shape[-1]
-
+            
+            # if the #group = 1, actually no return.
             key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
             value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
