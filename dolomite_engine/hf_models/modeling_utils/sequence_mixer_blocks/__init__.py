@@ -83,6 +83,7 @@ def get_sequence_mixer(
             sequence_mixer_kwargs["use_latent_attention"] = block.use_latent_attention
             if block.use_latent_attention:
                 sequence_mixer_kwargs["kv_compression_dim"] = block.kv_compression_dim
+                sequence_mixer_kwargs["head_dim_latent"] = block.head_dim_latent
         
         if hasattr(block, "use_sparse_attention"):
             sequence_mixer_kwargs["use_sparse_attention"] = block.use_sparse_attention
@@ -117,7 +118,7 @@ def get_sequence_mixer(
                 # Filter out latent and sparse parameters for regular attention
                 regular_kwargs = {k: v for k, v in sequence_mixer_kwargs.items() 
                                 if k not in ['use_latent_attention', 'kv_compression_dim', 
-                                            'use_sparse_attention', 
+                                            'use_sparse_attention', 'head_dim_latent',
                                             'sparse_pattern', 'moba_chunk_size', 'moba_topk']}
                 return _ATTENTION_MODULES[attention_implementation](**regular_kwargs)
         elif sequence_mixer_type == "stickbreaking_attention":

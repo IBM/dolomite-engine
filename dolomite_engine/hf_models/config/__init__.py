@@ -195,6 +195,7 @@ class CommonConfig(PretrainedConfig):
                 sequence_mixer_kwargs["use_latent_attention"] = use_latent_attention
                 if use_latent_attention:
                     sequence_mixer_kwargs["kv_compression_dim"] = sequence_mixer_block.pop("kv_compression_dim", None)
+                    sequence_mixer_kwargs["head_dim_latent"] = sequence_mixer_block.pop("head_dim_latent", None)
 
                 # Add sparse attention parameters
                 use_sparse_attention = sequence_mixer_block.pop("use_sparse_attention", False)

@@ -37,6 +37,7 @@ class Attention(nn.Module):
         causal: bool,
         layer_idx: int,
         kv_compression_dim: int = None,
+        head_dim_latent: int = 64,
         use_latent_attention: bool = False,
         use_sparse_attention: bool = False,
         sparse_pattern: str = "block_local",
@@ -69,7 +70,7 @@ class Attention(nn.Module):
             )
         else:
             # Just hardcode here, need to pass dimenstion later.
-            self.head_dim = 64
+            self.head_dim = head_dim_latent
 
         self.attention_head_type = attention_head_type
         self.position_embedding_type = position_embedding_type
