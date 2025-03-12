@@ -336,7 +336,7 @@ class Attention(nn.Module):
                 cu_seqlens=adjusted_cu_seqlens,
                 max_seqlen=max_seqlen,
                 moba_chunk_size=self.moba_chunk_size,  # Configurable chunk size
-                moba_topk=4  # Configurable sparsity level
+                moba_topk=self.moba_topk  # Configurable sparsity level
             )
             
             # Reshape back to expected format
