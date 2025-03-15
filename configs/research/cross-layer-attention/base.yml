@@ -51,103 +51,6 @@ model_args:
     position_embedding_type: rope
     rope_theta: 10000
     vocab_size: 50304
-    mlp_blocks:
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
-      - mlp_type: MLP
-        activation_function: swiglu
-        intermediate_size: 8192
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
         num_key_value_heads: 1
@@ -245,6 +148,103 @@ model_args:
       - sequence_mixer_type: softmax_attention
         num_key_value_heads: 1
         attention_head_type: mqa
+    mlp_blocks:
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 8192
   efficient_initialization: false
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
