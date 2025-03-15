@@ -15,6 +15,9 @@ from .models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
+    PaLMConfig,
+    PaLMForCausalLM,
+    PaLMModel,
 )
 
 
@@ -24,6 +27,7 @@ _CUSTOM_MODEL_REGISTRY = [
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
+    (PaLMConfig, PaLMModel, PaLMForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
