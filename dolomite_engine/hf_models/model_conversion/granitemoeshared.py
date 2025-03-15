@@ -88,7 +88,9 @@ def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> 
             {
                 "mlp_type": "MoE",
                 "intermediate_size": original_config.intermediate_size,
-                "shared_intermediate_size": original_config.shared_intermediate_size,
+                "shared_intermediate_size": (
+                    None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
+                ),
                 "num_experts": original_config.num_local_experts,
                 "num_experts_per_tok": original_config.num_experts_per_tok,
                 "activation_function": "swiglu",
@@ -199,6 +201,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeShared
     config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias", False)
     config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
     config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_type", "MoE")
+    shared_intermediate_size = config.check_equal_for_all_and_get_value("mlp_blocks", "shared_intermediate_size")
 
     original_config = GraniteMoeSharedConfig(
         vocab_size=config.vocab_size,
@@ -206,7 +209,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeShared
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
-        shared_intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "shared_intermediate_size"),
+        shared_intermediate_size=0 if shared_intermediate_size is None else shared_intermediate_size,
         num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
