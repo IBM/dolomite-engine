@@ -16,7 +16,8 @@ tokenizer_args:
   tokenizer_name: bigcode/starcoder
 
 kernel_args:
-  - scattermoe
+  kernels:
+    - scattermoe
 
 model_args:
   model_class: AutoModelForCausalLM
