@@ -40,7 +40,7 @@ def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str,
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> MoEDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> GPTDolomiteConfig:
     assert original_config.hidden_act == "silu"
 
     if original_config.num_attention_heads == original_config.num_key_value_heads:
