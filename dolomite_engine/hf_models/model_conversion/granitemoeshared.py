@@ -13,7 +13,7 @@ from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..models import MoEDolomiteConfig
+from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -52,7 +52,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> 
 
     assert not original_config.attention_bias
 
-    config = MoEDolomiteConfig(
+    config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
         n_positions=original_config.max_position_embeddings,
         n_embd=original_config.hidden_size,
@@ -153,7 +153,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: MoEDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
@@ -179,7 +179,7 @@ def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, s
         pass
 
 
-def _export_config_to_huggingface(config: MoEDolomiteConfig) -> GraniteMoeSharedConfig:
+def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeSharedConfig:
     assert config.activation_function == "swiglu"
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"

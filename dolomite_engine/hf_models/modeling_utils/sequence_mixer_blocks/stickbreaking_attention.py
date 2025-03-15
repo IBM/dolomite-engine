@@ -7,7 +7,6 @@ from transformers import DynamicCache
 
 from ....utils import is_stickbreaking_available
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ...modeling_utils import Attention
 from .softmax_attention import Attention
 
 
