@@ -10,8 +10,11 @@ from .arguments import TrainingArgs, get_args
 from .checkpointing import ensure_last_checkpoint_is_saved, load_checkpoint_for_training, save_checkpoint
 from .containers import LRSchedulerContainer, ModelContainer, OptimizerContainer, log_model_optimizer_container
 from .data import ResumableDataLoader, custom_iterator, get_finetuning_dataloader, get_next_batch
-from .distributed import dtensor_to_tensor, wrap_model_container_for_distributed_training
+from .distributed import wrap_model_container_for_distributed_training
+from .dtensors import dtensor_to_tensor
 from .enums import DatasetSplit, Mode, TuningMethod
+from .hf_models import disable_generation_cache
+from .kernels import enable_kernels
 from .model_wrapper import ModelWrapper, get_model_container
 from .optimization import get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
@@ -171,7 +174,7 @@ def train(
         evaluate(val_dataloader, model_container, starting_iteration, experiments_tracker)
 
     forward_context = nullcontext
-    backward_context = loss_parallel if args.distributed_args.tensor_parallel_word_embeddings else nullcontext
+    backward_context = loss_parallel if ProcessGroupManager.is_tensor_parallel_enabled() else nullcontext
 
     torch_profiler = get_torch_profiler(args.logging_args.torch_profiler_trace_path)
 
@@ -394,16 +397,17 @@ def main() -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    train(
-        args,
-        model_container=model_container,
-        optimizer_container=optimizer_container,
-        lr_scheduler_container=lr_scheduler_container,
-        train_dataloader=train_dataloader,
-        val_dataloader=val_dataloader,
-        experiments_tracker=experiments_tracker,
-        starting_iteration=starting_iteration,
-    )
+    with disable_generation_cache(), enable_kernels(args.kernel_args.kernels):
+        train(
+            args,
+            model_container=model_container,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
+            experiments_tracker=experiments_tracker,
+            starting_iteration=starting_iteration,
+        )
 
 
 if __name__ == "__main__":

@@ -1,14 +1,18 @@
-from contextlib import nullcontext
-
 import torch
 import torch.distributed
-import torch.nn.functional as F
-from torch.distributed._tensor.placement_types import Replicate, Shard
-from torch.distributed.tensor.parallel import loss_parallel
+from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..distributed import tensor_to_dtensor
-from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..dtensors import tensor_to_dtensor
+from ..enums import AttentionImplementation, Kernel, Mode
+from ..hf_models import (
+    CausalLMOutputWithPast,
+    PipelineParallelInput,
+    PipelineParallelOutput,
+    get_autoregressive_language_modeling_loss,
+    get_aux_loss,
+)
+from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -23,9 +27,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
@@ -48,7 +50,6 @@ class ModelWrapperForPretraining(ModelWrapper):
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
             attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
@@ -74,9 +75,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             dtype=dtype,
             efficient_initialization=efficient_initialization,
             attention_implementation=attention_implementation,
-            moe_implementation=moe_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             num_pipeline_stages=num_pipeline_stages,
             pipeline_stage_id=pipeline_stage_id,
@@ -91,7 +90,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             self._extra_metrics = MetricsTrackingDict({})
 
-    def forward(self, batch: dict, prev_aux_loss: torch.Tensor | None = None, lm_loss_multiplier: float = 1) -> dict:
+    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
         """forward function for a batch
 
         Args:
@@ -109,61 +108,58 @@ class ModelWrapperForPretraining(ModelWrapper):
         if isinstance(batch, torch.Tensor):
             batch = {"text": batch}
 
-        input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
+        batch = self._prepare_model_inputs(batch)
+        labels = batch.pop("labels")
 
-        output = self.model(**batch, return_dict=True)
+        if not self.is_custom_model:
+            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        # without pipeline parallel, we compute the loss outside
-        if not self.is_pipeline_parallel_enabled:
+        output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
+
+        if self.is_pipeline_parallel_enabled:
+            if self.is_last_stage:
+                assert isinstance(output, CausalLMOutputWithPast)
+                output = output.logits
+            else:
+                assert isinstance(output, PipelineParallelOutput)
+                output = output.hidden_states
+        else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
         return output
 
-    def get_loss(self, model_outputs, labels: torch.Tensor, lm_loss_multiplier: float = 1) -> torch.Tensor | dict:
-        if isinstance(model_outputs, torch.Tensor):
-            logits = model_outputs
-            aux_loss = None
-        elif isinstance(model_outputs, tuple):
-            logits, aux_loss = model_outputs
-            aux_loss = aux_loss.squeeze(0)
-        else:
-            logits: torch.Tensor = model_outputs.logits
-            aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
+    def get_loss(
+        self, model_outputs: CausalLMOutputWithPast, labels: torch.Tensor, lm_loss_multiplier: float = 1
+    ) -> torch.Tensor | dict:
+        tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        if self.upcast_logits_for_loss:
-            logits = logits.float()
-
-        loss_context = nullcontext
-        is_tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
-
-        if is_tensor_parallel_enabled:
-            logits = tensor_to_dtensor(
-                logits,
-                device_mesh=self.tp_mesh,
-                current_placement=Shard(-1) if self.tensor_parallel_word_embeddings else Replicate(),
-            )
-            labels = tensor_to_dtensor(labels, device_mesh=self.tp_mesh, current_placement=Replicate())
-
-            if self.tensor_parallel_word_embeddings:
-                loss_context = loss_parallel
-
-        with loss_context():
-            lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1), reduction="sum")
+        lm_loss = get_autoregressive_language_modeling_loss(
+            lm_logits=None if use_fused_linear_cross_entropy_kernel else model_outputs.logits,
+            labels=labels,
+            hidden_states=model_outputs.last_hidden_state if use_fused_linear_cross_entropy_kernel else None,
+            vocab_weight=self.model.get_output_embeddings().weight if use_fused_linear_cross_entropy_kernel else None,
+            cu_seqlens=None,
+            use_padding_free_transformer=self.use_padding_free_transformer,
+            reduction="sum",
+            shift_logits_and_labels=False,
+            tensor_parallel_enabled=tensor_parallel_enabled,
+        )
 
         lm_loss = lm_loss * lm_loss_multiplier
+        aux_loss = get_aux_loss()
 
-        if aux_loss is None:
+        if aux_loss == 0:
             loss = lm_loss
             output = {"loss": loss}
         else:
             if self.is_pipeline_parallel_enabled:
                 self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
 
-            if is_tensor_parallel_enabled:
+            if tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
-            loss = lm_loss + self.router_aux_loss_coef * aux_loss
+            loss = _F.apply(lm_loss, aux_loss, self.router_aux_loss_coef)
             output = {"loss": loss, "lm_loss": lm_loss, "aux_loss": aux_loss}
 
         return output
@@ -188,8 +184,31 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         return tokens
 
-    def _prepare_model_inputs(self, input_ids: torch.Tensor, prev_aux_loss: torch.Tensor | None = None) -> dict:
-        batch = {}
+    def _prepare_model_inputs(self, batch: dict) -> dict:
+        if self.is_pipeline_parallel_enabled:
+            # when using pipeline parallel, we broadcast the input outside the model function
+            tokens = batch["text"]
+            tokens = tokens.to(torch.cuda.current_device())
+
+            if self.is_first_stage:
+                input_ids = tokens[:, :-1]
+                pipeline_parallel_input = None
+            else:
+                input_ids = None
+                pipeline_parallel_input = PipelineParallelInput(hidden_states=tokens)
+
+            batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
+        else:
+            if ProcessGroupManager.is_tensor_parallel_enabled():
+                tokens = self.broadcast_tensor_parallel_input(
+                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
+                )
+            else:
+                tokens = batch["text"]
+                tokens = tokens.to(torch.cuda.current_device())
+
+            input_ids = tokens[:, :-1]
+            batch = {"labels": tokens[:, 1:]}
 
         if self.use_padding_free_transformer:
             batch_size, sequence_length = input_ids.shape
@@ -227,39 +246,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         batch["input_ids"] = input_ids
 
         if ProcessGroupManager.is_tensor_parallel_enabled():
-            batch["output_parallel_lm_logits"] = self.tensor_parallel_word_embeddings
-
-        if prev_aux_loss is not None:
-            # past_key_values is used to send prev_aux_loss
-            batch["past_key_values"] = prev_aux_loss
+            batch["output_parallel_lm_logits"] = True
 
         return batch
-
-    def _prepare_inputs_ids_and_labels_for_forward(self, batch: dict) -> tuple[torch.Tensor]:
-        if self.is_pipeline_parallel_enabled:
-            # when using pipeline parallel, we broadcast the input outside the model function
-            tokens = batch["text"]
-            tokens = tokens.to(torch.cuda.current_device())
-
-            if self.pipeline_stage_id == 0:
-                input_ids = tokens[:, :-1]
-            else:
-                input_ids = tokens
-
-            labels = None
-        else:
-            if ProcessGroupManager.is_tensor_parallel_enabled():
-                tokens = self.broadcast_tensor_parallel_input(
-                    None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
-                )
-            else:
-                tokens = batch["text"]
-                tokens = tokens.to(torch.cuda.current_device())
-
-            input_ids = tokens[:, :-1]
-            labels = tokens[:, 1:]
-
-        return input_ids, labels
 
     def _setup_model(self) -> None:
         assert not self.is_encoder_decoder, "currently encoder_decoder models are not supported for pretraining"
@@ -300,3 +289,15 @@ class ModelWrapperForPretraining(ModelWrapper):
             assert (
                 not self.reset_position_ids
             ), "currently reset_position_ids is only implemented for padding free transformer"
+
+
+class _F(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, lm_loss: torch.Tensor, aux_loss: torch.Tensor, router_aux_loss_coef: float) -> torch.Tensor:
+        ctx.router_aux_loss_coef = router_aux_loss_coef
+        return lm_loss + router_aux_loss_coef * aux_loss
+
+    @staticmethod
+    @torch._dynamo.disable
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
+        return grad_output, ctx.router_aux_loss_coef * grad_output, None

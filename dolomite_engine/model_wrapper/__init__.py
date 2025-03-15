@@ -1,6 +1,7 @@
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
+from ..kernels import enable_kernels
 from ..utils import get_pipeline_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
@@ -35,9 +36,7 @@ def get_model_container(
         "dtype": args.mixed_precision_args.dtype,
         "efficient_initialization": args.model_args.efficient_initialization,
         "attention_implementation": args.model_args.attention_implementation,
-        "moe_implementation": args.model_args.moe_implementation,
         "use_padding_free_transformer": args.model_args.use_padding_free_transformer,
-        "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,
         "num_pipeline_stages": num_pipeline_stages,
         "trust_remote_code": args.model_args.trust_remote_code,
@@ -59,9 +58,10 @@ def get_model_container(
         kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
         kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
-    model_list = []
-    for pipeline_stage_id in get_pipeline_stage_ids_on_current_rank(num_pipeline_stages):
-        kwargs["pipeline_stage_id"] = pipeline_stage_id
-        model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
+    with enable_kernels(args.kernel_args.kernels):
+        model_list = []
+        for pipeline_stage_id in get_pipeline_stage_ids_on_current_rank(num_pipeline_stages):
+            kwargs["pipeline_stage_id"] = pipeline_stage_id
+            model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
     return ModelContainer(model_list)

@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import torch
 from torch.distributed._functional_collectives import AsyncCollectiveTensor
 
@@ -11,8 +13,19 @@ def is_kernel_allowed(kernel: Kernel) -> bool:
     return kernel in _KERNELS
 
 
-def add_kernel(kernel: Kernel) -> None:
-    _KERNELS.add(kernel)
+@contextmanager
+def enable_kernels(kernels: set[Kernel] | list[Kernel]):
+    if not isinstance(kernels, set):
+        kernels = set(kernels)
+
+    global _KERNELS
+
+    original_kernels = _KERNELS
+    _KERNELS = kernels
+
+    yield
+
+    _KERNELS = original_kernels
 
 
 class _ACT_BackwardWait(torch.autograd.Function):

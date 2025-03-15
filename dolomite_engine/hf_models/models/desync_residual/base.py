@@ -20,9 +20,6 @@ class DesyncResidualModel(DesyncResidualPreTrainedModel, GPTDolomiteModel):
 
         super().__init__(config, **kwargs)
 
-        if self.position_embedding_type == PositionEmbeddingType.alibi:
-            raise NotImplementedError("currently DesyncResidual doesn't support alibi")
-
     def _get_rope_cos_sin(self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
         rope_cos_sin = super()._get_rope_cos_sin(key_length, position_ids, dtype=dtype)
 

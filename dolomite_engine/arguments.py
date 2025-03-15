@@ -15,11 +15,9 @@ from .enums import (
     LossMask,
     LRDecaySchedule,
     Mode,
-    MoEImplementation,
     ParamsGroupMethod,
     TuningMethod,
 )
-from .kernels import add_kernel
 from .utils import BaseArgs, load_yaml, log_environment, log_rank_0, normalize_dtype_string, run_rank_n, set_logger
 
 
@@ -51,8 +49,6 @@ class ModelArgs(BaseArgs):
     trust_remote_code: bool = False
     # attention implementation
     attention_implementation: AttentionImplementation | None = None
-    # moe implementation (only works with MoEDolomiteForCausalLM)
-    moe_implementation: MoEImplementation | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model
@@ -120,6 +116,8 @@ class SaveArgs(BaseArgs):
     save_interval: int = None
     # whether to save optimizer
     save_optimizer: bool = True
+    # whether to use async checkpointing
+    async_checkpointing: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         _check_not_None([(self.save_path, "save_path"), (self.save_interval, "save_interval")])
@@ -266,8 +264,6 @@ class DistributedArgs(BaseArgs):
     dispatching_dataloader: bool = False
     # tensor parallel world size
     tensor_parallel_world_size: int = 1
-    # tensor parallel embeddings
-    tensor_parallel_word_embeddings: bool = False
     # whether to use sequence parallel
     sequence_parallel: bool = False
     # pipeline parallel world size
@@ -294,11 +290,6 @@ class DistributedArgs(BaseArgs):
 
         if self.sequence_parallel:
             assert self.tensor_parallel_world_size > 1, "tensor parallel needs to be enabled for sequence parallel"
-
-        if self.tensor_parallel_word_embeddings:
-            assert (
-                self.tensor_parallel_world_size > 1
-            ), "tensor parallel needs to be enabled when using tensor parallel work embeddings"
 
         if self.tensor_parallel_world_size > 1:
             assert self.fsdp_algorithm == 2, "FSDP-2 is required for using tensor parallel"
@@ -361,14 +352,8 @@ class LoggingArgs(BaseArgs):
 
 
 class KernelArgs(BaseArgs):
-    # Scalar of noise to inject into input embeddings
-    # https://arxiv.org/abs/2310.05914
-    kernels: list[Kernel] | None = None
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.kernels is not None:
-            for kernel in self.kernels:
-                add_kernel(kernel)
+    # custom kernels
+    kernels: list[Kernel] = []
 
 
 class TeacherArgs(BaseArgs):

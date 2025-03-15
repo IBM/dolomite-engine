@@ -12,7 +12,6 @@ class PositionEmbeddingType(Enum):
     """
 
     learned_absolute = "learned_absolute"
-    alibi = "alibi"
     rope = "rope"
     nope = "nope"
 

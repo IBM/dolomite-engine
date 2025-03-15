@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from torch.distributed._tensor.placement_types import Partial, Replicate
 
-from ...distributed import dtensor_to_tensor, tensor_to_dtensor
+from ...dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ...enums import Kernel
-from ...kernels import is_kernel_allowed
+from ...kernels import is_kernel_allowed, wait_for_ACT
 from ...utils import ProcessGroupManager, is_cute_kernels_available
 from .dtensor_module import DTensorModule
 from .TP import get_module_placements
@@ -78,12 +78,14 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
 
 class CuteRMSNorm_TP(RMSNorm_TP):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        input = wait_for_ACT(input, wait_in_forward=True, wait_in_backward=False)
         input = rmsnorm_cute(
             x=input,
             weight=dtensor_to_tensor(self.weight, grad_placement=Partial() if self.sequence_parallel else Replicate()),
             eps=self.eps,
             memory_efficient=False,
         )
+        input = wait_for_ACT(input, wait_in_forward=False, wait_in_backward=True)
         return input
 
 
@@ -100,7 +102,7 @@ def get_normalization_function_TP(
     use_padding_free_transformer: bool = False,
     sequence_parallel: bool = False,
 ) -> nn.LayerNorm:
-    if is_kernel_allowed(Kernel.cute_rmsnorm) and normalization_function == "rmsnorm":
+    if is_kernel_allowed(Kernel.rmsnorm_cute) and normalization_function == "rmsnorm":
         normalization = CuteRMSNorm_TP(
             normalized_shape,
             eps=eps,

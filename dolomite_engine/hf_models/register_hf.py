@@ -3,7 +3,6 @@ from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 from .models import (
     DesyncResidualConfig,
     DesyncResidualForCausalLM,
-    DesyncResidualForCausalLM_TP,
     DesyncResidualModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
@@ -16,40 +15,19 @@ from .models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
     LadderResidualModel,
-    MoEDolomiteConfig,
-    MoEDolomiteForCausalLM,
-    MoEDolomiteForCausalLM_TP,
-    MoEDolomiteModel,
-    MoELadderResidualConfig,
-    MoELadderResidualForCausalLM,
-    MoELadderResidualModel,
-    MoEStickBreakingConfig,
-    MoEStickBreakingForCausalLM,
-    MoEStickBreakingModel,
-    RNNDolomiteConfig,
-    RNNDolomiteForCausalLM,
-    RNNDolomiteModel,
-    RNNMoEDolomiteConfig,
-    RNNMoEDolomiteForCausalLM,
-    RNNMoEDolomiteModel,
-    StickBreakingConfig,
-    StickBreakingForCausalLM,
-    StickBreakingModel,
+    PaLMConfig,
+    PaLMForCausalLM,
+    PaLMModel,
 )
 
 
 # (AutoConfig, AutoModel, AutoModelForCausalLM)
 _CUSTOM_MODEL_REGISTRY = [
     (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
-    (MoEDolomiteConfig, MoEDolomiteModel, MoEDolomiteForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
-    (RNNDolomiteConfig, RNNDolomiteModel, RNNDolomiteForCausalLM),
-    (RNNMoEDolomiteConfig, RNNMoEDolomiteModel, RNNMoEDolomiteForCausalLM),
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
-    (StickBreakingConfig, StickBreakingModel, StickBreakingForCausalLM),
-    (MoEStickBreakingConfig, MoEStickBreakingModel, MoEStickBreakingForCausalLM),
-    (MoELadderResidualConfig, MoELadderResidualModel, MoELadderResidualForCausalLM),
+    (PaLMConfig, PaLMModel, PaLMForCausalLM),
 ]
 _CUSTOM_MODEL_TYPES = []
 _CUSTOM_MODEL_CLASSES = []
@@ -73,9 +51,7 @@ def is_custom_model(model_type: str) -> bool:
 
 _MODEL_PARALLEL_CLASS_MAPPING = {
     GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
-    DesyncResidualConfig.model_type: DesyncResidualForCausalLM_TP,
     LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
-    MoEDolomiteConfig.model_type: MoEDolomiteForCausalLM_TP,
 }
 
 

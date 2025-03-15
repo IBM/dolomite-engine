@@ -3,7 +3,7 @@ from parameterized import parameterized
 
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 from dolomite_engine.hf_models.modeling_utils import (
-    get_attention_module,
+    get_sequence_mixer,
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
@@ -15,16 +15,19 @@ class WeightTest(TestCommons):
     @parameterized.expand(TestCommons.make_args_matrix(TestCommons.get_attention_head_types()))
     def test_query_key_value_weight_loading_and_saving(self, attention_head_type: AttentionHeadType) -> None:
         config = self.get_dense_test_config(attention_head_type, PositionEmbeddingType.learned_absolute)
-        attention = get_attention_module(config, True, "sdpa", False, 1)
+
+        layer_idx = 1
+        attention = get_sequence_mixer(config, True, "sdpa", False, layer_idx)
+        num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
         state_dict = attention.state_dict()
 
         c_attn_weight = state_dict["c_attn.weight"]
         query_key_value_weight = self._split_and_interleave(
             c_attn_weight,
-            config.n_head,
-            config.num_key_value_heads,
-            config.n_embd // config.n_head,
+            config.num_attention_heads,
+            num_key_value_heads,
+            config.hidden_size // config.num_attention_heads,
             attention_head_type,
         )
         assert (c_attn_weight == query_key_value_weight).all()
@@ -32,9 +35,9 @@ class WeightTest(TestCommons):
         c_attn_bias = state_dict["c_attn.bias"]
         query_key_value_bias = self._split_and_interleave(
             c_attn_bias,
-            config.n_head,
-            config.num_key_value_heads,
-            config.n_embd // config.n_head,
+            config.num_attention_heads,
+            num_key_value_heads,
+            config.hidden_size // config.num_attention_heads,
             attention_head_type,
         )
         assert (c_attn_bias == query_key_value_bias).all()

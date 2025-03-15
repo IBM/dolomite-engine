@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Callable
 
 import torch
 from parameterized import parameterized
@@ -13,90 +14,20 @@ from ..test_commons import TestCommons
 
 
 class ParamsGroupTest(TestCommons):
-    @parameterized.expand(
-        [
-            ("gpt_dolomite_config.yml", "gpt_dolomite_mup.json"),
-            ("moe_dolomite_config.yml", "moe_dolomite_mup.json"),
-            ("rnn_dolomite_config.yml", "rnn_dolomite_mup.json"),
-            ("rnn_moe_dolomite_config.yml", "rnn_moe_dolomite_mup.json"),
-        ]
-    )
-    def test_mup_group(self, config_filename: str, expected_groups_filename: str) -> None:
-        args = TestCommons.load_training_args_for_unit_tests(
-            os.path.join("params_group/training_configs", config_filename)
-        )
+    @parameterized.expand([("mup.json", get_mup_group_with_names), ("normal.json", get_normal_group_with_names)])
+    def test_mup_group(self, expected_groups_filename: str, grouping_function: Callable) -> None:
+        args = TestCommons.load_training_args_for_unit_tests("params_group/training_config.yml")
 
-        if "rnn_dolomite" in config_filename or "rnn_moe_dolomite" in config_filename:
-            if not torch.cuda.is_available():
-                self.skipTest("skipping test because CUDA is unavailable")
+        with (
+            torch.device("meta"),
+            ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+            ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
+            ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
+            ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
+        ):
+            model_container = get_model_container(args, Mode.training)
 
-            try:
-                with (
-                    torch.device("meta"),
-                    ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
-                    ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
-                    ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
-                    ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
-                ):
-                    model_container = get_model_container(args, Mode.training)
-            except RuntimeError:
-                self.skipTest("skipping rnn_dolomite test since causal-conv1d is not installed")
-        else:
-            with (
-                torch.device("meta"),
-                ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
-                ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
-                ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
-                ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
-            ):
-                model_container = get_model_container(args, Mode.training)
-
-        _, names = get_mup_group_with_names(model_container[0], args.optimizer_args.class_args)
-
-        expected_group = json.load(
-            open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
-        )
-        assert expected_group == names
-
-    @parameterized.expand(
-        [
-            ("gpt_dolomite_config.yml", "gpt_dolomite_normal.json"),
-            ("moe_dolomite_config.yml", "moe_dolomite_normal.json"),
-            ("rnn_dolomite_config.yml", "rnn_dolomite_normal.json"),
-            ("rnn_moe_dolomite_config.yml", "rnn_moe_dolomite_normal.json"),
-        ]
-    )
-    def test_normal_group(self, config_filename: str, expected_groups_filename: str) -> None:
-        args = TestCommons.load_training_args_for_unit_tests(
-            os.path.join("params_group/training_configs", config_filename)
-        )
-
-        if "rnn_dolomite" in config_filename or "rnn_moe_dolomite" in config_filename:
-            if not torch.cuda.is_available():
-                self.skipTest("skipping test because CUDA is unavailable")
-
-            try:
-                with (
-                    torch.device("meta"),
-                    ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
-                    ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
-                    ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
-                    ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
-                ):
-                    model_container = get_model_container(args, Mode.training)
-            except RuntimeError:
-                self.skipTest("skipping rnn_dolomite test since causal-conv1d is not installed")
-        else:
-            with (
-                torch.device("meta"),
-                ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
-                ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
-                ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
-                ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
-            ):
-                model_container = get_model_container(args, Mode.training)
-
-        _, names = get_normal_group_with_names(model_container[0], args.optimizer_args.class_args)
+        _, names = grouping_function(model_container[0], args.optimizer_args.class_args)
 
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")

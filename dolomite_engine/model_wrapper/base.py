@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
-from ..enums import AttentionImplementation, Mode, MoEImplementation
+from ..enums import AttentionImplementation, Mode
 from ..hf_models import get_model_parallel_class, is_custom_model
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
@@ -21,9 +21,7 @@ class ModelWrapper(nn.Module):
         dtype: torch.dtype,
         efficient_initialization: bool,
         attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         num_pipeline_stages: int,
         pipeline_stage_id: int,
@@ -42,7 +40,6 @@ class ModelWrapper(nn.Module):
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
             attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
             num_pipeline_stages (int): number of stages for the pipeline
             pipeline_stage_id (int): current pipeline stage id
@@ -60,15 +57,15 @@ class ModelWrapper(nn.Module):
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
         self.attention_implementation = attention_implementation
-        self.moe_implementation = moe_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
         self.num_pipeline_stages = num_pipeline_stages
         self.pipeline_stage_id = pipeline_stage_id
+        self.is_first_stage = self.pipeline_stage_id == 0
+        self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
         self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
 
         use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.is_pipeline_parallel_enabled
@@ -81,10 +78,10 @@ class ModelWrapper(nn.Module):
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_model_parallel_class(self.config.model_type)
 
+        self.is_custom_model = is_custom_model(self.config.model_type)
+
         if self.use_padding_free_transformer:
-            assert is_custom_model(
-                self.config.model_type
-            ), "padding free transformer is not supported with the specified model"
+            assert self.is_custom_model, "padding free transformer is not supported with the specified model"
 
             assert (
                 self.attention_implementation == AttentionImplementation.flash_attention_2
@@ -152,11 +149,9 @@ class ModelWrapper(nn.Module):
 
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
-        self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
         self.router_aux_loss_coef = getattr(self.config, "router_aux_loss_coef", None)
 
         log_rank_0(logging.INFO, self.config)
-        log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
 
     def _setup_tokenizer(self) -> None:
         assert self.tokenizer_name is not None, "pass a tokenizer"
@@ -172,12 +167,8 @@ class ModelWrapper(nn.Module):
 
         if self.attention_implementation is not None:
             model_kwargs["attn_implementation"] = self.attention_implementation.value
-        if self.moe_implementation is not None:
-            model_kwargs["moe_implementation"] = self.moe_implementation.value
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
-        if self.tensor_parallel_word_embeddings:
-            model_kwargs["tensor_parallel_word_embeddings"] = True
         if self.sequence_parallel:
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:

@@ -1,18 +1,17 @@
-import warnings
-
 import torch
 import torch.nn as nn
-from transformers import DynamicCache, GenerationMixin, PreTrainedModel
-from transformers.modeling_outputs import BaseModelOutputWithPast
+from transformers import DynamicCache, PreTrainedModel
 
 from ....utils import divide_if_divisible
+from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
-from ...modeling_utils import Alibi, ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
-from ...utils import convert_padding_free_lists_to_tensors
+from ...enums import PositionEmbeddingType
+from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
+from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
+from ..modeling_outputs import BaseModelOutputWithPast
 
 
-class PreTrainedModelMixin(PreTrainedModel, GenerationMixin):
+class PreTrainedModelMixin(PreTrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -43,6 +42,8 @@ class PreTrainedModelMixin(PreTrainedModel, GenerationMixin):
         if self._use_padding_free_transformer:
             assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
+        self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
+
     def _init_weights(self, module: nn.Module) -> None:
         if hasattr(module, "reset_parameters"):
             module.reset_parameters()
@@ -59,7 +60,6 @@ class PreTrainedModelMixin(PreTrainedModel, GenerationMixin):
         past_key_values: tuple[tuple[torch.Tensor]],
         attention_mask: torch.Tensor | None,
         use_cache: bool,
-        output_attentions: bool,
     ) -> tuple[torch.Tensor]:
         if self._use_padding_free_transformer:
             if isinstance(input_ids, list) or isinstance(inputs_embeds, list):
@@ -93,8 +93,6 @@ class PreTrainedModelMixin(PreTrainedModel, GenerationMixin):
             if use_cache or past_key_values is not None:
                 raise NotImplementedError("KV caching is not supported with padding_free transformer")
 
-        assert not output_attentions
-
         return input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen
 
 
@@ -106,11 +104,13 @@ class BaseModelMixin(PreTrainedModelMixin):
         self._init_model(config, **kwargs)
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
-        self.attention_head_type = AttentionHeadType(config.attention_head_type)
-        self.embed_dim = config.n_embd
-        self.num_heads = config.n_head
+        self.embed_dim = config.hidden_size
+        self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
+        self.sequence_mixer_block_types = [
+            config.sequence_mixer_blocks[i].sequence_mixer_type for i in range(config.num_layers)
+        ]
 
         self.head_dim = divide_if_divisible(
             self.embed_dim,
@@ -120,7 +120,9 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
-        self.drop = nn.Identity() if config.embd_pdrop == 0 else nn.Dropout(config.embd_pdrop)
+        self.embedding_dropout = (
+            nn.Identity() if config.embedding_dropout == 0 else nn.Dropout(config.embedding_dropout)
+        )
         self.h = nn.ModuleList(
             [
                 self.layer_class(
@@ -129,7 +131,7 @@ class BaseModelMixin(PreTrainedModelMixin):
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                 )
-                for i in range(config.n_layer)
+                for i in range(config.num_layers)
             ]
         )
         self.ln_f = get_normalization_function(
@@ -151,22 +153,19 @@ class BaseModelMixin(PreTrainedModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: DynamicCache | HybridMambaAttentionDynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
-        return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> BaseModelOutputWithPast:
         (
-            output_hidden_states,
             use_cache,
             hidden_states,
-            attention_mask,
+            causal_mask,
             position_ids,
             rope_cos_sin,
             past_key_values,
@@ -178,7 +177,6 @@ class BaseModelMixin(PreTrainedModelMixin):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
@@ -192,16 +190,25 @@ class BaseModelMixin(PreTrainedModelMixin):
         #     attention_mask -> (batch_size, 1, query_length, key_length)
         # ==========================================================================================
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        all_hidden_states = () if output_hidden_states else None
-        for block in self.h:
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
+        if is_generation_cache_enabled():
+            past_key_values = (
+                self._get_empty_cache(input_ids) if use_cache and past_key_values is None else past_key_values
+            )
+
+        mamba_mask = None
+        mamba_mask_computed = False
+
+        for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
+            is_mamba_layer = sequence_mixer_type == "mamba2"
+
+            if is_mamba_layer and not mamba_mask_computed:
+                mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
+                mamba_mask_computed = True
 
             hidden_states = block(
                 hidden_states,
                 past_key_values=past_key_values,
-                attention_mask=attention_mask,
+                attention_mask=mamba_mask if is_mamba_layer else causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
@@ -209,15 +216,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         hidden_states = self.ln_f(hidden_states)
 
-        # Add last hidden state
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        return BaseModelOutputWithPast(
-            last_hidden_state=hidden_states,
-            past_key_values=past_key_values,
-            hidden_states=all_hidden_states,
-        )
+        return BaseModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)
 
     def _get_position_ids(
         self, attention_mask: torch.Tensor, past_length: int, query_length: int, key_length: int, device: torch.device
@@ -233,34 +232,6 @@ class BaseModelMixin(PreTrainedModelMixin):
             position_ids = position_ids.unsqueeze(0).view(-1, query_length)
 
         return position_ids
-
-    def _get_alibi_bias(
-        self,
-        attention_mask: torch.Tensor,
-        batch_size: int,
-        query_length: int,
-        key_length: int,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> torch.Tensor:
-        if self.position_embedding_type != PositionEmbeddingType.alibi:
-            return None
-
-        alibi_bias = self.alibi(attention_mask, batch_size, key_length, device, dtype)
-
-        # ==========================================================================================
-        # alibi_bias -> (batch_size, num_heads, key_length)
-        # ==========================================================================================
-
-        alibi_bias = alibi_bias.unsqueeze(2)
-        if query_length != 1:
-            alibi_bias = alibi_bias.expand(-1, -1, query_length, -1)
-
-        # ==========================================================================================
-        # alibi_bias -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
-        return alibi_bias
 
     def _get_rope_cos_sin(self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -338,7 +309,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         if token_type_ids is not None:
             inputs_embeds = inputs_embeds + self.wte(token_type_ids)
 
-        inputs_embeds = self.drop(inputs_embeds)
+        inputs_embeds = self.embedding_dropout(inputs_embeds)
 
         if self.m_emb is not None:
             inputs_embeds = inputs_embeds * self.m_emb
@@ -354,7 +325,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
-        output_hidden_states: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[
@@ -370,10 +340,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         torch.Tensor,
         tuple[torch.Tensor],
     ]:
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
-
         if use_cache is None:
             use_cache = False if self._use_padding_free_transformer else self.config.use_cache
 
@@ -407,10 +373,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 "inputs"
             )
         else:
-            if self.position_embedding_type == PositionEmbeddingType.alibi:
-                if position_ids is not None:
-                    warnings.warn("`position_ids` have no functionality with Alibi.", FutureWarning)
-
             if token_type_ids is not None:
                 token_type_ids = token_type_ids.view(-1, input_shape[-1])
 
@@ -458,14 +420,6 @@ class BaseModelMixin(PreTrainedModelMixin):
         #     hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
-        alibi_bias = self._get_alibi_bias(
-            attention_mask, batch_size, query_length, key_length, device, hidden_states.dtype
-        )
-
-        # ==========================================================================================
-        # alibi_bias -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
         rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         # ==========================================================================================
@@ -476,11 +430,10 @@ class BaseModelMixin(PreTrainedModelMixin):
         # ==========================================================================================
 
         attention_mask = self._get_maybe_causal_mask(
-            attention_mask, alibi_bias, batch_size, query_length, key_length, hidden_states.dtype, device
+            attention_mask, batch_size, query_length, key_length, hidden_states.dtype, device
         )
 
         return (
-            output_hidden_states,
             use_cache,
             hidden_states,
             attention_mask,
@@ -494,10 +447,6 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
             self.wpe = ParameterizedEmbedding(max_position_embeddings, self.embed_dim, std=self.initializer_range)
-        elif self.position_embedding_type == PositionEmbeddingType.alibi:
-            assert not self._use_flash_attention_2, "alibi is not implemented with FlashAttention"
-
-            self.alibi = Alibi(self.num_heads)
         elif self.position_embedding_type == PositionEmbeddingType.rope:
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
@@ -527,7 +476,6 @@ class BaseModelMixin(PreTrainedModelMixin):
     def _get_maybe_causal_mask(
         self,
         attention_mask: torch.Tensor | None,
-        alibi_bias: torch.Tensor | None,
         batch_size: int,
         query_length: int,
         key_length: int,
@@ -543,7 +491,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
                 attention_mask = torch.where(
                     attention_mask,
-                    ~attention_mask if alibi_bias is None else alibi_bias,
+                    ~attention_mask,
                     self._get_mask_value(attention_mask.device, dtype),
                 )
 
@@ -559,8 +507,34 @@ class BaseModelMixin(PreTrainedModelMixin):
 
             attention_mask = torch.where(
                 attention_mask,
-                ~attention_mask if alibi_bias is None else alibi_bias,
+                ~attention_mask,
                 self._get_mask_value(attention_mask.device, dtype),
             )
 
         return attention_mask
+
+    def _get_mamba_mask(
+        self, attention_mask: torch.Tensor | None, past_key_values: HybridMambaAttentionDynamicCache
+    ) -> torch.Tensor | None:
+        mamba_mask = attention_mask
+        if (
+            past_key_values is None
+            or past_key_values.get_seq_length() > 0
+            or (attention_mask is not None and torch.all(attention_mask == 1))
+        ):
+            mamba_mask = None
+
+        return mamba_mask
+
+    def _get_empty_cache(self, input_ids: torch.Tensor) -> DynamicCache | HybridMambaAttentionDynamicCache:
+        if self._has_mamba2:
+            past_key_values = HybridMambaAttentionDynamicCache(
+                config=self.config,
+                batch_size=input_ids.size(0),
+                dtype=self.wte.weight.dtype,
+                device=self.wte.weight.device,
+            )
+        else:
+            past_key_values = DynamicCache()
+
+        return past_key_values

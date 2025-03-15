@@ -118,6 +118,18 @@ def is_causal_conv1d_available() -> bool:
 
 
 try:
+    import mamba_ssm
+
+    _IS_MAMBA_2_SSM_AVAILABLE = True
+except ImportError:
+    _IS_MAMBA_2_SSM_AVAILABLE = False
+
+
+def is_mamba_2_ssm_available() -> bool:
+    return _IS_MAMBA_2_SSM_AVAILABLE
+
+
+try:
     import torchao
 
     _IS_TORCHAO_AVAILABLE = True
@@ -129,6 +141,22 @@ except ImportError:
 
 def is_torchao_available() -> bool:
     return _IS_TORCHAO_AVAILABLE
+
+
+try:
+    import stickbreaking_attention
+
+    _IS_STICKBREAKING_AVAILABLE = True
+except ImportError:
+    _IS_STICKBREAKING_AVAILABLE = False
+
+    warn_rank_0(
+        "stickbreaking-attention is not available, install from https://github.com/shawntan/stickbreaking-attention"
+    )
+
+
+def is_stickbreaking_available():
+    return _IS_STICKBREAKING_AVAILABLE
 
 
 @run_rank_n

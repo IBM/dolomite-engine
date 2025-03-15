@@ -3,8 +3,10 @@ import torch.distributed
 from torch.distributed._tensor.placement_types import Replicate
 
 from ..communication import Communication
-from ..distributed import tensor_to_dtensor
-from ..hf_models import get_autoregressive_language_modeling_loss
+from ..dtensors import tensor_to_dtensor
+from ..enums import Kernel
+from ..hf_models import CausalLMOutputWithPast, get_autoregressive_language_modeling_loss, get_aux_loss
+from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
 
@@ -23,9 +25,11 @@ class ModelWrapperForFinetuning(ModelWrapper):
         if ProcessGroupManager.is_tensor_parallel_enabled():
             batch = self._broadcast_inputs_for_tensor_parallel(batch)
 
-        labels = batch.pop("labels")
+        if not self.is_custom_model:
+            assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
-        model_outputs = self.model(**batch)
+        labels = batch.pop("labels")
+        model_outputs: CausalLMOutputWithPast = self.model(**batch)
 
         return self.get_loss(
             model_outputs=model_outputs,
@@ -35,28 +39,35 @@ class ModelWrapperForFinetuning(ModelWrapper):
         )
 
     def get_loss(
-        self, model_outputs, labels: torch.Tensor, cu_seqlens: torch.Tensor | None, lm_loss_multiplier: float = 1
+        self,
+        model_outputs: CausalLMOutputWithPast,
+        labels: torch.Tensor,
+        cu_seqlens: torch.Tensor | None,
+        lm_loss_multiplier: float = 1,
     ) -> torch.Tensor | dict:
-        logits: torch.Tensor = model_outputs.logits
-        aux_loss = model_outputs.aux_loss if hasattr(model_outputs, "aux_loss") else None
+        tensor_parallel_enabled = ProcessGroupManager.is_tensor_parallel_enabled()
+        use_fused_linear_cross_entropy_kernel = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
         lm_loss = get_autoregressive_language_modeling_loss(
-            lm_logits=logits,
+            lm_logits=None if use_fused_linear_cross_entropy_kernel else model_outputs.logits,
             labels=labels,
-            upcast_logits_for_loss=self.upcast_logits_for_loss,
+            hidden_states=model_outputs.last_hidden_state if use_fused_linear_cross_entropy_kernel else None,
+            vocab_weight=self.model.get_output_embeddings().weight if use_fused_linear_cross_entropy_kernel else None,
             cu_seqlens=cu_seqlens,
             use_padding_free_transformer=self.use_padding_free_transformer,
             reduction="sum",
-            tensor_parallel_word_embeddings=self.tensor_parallel_word_embeddings,
+            shift_logits_and_labels=True,
+            tensor_parallel_enabled=tensor_parallel_enabled,
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
+        aux_loss = get_aux_loss()
 
-        if aux_loss is None:
+        if aux_loss == 0:
             loss = lm_loss
             output = {"loss": loss}
         else:
-            if ProcessGroupManager.is_tensor_parallel_enabled():
+            if tensor_parallel_enabled:
                 aux_loss = tensor_to_dtensor(aux_loss, device_mesh=self.tp_mesh, current_placement=Replicate())
 
             loss = lm_loss + self.router_aux_loss_coef * aux_loss
