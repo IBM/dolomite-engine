@@ -1,3 +1,4 @@
+import torch
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig, GraniteMoeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
