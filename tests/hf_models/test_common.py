@@ -117,6 +117,7 @@ class TestCommons(TestCase):
         num_experts: int = 8,
         num_experts_per_tok: int = 8,
         add_bias: bool = True,
+        shared_n_inner: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
         m_emb: float = None,

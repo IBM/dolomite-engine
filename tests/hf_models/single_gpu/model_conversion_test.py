@@ -80,3 +80,28 @@ class ModelConversionTest(TestCommons):
             exact_match=False,
             compare_loss=False,
         )
+
+    @parameterized.expand(
+        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
+    )
+    def test_granitemoeshared_model_conversion(
+        self, device: torch.device, attention_head_type: AttentionHeadType
+    ) -> None:
+        dolomite_config = self.get_moe_test_config(
+            attention_head_type,
+            PositionEmbeddingType.rope,
+            add_bias=False,
+            shared_n_inner=64,
+            activation_function="swiglu",
+            normalization_function="rmsnorm",
+            m_emb=2,
+            m_width=2,
+        )
+
+        self.model_conversion_test(
+            dolomite_config=dolomite_config,
+            model_type="granitemoeshared",
+            device=device,
+            exact_match=False,
+            compare_loss=False,
+        )

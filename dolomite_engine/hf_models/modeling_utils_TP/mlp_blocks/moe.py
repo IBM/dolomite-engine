@@ -275,8 +275,9 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         if self.shared_intermediate_size is None:
             hidden_states = moe_output
         else:
-            shared_experts_output = self._compute_shared_experts(hidden_states)
-            hidden_states = moe_output + shared_experts_output
+            hidden_states = moe_output + self._compute_shared_experts(hidden_states)
+
+        del moe_output
 
         hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=Partial())
         hidden_states = dtensor_to_tensor(
