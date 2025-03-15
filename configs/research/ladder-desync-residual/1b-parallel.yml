@@ -18,24 +18,262 @@ tokenizer_args:
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    activation_function: swiglu
-    add_bias: false
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
     model_type: palm
     hidden_size: 1536
     num_attention_heads: 24
-    intermediate_size: 4096
     num_layers: 40
     max_position_embeddings: 2048
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000
-    attention_head_type: mha
     vocab_size: 49152
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
+    sequence_mixer_blocks:
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+    mlp_blocks:
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
+      - mlp_type: MLP
+        activation_function: swiglu
+        intermediate_size: 4096
   efficient_initialization: false
   attention_implementation: sdpa
   use_padding_free_transformer: false
