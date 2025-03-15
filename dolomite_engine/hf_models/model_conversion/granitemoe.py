@@ -2,11 +2,6 @@ import torch
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig, GraniteMoeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
-from ..enums import AttentionHeadType
-from ..modeling_utils import (
-    interleave_query_key_value_tensor_for_attention,
-    split_query_key_value_tensor_for_attention,
-)
 from ..models import GPTDolomiteConfig
 from .granitemoeshared import _export_state_dict_to_huggingface, _import_state_dict_from_huggingface
 
@@ -95,59 +90,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
     return config
 
 
-def _import_state_dict_from_huggingface(
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    num_layers: int,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: AttentionHeadType,
-) -> None:
-    state_dict = {
-        "transformer.wte.weight": safetensors_weights_manager.get_tensor("model.embed_tokens.weight"),
-        "transformer.ln_f.weight": safetensors_weights_manager.get_tensor("model.norm.weight"),
-    }
-
-    if safetensors_weights_manager.has_tensor("lm_head.weight"):
-        state_dict["lm_head.weight"] = safetensors_weights_manager.get_tensor("lm_head.weight")
-
-    for layer_idx in range(num_layers):
-        state_dict[f"transformer.h.{layer_idx}.ln_1.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.input_layernorm.weight"
-        )
-        state_dict[f"transformer.h.{layer_idx}.ln_2.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.post_attention_layernorm.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.mlp_block.gate.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight")
-        )
-        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = (
-            interleave_query_key_value_tensor_for_attention(
-                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
-                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
-                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
-                num_heads,
-                num_key_value_heads,
-                head_dim,
-                attention_head_type,
-            )
-        )
-        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.self_attn.o_proj.weight"
-        )
-
-    return state_dict
-
-
 def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
@@ -215,62 +157,3 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig
     )
 
     return original_config
-
-
-def _export_state_dict_to_huggingface(
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    num_layers: int,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: AttentionHeadType,
-) -> None:
-    state_dict = {
-        "model.embed_tokens.weight": safetensors_weights_manager.get_tensor("transformer.wte.weight"),
-        "model.norm.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight"),
-    }
-
-    if safetensors_weights_manager.has_tensor("lm_head.weight"):
-        state_dict["lm_head.weight"] = safetensors_weights_manager.get_tensor("lm_head.weight")
-
-    for layer_idx in range(num_layers):
-        state_dict[f"model.layers.{layer_idx}.input_layernorm.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.ln_1.weight"
-        )
-        state_dict[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
-        )
-
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.gate.weight")
-        )
-
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
-        )
-
-        query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"),
-            num_heads,
-            num_key_value_heads,
-            head_dim,
-            attention_head_type,
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.q_proj.weight"] = query_weight
-        state_dict[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = key_weight
-        state_dict[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = value_weight
-
-        state_dict[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
-        )
-
-    return state_dict
-
-
-def _split_and_reorder_for_glu(weight: torch.Tensor) -> torch.Tensor:
-    x, y = weight.chunk(2, dim=1)
-    weight = torch.cat([y, x], dim=1)
-    return weight
