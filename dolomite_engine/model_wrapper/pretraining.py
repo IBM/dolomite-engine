@@ -256,6 +256,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         super()._setup_model()
         self.reset_parameters()
 
+    @torch.no_grad
     def reset_parameters(self) -> None:
         if self.use_padding_free_transformer:
             if not self.reset_attention_mask:
