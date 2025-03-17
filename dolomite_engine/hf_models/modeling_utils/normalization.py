@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.init as init
 
 from ...enums import Kernel
 from ...kernels import is_kernel_allowed
@@ -30,7 +31,43 @@ class GatedRMSNorm(nn.RMSNorm):
         return hidden_states
 
 
-_NORMALIZATION_FUNCTIONS = {"layernorm": nn.LayerNorm, "rmsnorm": nn.RMSNorm, "silu_gated_rmsnorm": GatedRMSNorm}
+class DynamicTanh(nn.Module):
+    def __init__(self, hidden_size: int, alpha_init_value: float) -> None:
+        super().__init__()
+
+        self.alpha_init_value = alpha_init_value
+
+        self.alpha = nn.Parameter(torch.empty(1))
+        self.weight = nn.Parameter(torch.empty(hidden_size))
+        self.bias = nn.Parameter(torch.empty(hidden_size))
+
+        self.reset_parameters()
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        input_dtype = hidden_states.dtype
+        hidden_states = hidden_states.float()
+
+        hidden_states = self.alpha * hidden_states
+        hidden_states = F.tanh(hidden_states)
+        hidden_states = self.weight * hidden_states + self.bias
+
+        hidden_states = hidden_states.to(input_dtype)
+
+        return hidden_states
+
+    @torch.no_grad
+    def reset_parameters(self) -> None:
+        self.alpha.fill_(self.alpha_init_value)
+        self.weight.fill_(1)
+        self.bias.zero_()
+
+
+_NORMALIZATION_FUNCTIONS = {
+    "layernorm": nn.LayerNorm,
+    "rmsnorm": nn.RMSNorm,
+    "silu_gated_rmsnorm": GatedRMSNorm,
+    "dynamic_tanh": DynamicTanh,
+}
 
 
 class CuteRMSNorm(nn.RMSNorm):

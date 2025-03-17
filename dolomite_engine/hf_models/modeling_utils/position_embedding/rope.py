@@ -31,6 +31,7 @@ class RoPE(nn.Module):
 
         return cos, sin
 
+    @torch.no_grad
     def reset_parameters(self) -> None:
         self._set_cos_sin_cache(seq_len=self.max_position_embeddings, dtype=torch.float32)
 
