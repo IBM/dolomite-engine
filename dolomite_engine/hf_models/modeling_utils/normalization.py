@@ -32,7 +32,7 @@ class GatedRMSNorm(nn.RMSNorm):
 
 
 class DynamicTanh(nn.Module):
-    def __init__(self, hidden_size: int, alpha_init_value: float) -> None:
+    def __init__(self, hidden_size: int, alpha_init_value: float = 0.5) -> None:
         super().__init__()
 
         self.alpha_init_value = alpha_init_value
@@ -80,6 +80,8 @@ def get_normalization_function(
 ) -> nn.LayerNorm | nn.RMSNorm:
     if is_kernel_allowed(Kernel.rmsnorm_cute) and normalization_function == "rmsnorm":
         normalization = CuteRMSNorm(normalized_shape, eps=eps)
+    elif normalization_function == "dynamic_tanh":
+        normalization = _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape)
     else:
         if normalization_function in _NORMALIZATION_FUNCTIONS:
             normalization = _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape, eps=eps)
