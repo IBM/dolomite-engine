@@ -80,3 +80,4 @@ class Kernel(Enum):
     scattermoe = "scattermoe"
     cross_entropy_cute = "cross_entropy_cute"
     fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"
+    fused_residual_add_rmsnorm_cute = "fused_residual_add_rmsnorm_cute"

@@ -197,6 +197,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         mamba_mask = None
         mamba_mask_computed = False
+        residual = None
 
         for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
             is_mamba_layer = sequence_mixer_type == "mamba2"
@@ -205,13 +206,14 @@ class BaseModelMixin(PreTrainedModelMixin):
                 mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
                 mamba_mask_computed = True
 
-            hidden_states = block(
+            hidden_states, residual = block(
                 hidden_states,
                 past_key_values=past_key_values,
                 attention_mask=mamba_mask if is_mamba_layer else causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
+                residual=residual,
             )
 
         hidden_states = self.ln_f(hidden_states)
