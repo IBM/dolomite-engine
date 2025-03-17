@@ -41,11 +41,11 @@ class LayerNorm_TP(nn.LayerNorm, DTensorModule):
 
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.placement)
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.placement)
-        return input
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = tensor_to_dtensor(hidden_states, device_mesh=self.tp_mesh, current_placement=self.placement)
+        hidden_states = super().forward(hidden_states)
+        hidden_states = dtensor_to_tensor(hidden_states, device_mesh=self.tp_mesh, desired_placement=self.placement)
+        return hidden_states
 
 
 class RMSNorm_TP(nn.RMSNorm, DTensorModule):
@@ -69,24 +69,28 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
         self.sequence_parallel = sequence_parallel
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = tensor_to_dtensor(input, device_mesh=self.tp_mesh, current_placement=self.placement)
-        input = super().forward(input)
-        input = dtensor_to_tensor(input, device_mesh=self.tp_mesh, desired_placement=self.placement)
-        return input
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if is_kernel_allowed(Kernel.rmsnorm_cute):
+            hidden_states = wait_for_ACT(hidden_states, wait_in_forward=True, wait_in_backward=False)
+            hidden_states = rmsnorm_cute(
+                x=hidden_states,
+                weight=dtensor_to_tensor(
+                    self.weight, grad_placement=Partial() if self.sequence_parallel else Replicate()
+                ),
+                eps=self.eps,
+                memory_efficient=False,
+            )
+            hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
+        else:
+            hidden_states = tensor_to_dtensor(
+                hidden_states, device_mesh=self.tp_mesh, current_placement=self.placement
+            )
+            hidden_states = super().forward(hidden_states)
+            hidden_states = dtensor_to_tensor(
+                hidden_states, device_mesh=self.tp_mesh, desired_placement=self.placement
+            )
 
-
-class CuteRMSNorm_TP(RMSNorm_TP):
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = wait_for_ACT(input, wait_in_forward=True, wait_in_backward=False)
-        input = rmsnorm_cute(
-            x=input,
-            weight=dtensor_to_tensor(self.weight, grad_placement=Partial() if self.sequence_parallel else Replicate()),
-            eps=self.eps,
-            memory_efficient=False,
-        )
-        input = wait_for_ACT(input, wait_in_forward=False, wait_in_backward=True)
-        return input
+        return hidden_states
 
 
 _NORMALIZATION_FUNCTIONS = {
@@ -102,22 +106,14 @@ def get_normalization_function_TP(
     use_padding_free_transformer: bool = False,
     sequence_parallel: bool = False,
 ) -> nn.LayerNorm:
-    if is_kernel_allowed(Kernel.rmsnorm_cute) and normalization_function == "rmsnorm":
-        normalization = CuteRMSNorm_TP(
+    if normalization_function in _NORMALIZATION_FUNCTIONS:
+        normalization = _NORMALIZATION_FUNCTIONS[normalization_function](
             normalized_shape,
             eps=eps,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
         )
     else:
-        if normalization_function in _NORMALIZATION_FUNCTIONS:
-            normalization = _NORMALIZATION_FUNCTIONS[normalization_function](
-                normalized_shape,
-                eps=eps,
-                use_padding_free_transformer=use_padding_free_transformer,
-                sequence_parallel=sequence_parallel,
-            )
-        else:
-            raise ValueError(f"unexpected `normalization_function` {normalization_function}")
+        raise ValueError(f"unexpected `normalization_function` {normalization_function}")
 
     return normalization

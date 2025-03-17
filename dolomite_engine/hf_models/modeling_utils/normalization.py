@@ -11,6 +11,16 @@ if is_cute_kernels_available():
     from cute_kernels import rmsnorm_cute
 
 
+class RMSNorm(nn.RMSNorm):
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if is_kernel_allowed(Kernel.rmsnorm_cute):
+            hidden_states = rmsnorm_cute(x=hidden_states, weight=self.weight, eps=self.eps, memory_efficient=False)
+        else:
+            hidden_states = super().forward(hidden_states)
+
+        return hidden_states
+
+
 class GatedRMSNorm(nn.RMSNorm):
     def forward(self, hidden_states: torch.Tensor, gate: torch.Tensor | None = None) -> torch.Tensor:
         input_dtype = hidden_states.dtype
@@ -33,20 +43,12 @@ class GatedRMSNorm(nn.RMSNorm):
 _NORMALIZATION_FUNCTIONS = {"layernorm": nn.LayerNorm, "rmsnorm": nn.RMSNorm, "silu_gated_rmsnorm": GatedRMSNorm}
 
 
-class CuteRMSNorm(nn.RMSNorm):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return rmsnorm_cute(x=x, weight=self.weight, eps=self.eps, memory_efficient=False)
-
-
 def get_normalization_function(
     normalization_function: str, normalized_shape: int, eps: float = 1e-5
 ) -> nn.LayerNorm | nn.RMSNorm:
-    if is_kernel_allowed(Kernel.rmsnorm_cute) and normalization_function == "rmsnorm":
-        normalization = CuteRMSNorm(normalized_shape, eps=eps)
+    if normalization_function in _NORMALIZATION_FUNCTIONS:
+        normalization = _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape, eps=eps)
     else:
-        if normalization_function in _NORMALIZATION_FUNCTIONS:
-            normalization = _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape, eps=eps)
-        else:
-            raise ValueError(f"unexpected `normalization_function` {normalization_function}")
+        raise ValueError(f"unexpected `normalization_function` {normalization_function}")
 
     return normalization
