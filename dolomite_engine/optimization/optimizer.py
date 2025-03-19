@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch.nn as nn
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
@@ -74,13 +76,13 @@ def get_optimizer_container(
                     optimizer_map[param] = optimizer_class([param], **group)
 
             for param in model.parameters():
-                optimizer = optimizer_map[param]
 
-                def _step(p: nn.Parameter) -> None:
+                def _step(p: nn.Parameter, optimizer_map: dict) -> None:
+                    optimizer = optimizer_map[p]
                     optimizer.step()
                     optimizer.zero_grad()
 
-                param.register_post_accumulate_grad_hook(_step)
+                param.register_post_accumulate_grad_hook(partial(_step, optimizer_map=optimizer_map))
 
             optimizer_list.append(optimizer_map)
 
