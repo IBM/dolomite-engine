@@ -1,3 +1,4 @@
+import torch.nn as nn
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad
 from torch.optim.adam import Adam as TorchAdam
@@ -63,7 +64,25 @@ def get_optimizer_container(
     params_groups_list = get_param_groups_list(model_container, optimizer_class_args, params_group_method)
 
     if use_optimizer_with_backward_hook:
-        pass
+        optimizer_list = []
+        for model, params_groups in zip(model_container, params_groups_list):
+            optimizer_map = {}
+
+            for group in params_groups:
+                params = group.pop("params")
+                for param in params:
+                    optimizer_map[param] = optimizer_class([param], **group)
+
+            for param in model.parameters():
+                optimizer = optimizer_map[param]
+
+                def _step(p: nn.Parameter) -> None:
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                param.register_post_accumulate_grad_hook(_step)
+
+            optimizer_list.append(optimizer_map)
     else:
         optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
 
