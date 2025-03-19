@@ -76,20 +76,6 @@ def is_triton_available() -> bool:
 
 
 try:
-    import einops
-
-    _IS_EINOPS_AVAILABLE = True
-except ImportError:
-    _IS_EINOPS_AVAILABLE = False
-
-    warn_rank_0("einops is not installed")
-
-
-def is_einops_available() -> bool:
-    return _IS_EINOPS_AVAILABLE
-
-
-try:
     import cute_kernels
 
     _IS_CUTE_KERNELS_AVAILABLE = True

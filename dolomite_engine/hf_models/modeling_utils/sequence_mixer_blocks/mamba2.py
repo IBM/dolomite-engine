@@ -1,10 +1,16 @@
+import math
+
 import torch
 import torch.nn as nn
 
-from .....utils import is_causal_conv1d_available, is_mamba_2_ssm_available
-from ....cache import HybridMambaAttentionDynamicCache
-from .base import Mamba2Base
-from .utils import _apply_mask_to_padding_states
+from ....utils import divide_if_divisible, is_causal_conv1d_available, is_mamba_2_ssm_available
+from ...cache import HybridMambaAttentionDynamicCache
+from ...enums import InitMethod
+from ..activations import get_activation_function
+from ..convolution import ParameterizedConv1d
+from ..linear import ParameterizedLinear
+from ..mlp_blocks.mlp import _get_std_for_linear
+from ..normalization import get_normalization_function
 
 
 if is_mamba_2_ssm_available():
@@ -15,7 +21,104 @@ if is_causal_conv1d_available():
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
 
 
-class Mamba2CUDA(Mamba2Base):
+def _apply_mask_to_padding_states(hidden_states: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
+    """
+    Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
+    """
+    if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
+        dtype = hidden_states.dtype
+        hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
+
+    return hidden_states
+
+
+class Mamba2(nn.Module):
+    """
+    Compute ∆, A, B, C, and D the state space parameters and compute the `contextualized_states`.
+    A, D are input independent (see Mamba paper [1] Section 3.5.2 "Interpretation of A" for why A isn't selective)
+    ∆, B, C are input-dependent (this is a key difference between Mamba and the linear time invariant S4,
+    and is why Mamba is called **selective** state spaces)
+    """
+
+    def __init__(
+        self,
+        hidden_size: int,
+        ssm_state_size: int,
+        ssm_intermediate_size: int,
+        ssm_num_heads: int,
+        conv_kernel_size: int,
+        time_step_limit: int,
+        add_bias: bool,
+        use_conv_bias: bool,
+        ssm_activation_function: str,
+        num_groups: int,
+        chunk_size: int,
+        layer_norm_epsilon: float,
+        initializer_range: float,
+        m_width: float,
+        init_method: InitMethod,
+        num_layers: int,
+        layer_idx: int,
+    ) -> None:
+        super().__init__()
+
+        self.num_heads = ssm_num_heads
+        self.hidden_size = hidden_size
+        self.ssm_state_size = ssm_state_size
+        self.conv_kernel_size = conv_kernel_size
+        self.intermediate_size = ssm_intermediate_size
+        self.layer_idx = layer_idx
+        self.use_conv_bias = use_conv_bias
+
+        self.activation_string = ssm_activation_function
+        self.activation = get_activation_function(self.activation_string)
+
+        self.n_groups = num_groups
+        self.head_dim = divide_if_divisible(ssm_intermediate_size, ssm_num_heads, "")
+        self.chunk_size = chunk_size
+
+        self.time_step_limit = time_step_limit
+
+        std = _get_std_for_linear(initializer_range, init_method, m_width)
+
+        # 1D convolutional layer
+        self.conv_dim = self.intermediate_size + 2 * self.n_groups * self.ssm_state_size
+        self.conv1d = ParameterizedConv1d(
+            in_channels=self.conv_dim,
+            out_channels=self.conv_dim,
+            bias=use_conv_bias,
+            kernel_size=self.conv_kernel_size,
+            groups=self.conv_dim,
+            padding=self.conv_kernel_size - 1,
+            std=std,
+        )
+
+        # projection of the input hidden states
+        self.in_proj = ParameterizedLinear(
+            self.hidden_size,
+            self.intermediate_size + self.conv_dim + self.num_heads,
+            bias=add_bias,
+            std=std,
+        )
+
+        # selective projection used to make dt, B and C input dependant
+
+        # time step projection (discretization)
+        # instantiate once and copy inv_dt in init_weights of PretrainedModel
+        # Initialize log dt bias
+        self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
+
+        # S4D real initialization. These are not discretized!
+        # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log = nn.Parameter(torch.log(A))
+        self.norm = get_normalization_function("silu_gated_rmsnorm", self.intermediate_size, eps=layer_norm_epsilon)
+        self.D = nn.Parameter(torch.ones(self.num_heads))
+
+        self.out_proj = ParameterizedLinear(
+            self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
+        )
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -180,3 +283,9 @@ class Mamba2CUDA(Mamba2Base):
                 out = self.out_proj(scan_output)
 
         return out
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        A = torch.arange(1, self.num_heads + 1)
+        self.A_log.data = torch.log(A)
+        nn.init.ones_(self.D)
