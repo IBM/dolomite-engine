@@ -60,7 +60,13 @@ def get_optimizer_container(
     if optimizer_class is None:
         raise ImportError("relevant package for the optimizer is not installed")
 
-    params_groups_list = get_param_groups_list(model_container, optimizer_class_args, params_group_method)
+    params_groups_list = get_param_groups_list(
+        model_container,
+        optimizer_class_args,
+        params_group_method,
+        use_optimizer_with_backward_hook=use_optimizer_with_backward_hook,
+    )
+
     optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
 
     return OptimizerContainer(optimizer_list)
