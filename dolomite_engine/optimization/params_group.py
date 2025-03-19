@@ -12,10 +12,16 @@ from ..hf_models import (
 )
 from ..hf_models.modeling_utils import MLP, Attention, Mamba2Base, MoE
 from ..model_wrapper import ModelWrapper
-from ..utils import log_rank_0
+from ..utils import BaseArgs, log_rank_0
 
 
-def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> dict:
+class _ParamsGroup(BaseArgs):
+    name: str
+    parameter_name_map: dict
+    params_group_kwargs: dict = {}
+
+
+def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
     if model.has_teacher_model():
         log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
         # this is the student model
@@ -53,17 +59,23 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
         no_weight_decay_params.update(normal_params)
         normal_params = {}
 
-    mapping = {}
+    params_groups = []
 
     if len(normal_params) > 0:
-        mapping["normal"] = {"parameter_map": normal_params}
+        params_groups.append(_ParamsGroup(name="normal", parameter_name_map=normal_params))
     if len(no_weight_decay_params) > 0:
-        mapping["no_weight_decay"] = {"parameter_map": no_weight_decay_params, "weight_decay": 0}
+        params_groups.append(
+            _ParamsGroup(
+                name="no_weight_decay",
+                parameter_name_map=no_weight_decay_params,
+                params_group_kwargs={"weight_decay": 0},
+            )
+        )
 
-    return mapping
+    return params_groups
 
 
-def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[dict]:
+def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
     assert isinstance(
         model.model,
         (
@@ -117,16 +129,28 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
-    mapping = {}
+    params_groups = []
 
     if len(normal_params) > 0:
-        mapping["normal"] = {"parameter_map": normal_params}
+        params_groups.append(_ParamsGroup(name="normal", parameter_name_map=normal_params))
     if len(no_weight_decay_params) > 0:
-        mapping["no_weight_decay"] = {"parameter_map": no_weight_decay_params, "weight_decay": 0}
+        params_groups.append(
+            _ParamsGroup(
+                name="no_weight_decay",
+                parameter_name_map=no_weight_decay_params,
+                params_group_kwargs={"weight_decay": 0},
+            )
+        )
     if len(mup_params) > 0:
-        mapping["mup"] = {"parameter_map": mup_params, "lr": optimizer_class_args["lr"] / model.config.m_width}
+        params_groups.append(
+            _ParamsGroup(
+                name="mup",
+                parameter_name_map=mup_params,
+                params_group_kwargs={"lr": optimizer_class_args["lr"] / model.config.m_width},
+            )
+        )
 
-    return mapping
+    return params_groups
 
 
 _PARAM_GROUPS = {
@@ -137,7 +161,7 @@ _PARAM_GROUPS = {
 
 def get_param_groups_list(
     model_container: ModelContainer, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
-) -> list[dict]:
+) -> list[list[_ParamsGroup]]:
     if params_group_method not in _PARAM_GROUPS:
         raise ValueError(f"unexpected `params_group_method` {params_group_method}")
 

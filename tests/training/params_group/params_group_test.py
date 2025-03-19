@@ -27,13 +27,13 @@ class ParamsGroupTest(TestCommons):
         ):
             model_container = get_model_container(args, Mode.training)
 
-        names = grouping_function(model_container[0], args.optimizer_args.class_args)
+        params_groups_list = grouping_function(model_container[0], args.optimizer_args.class_args)
         resulting_groups = {}
-        for group_name in names:
-            resulting_groups[group_name] = []
-            for param_name in names[group_name]["parameter_map"]:
-                resulting_groups[group_name].append(param_name)
-            resulting_groups[group_name].sort()
+
+        for params_groups in params_groups_list:
+            parameter_names = list(params_groups.parameter_name_map.keys())
+            parameter_names.sort()
+            resulting_groups[params_groups.name] = parameter_names
 
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
