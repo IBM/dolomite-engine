@@ -90,7 +90,7 @@ def get_optimizer_container(
     else:
         optimizer_list = OptimizerContainer(
             [
-                optimizer_class(params_groups.to_torch_compatible_params_groups())
+                optimizer_class(params_groups.to_torch_compatible_params_groups(), **optimizer_class_args)
                 for params_groups in params_groups_list
             ]
         )
