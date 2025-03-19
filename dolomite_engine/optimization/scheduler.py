@@ -1,5 +1,4 @@
 import math
-from functools import partial
 
 import torch.nn as nn
 from torch.optim import Optimizer
@@ -210,13 +209,10 @@ def get_scheduler_container(
         raise ValueError(f"invalid lr_decay_style ({lr_decay_style})")
 
     if use_optimizer_with_backward_hook:
-        lr_scheduler_list = []
-        for optimizer_map in optimizer_container:
-            lr_scheduler_map = {}
-
-            for name, optimizer in optimizer_map.items():
-                lr_scheduler_map[name] = _LR_SCHEDULER_CLASSES[lr_decay_style](
-                    optimizer,
+        for model in model_container:
+            for param in model.parameters():
+                param._lr_scheduler = _LR_SCHEDULER_CLASSES[lr_decay_style](
+                    param._optimizer,
                     num_warmup_steps=num_warmup_steps,
                     num_constant_steps=num_constant_steps,
                     num_decay_steps=num_decay_steps,
@@ -226,17 +222,12 @@ def get_scheduler_container(
                     last_epoch=last_epoch,
                 )
 
-            for model in model_container:
-                for param in model.parameters():
+                def _step(p: nn.Parameter) -> None:
+                    p._lr_scheduler.step()
 
-                    def _step(p: nn.Parameter, lr_scheduler: Optimizer) -> None:
-                        lr_scheduler.step()
+                param.register_post_accumulate_grad_hook(_step)
 
-                    param.register_post_accumulate_grad_hook(partial(_step, optimizer=lr_scheduler_map[param]))
-
-            lr_scheduler_list.append(lr_scheduler_map)
-
-        lr_scheduler_list = BackwardHookOptimizerContainer(lr_scheduler_list)
+        lr_scheduler_list = BackwardHookOptimizerContainer([None] * len(model_container))
     else:
         lr_scheduler_list = [
             _LR_SCHEDULER_CLASSES[lr_decay_style](
