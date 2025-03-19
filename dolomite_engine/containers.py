@@ -50,6 +50,14 @@ class OptimizerContainer(LRSchedulerContainer):
             optimizer.zero_grad()
 
 
+class BackwardHookOptimizerContainer(OptimizerContainer):
+    def step(self) -> None:
+        return
+
+    def zero_grad(self) -> None:
+        return
+
+
 def log_model_optimizer_container(model_container: ModelContainer, optimizer_container: OptimizerContainer) -> None:
     """print model and optimizer
 

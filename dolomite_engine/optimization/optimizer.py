@@ -12,7 +12,7 @@ from torch.optim.rmsprop import RMSprop as TorchRMSprop
 from torch.optim.rprop import Rprop as TorchRprop
 from torch.optim.sgd import SGD as TorchSGD
 
-from ..containers import ModelContainer, OptimizerContainer
+from ..containers import BackwardHookOptimizerContainer, ModelContainer, OptimizerContainer
 from ..enums import ParamsGroupMethod
 from .params_group import get_param_groups_list
 
@@ -83,7 +83,10 @@ def get_optimizer_container(
                 param.register_post_accumulate_grad_hook(_step)
 
             optimizer_list.append(optimizer_map)
+
+        optimizer_list = BackwardHookOptimizerContainer(optimizer_list)
     else:
         optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
+        optimizer_list = OptimizerContainer(optimizer_list)
 
-    return OptimizerContainer(optimizer_list)
+    return optimizer_list
