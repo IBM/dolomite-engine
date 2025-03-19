@@ -129,6 +129,10 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
+    if optimizer_class_args.get("weight_decay") == 0:
+        no_weight_decay_params.update(normal_params)
+        normal_params = {}
+
     params_groups = []
 
     if len(normal_params) > 0:
