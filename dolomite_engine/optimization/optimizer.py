@@ -70,7 +70,7 @@ def get_optimizer_container(
                 for group in params_groups.params_groups:
                     if param_name in group.parameter_name_map:
                         param._optimizer = optimizer_class(
-                            {"params": [param], **group.params_group_kwargs}, **optimizer_class_args
+                            [{"params": [param], **group.params_group_kwargs}], **optimizer_class_args
                         )
 
                         def _step(p: nn.Parameter) -> None:
