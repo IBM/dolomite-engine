@@ -227,12 +227,12 @@ def get_scheduler_container(
                 )
 
             for model in model_container:
-                for name, param in model.named_parameters():
+                for param in model.parameters():
 
                     def _step(p: nn.Parameter, lr_scheduler: Optimizer) -> None:
                         lr_scheduler.step()
 
-                    param.register_post_accumulate_grad_hook(partial(_step, optimizer=lr_scheduler_map[name]))
+                    param.register_post_accumulate_grad_hook(partial(_step, optimizer=lr_scheduler_map[param]))
 
             lr_scheduler_list.append(lr_scheduler_map)
 
