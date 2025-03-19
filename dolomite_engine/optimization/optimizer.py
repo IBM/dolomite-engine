@@ -88,13 +88,11 @@ def get_optimizer_container(
 
         optimizer_list = BackwardHookOptimizerContainer(optimizer_list)
     else:
-        for params_groups in params_groups_list:
-            torch_compatible_params_group = []
-            for params_group in params_groups:
-                torch_compatible_params_group.append(params_group.to_param_group())
-
-            optimizer_list.append(optimizer_class(torch_compatible_params_group))
-
-        optimizer_list = OptimizerContainer(optimizer_list)
+        optimizer_list = OptimizerContainer(
+            [
+                optimizer_class(params_groups.to_torch_compatible_params_groups())
+                for params_groups in params_groups_list
+            ]
+        )
 
     return optimizer_list
