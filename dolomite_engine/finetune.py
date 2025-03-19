@@ -374,6 +374,7 @@ def main() -> None:
         lr_decay_style=args.lr_scheduler_args.lr_decay_style,
         lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        use_optimizer_with_backward_hook=args.optimizer_args.use_optimizer_with_backward_hook,
     )
 
     assert len(model_container) == len(optimizer_container)

@@ -1,9 +1,11 @@
 import math
+from functools import partial
 
+import torch.nn as nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
-from ..containers import LRSchedulerContainer, OptimizerContainer
+from ..containers import BackwardHookOptimizerContainer, LRSchedulerContainer, ModelContainer, OptimizerContainer
 from ..enums import LRDecaySchedule
 
 
@@ -192,6 +194,7 @@ _LR_SCHEDULER_CLASSES = {
 
 
 def get_scheduler_container(
+    model_container: ModelContainer,
     optimizer_container: OptimizerContainer,
     num_warmup_steps: int,
     num_constant_steps: int,
@@ -200,23 +203,55 @@ def get_scheduler_container(
     lr_decay_style: LRDecaySchedule,
     lr_decay_factor: float,
     extra_lr_scheduler_args: dict,
+    use_optimizer_with_backward_hook: bool,
     last_epoch: int = -1,
 ) -> LambdaLR:
     if lr_decay_style not in _LR_SCHEDULER_CLASSES:
         raise ValueError(f"invalid lr_decay_style ({lr_decay_style})")
 
-    lr_scheduler_list = [
-        _LR_SCHEDULER_CLASSES[lr_decay_style](
-            optimizer,
-            num_warmup_steps=num_warmup_steps,
-            num_constant_steps=num_constant_steps,
-            num_decay_steps=num_decay_steps,
-            num_training_steps=num_training_steps,
-            lr_decay_factor=lr_decay_factor,
-            **extra_lr_scheduler_args,
-            last_epoch=last_epoch,
-        )
-        for optimizer in optimizer_container
-    ]
+    if use_optimizer_with_backward_hook:
+        lr_scheduler_list = []
+        for optimizer_map in optimizer_container:
+            lr_scheduler_map = {}
 
-    return LRSchedulerContainer(lr_scheduler_list)
+            for name, optimizer in optimizer_map.items():
+                lr_scheduler_map[name] = _LR_SCHEDULER_CLASSES[lr_decay_style](
+                    optimizer,
+                    num_warmup_steps=num_warmup_steps,
+                    num_constant_steps=num_constant_steps,
+                    num_decay_steps=num_decay_steps,
+                    num_training_steps=num_training_steps,
+                    lr_decay_factor=lr_decay_factor,
+                    **extra_lr_scheduler_args,
+                    last_epoch=last_epoch,
+                )
+
+            for model in model_container:
+                for name, param in model.parameters():
+
+                    def _step(p: nn.Parameter, lr_scheduler: Optimizer) -> None:
+                        lr_scheduler.step()
+
+                    param.register_post_accumulate_grad_hook(partial(_step, optimizer=lr_scheduler_map[name]))
+
+            lr_scheduler_list.append(lr_scheduler_map)
+
+        lr_scheduler_list = BackwardHookOptimizerContainer(lr_scheduler_list)
+    else:
+        lr_scheduler_list = [
+            _LR_SCHEDULER_CLASSES[lr_decay_style](
+                optimizer,
+                num_warmup_steps=num_warmup_steps,
+                num_constant_steps=num_constant_steps,
+                num_decay_steps=num_decay_steps,
+                num_training_steps=num_training_steps,
+                lr_decay_factor=lr_decay_factor,
+                **extra_lr_scheduler_args,
+                last_epoch=last_epoch,
+            )
+            for optimizer in optimizer_container
+        ]
+
+        lr_scheduler_list = LRSchedulerContainer(lr_scheduler_list)
+
+    return lr_scheduler_list
