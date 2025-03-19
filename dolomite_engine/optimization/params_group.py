@@ -23,7 +23,33 @@ class _ParamsGroup(BaseArgs):
     def to_param_group(self) -> dict:
         result = {}
         result.update(self.params_group_kwargs)
-        result["params"] = list(self.parameter_name_map.values())
+
+        # do in a sorted order
+        param_names = self.get_param_names()
+
+        result["params"] = []
+        for param_name in param_names:
+            result["params"].append(self.parameter_name_map[param_name])
+
+        return result
+
+    def get_param_names(self) -> list[str]:
+        param_names = list(self.parameter_name_map.keys())
+        param_names.sort()
+        return param_names
+
+
+class _ParamsGroupsList(BaseArgs):
+    params_groups: list[_ParamsGroup] = []
+
+    def add_params_group(self, params_group: _ParamsGroup) -> None:
+        self.params_groups.append(params_group)
+
+    def to_torch_compatible_params_groups(self) -> list[dict]:
+        return [group.to_param_group() for group in self.params_groups]
+
+    def get_param_names(self) -> list[str]:
+        return {group.name: group.get_param_names() for group in self.params_groups}
 
 
 def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
@@ -64,12 +90,12 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
         no_weight_decay_params.update(normal_params)
         normal_params = {}
 
-    params_groups = []
+    params_group_list = _ParamsGroupsList()
 
     if len(normal_params) > 0:
-        params_groups.append(_ParamsGroup(name="normal", parameter_name_map=normal_params))
+        params_group_list.add_params_group(_ParamsGroup(name="normal", parameter_name_map=normal_params))
     if len(no_weight_decay_params) > 0:
-        params_groups.append(
+        params_group_list.add_params_group(
             _ParamsGroup(
                 name="no_weight_decay",
                 parameter_name_map=no_weight_decay_params,
@@ -77,7 +103,7 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
             )
         )
 
-    return params_groups
+    return params_group_list
 
 
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
@@ -138,12 +164,12 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         no_weight_decay_params.update(normal_params)
         normal_params = {}
 
-    params_groups = []
+    params_group_list = _ParamsGroupsList()
 
     if len(normal_params) > 0:
-        params_groups.append(_ParamsGroup(name="normal", parameter_name_map=normal_params))
+        params_group_list.add_params_group(_ParamsGroup(name="normal", parameter_name_map=normal_params))
     if len(no_weight_decay_params) > 0:
-        params_groups.append(
+        params_group_list.add_params_group(
             _ParamsGroup(
                 name="no_weight_decay",
                 parameter_name_map=no_weight_decay_params,
@@ -151,7 +177,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             )
         )
     if len(mup_params) > 0:
-        params_groups.append(
+        params_group_list.add_params_group(
             _ParamsGroup(
                 name="mup",
                 parameter_name_map=mup_params,
@@ -159,7 +185,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
             )
         )
 
-    return params_groups
+    return params_group_list
 
 
 _PARAM_GROUPS = {
