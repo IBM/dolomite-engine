@@ -53,19 +53,14 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
         no_weight_decay_params.update(normal_params)
         normal_params = {}
 
-    trainable_parameters_or_param_groups = []
-    names = {}
+    mapping = {}
 
     if len(normal_params) > 0:
-        trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
-        names["normal"] = list(normal_params.keys())
+        mapping["normal"] = {"parameter_map": normal_params}
     if len(no_weight_decay_params) > 0:
-        trainable_parameters_or_param_groups.append(
-            {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
-        )
-        names["no_weight_decay"] = list(no_weight_decay_params.keys())
+        mapping["no_weight_decay"] = {"parameter_map": no_weight_decay_params, "weight_decay": 0}
 
-    return trainable_parameters_or_param_groups, names
+    return mapping
 
 
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[dict]:
@@ -122,24 +117,16 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
-    trainable_parameters_or_param_groups = []
-    names = {}
+    mapping = {}
 
     if len(normal_params) > 0:
-        trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
-        names["normal"] = list(normal_params.keys())
+        mapping["normal"] = {"parameter_map": normal_params}
     if len(no_weight_decay_params) > 0:
-        trainable_parameters_or_param_groups.append(
-            {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
-        )
-        names["no_weight_decay"] = list(no_weight_decay_params.keys())
+        mapping["no_weight_decay"] = {"parameter_map": no_weight_decay_params, "weight_decay": 0}
     if len(mup_params) > 0:
-        trainable_parameters_or_param_groups.append(
-            {"params": list(mup_params.values()), "lr": optimizer_class_args["lr"] / model.config.m_width}
-        )
-        names["mup"] = list(mup_params.keys())
+        mapping["mup"] = {"parameter_map": mup_params, "lr": optimizer_class_args["lr"] / model.config.m_width}
 
-    return trainable_parameters_or_param_groups, names
+    return mapping
 
 
 _PARAM_GROUPS = {
@@ -150,8 +137,8 @@ _PARAM_GROUPS = {
 
 def get_param_groups_list(
     model_container: ModelContainer, optimizer_class_args: dict, params_group_method: ParamsGroupMethod | None
-) -> list[list[dict]]:
+) -> list[dict]:
     if params_group_method not in _PARAM_GROUPS:
         raise ValueError(f"unexpected `params_group_method` {params_group_method}")
 
-    return [_PARAM_GROUPS[params_group_method](model, optimizer_class_args)[0] for model in model_container]
+    return [_PARAM_GROUPS[params_group_method](model, optimizer_class_args) for model in model_container]
