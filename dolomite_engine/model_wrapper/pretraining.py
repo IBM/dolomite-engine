@@ -151,7 +151,7 @@ class ModelWrapperForPretraining(ModelWrapper):
 
         if aux_loss == 0:
             loss = lm_loss
-            output = {"loss": loss}
+            output = {"loss": loss, "lm_loss": loss}
         else:
             if self.is_pipeline_parallel_enabled:
                 self._extra_metrics = self._extra_metrics + {"aux_loss": aux_loss}
