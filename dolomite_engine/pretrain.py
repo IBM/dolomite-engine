@@ -133,9 +133,9 @@ def train_step_with_pipeline_parallel(
 
 
 def train_step_without_pipeline_parallel(
-    model: ModelWrapper,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
     gradient_clipping: float,
     forward_context: AbstractContextManager,
@@ -146,9 +146,9 @@ def train_step_without_pipeline_parallel(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (ModelWrapper): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
+        model_container (ModelContainer): container of models
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_clipping (float): gradient clipping value
         forward_context (AbstractContextManager): a context that is used for every model forward call
@@ -159,6 +159,8 @@ def train_step_without_pipeline_parallel(
     Returns:
         MetricsTrackingDict: metrics to track
     """
+
+    model = model_container[0]
 
     fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
 
@@ -171,7 +173,7 @@ def train_step_without_pipeline_parallel(
 
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
-    optimizer.zero_grad()
+    optimizer_container.zero_grad()
 
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
@@ -213,8 +215,8 @@ def train_step_without_pipeline_parallel(
     if is_torchao_available():
         FP8Manager.sync_float8_amax_and_scale_history([model])
 
-    optimizer.step()
-    lr_scheduler.step()
+    optimizer_container.step()
+    lr_scheduler_container.step()
 
     if is_torchao_available():
         FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
@@ -366,9 +368,9 @@ def train(
             )
         else:
             loss_step_dict = train_step_without_pipeline_parallel(
-                model=model_container[0],
-                optimizer=optimizer_container[0],
-                lr_scheduler=lr_scheduler_container[0],
+                model_container=model_container,
+                optimizer_container=optimizer_container,
+                lr_scheduler_container=lr_scheduler_container,
                 train_dataloader=train_dataloader,
                 gradient_clipping=gradient_clipping,
                 forward_context=forward_context,
