@@ -227,7 +227,7 @@ def get_scheduler_container(
                 )
 
             for model in model_container:
-                for name, param in model.parameters():
+                for name, param in model.named_parameters():
 
                     def _step(p: nn.Parameter, lr_scheduler: Optimizer) -> None:
                         lr_scheduler.step()
