@@ -16,54 +16,54 @@ from ..utils import log_rank_0
 
 
 def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> dict:
-    if optimizer_class_args.get("weight_decay") == 0:
-        trainable_parameters_or_param_groups = model.parameters()
-        names = {"normal": [name for name, _ in model.named_parameters()]}
-    else:
-        if model.has_teacher_model():
-            log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
-            # this is the student model
-            model = model.model
+    if model.has_teacher_model():
+        log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+        # this is the student model
+        model = model.model
 
-        normal_params = {}
-        no_weight_decay_params = {}
+    normal_params = {}
+    no_weight_decay_params = {}
 
-        # remove layernorm and rmsnorm parameters from weight decay
-        for module_name, module in model.named_modules():
-            if isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
-                for param_name, param in module.named_parameters():
+    # remove layernorm and rmsnorm parameters from weight decay
+    for module_name, module in model.named_modules():
+        if isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
+            for param_name, param in module.named_parameters():
+                no_weight_decay_params[f"{module_name}.{param_name}"] = param
+        elif isinstance(module, Mamba2Base):
+            for param_name, param in module.named_parameters():
+                # we don't add bias or norms to mup group
+                if param_name.endswith("A_log") or param_name.endswith("D"):
                     no_weight_decay_params[f"{module_name}.{param_name}"] = param
-            elif isinstance(module, Mamba2Base):
-                for param_name, param in module.named_parameters():
-                    # we don't add bias or norms to mup group
-                    if param_name.endswith("A_log") or param_name.endswith("D"):
-                        no_weight_decay_params[f"{module_name}.{param_name}"] = param
 
-        # remove biases from weight decay
-        for param_name, param in model.named_parameters():
-            if param_name not in no_weight_decay_params and param_name.endswith("bias"):
-                no_weight_decay_params[param_name] = param
+    # remove biases from weight decay
+    for param_name, param in model.named_parameters():
+        if param_name not in no_weight_decay_params and param_name.endswith("bias"):
+            no_weight_decay_params[param_name] = param
 
-        # these parameters have weight decay
-        for param_name, param in model.named_parameters():
-            if param_name not in no_weight_decay_params:
-                normal_params[param_name] = param
+    # these parameters have weight decay
+    for param_name, param in model.named_parameters():
+        if param_name not in no_weight_decay_params:
+            normal_params[param_name] = param
 
-        assert len(normal_params) + len(no_weight_decay_params) == len(
-            list(model.parameters())
-        ), "params in groups don't sum up to total parameters"
+    assert len(normal_params) + len(no_weight_decay_params) == len(
+        list(model.parameters())
+    ), "params in groups don't sum up to total parameters"
 
-        trainable_parameters_or_param_groups = []
-        names = {}
+    if optimizer_class_args.get("weight_decay") == 0:
+        no_weight_decay_params.update(normal_params)
+        normal_params = {}
 
-        if len(normal_params) > 0:
-            trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
-            names["normal"] = list(normal_params.keys())
-        if len(no_weight_decay_params) > 0:
-            trainable_parameters_or_param_groups.append(
-                {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
-            )
-            names["no_weight_decay"] = list(no_weight_decay_params.keys())
+    trainable_parameters_or_param_groups = []
+    names = {}
+
+    if len(normal_params) > 0:
+        trainable_parameters_or_param_groups.append({"params": list(normal_params.values())})
+        names["normal"] = list(normal_params.keys())
+    if len(no_weight_decay_params) > 0:
+        trainable_parameters_or_param_groups.append(
+            {"params": list(no_weight_decay_params.values()), "weight_decay": 0}
+        )
+        names["no_weight_decay"] = list(no_weight_decay_params.keys())
 
     return trainable_parameters_or_param_groups, names
 
