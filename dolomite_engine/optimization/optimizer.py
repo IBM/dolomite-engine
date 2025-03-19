@@ -65,9 +65,9 @@ def get_optimizer_container(
         raise ImportError("relevant package for the optimizer is not installed")
 
     params_groups_list = get_param_groups_list(model_container, optimizer_class_args, params_group_method)
+    optimizer_list = []
 
     if use_optimizer_with_backward_hook:
-        optimizer_list = []
         for model, params_groups in zip(model_container, params_groups_list):
             optimizer_map = {}
 
@@ -88,7 +88,13 @@ def get_optimizer_container(
 
         optimizer_list = BackwardHookOptimizerContainer(optimizer_list)
     else:
-        optimizer_list = [optimizer_class(params_group, **optimizer_class_args) for params_group in params_groups_list]
+        for params_groups in params_groups_list:
+            torch_compatible_params_group = []
+            for params_group in params_groups:
+                torch_compatible_params_group.append(params_group.to_param_group())
+
+            optimizer_list.append(optimizer_class(torch_compatible_params_group))
+
         optimizer_list = OptimizerContainer(optimizer_list)
 
     return optimizer_list

@@ -20,6 +20,11 @@ class _ParamsGroup(BaseArgs):
     parameter_name_map: dict
     params_group_kwargs: dict = {}
 
+    def to_param_group(self) -> dict:
+        result = {}
+        result.update(self.params_group_kwargs)
+        result["params"] = list(self.parameter_name_map.values())
+
 
 def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
     if model.has_teacher_model():
