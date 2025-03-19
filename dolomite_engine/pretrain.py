@@ -555,6 +555,7 @@ def main(mode: Mode = Mode.training) -> None:
         optimizer_class_args=args.optimizer_args.class_args,
         model_container=model_container,
         params_group_method=args.optimizer_args.params_group_method,
+        use_optimizer_with_backward_hook=args.optimizer_args.use_optimizer_with_backward_hook,
     )
 
     lr_scheduler_container = get_scheduler_container(

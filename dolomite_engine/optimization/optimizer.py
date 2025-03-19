@@ -38,6 +38,7 @@ def get_optimizer_container(
     optimizer_class_args: dict,
     model_container: ModelContainer,
     params_group_method: ParamsGroupMethod,
+    use_optimizer_with_backward_hook: bool,
 ) -> OptimizerContainer:
     """setup list of optimizers for the model
 
@@ -46,6 +47,7 @@ def get_optimizer_container(
         optimizer_class_args (dict): args for the optimizer class
         model_container (ModelContainer): model container
         params_group_method (ParamsGroupMethod): the params grouping to use
+        use_optimizer_with_backward_hook (bool): whether to use optimizer as a backward hook
 
     Returns:
         OptimizerContainer: optimizer container
