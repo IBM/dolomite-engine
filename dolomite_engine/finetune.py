@@ -366,6 +366,7 @@ def main() -> None:
     )
 
     lr_scheduler_container = get_scheduler_container(
+        model_container=model_container,
         optimizer_container=optimizer_container,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
