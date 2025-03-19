@@ -1,5 +1,3 @@
-from functools import partial
-
 import torch.nn as nn
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
@@ -65,28 +63,25 @@ def get_optimizer_container(
         raise ImportError("relevant package for the optimizer is not installed")
 
     params_groups_list = get_param_groups_list(model_container, optimizer_class_args, params_group_method)
-    optimizer_list = []
 
     if use_optimizer_with_backward_hook:
         for model, params_groups in zip(model_container, params_groups_list):
-            optimizer_map = {}
+            for param_name, param in model.named_parameters():
+                for group in params_groups.params_groups:
+                    if param_name in group.parameter_name_map:
+                        param._optimizer = optimizer_class(
+                            {"params": [param], **group.params_group_kwargs}, **optimizer_class_args
+                        )
 
-            for group in params_groups:
-                params = group.pop("params")
-                for param in params:
-                    optimizer_map[param] = optimizer_class([param], **group)
+                        def _step(p: nn.Parameter) -> None:
+                            p._optimizer.step()
+                            p._optimizer.zero_grad()
 
-            for param in model.parameters():
+                        param.register_post_accumulate_grad_hook(_step)
 
-                def _step(p: nn.Parameter, optimizer: Optimizer) -> None:
-                    optimizer.step()
-                    optimizer.zero_grad()
+                        break
 
-                param.register_post_accumulate_grad_hook(partial(_step, optimizer=optimizer_map[param]))
-
-            optimizer_list.append(optimizer_map)
-
-        optimizer_list = BackwardHookOptimizerContainer(optimizer_list)
+        optimizer_list = BackwardHookOptimizerContainer([None] * len(model_container))
     else:
         optimizer_list = OptimizerContainer(
             [
