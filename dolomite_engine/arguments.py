@@ -187,6 +187,8 @@ class OptimizerArgs(BaseArgs):
     class_name: str = "TorchAdamW"
     # how to create param groups
     params_group_method: ParamsGroupMethod | None = None
+    # backward hooked optimizer
+    use_optimizer_with_backward_hook: bool = False
     # class args for optimizer
     class_args: dict = {
         "lr": 1e-5,
@@ -427,6 +429,15 @@ class TrainingArgs(BaseArgs):
 
         if self.distributed_args.num_pipeline_stages > 1 and self.training_parameters.eval_during_training:
             raise NotImplementedError("evaluation is not supported with pipeline parallel")
+
+        if self.optimizer_args.use_optimizer_with_backward_hook:
+            assert self.training_parameters.gradient_accumulation_steps == 1
+            assert self.training_parameters.gradient_clipping is None
+
+            raise NotImplementedError(
+                "use_optimizer_with_backward_hook doesn't support saving or loading checkpoint, comment this "
+                "assertion out to play with this, this is purely experimental"
+            )
 
 
 class GenerationParameters(BaseArgs):

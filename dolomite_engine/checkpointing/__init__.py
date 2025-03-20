@@ -229,9 +229,10 @@ def load_checkpoint_for_training(
             torch.load(_get_lr_scheduler_path(load_path), weights_only=False)
         )
     elif args.load_args.resume_learning_rate:
-        for optimizer, lr_scheduler in zip(optimizer_container, lr_scheduler_container):
+        for model, optimizer, lr_scheduler in zip(model_container, optimizer_container, lr_scheduler_container):
             _resume_learning_rate(
                 args,
+                model=model,
                 optimizer=optimizer,
                 lr_scheduler=lr_scheduler,
                 iteration=iteration if load_starting_iteration else None,

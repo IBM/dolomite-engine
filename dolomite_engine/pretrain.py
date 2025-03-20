@@ -5,8 +5,6 @@ from contextlib import AbstractContextManager, nullcontext
 import torch
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from transformers import set_seed
 
@@ -20,8 +18,8 @@ from .dtensors import dtensor_to_tensor
 from .enums import Mode, TuningMethod
 from .hf_models import disable_generation_cache
 from .kernels import enable_kernels
-from .model_wrapper import ModelWrapper, get_model_container
-from .optimization import get_optimizer_container, get_scheduler_container
+from .model_wrapper import get_model_container
+from .optimization import get_learning_rate, get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics
 from .utils import (
     ExperimentsTracker,
@@ -110,7 +108,9 @@ def train_step_with_pipeline_parallel(
     metrics_tracker = MetricsTrackingDict({})
 
     with torch.inference_mode():
-        grad_norm = dtensor_to_tensor(sum(grad_norm))
+        if gradient_clipping is not None:
+            grad_norm = dtensor_to_tensor(sum(grad_norm))
+
         torch.distributed.all_reduce(grad_norm, group=ProcessGroupManager.get_pipeline_parallel_group())
 
         if is_last_pipeline_rank:
@@ -122,7 +122,8 @@ def train_step_with_pipeline_parallel(
 
             metrics_tracker = metrics_tracker / StepTracker.get_gradient_accumulation_steps()
 
-            metrics_tracker["grad_norm"] = grad_norm
+            if gradient_clipping is not None:
+                metrics_tracker["grad_norm"] = grad_norm
 
             for key in metrics_tracker:
                 metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
@@ -133,9 +134,9 @@ def train_step_with_pipeline_parallel(
 
 
 def train_step_without_pipeline_parallel(
-    model: ModelWrapper,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
     gradient_clipping: float,
     forward_context: AbstractContextManager,
@@ -146,9 +147,9 @@ def train_step_without_pipeline_parallel(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (ModelWrapper): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
+        model_container (ModelContainer): container of models
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_clipping (float): gradient clipping value
         forward_context (AbstractContextManager): a context that is used for every model forward call
@@ -159,6 +160,8 @@ def train_step_without_pipeline_parallel(
     Returns:
         MetricsTrackingDict: metrics to track
     """
+
+    model = model_container[0]
 
     fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
 
@@ -171,7 +174,7 @@ def train_step_without_pipeline_parallel(
 
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
-    optimizer.zero_grad()
+    optimizer_container.zero_grad()
 
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
@@ -213,8 +216,8 @@ def train_step_without_pipeline_parallel(
     if is_torchao_available():
         FP8Manager.sync_float8_amax_and_scale_history([model])
 
-    optimizer.step()
-    lr_scheduler.step()
+    optimizer_container.step()
+    lr_scheduler_container.step()
 
     if is_torchao_available():
         FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
@@ -366,9 +369,9 @@ def train(
             )
         else:
             loss_step_dict = train_step_without_pipeline_parallel(
-                model=model_container[0],
-                optimizer=optimizer_container[0],
-                lr_scheduler=lr_scheduler_container[0],
+                model_container=model_container,
+                optimizer_container=optimizer_container,
+                lr_scheduler_container=lr_scheduler_container,
                 train_dataloader=train_dataloader,
                 gradient_clipping=gradient_clipping,
                 forward_context=forward_context,
@@ -388,7 +391,7 @@ def train(
             time_elapsed = time.perf_counter() - start_time
             step_time = time_elapsed / steps_since_start_time
 
-            metrics_tracker["learning_rate"] = lr_scheduler_container[0].get_lr()[0]
+            metrics_tracker["learning_rate"] = get_learning_rate(model_container, lr_scheduler_container)
 
             if model_flops is not None:
                 metrics_tracker["FLOPs"] = model_flops * steps_since_start_time / time_elapsed
@@ -555,9 +558,11 @@ def main(mode: Mode = Mode.training) -> None:
         optimizer_class_args=args.optimizer_args.class_args,
         model_container=model_container,
         params_group_method=args.optimizer_args.params_group_method,
+        use_optimizer_with_backward_hook=args.optimizer_args.use_optimizer_with_backward_hook,
     )
 
     lr_scheduler_container = get_scheduler_container(
+        model_container=model_container,
         optimizer_container=optimizer_container,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
@@ -566,6 +571,7 @@ def main(mode: Mode = Mode.training) -> None:
         lr_decay_style=args.lr_scheduler_args.lr_decay_style,
         lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        use_optimizer_with_backward_hook=args.optimizer_args.use_optimizer_with_backward_hook,
     )
 
     assert len(model_container) == len(optimizer_container)

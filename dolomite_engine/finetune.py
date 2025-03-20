@@ -2,8 +2,6 @@ from contextlib import AbstractContextManager, nullcontext
 
 import torch
 from torch.distributed.tensor.parallel import loss_parallel
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
@@ -15,8 +13,8 @@ from .dtensors import dtensor_to_tensor
 from .enums import DatasetSplit, Mode, TuningMethod
 from .hf_models import disable_generation_cache
 from .kernels import enable_kernels
-from .model_wrapper import ModelWrapper, get_model_container
-from .optimization import get_optimizer_container, get_scheduler_container
+from .model_wrapper import get_model_container
+from .optimization import get_learning_rate, get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
 from .utils import (
     ExperimentsTracker,
@@ -34,9 +32,9 @@ if is_torchao_available():
 
 
 def train_step_without_pipeline_parallel(
-    model: ModelWrapper,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
+    model_container: ModelContainer,
+    optimizer_container: OptimizerContainer,
+    lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
     gradient_clipping: float,
     forward_context: AbstractContextManager,
@@ -46,9 +44,9 @@ def train_step_without_pipeline_parallel(
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
     Args:
-        model (ModelWrapper): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
+        model_container (ModelContainer): container of models
+        optimizer_container (OptimizerContainer): container of optimizers
+        lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
         gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
@@ -59,6 +57,8 @@ def train_step_without_pipeline_parallel(
     Returns:
         MetricsTrackingDict: metrics to track
     """
+
+    model = model_container[0]
 
     fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
 
@@ -71,7 +71,7 @@ def train_step_without_pipeline_parallel(
 
     metrics_tracker = MetricsTrackingDict({})
     grad_norm = None
-    optimizer.zero_grad()
+    optimizer_container.zero_grad()
 
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
@@ -114,8 +114,8 @@ def train_step_without_pipeline_parallel(
     if is_torchao_available():
         FP8Manager.sync_float8_amax_and_scale_history([model])
 
-    optimizer.step()
-    lr_scheduler.step()
+    optimizer_container.step()
+    lr_scheduler_container.step()
 
     if is_torchao_available():
         FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
@@ -205,7 +205,7 @@ def train(
 
         if global_step % log_interval == 0:
             metrics_tracker = metrics_tracker / log_interval
-            metrics_tracker["learning_rate"] = lr_scheduler_container[0].get_lr()[0]
+            metrics_tracker["learning_rate"] = get_learning_rate(model_container, lr_scheduler_container)
 
             track_metrics(
                 global_step=global_step,
@@ -362,9 +362,11 @@ def main() -> None:
         optimizer_class_args=args.optimizer_args.class_args,
         model_container=model_container,
         params_group_method=args.optimizer_args.params_group_method,
+        use_optimizer_with_backward_hook=args.optimizer_args.use_optimizer_with_backward_hook,
     )
 
     lr_scheduler_container = get_scheduler_container(
+        model_container=model_container,
         optimizer_container=optimizer_container,
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
@@ -373,6 +375,7 @@ def main() -> None:
         lr_decay_style=args.lr_scheduler_args.lr_decay_style,
         lr_decay_factor=args.lr_scheduler_args.lr_decay_factor,
         extra_lr_scheduler_args=args.lr_scheduler_args.extra_lr_scheduler_args,
+        use_optimizer_with_backward_hook=args.optimizer_args.use_optimizer_with_backward_hook,
     )
 
     assert len(model_container) == len(optimizer_container)

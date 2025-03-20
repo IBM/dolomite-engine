@@ -1,11 +1,12 @@
 import os
 
+import torch.nn as nn
 from torch.distributed.checkpoint.stateful import Stateful
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
 from ..arguments import TrainingArgs
-from ..containers import LRSchedulerContainer, OptimizerContainer
+from ..containers import LRSchedulerContainer, ModelContainer, OptimizerContainer
 from ..optimization import get_scheduler_container
 from ..utils import ProcessGroupManager
 
@@ -25,7 +26,7 @@ class _LRSchedulerSaver(Stateful):
 
 
 def _resume_learning_rate(
-    args: TrainingArgs, optimizer: Optimizer, lr_scheduler: LambdaLR, iteration: int | None = None
+    args: TrainingArgs, model: nn.Module, optimizer: Optimizer, lr_scheduler: LambdaLR, iteration: int | None = None
 ) -> None:
     initial_lr = []
     for grp in optimizer.param_groups:
@@ -35,6 +36,7 @@ def _resume_learning_rate(
     # we create lr scheduler again here since optimizer is loaded from disk and lr scheduler is now out of sync
     # this helps to resume phase 2
     lr_scheduler_tmp = get_scheduler_container(
+        model_container=ModelContainer([model]),
         optimizer_container=OptimizerContainer([optimizer]),
         num_warmup_steps=args.lr_scheduler_args.num_warmup_steps,
         num_constant_steps=args.lr_scheduler_args.num_constant_steps,
