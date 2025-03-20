@@ -188,6 +188,21 @@ class CommonConfig(PretrainedConfig):
                     "attention_head_type": attention_head_type,
                 }
 
+                # Add latent attention parameters
+                use_latent_attention = sequence_mixer_block.pop("use_latent_attention", False)
+                sequence_mixer_kwargs["use_latent_attention"] = use_latent_attention
+                if use_latent_attention:
+                    sequence_mixer_kwargs["kv_compression_dim"] = sequence_mixer_block.pop("kv_compression_dim", None)
+                    sequence_mixer_kwargs["head_dim_latent"] = sequence_mixer_block.pop("head_dim_latent", None)
+
+                # Add sparse attention parameters
+                use_sparse_attention = sequence_mixer_block.pop("use_sparse_attention", False)
+                sequence_mixer_kwargs["use_sparse_attention"] = use_sparse_attention
+                if use_sparse_attention:
+                    sequence_mixer_kwargs["sparse_pattern"] = sequence_mixer_block.pop("sparse_pattern", "block_local")
+                    sequence_mixer_kwargs["moba_chunk_size"] = sequence_mixer_block.pop("moba_chunk_size", 1024)
+                    sequence_mixer_kwargs["moba_topk"] = sequence_mixer_block.pop("moba_topk", 8)
+
                 for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 

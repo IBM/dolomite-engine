@@ -249,21 +249,39 @@ class MoE(nn.Module):
         return x, indices
 
     def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
-        logits = logits.view(-1, logits.size(-1))
-        probs = probs.view(-1, probs.size(-1))
+        # Get target device from input tensors
+        device = logits.device
+
+        # Ensure all inputs are on the correct device
+        logits = logits.to(device).view(-1, logits.size(-1))
+        probs = probs.to(device).view(-1, probs.size(-1))
+        topk_idxs = topk_idxs.to(device)
 
         num_experts = logits.size(1)
-        acc_probs = probs.sum(0)
+        acc_probs = probs.sum(0).to(device)
 
+        # Ensure freq is explicitly created on the correct device
         if topk_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
-            freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
+            # Get freq and immediately move to correct device with correct dtype
+            freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
+            freq = freq.to(device=device, dtype=logits.dtype)
         else:
-            freq = bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+            # Get freq and immediately move to correct device with correct dtype
+            freq = bincount(topk_idxs.flatten(), minlength=num_experts)
+            freq = freq.to(device=device, dtype=logits.dtype)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
+            # Ensure it's on the right device after distributed operation
+            freq = freq.to(device)
 
-        switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
+        # Now both tensors should definitely be on the same device
+        normalized_acc_probs = F.normalize(acc_probs, p=1, dim=0)
+
+        # Remove the redundant to(device) since freq is already on the correct device
+        normalized_freq = F.normalize(freq, p=1, dim=0)
+
+        switch_loss = num_experts * (normalized_acc_probs * normalized_freq).sum()
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
 
         loss = switch_loss + 0.1 * z_loss
