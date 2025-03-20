@@ -25,29 +25,109 @@ datasets:
       sequence_length: 2048 # This sets the seq_len
  
 tokenizer_args:
-  tokenizer_name: bigcode/starcoder # /proj/data-eng/tokenizers/bigcode_starcoder # bigcode/starcoder
+  tokenizer_name: bigcode/starcoder
 
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
     model_type: gpt_dolomite
-    vocab_size: 200000
+    vocab_size: 50257
     max_position_embeddings: 2048
     hidden_size: 768
     num_layers: 12
     num_attention_heads: 12
-    num_key_value_heads: null
-    intermediate_size: null
-    activation_function: gelu_pytorch_tanh
-    attention_head_type: mqa
     normalization_function: layernorm
     layer_norm_epsilon: 1e-5
     initializer_range: 0.02
-    use_cache: true
     bos_token_id: 0
     eos_token_id: 0
     pad_token_id: 0
-    add_bias: true
+    sequence_mixer_blocks:
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mqa
+        num_key_value_heads: 1
+    mlp_blocks:
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
+      - mlp_type: MLP
+        activation_function: gelu_pytorch_tanh
+        intermediate_size: 3072
+        add_bias: true
     position_embedding_type: learned_absolute
   attention_implementation: flash_attention_2
   use_padding_free_transformer: true
@@ -55,19 +135,14 @@ model_args:
 tuning_args:
   tuning_method: pretraining
 
-load_args:
-  load_path: /proj/checkpoints/mayank/fms
-
 save_args:
   save_path: checkpoints
-  save_interval: 10000
+  save_interval: 50
 
 training_parameters:
-  num_training_steps: 100000
-  eval_during_training: false
-  eval_interval: 500
+  num_training_steps: 100
+  eval_interval: 50
   micro_batch_size: 6
-  gradient_accumulation_steps: 4
 
 optimizer_args:
   class_name: TorchAdamW
@@ -84,6 +159,3 @@ lr_scheduler_args:
 
 mixed_precision_args:
   dtype: bf16
-
-logging_args:
-  log_interval: 10

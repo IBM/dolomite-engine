@@ -8,293 +8,249 @@ datasets:
       data_cache_path: /proj/checkpoints/mayank/cache
       # Option 1: data loading using --data-path with single file
       data_path:
-        - 58996336
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk1
-        - 58982360
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk2
-        - 59060327
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk3
-        - 59040311
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk4
-        - 59201586
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk5
-        - 59023939
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk6
-        - 58932495
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk7
-        - 59087730
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk8
-        - 59073554
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk9
-        - 58995987
-        - /proj/datasets/slim_pajama_gptneox_megatron/train/chunk10
+        - /proj/datasets/training_data_starcoder_cleaned_0324/fineweb-edu
       split: 98,1,1
       sequence_length: 2048
 
 tokenizer_args:
-  tokenizer_name: EleutherAI/gpt-neox-20b
+  tokenizer_name: bigcode/starcoder
 
 model_args:
   model_class: AutoModelForCausalLM
   pretrained_config:
-    bos_token_id: 0
-    eos_token_id: 0
-    pad_token_id: 0
     initializer_range: 0.02
     layer_norm_epsilon: 1e-05
-    model_type: gpt_crosslayer
-    hidden_size: 3072
-    num_attention_heads: 12
-    num_layers: 32
+    model_type: gpt_dolomite
+    hidden_size: 2304
+    num_attention_heads: 36
+    num_layers: 40
     max_position_embeddings: 2048
     normalization_function: rmsnorm
     position_embedding_type: rope
     rope_theta: 10000
-    sharing_pattern:
-      - 0
-      - 0
-      - 2
-      - 2
-      - 4
-      - 4
-      - 6
-      - 6
-      - 8
-      - 8
-      - 10
-      - 10
-      - 12
-      - 12
-      - 14
-      - 14
-      - 16
-      - 16
-      - 18
-      - 18
-      - 20
-      - 20
-      - 22
-      - 22
-      - 24
-      - 24
-      - 26
-      - 26
-      - 28
-      - 28
-      - 30
-      - 30
-    vocab_size: 50304
+    vocab_size: 49152
+    bos_token_id: 0
+    eos_token_id: 0
+    pad_token_id: 0
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
       - sequence_mixer_type: softmax_attention
-        num_key_value_heads: 1
-        attention_head_type: mqa
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
+      - sequence_mixer_type: softmax_attention
+        attention_head_type: mha
+        add_bias: false
     mlp_blocks:
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
       - mlp_type: MLP
         activation_function: swiglu
-        intermediate_size: 8192
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
+      - mlp_type: MLP
+        activation_function: swiglu
   efficient_initialization: false
-  attention_implementation: flash_attention_2
-  use_padding_free_transformer: true
+  attention_implementation: sdpa
+  use_padding_free_transformer: false
 
 tuning_args:
   tuning_method: pretraining
 
 save_args:
-  save_path: /proj/checkpoints/mayank/mla-experiments/3b-base-cla
+  save_path: /proj/checkpoints/mayank/experiments/3b-base
   save_interval: 5000
 
 logging_args:
   log_interval: 10
   experiments_tracker_name: wandb
   wandb_args:
-    project: multilayer-attention
-    name: 3b-cla
+    project: comms
+    name: 3b-base
 
 training_parameters:
   num_training_steps: 25000
@@ -321,7 +277,10 @@ mixed_precision_args:
   dtype: bf16
 
 distributed_args:
+  communication_dtype: fp32
   stage: 3
+  fsdp_algorithm: 2
   zero_topology:
-    data_parallel_replication_world_size: 16
     data_parallel_sharding_world_size: 8
+    data_parallel_replication_world_size: 16
+  torch_compile: true
