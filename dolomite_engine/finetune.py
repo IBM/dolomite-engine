@@ -16,7 +16,7 @@ from .enums import DatasetSplit, Mode, TuningMethod
 from .hf_models import disable_generation_cache
 from .kernels import enable_kernels
 from .model_wrapper import ModelWrapper, get_model_container
-from .optimization import get_optimizer_container, get_scheduler_container
+from .optimization import get_learning_rate, get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
 from .utils import (
     ExperimentsTracker,
@@ -207,7 +207,7 @@ def train(
 
         if global_step % log_interval == 0:
             metrics_tracker = metrics_tracker / log_interval
-            metrics_tracker["learning_rate"] = lr_scheduler_container[0].get_lr()[0]
+            metrics_tracker["learning_rate"] = get_learning_rate(model_container, lr_scheduler_container, False)
 
             track_metrics(
                 global_step=global_step,
