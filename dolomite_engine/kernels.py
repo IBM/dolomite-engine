@@ -42,9 +42,8 @@ class _ACT_BackwardWait(torch.autograd.Function):
 
 
 def wait_for_ACT(x: torch.Tensor, wait_in_forward: bool, wait_in_backward: bool) -> torch.Tensor:
-    if wait_in_forward:
-        if isinstance(x, AsyncCollectiveTensor):
-            x = x.wait()
+    if wait_in_forward and isinstance(x, AsyncCollectiveTensor):
+        x = x.wait()
 
     if wait_in_backward:
         x = _ACT_BackwardWait.apply(x)
