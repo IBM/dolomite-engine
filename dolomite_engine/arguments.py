@@ -432,6 +432,7 @@ class TrainingArgs(BaseArgs):
 
         if self.optimizer_args.use_optimizer_with_backward_hook:
             assert self.training_parameters.gradient_accumulation_steps == 1
+            assert self.training_parameters.gradient_clipping is None
 
 
 class GenerationParameters(BaseArgs):
