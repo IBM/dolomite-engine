@@ -2,17 +2,14 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from transformers import DynamicCache
 
 from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...linear import ParameterizedLinear
-from ...position_embedding import apply_rotary_pos_emb
-from .utils import repeat_key_value
+from ..softmax_attention import Attention
 
 
-class Attention(nn.Module):
+class MLAAttention(Attention):
     def __init__(
         self,
         hidden_size: int,
@@ -33,7 +30,7 @@ class Attention(nn.Module):
         kv_compression_dim: int = None,
         use_latent_attention: bool = False,
     ) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
 
         self.causal = causal
         self.hidden_size = hidden_size
@@ -194,166 +191,3 @@ class Attention(nn.Module):
         # value -> (batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
         return query, key, value
-
-    def _prepare_qkv_for_forward_mha(
-        self, hidden_states: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
-
-        hidden_states = hidden_states.view(batch_size, query_length, self.num_heads, -1)
-        hidden_states = hidden_states.transpose(1, 2)
-
-        query, key, value = hidden_states.chunk(3, dim=-1)
-
-        return query, key, value
-
-    def _prepare_qkv_for_forward_gqa(
-        self, hidden_states: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
-
-        hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
-
-        query, key, value = hidden_states.split(
-            ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
-        )
-
-        # this needs to be a reshape instead of view sadly
-        query = query.reshape(batch_size, query_length, -1, self.head_dim)
-
-        query = query.transpose(1, 2)
-        key = key.transpose(1, 2)
-        value = value.transpose(1, 2)
-
-        return query, key, value
-
-    def _prepare_qkv_for_forward_mqa(
-        self, hidden_states: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
-
-        query, key, value = hidden_states.split((self.hidden_size, self.head_dim, self.head_dim), dim=-1)
-
-        query = query.view(batch_size, query_length, self.num_heads, -1)
-
-        query = query.transpose(1, 2)
-        key = key.unsqueeze(1)
-        value = value.unsqueeze(1)
-
-        return query, key, value
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
-        query, key, value = self._prepare_qkv_for_forward(hidden_states)
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # ==========================================================================================
-
-        if self.position_embedding_type == PositionEmbeddingType.rope:
-            query = apply_rotary_pos_emb(query, rope_cos_sin)
-            key = apply_rotary_pos_emb(key, rope_cos_sin)
-
-        if past_key_values is not None:
-            key, value = past_key_values.update(key, value, self.layer_idx)
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # ==========================================================================================
-
-        key = key.transpose(-1, -2)
-        dtype = query.dtype
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, head_dim, key_length)
-        # value -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # ==========================================================================================
-
-        batch_size = query.shape[0]
-        query_length = query.shape[2]
-        key_length = key.shape[-1]
-
-        key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
-        value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
-
-        # Always copies
-        query = query.reshape(batch_size * self.num_heads, query_length, self.head_dim)
-        # No copy when layer_past is provided.
-        key = key.reshape(batch_size * self.num_heads, self.head_dim, key_length)
-
-        # ==========================================================================================
-        # query -> (batch_size * num_heads, query_length, head_dim)
-        # key -> (batch_size * num_heads, head_dim, key_length)
-        # value -> (batch_size, num_heads, key_length, head_dim)
-        # ==========================================================================================
-
-        if attention_mask is None:
-            hidden_states = torch.empty(
-                (batch_size * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
-            )
-            beta = 0
-        else:
-            hidden_states = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
-            beta = 1
-
-        hidden_states = torch.baddbmm(hidden_states, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
-            batch_size, self.num_heads, query_length, key_length
-        )
-
-        del query, key
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
-        hidden_states = F.softmax(hidden_states.float(), dim=-1).to(dtype)
-        hidden_states = self.softmax_dropout(hidden_states)
-
-        # ==========================================================================================
-        # value -> (batch_size, num_heads, key_length, head_dim)
-        # hidden_states -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
-        hidden_states = torch.matmul(hidden_states, value)
-
-        del value
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, num_heads, query_length, head_dim)
-        # ==========================================================================================
-
-        hidden_states = hidden_states.transpose(1, 2)
-        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
-        hidden_states = self.c_proj(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-
-        return hidden_states
-
-    def _get_softmax_scale(self, return_none_allowed: bool = True) -> float:
-        if self.attention_multiplier is None:
-            softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
-        else:
-            softmax_scale = self.attention_multiplier
-
-        return softmax_scale
