@@ -6,13 +6,11 @@ from .....kernels import wait_for_ACT
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ...position_embedding import apply_rotary_pos_emb
 from .base import Attention
-
-
-# Add imports
-from .moba.wrapper import moba_layer
 from .moba.config import MoBAConfig
 from .moba.moba_efficient import moba_attn_varlen
 
+# Add imports
+from .moba.wrapper import moba_layer
 
 
 ## For the latent attention implementation, we don't need to change anything in the flash attention part!
@@ -52,7 +50,7 @@ class FlashAttention2(Attention):
         # ==========================================================================================
 
         batch_size, _, query_length, _ = query.shape
-        
+
         # Sparse attention path using MoBA when enabled and in padding-free mode
         if self.use_sparse_attention and cu_seqlens is not None:
             # Prepare inputs for MoBA format (seq_len first)
@@ -60,7 +58,7 @@ class FlashAttention2(Attention):
             query_moba = query.transpose(1, 2).reshape(-1, self.num_heads, self.head_dim).contiguous()
             key_moba = key.transpose(1, 2).reshape(-1, self.num_key_value_heads, self.head_dim).contiguous()
             value_moba = value.transpose(1, 2).reshape(-1, self.num_key_value_heads, self.head_dim).contiguous()
-            
+
             # Apply MoBA sparse attention
             hidden_states = moba_attn_varlen(
                 q=query_moba,
@@ -72,11 +70,11 @@ class FlashAttention2(Attention):
                 moba_topk=self.moba_topk,
                 causal=self.causal,
             )
-            
+
             # Reshape back to expected format: (batch_size, query_length, num_heads*head_dim)
             hidden_states = hidden_states.view(batch_size, query_length, self.num_heads, self.head_dim)
             hidden_states = hidden_states.reshape(batch_size, query_length, -1)
-            
+
         else:
             # Original flash attention path
             # TODO avoid this extra transpose
@@ -113,7 +111,6 @@ class FlashAttention2(Attention):
 
             hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
             hidden_states = hidden_states.view(batch_size, query_length, -1)
-
 
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)

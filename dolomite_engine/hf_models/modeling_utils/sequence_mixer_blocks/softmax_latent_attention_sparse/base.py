@@ -9,13 +9,11 @@ from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
-from .utils import repeat_key_value
-
+from .moba.config import MoBAConfig
 
 # Import needed for MoBA
 from .moba.wrapper import moba_layer
-from .moba.config import MoBAConfig
-
+from .utils import repeat_key_value
 
 
 class Attention(nn.Module):
@@ -41,8 +39,8 @@ class Attention(nn.Module):
         use_latent_attention: bool = False,
         use_sparse_attention: bool = False,
         sparse_pattern: str = "block_local",
-        moba_chunk_size: int = 1024, 
-        moba_topk: int = 8
+        moba_chunk_size: int = 1024,
+        moba_topk: int = 8,
     ) -> None:
         super().__init__()
 
@@ -51,10 +49,10 @@ class Attention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
-        
+
         self.kv_compression_dim = kv_compression_dim
         self.use_latent_attention = use_latent_attention
-        
+
         # Sparse attention params
         self.use_sparse_attention = use_sparse_attention
         self.sparse_pattern = sparse_pattern
@@ -107,33 +105,34 @@ class Attention(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-            
-        
+
         # add the latent attention layer here
         if self.use_latent_attention:
-            assert self.kv_compression_dim is not None, "kv_compression_dim must be specified when using latent attention"
+            assert (
+                self.kv_compression_dim is not None
+            ), "kv_compression_dim must be specified when using latent attention"
             # For latent attention, we have separate projections
             self.q_proj = ParameterizedLinear(
-                self.hidden_size, 
-                self.num_heads * self.head_dim, 
+                self.hidden_size,
+                self.num_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
             )
-            
+
             self.kv_down_proj = ParameterizedLinear(
                 self.hidden_size,
                 self.kv_compression_dim,
                 bias=self.add_bias,
                 std=std,
-            )      
-            
+            )
+
             self.k_up_proj = ParameterizedLinear(
                 self.kv_compression_dim,
                 self.num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
             )
-            
+
             self.v_up_proj = ParameterizedLinear(
                 self.kv_compression_dim,
                 self.num_key_value_heads * self.head_dim,
@@ -148,33 +147,33 @@ class Attention(nn.Module):
                 bias=self.add_bias,
                 std=std,
             )
-            
+
         # Add to the __init__ method in Attention class
         if self.use_sparse_attention:
             # Register MoBA with standard configurations
             from .moba import register_moba
             from .moba.config import MoBAConfig
-            
+
             # Configure MoBA with user parameters
             moba_config = MoBAConfig(
                 moba_chunk_size=self.moba_chunk_size,  # Sensible default based on block size
-                moba_topk=self.moba_topk  # Sensible default based on sparsity level
+                moba_topk=self.moba_topk,  # Sensible default based on sparsity level
             )
-            
+
             # Register MoBA implementations
             register_moba(moba_config)
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedLinear(self.num_heads * self.head_dim, self.hidden_size, bias=self.add_bias, std=std)
+        self.c_proj = ParameterizedLinear(
+            self.num_heads * self.head_dim, self.hidden_size, bias=self.add_bias, std=std
+        )
 
         self.softmax_dropout_p = softmax_dropout
 
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
-
-
 
     ## TODO: Need to verify if the current implementation is correct or not.
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -188,26 +187,28 @@ class Attention(nn.Module):
             kv_latent = self.kv_down_proj(hidden_states)
             key = self.k_up_proj(kv_latent)
             value = self.v_up_proj(kv_latent)
-            
+
             batch_size, query_length = hidden_states.shape[:-1]
-            
+
             # Reshape query
             query = query.view(batch_size, query_length, self.num_heads, self.head_dim)
             query = query.transpose(1, 2)
-            
+
             # Reshape key and value based on attention head type
             if self.attention_head_type == AttentionHeadType.mha:
                 key = key.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
                 value = value.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
                 key = key.transpose(1, 2)
                 value = value.transpose(1, 2)
-            else: 
-                raise ValueError(f"unexpected attention_head_type ({self.attention_head_type}). \
-                                   The only supported attention_head_type is mha")
+            else:
+                raise ValueError(
+                    f"unexpected attention_head_type ({self.attention_head_type}). \
+                                   The only supported attention_head_type is mha"
+                )
         else:
             # Original attention flow
             hidden_states = self.c_attn(hidden_states)
-            
+
             # Use existing methods based on attention head type
             if self.attention_head_type == AttentionHeadType.mha:
                 query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
@@ -224,8 +225,6 @@ class Attention(nn.Module):
         # value -> (batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
         return query, key, value
-
-
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor
@@ -301,33 +300,36 @@ class Attention(nn.Module):
 
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
-            
-        
+
         # Check if sparse attention should be used
         if self.use_sparse_attention and cu_seqlens is not None:
             # Configure MoBA
             moba_config = MoBAConfig(
                 moba_chunk_size=self.moba_chunk_size,  # Sensible default based on block size
-                moba_topk=self.moba_topk  # Sensible default based on sparsity level
+                moba_topk=self.moba_topk,  # Sensible default based on sparsity level
             )
-            
+
             # Use MoBA for sparse attention
             from .moba.moba_efficient import moba_attn_varlen
-            
+
             # Convert from batched to varlen format for MoBA
             # MoBA expects seq_len, head, head_dim format
             batch_size, num_heads, query_length, head_dim = query.shape
             reshaped_query = query.permute(2, 1, 3, 0).reshape(query_length * batch_size, num_heads, head_dim)
-            reshaped_key = key.permute(2, 1, 3, 0).reshape(key.shape[2] * batch_size, self.num_key_value_heads, head_dim)
-            reshaped_value = value.permute(2, 1, 3, 0).reshape(value.shape[2] * batch_size, self.num_key_value_heads, head_dim)
-            
+            reshaped_key = key.permute(2, 1, 3, 0).reshape(
+                key.shape[2] * batch_size, self.num_key_value_heads, head_dim
+            )
+            reshaped_value = value.permute(2, 1, 3, 0).reshape(
+                value.shape[2] * batch_size, self.num_key_value_heads, head_dim
+            )
+
             # Adjust cu_seqlens for multiple batches
             if batch_size > 1:
                 batch_offsets = torch.arange(0, batch_size, device=query.device) * query_length
                 adjusted_cu_seqlens = torch.cat([cu_seqlens + offset for offset in batch_offsets])
             else:
                 adjusted_cu_seqlens = cu_seqlens
-                
+
             # Call MoBA attention
             output = moba_attn_varlen(
                 q=reshaped_query,
@@ -336,14 +338,14 @@ class Attention(nn.Module):
                 cu_seqlens=adjusted_cu_seqlens,
                 max_seqlen=max_seqlen,
                 moba_chunk_size=self.moba_chunk_size,  # Configurable chunk size
-                moba_topk=self.moba_topk  # Configurable sparsity level
+                moba_topk=self.moba_topk,  # Configurable sparsity level
             )
-            
+
             # Reshape back to expected format
             output = output.view(query_length, batch_size, num_heads, head_dim)
             output = output.permute(1, 2, 0, 3)
             hidden_states = output.reshape(batch_size, query_length, self.num_heads * self.head_dim)
-            
+
         else:
 
             # ==========================================================================================
@@ -364,7 +366,7 @@ class Attention(nn.Module):
             batch_size = query.shape[0]
             query_length = query.shape[2]
             key_length = key.shape[-1]
-            
+
             # if the #group = 1, actually no return.
             key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
             value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
@@ -389,9 +391,9 @@ class Attention(nn.Module):
                 hidden_states = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
                 beta = 1
 
-            hidden_states = torch.baddbmm(hidden_states, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
-                batch_size, self.num_heads, query_length, key_length
-            )
+            hidden_states = torch.baddbmm(
+                hidden_states, query, key, beta=beta, alpha=self._get_softmax_scale(False)
+            ).view(batch_size, self.num_heads, query_length, key_length)
 
             del query, key
 

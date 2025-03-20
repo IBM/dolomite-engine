@@ -40,7 +40,7 @@ class Attention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
-        
+
         self.kv_compression_dim = kv_compression_dim
         self.use_latent_attention = use_latent_attention
 
@@ -85,34 +85,35 @@ class Attention(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-            
-        
+
         # add the latent attention layer here
         if self.use_latent_attention:
-            assert self.kv_compression_dim is not None, "kv_compression_dim must be specified when using latent attention"
-            
+            assert (
+                self.kv_compression_dim is not None
+            ), "kv_compression_dim must be specified when using latent attention"
+
             # For latent attention, we have separate projections
             self.q_proj = ParameterizedLinear(
-                self.hidden_size, 
-                self.num_heads * self.head_dim, 
+                self.hidden_size,
+                self.num_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
             )
-            
+
             self.kv_down_proj = ParameterizedLinear(
                 self.hidden_size,
                 self.kv_compression_dim,
                 bias=self.add_bias,
                 std=std,
             )
-            
+
             self.k_up_proj = ParameterizedLinear(
                 self.kv_compression_dim,
                 self.num_key_value_heads * self.head_dim,
                 bias=self.add_bias,
                 std=std,
             )
-            
+
             self.v_up_proj = ParameterizedLinear(
                 self.kv_compression_dim,
                 self.num_key_value_heads * self.head_dim,
@@ -138,8 +139,6 @@ class Attention(nn.Module):
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
-
-
     ## TODO: Need to verify if the current implementation is correct or not.
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # ==========================================================================================
@@ -152,13 +151,13 @@ class Attention(nn.Module):
             kv_latent = self.kv_down_proj(hidden_states)
             key = self.k_up_proj(kv_latent)
             value = self.v_up_proj(kv_latent)
-            
+
             batch_size, query_length = hidden_states.shape[:-1]
-            
+
             # Reshape query
             query = query.view(batch_size, query_length, self.num_heads, self.head_dim)
             query = query.transpose(1, 2)
-            
+
             # Reshape key and value based on attention head type
             if self.attention_head_type == AttentionHeadType.mha:
                 key = key.view(batch_size, query_length, self.num_key_value_heads, self.head_dim)
@@ -178,7 +177,7 @@ class Attention(nn.Module):
         else:
             # Original attention flow
             hidden_states = self.c_attn(hidden_states)
-            
+
             # Use existing methods based on attention head type
             if self.attention_head_type == AttentionHeadType.mha:
                 query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
@@ -195,8 +194,6 @@ class Attention(nn.Module):
         # value -> (batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
         return query, key, value
-
-
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor

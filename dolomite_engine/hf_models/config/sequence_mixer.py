@@ -12,13 +12,12 @@ class _SoftmaxAttentionArgs(BaseArgs):
     dropout: float = 0
     add_bias: bool = True
     attention_multiplier: float | None = None
-    
-    
+
     # Add new parameters for latent attention
     use_latent_attention: bool = False
     kv_compression_dim: int | None = None
     head_dim_latent: int | None = None
-    
+
     # Add new parameters for sparse attention
     use_sparse_attention: bool = False
     sparse_block_size: int = 16
@@ -26,15 +25,21 @@ class _SoftmaxAttentionArgs(BaseArgs):
     moba_chunk_size: int = 1024
     moba_topk: int = 8
 
-
     def model_post_init(self, __context: Any) -> None:
         assert self.sequence_mixer_type == "softmax_attention"
-                # Add validation for latent and sparse attention
+        # Add validation for latent and sparse attention
         if self.use_latent_attention:
-            assert self.kv_compression_dim is not None, "kv_compression_dim must be set when use_latent_attention is True"
+            assert (
+                self.kv_compression_dim is not None
+            ), "kv_compression_dim must be set when use_latent_attention is True"
             assert self.head_dim_latent is not None, "head_dim_latent must be set when use_latent_attention is True"
         if self.use_sparse_attention:
-            assert self.sparse_pattern in ["block_local", "block_sparse", "strided"], f"Invalid sparse_pattern: {self.sparse_pattern}"
+            assert self.sparse_pattern in [
+                "block_local",
+                "block_sparse",
+                "strided",
+            ], f"Invalid sparse_pattern: {self.sparse_pattern}"
+
 
 class _StickbreakingAttentionArgs(BaseArgs):
     sequence_mixer_type: str = "stickbreaking_attention"

@@ -1,6 +1,8 @@
+from typing import Callable, Optional, Tuple
+
 import torch
-from typing import Callable, Tuple, Optional
 from flash_attn import flash_attn_func
+
 from .config import MoBAConfig
 
 

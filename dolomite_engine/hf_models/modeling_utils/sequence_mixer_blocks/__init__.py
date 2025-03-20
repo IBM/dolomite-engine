@@ -77,14 +77,14 @@ def get_sequence_mixer(
             causal=causal,
             layer_idx=layer_idx,
         )
-        
+
         # Add latent and sparse attention parameters
         if hasattr(block, "use_latent_attention"):
             sequence_mixer_kwargs["use_latent_attention"] = block.use_latent_attention
             if block.use_latent_attention:
                 sequence_mixer_kwargs["kv_compression_dim"] = block.kv_compression_dim
                 sequence_mixer_kwargs["head_dim_latent"] = block.head_dim_latent
-        
+
         if hasattr(block, "use_sparse_attention"):
             sequence_mixer_kwargs["use_sparse_attention"] = block.use_sparse_attention
             if block.use_sparse_attention:
@@ -103,23 +103,35 @@ def get_sequence_mixer(
             elif block.use_sparse_attention:
                 # Use sparse attention implementation
                 from .softmax_latent_attention_sparse import _ATTENTION_MODULES as SPARSE_MODULES
+
                 return SPARSE_MODULES[attention_implementation](**sequence_mixer_kwargs)
             elif block.use_latent_attention:
                 # Use latent attention implementation
                 from .softmax_latent_attention import _ATTENTION_MODULES as LATENT_MODULES
+
                 # Create a copy and remove sparse-specific parameters
                 latent_kwargs = sequence_mixer_kwargs.copy()
-                latent_kwargs.pop('use_sparse_attention', None)
-                latent_kwargs.pop('sparse_pattern', None)
-                latent_kwargs.pop('moba_chunk_size', None)
-                latent_kwargs.pop('moba_topk', None)
+                latent_kwargs.pop("use_sparse_attention", None)
+                latent_kwargs.pop("sparse_pattern", None)
+                latent_kwargs.pop("moba_chunk_size", None)
+                latent_kwargs.pop("moba_topk", None)
                 return LATENT_MODULES[attention_implementation](**latent_kwargs)
             else:
                 # Filter out latent and sparse parameters for regular attention
-                regular_kwargs = {k: v for k, v in sequence_mixer_kwargs.items() 
-                                if k not in ['use_latent_attention', 'kv_compression_dim', 
-                                            'use_sparse_attention', 'head_dim_latent',
-                                            'sparse_pattern', 'moba_chunk_size', 'moba_topk']}
+                regular_kwargs = {
+                    k: v
+                    for k, v in sequence_mixer_kwargs.items()
+                    if k
+                    not in [
+                        "use_latent_attention",
+                        "kv_compression_dim",
+                        "use_sparse_attention",
+                        "head_dim_latent",
+                        "sparse_pattern",
+                        "moba_chunk_size",
+                        "moba_topk",
+                    ]
+                }
                 return _ATTENTION_MODULES[attention_implementation](**regular_kwargs)
         elif sequence_mixer_type == "stickbreaking_attention":
             if use_padding_free_transformer:

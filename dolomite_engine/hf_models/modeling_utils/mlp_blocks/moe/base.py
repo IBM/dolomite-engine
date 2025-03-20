@@ -251,7 +251,7 @@ class MoE(nn.Module):
     def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
         # Get target device from input tensors
         device = logits.device
-        
+
         # Ensure all inputs are on the correct device
         logits = logits.to(device).view(-1, logits.size(-1))
         probs = probs.to(device).view(-1, probs.size(-1))
@@ -277,7 +277,7 @@ class MoE(nn.Module):
 
         # Now both tensors should definitely be on the same device
         normalized_acc_probs = F.normalize(acc_probs, p=1, dim=0)
-        
+
         # Remove the redundant to(device) since freq is already on the correct device
         normalized_freq = F.normalize(freq, p=1, dim=0)
 

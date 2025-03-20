@@ -187,9 +187,7 @@ class CommonConfig(PretrainedConfig):
                     "num_key_value_heads": num_key_value_heads,
                     "attention_head_type": attention_head_type,
                 }
-                
-                
-                
+
                 # Add latent attention parameters
                 use_latent_attention = sequence_mixer_block.pop("use_latent_attention", False)
                 sequence_mixer_kwargs["use_latent_attention"] = use_latent_attention
@@ -204,8 +202,7 @@ class CommonConfig(PretrainedConfig):
                     sequence_mixer_kwargs["sparse_pattern"] = sequence_mixer_block.pop("sparse_pattern", "block_local")
                     sequence_mixer_kwargs["moba_chunk_size"] = sequence_mixer_block.pop("moba_chunk_size", 1024)
                     sequence_mixer_kwargs["moba_topk"] = sequence_mixer_block.pop("moba_topk", 8)
-                
-                
+
                 for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 

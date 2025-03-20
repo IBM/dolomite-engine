@@ -1,9 +1,11 @@
 from functools import partial
+
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
-from .wrapper import moba_layer
-from .moba_naive import moba_attn_varlen_naive
-from .moba_efficient import moba_attn_varlen
+
 from .config import MoBAConfig
+from .moba_efficient import moba_attn_varlen
+from .moba_naive import moba_attn_varlen_naive
+from .wrapper import moba_layer
 
 
 def register_moba(cfg: MoBAConfig):

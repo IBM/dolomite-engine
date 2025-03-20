@@ -93,14 +93,14 @@ def get_model_tflops(
         elif sequence_mixer_type == "mamba2":
             # Mamba2 FLOP calculation based on its specific architecture
             # Core components: projection, convolution, SSM operations
-            mamba_heads = block.num_heads
+            block.num_heads
             mamba_state_size = block.state_size
             mamba_intermediate_size = block.intermediate_size
-            
+
             # Input projection + convolution + SSM computation + output projection
             projection_flops = 4 * b * s * h * mamba_intermediate_size
             ssm_flops = 4 * b * s * mamba_intermediate_size * mamba_state_size
-            
+
             attention_flops = projection_flops + ssm_flops
         else:
             raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
