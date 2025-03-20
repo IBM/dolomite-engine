@@ -110,7 +110,9 @@ def train_step_with_pipeline_parallel(
     metrics_tracker = MetricsTrackingDict({})
 
     with torch.inference_mode():
-        grad_norm = dtensor_to_tensor(sum(grad_norm))
+        if gradient_clipping is not None:
+            grad_norm = dtensor_to_tensor(sum(grad_norm))
+
         torch.distributed.all_reduce(grad_norm, group=ProcessGroupManager.get_pipeline_parallel_group())
 
         if is_last_pipeline_rank:
@@ -122,7 +124,8 @@ def train_step_with_pipeline_parallel(
 
             metrics_tracker = metrics_tracker / StepTracker.get_gradient_accumulation_steps()
 
-            metrics_tracker["grad_norm"] = grad_norm
+            if gradient_clipping is not None:
+                metrics_tracker["grad_norm"] = grad_norm
 
             for key in metrics_tracker:
                 metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
