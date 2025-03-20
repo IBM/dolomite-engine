@@ -205,7 +205,7 @@ def train(
 
         if global_step % log_interval == 0:
             metrics_tracker = metrics_tracker / log_interval
-            metrics_tracker["learning_rate"] = get_learning_rate(model_container, lr_scheduler_container, False)
+            metrics_tracker["learning_rate"] = get_learning_rate(model_container, lr_scheduler_container)
 
             track_metrics(
                 global_step=global_step,
