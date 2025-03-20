@@ -434,6 +434,8 @@ class TrainingArgs(BaseArgs):
             assert self.training_parameters.gradient_accumulation_steps == 1
             assert self.training_parameters.gradient_clipping is None
 
+            log_rank_0(logging.WARN, "use_optimizer_with_backward_hook doesn't support saving or loading checkpoint")
+
 
 class GenerationParameters(BaseArgs):
     # batch size
