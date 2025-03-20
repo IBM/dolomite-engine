@@ -2,8 +2,6 @@ from contextlib import AbstractContextManager, nullcontext
 
 import torch
 from torch.distributed.tensor.parallel import loss_parallel
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
 from transformers import set_seed
 
 from .arguments import TrainingArgs, get_args
@@ -15,7 +13,7 @@ from .dtensors import dtensor_to_tensor
 from .enums import DatasetSplit, Mode, TuningMethod
 from .hf_models import disable_generation_cache
 from .kernels import enable_kernels
-from .model_wrapper import ModelWrapper, get_model_container
+from .model_wrapper import get_model_container
 from .optimization import get_learning_rate, get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_torch_profiler, track_metrics
 from .utils import (
