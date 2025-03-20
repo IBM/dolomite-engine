@@ -9,11 +9,11 @@ from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
+from ..softmax_attention import repeat_key_value
 from .moba.config import MoBAConfig
 
 # Import needed for MoBA
 from .moba.wrapper import moba_layer
-from .utils import repeat_key_value
 
 
 class Attention(nn.Module):

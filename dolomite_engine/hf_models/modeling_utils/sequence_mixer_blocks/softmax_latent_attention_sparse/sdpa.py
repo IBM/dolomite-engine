@@ -4,8 +4,8 @@ from transformers import DynamicCache
 
 from ....enums import PositionEmbeddingType
 from ...position_embedding import apply_rotary_pos_emb
+from ..softmax_attention import repeat_key_value
 from .base import Attention
-from .utils import repeat_key_value
 
 
 class SDPA(Attention):
