@@ -7,9 +7,13 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
-from .....utils import divide_if_divisible
+from .....utils import divide_if_divisible, is_flash_attention_available
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear, apply_rotary_pos_emb, get_normalization_function
+
+
+if is_flash_attention_available():
+    from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
 class CrossLayerAttention(nn.Module):

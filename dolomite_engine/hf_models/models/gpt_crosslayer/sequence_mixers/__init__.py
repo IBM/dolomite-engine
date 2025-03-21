@@ -1,6 +1,6 @@
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ..config import GPTCrossLayerConfig
-from .base import CrossLayerAttention
+from .base import CrossLayerAttention, KeyValueProjection
 
 
 def get_sequence_mixer(
