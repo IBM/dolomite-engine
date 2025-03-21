@@ -3,12 +3,10 @@ from ..config import GPTCrossLayerConfig
 from .base import CrossLayerAttention, KeyValueProjection
 from .flash import CrossLayerFlashAttention2
 from .padding_free import CrossLayerPaddingFreeAttention, KeyValuePaddingFreeProjection
-from .sdpa import CrossLayerSDPA
 
 
 _ATTENTION_MODULES = {
     "eager": CrossLayerAttention,
-    "sdpa": CrossLayerSDPA,
     "flash_attention_2": CrossLayerFlashAttention2,
 }
 

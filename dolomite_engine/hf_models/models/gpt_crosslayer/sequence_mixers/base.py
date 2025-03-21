@@ -88,35 +88,17 @@ class CrossLayerAttention(nn.Module):
         if self.position_embedding_type == PositionEmbeddingType.rope:
             query = apply_rotary_pos_emb(query, rope_cos_sin)
 
-        dtype = query.dtype
-        batch_size = query.shape[0]
-        query_length = query.shape[2]
-        key_length = key.shape[-1]
-
-        # Always copies
-        query = query.reshape(batch_size * self.num_heads, query_length, self.head_dim)
-
-        if attention_mask is None:
-            hidden_states = torch.empty(
-                (batch_size * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
-            )
-            beta = 0
-        else:
-            hidden_states = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
-            beta = 1
-
-        hidden_states = torch.baddbmm(hidden_states, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
-            batch_size, self.num_heads, query_length, key_length
+        hidden_states = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
+            is_causal=self.causal if attention_mask is None else False,
+            scale=self._get_softmax_scale(),
         )
 
-        del query, key
-
-        hidden_states = F.softmax(hidden_states.float(), dim=-1).to(dtype)
-        hidden_states = self.softmax_dropout(hidden_states)
-
-        hidden_states = torch.matmul(hidden_states, value)
-
-        del value
+        del query, key, value
 
         hidden_states = hidden_states.transpose(1, 2)
         hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)

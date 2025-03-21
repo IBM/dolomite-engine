@@ -208,68 +208,32 @@ class Attention(nn.Module):
         # value -> (batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
-        key = key.transpose(-1, -2)
-        dtype = query.dtype
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, head_dim, key_length)
-        # value -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # ==========================================================================================
-
-        batch_size = query.shape[0]
-        query_length = query.shape[2]
-        key_length = key.shape[-1]
-
         key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
         value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
-        # Always copies
-        query = query.reshape(batch_size * self.num_heads, query_length, self.head_dim)
-        # No copy when layer_past is provided.
-        key = key.reshape(batch_size * self.num_heads, self.head_dim, key_length)
-
         # ==========================================================================================
-        # query -> (batch_size * num_heads, query_length, head_dim)
-        # key -> (batch_size * num_heads, head_dim, key_length)
+        # query -> (batch_size, num_heads, query_length, head_dim)
+        # key -> (batch_size, num_heads, key_length, head_dim)
         # value -> (batch_size, num_heads, key_length, head_dim)
         # ==========================================================================================
 
-        if attention_mask is None:
-            hidden_states = torch.empty(
-                (batch_size * self.num_heads, query_length, key_length), device=query.device, dtype=query.dtype
-            )
-            beta = 0
-        else:
-            hidden_states = attention_mask.expand(-1, self.num_heads, -1, -1).reshape(-1, query_length, key_length)
-            beta = 1
-
-        hidden_states = torch.baddbmm(hidden_states, query, key, beta=beta, alpha=self._get_softmax_scale(False)).view(
-            batch_size, self.num_heads, query_length, key_length
+        hidden_states = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=self.softmax_dropout_p if self.training else 0,
+            is_causal=self.causal if attention_mask is None else False,
+            scale=self._get_softmax_scale(),
         )
 
-        del query, key
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
-        hidden_states = F.softmax(hidden_states.float(), dim=-1).to(dtype)
-        hidden_states = self.softmax_dropout(hidden_states)
-
-        # ==========================================================================================
-        # value -> (batch_size, num_heads, key_length, head_dim)
-        # hidden_states -> (batch_size, num_heads, query_length, key_length)
-        # ==========================================================================================
-
-        hidden_states = torch.matmul(hidden_states, value)
-
-        del value
+        del query, key, value
 
         # ==========================================================================================
         # hidden_states -> (batch_size, num_heads, query_length, head_dim)
         # ==========================================================================================
 
+        batch_size = hidden_states.shape[0]
         hidden_states = hidden_states.transpose(1, 2)
         hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 

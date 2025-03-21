@@ -2,7 +2,6 @@ from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mamba2 import Mamba2
 from .softmax_attention import (
-    SDPA,
     Attention,
     FlashAttention2,
     PaddingFreeAttention,
@@ -22,7 +21,6 @@ from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
 _ATTENTION_MODULES = {
     "eager": Attention,
-    "sdpa": SDPA,
     "flash_attention_2": FlashAttention2,
 }
 

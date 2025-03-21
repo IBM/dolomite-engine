@@ -1,6 +1,6 @@
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ..config import DesyncResidualConfig
-from .sdpa import DesyncResidualSDPA
+from .base import DesyncResidualSDPA
 
 
 _ATTENTION_MODULES = {"sdpa": DesyncResidualSDPA}

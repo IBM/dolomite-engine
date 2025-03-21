@@ -7,7 +7,6 @@ from ....enums import AttentionHeadType
 from .base import Attention
 from .flash import FlashAttention2
 from .padding_free import PaddingFreeAttention
-from .sdpa import SDPA
 from .utils import (
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
@@ -21,7 +20,6 @@ from .utils import (
 
 _ATTENTION_MODULES = {
     "eager": Attention,
-    "sdpa": SDPA,
     "flash_attention_2": FlashAttention2,
 }
 

@@ -1,18 +1,10 @@
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from .softmax_attention import SDPA_TP, Attention_TP, FlashAttention2_TP, PaddingFreeAttention_TP
+from .softmax_attention import Attention_TP, FlashAttention2_TP, PaddingFreeAttention_TP
 
 
 _ATTENTION_MODULES = {
     "eager": Attention_TP,
-    "sdpa": SDPA_TP,
-    "flash_attention_2": FlashAttention2_TP,
-}
-
-
-_ATTENTION_MODULES = {
-    "eager": Attention_TP,
-    "sdpa": SDPA_TP,
     "flash_attention_2": FlashAttention2_TP,
 }
 
