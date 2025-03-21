@@ -42,7 +42,7 @@ def get_sequence_mixer(
 
 
 def get_key_value_projection(
-    config: GPTCrossLayerConfig, attention_implementation: str, use_padding_free_transformer: bool, layer_idx: int
+    config: GPTCrossLayerConfig, use_padding_free_transformer: bool, layer_idx: int
 ) -> CrossLayerAttention:
     kwargs = dict(
         hidden_size=config.hidden_size,
@@ -55,9 +55,6 @@ def get_key_value_projection(
     )
 
     if use_padding_free_transformer:
-        assert (
-            attention_implementation == "flash_attention_2"
-        ), "padding free transformer only works with flash attention"
         kv_projection_class = KeyValuePaddingFreeProjection
     else:
         kv_projection_class = KeyValueProjection

@@ -14,9 +14,7 @@ class TypeCheckTest(TestCommons):
         self.skip_test_if_device_unavailable(device)
 
         config = GPTDolomiteConfig(2048, 1024, 32, 8, 4)
-        model = self.from_config(
-            config, attn_implementation="flash_attention_2", use_padding_free_transformer=True
-        ).to(device)
+        model = self.from_config(config, use_padding_free_transformer=True).to(device)
         model.eval()
 
         input_ids, _, labels = self.get_dummy_inputs(device, return_list=True)

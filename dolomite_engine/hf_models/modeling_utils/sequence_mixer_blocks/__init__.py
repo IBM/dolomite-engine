@@ -21,7 +21,6 @@ from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 def get_sequence_mixer(
     config: CommonConfig,
     causal: bool,
-    attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
 ) -> Attention | Mamba2:
@@ -70,9 +69,6 @@ def get_sequence_mixer(
             sequence_mixer_kwargs["softmax_dropout"] = block.softmax_dropout
 
             if use_padding_free_transformer:
-                assert (
-                    attention_implementation == "flash_attention_2"
-                ), "padding free transformer only works with flash attention"
                 return PaddingFreeAttention(**sequence_mixer_kwargs)
             else:
                 return Attention(**sequence_mixer_kwargs)

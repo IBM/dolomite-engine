@@ -12,13 +12,7 @@ from .sequence_mixers import get_key_value_projection, get_sequence_mixer
 
 
 class GPTCrossLayerBlock(nn.Module):
-    def __init__(
-        self,
-        config: GPTCrossLayerConfig,
-        attention_implementation: str,
-        use_padding_free_transformer: bool,
-        layer_idx: int,
-    ) -> None:
+    def __init__(self, config: GPTCrossLayerConfig, use_padding_free_transformer: bool, layer_idx: int) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size
@@ -35,18 +29,13 @@ class GPTCrossLayerBlock(nn.Module):
         self.kv_proj = None
         if config.sharing_pattern[layer_idx] == layer_idx:
             self.kv_proj = get_key_value_projection(
-                config,
-                attention_implementation=attention_implementation,
-                use_padding_free_transformer=use_padding_free_transformer,
-                layer_idx=layer_idx,
+                config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
             )
 
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.sequence_mixer = get_sequence_mixer(
-            config, True, attention_implementation, use_padding_free_transformer, layer_idx
-        )
+        self.sequence_mixer = get_sequence_mixer(config, True, use_padding_free_transformer, layer_idx)
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )

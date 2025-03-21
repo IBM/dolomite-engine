@@ -33,9 +33,7 @@ class PreTrainedModelMixin(PreTrainedModel):
 
         assert self.config_class is not None
 
-        self.attention_implementation = self.config._attn_implementation
         self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
-
         self._tied_word_embeddings = config.tie_word_embeddings
 
         self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
@@ -121,12 +119,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         )
         self.h = nn.ModuleList(
             [
-                self.layer_class(
-                    config,
-                    attention_implementation=self.attention_implementation,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
-                    layer_idx=i,
-                )
+                self.layer_class(config, use_padding_free_transformer=self._use_padding_free_transformer, layer_idx=i)
                 for i in range(config.num_layers)
             ]
         )

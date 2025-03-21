@@ -260,12 +260,10 @@ class TestCommons(TestCase):
         return False
 
     def from_config(self, config: AutoConfig, **kwargs) -> AutoModelForCausalLM:
-        attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
 
         model = AutoModelForCausalLM.from_config(
             config,
-            attn_implementation=attention_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             torch_dtype=kwargs.pop("torch_dtype", None),
         )

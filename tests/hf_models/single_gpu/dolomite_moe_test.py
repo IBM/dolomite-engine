@@ -34,13 +34,8 @@ class MoEDolomiteAttentionTest(TestCommons):
 
         config = self.get_moe_test_config(attention_head_type, position_embedding_type, num_layers=1)
 
-        sdpa_model = self.from_config(config, torch_dtype=torch_dtype, attn_implementation="sdpa").to(device)
-        flash_model = self.from_config(
-            config,
-            torch_dtype=torch_dtype,
-            attn_implementation="flash_attention_2",
-            use_padding_free_transformer=True,
-        ).to(device)
+        sdpa_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        flash_model = self.from_config(config, torch_dtype=torch_dtype, use_padding_free_transformer=True).to(device)
 
         sdpa_model.eval()
         flash_model.eval()
@@ -93,10 +88,8 @@ class MoEDolomiteAttentionTest(TestCommons):
         input_ids, attention_mask, labels = self.get_dummy_inputs(device)
         config = self.get_moe_test_config(attention_head_type, position_embedding_type, num_layers=1)
 
-        sdpa_model = self.from_config(config, torch_dtype=torch_dtype, attn_implementation="sdpa").to(device)
-        flash_model = self.from_config(config, torch_dtype=torch_dtype, attn_implementation="flash_attention_2").to(
-            device
-        )
+        sdpa_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        flash_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
 
         sdpa_model.eval()
         flash_model.eval()
