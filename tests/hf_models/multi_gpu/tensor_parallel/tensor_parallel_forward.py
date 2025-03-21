@@ -91,7 +91,9 @@ elif args.model_type == "ladder_residual":
         ],
     )
 
-enable_kernels([Kernel.scattermoe]).__enter__()
+enable_kernels(
+    [Kernel.scattermoe] + ([Kernel.flash_attention_2] if args.attention_implementation == "flash_attention_2" else [])
+).__enter__()
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
