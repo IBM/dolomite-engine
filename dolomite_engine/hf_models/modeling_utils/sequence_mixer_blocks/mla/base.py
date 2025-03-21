@@ -21,7 +21,6 @@ class MultiHeadLatentAttention(nn.Module):
         rope_dim: int,
         num_attention_heads: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
         softmax_dropout: float,
@@ -56,7 +55,6 @@ class MultiHeadLatentAttention(nn.Module):
         else:
             assert self.rope_dim == 0
 
-        self.attention_head_type = attention_head_type
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
@@ -77,7 +75,7 @@ class MultiHeadLatentAttention(nn.Module):
 
         self.query_up_projection = ParameterizedLinear(
             self.hidden_size,
-            self.query_compression_size + 2 * self.key_value_compression_size + self.rope_dim,
+            self.hidden_size + self.rope_dim,
             bias=self.add_bias,
             std=std,
         )
@@ -124,8 +122,12 @@ class MultiHeadLatentAttention(nn.Module):
                 ),
                 dim=-1,
             )
+            del hidden_states
 
-            query, query_rope = self.query_up_projection(compressed_query)
+            query_query_rope = self.query_up_projection(compressed_query)
+            query, query_rope = query_query_rope.split((self.hidden_size, self.rope_dim), dim=-1)
+            del query_query_rope
+
             query_rope = apply_rotary_pos_emb(query_rope, rope_cos_sin)
             query = torch.cat([query, query_rope], dim=-1)
             del query_rope
@@ -142,31 +144,19 @@ class MultiHeadLatentAttention(nn.Module):
             key = torch.cat([key, key_rope], dim=-1)
             del key_rope
         else:
-            compressed_query, compressed_key_value, key_rope = hidden_states.split(
-                (
-                    self.query_compression_size,
-                    2 * self.key_value_compression_size,
-                    self.rope_dim,
-                ),
-                dim=-1,
+            compressed_query, compressed_key_value = hidden_states.split(
+                (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
             )
+            del hidden_states
 
-            query, query_rope = self.query_up_projection(compressed_query)
-            query_rope = apply_rotary_pos_emb(query_rope, rope_cos_sin)
-            query = torch.cat([query, query_rope], dim=-1)
-            del query_rope
-
-            key_rope = apply_rotary_pos_emb(key_rope, rope_cos_sin)
+            query = self.query_up_projection(compressed_query)
 
             if past_key_values is not None:
-                compressed_key_value, key_rope = past_key_values.update(compressed_key_value, key_rope, self.layer_idx)
+                compressed_key_value, None = past_key_values.update(compressed_key_value, None, self.layer_idx)
 
             key_value = self.key_value_up_projection(compressed_key_value)
             key, value = key_value.chunk(2, dim=-1)
             del key_value
-
-            key = torch.cat([key, key_rope], dim=-1)
-            del key_rope
 
         key = key.transpose(-1, -2)
         dtype = query.dtype
