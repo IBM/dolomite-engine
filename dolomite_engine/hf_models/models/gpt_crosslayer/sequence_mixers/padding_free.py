@@ -3,7 +3,7 @@ import torch
 from .....utils import is_flash_attention_available
 from ....enums import PositionEmbeddingType
 from ....modeling_utils import apply_rotary_pos_emb
-from .base import CrossLayerAttention, KeyValueProjection
+from .base import CrossLayerAttention
 
 
 if is_flash_attention_available():
@@ -50,19 +50,3 @@ class CrossLayerPaddingFreeAttention(CrossLayerAttention):
         hidden_states = self.dropout(hidden_states)
 
         return hidden_states
-
-
-class KeyValuePaddingFreeProjection(KeyValueProjection):
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.ln(hidden_states)
-        hidden_states = self.kv_attn(hidden_states)
-
-        if self.num_key_value_heads == 1:
-            hidden_states = hidden_states.unsqueeze(1)
-        else:
-            total_q = hidden_states.shape[0]
-            hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
-
-        key, value = hidden_states.chunk(2, -1)
-
-        return key, value

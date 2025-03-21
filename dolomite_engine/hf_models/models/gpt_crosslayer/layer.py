@@ -8,7 +8,7 @@ from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
 from .config import GPTCrossLayerConfig
-from .sequence_mixers import get_key_value_projection, get_sequence_mixer
+from .sequence_mixers import KeyValueProjection, get_sequence_mixer
 
 
 class GPTCrossLayerBlock(nn.Module):
@@ -28,8 +28,15 @@ class GPTCrossLayerBlock(nn.Module):
 
         self.kv_proj = None
         if config.sharing_pattern[layer_idx] == layer_idx:
-            self.kv_proj = get_key_value_projection(
-                config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
+            self.kv_proj = KeyValueProjection(
+                hidden_size=config.hidden_size,
+                num_attention_heads=config.num_attention_heads,
+                num_key_value_heads=config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
+                add_bias=config.sequence_mixer_blocks[layer_idx].add_bias,
+                initializer_range=config.initializer_range,
+                normalization_function=config.normalization_function,
+                layer_norm_epsilon=config.layer_norm_epsilon,
+                use_padding_free_transformer=use_padding_free_transformer,
             )
 
         self.ln_1 = get_normalization_function(

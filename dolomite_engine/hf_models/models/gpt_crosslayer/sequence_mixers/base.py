@@ -159,6 +159,7 @@ class KeyValueProjection(nn.Module):
         initializer_range: float,
         normalization_function: str,
         layer_norm_epsilon: float,
+        use_padding_free_transformer: bool,
     ) -> None:
         super().__init__()
 
@@ -173,17 +174,27 @@ class KeyValueProjection(nn.Module):
             std=initializer_range,
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:2]
+        self.use_padding_free_transformer = use_padding_free_transformer
 
+    def forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         hidden_states = self.ln(hidden_states)
         hidden_states = self.kv_attn(hidden_states)
 
-        if self.num_key_value_heads == 1:
-            hidden_states = hidden_states.unsqueeze(1)
+        if self.use_padding_free_transformer:
+            total_q = hidden_states.shape[0]
+
+            if self.num_key_value_heads == 1:
+                hidden_states = hidden_states.unsqueeze(1)
+            else:
+                hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
         else:
-            hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
-            hidden_states = hidden_states.transpose(1, 2)
+            batch_size, query_length = hidden_states.shape[:2]
+
+            if self.num_key_value_heads == 1:
+                hidden_states = hidden_states.unsqueeze(1)
+            else:
+                hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
+                hidden_states = hidden_states.transpose(1, 2)
 
         key, value = hidden_states.chunk(2, -1)
 
