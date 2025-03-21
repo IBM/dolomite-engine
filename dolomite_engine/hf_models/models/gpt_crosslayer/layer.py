@@ -28,7 +28,6 @@ class GPTCrossLayerBlock(nn.Module):
         self.head_dim = divide_if_divisible(hidden_size, self.num_heads, "")
         self.num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
-        self._use_sdpa = attention_implementation == "sdpa"
         self._use_flash_attention_2 = attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = use_padding_free_transformer
 
@@ -74,10 +73,7 @@ class GPTCrossLayerBlock(nn.Module):
             if past_key_values is not None:
                 key, value = past_key_values.update(key, value, layer_idx=self.layer_idx)
 
-            if self._use_sdpa:
-                key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
-                value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
-            elif self._use_flash_attention_2:
+            if self._use_flash_attention_2:
                 if not self._use_padding_free_transformer:
                     if self.attention_head_type == AttentionHeadType.mqa:
                         key = key.squeeze(1).unsqueeze(2)
@@ -85,6 +81,9 @@ class GPTCrossLayerBlock(nn.Module):
                     else:
                         key = key.transpose(1, 2)
                         value = value.transpose(1, 2)
+            else:
+                key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
+                value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)

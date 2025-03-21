@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache, PreTrainedModel
 
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
 from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
@@ -32,7 +34,6 @@ class PreTrainedModelMixin(PreTrainedModel):
         assert self.config_class is not None
 
         self.attention_implementation = self.config._attn_implementation
-        self._use_sdpa = self.attention_implementation == "sdpa"
         self._use_flash_attention_2 = self.attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
 
@@ -481,7 +482,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         dtype: torch.dtype,
         device: torch.device,
     ) -> torch.Tensor:
-        if self._use_sdpa:
+        if not is_kernel_allowed(Kernel.flash_attention_2):
             # we use the causal/non-causal argument of SDPA for attention in this case
             if attention_mask is not None:
                 attention_mask = self._prepare_causal_attention_mask(
