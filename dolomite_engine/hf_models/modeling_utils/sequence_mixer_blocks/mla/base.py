@@ -6,9 +6,10 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from .....utils import divide_if_divisible
-from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ....enums import InitMethod, PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
+from ..softmax_attention import repeat_key_value
 
 
 class MultiHeadLatentAttention(nn.Module):
@@ -37,6 +38,7 @@ class MultiHeadLatentAttention(nn.Module):
         self.causal = causal
         self.hidden_size = hidden_size
         self.num_heads = num_attention_heads
+        self.num_key_value_heads = self.num_heads
         self.add_bias = add_bias
         self.compress_query = compress_query
 
@@ -97,19 +99,9 @@ class MultiHeadLatentAttention(nn.Module):
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
+    def _prepare_qkv_for_forward(
+        self, hidden_states: torch.Tensor, past_key_values: DynamicCache | None, rope_cos_sin: torch.Tensor | None
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # the output of following is a tuple if using MQA with tensor parallel
         hidden_states = self.c_attn_down_projection(hidden_states)
 
@@ -158,18 +150,38 @@ class MultiHeadLatentAttention(nn.Module):
             key, value = key_value.chunk(2, dim=-1)
             del key_value
 
+        return query, key, value
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        # ==========================================================================================
+        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
+        # ==========================================================================================
+
+        query, key, value = self._prepare_qkv_for_forward(hidden_states, past_key_values, rope_cos_sin)
+
         key = key.transpose(-1, -2)
         dtype = query.dtype
 
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_heads, head_dim, key_length)
-        # value -> (batch_size, num_heads, key_length, head_dim)
+        # key -> (batch_size, num_key_value_heads, head_dim, key_length)
+        # value -> (batch_size, num_key_value_heads, key_length, head_dim)
         # ==========================================================================================
 
         batch_size = query.shape[0]
         query_length = query.shape[2]
         key_length = key.shape[-1]
+
+        key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
+        value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
         # Always copies
         query = query.reshape(batch_size * self.num_heads, query_length, self.head_dim)
