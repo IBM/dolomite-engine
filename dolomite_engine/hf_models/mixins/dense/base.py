@@ -25,8 +25,6 @@ class PreTrainedModelMixin(PreTrainedModel):
     causal = True
     _no_split_modules = None
     _skip_keys_device_placement = "past_key_values"
-    _supports_sdpa = True
-    _supports_flash_attn_2 = True
 
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
         super().__init__(config, *args, **kwargs)
