@@ -4,10 +4,10 @@ from torch.distributed._functional_collectives import all_reduce
 
 from .....utils import ProcessGroupManager
 from ....config import CommonConfig
-from .scatter import ScatterMoE
+from .base import MoE
 
 
-class AuxFreeMoE(ScatterMoE):
+class AuxFreeMoE(MoE):
     def __init__(self, config: CommonConfig, use_padding_free_transformer: bool) -> None:
         super().__init__(config, use_padding_free_transformer)
         self.register_buffer("bias", torch.zeros(config.num_experts))

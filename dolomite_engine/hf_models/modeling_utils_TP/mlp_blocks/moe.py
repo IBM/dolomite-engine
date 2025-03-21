@@ -7,17 +7,12 @@ import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
 from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
-from ....kernels import wait_for_ACT
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
 from ...enums import InitMethod
 from ...loss import add_aux_loss
-from ...modeling_utils import (
-    ParameterizedLinear,
-    ParameterizedScatteredExperts,
-    ScatterMoE,
-    get_activation_function,
-    is_glu,
-)
+from ...modeling_utils import MoE, ParameterizedExperts, ParameterizedLinear, get_activation_function, is_glu
 from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..dtensor_module import DTensorModule
 from ..linear import ColumnParallelLinear, RowParallelLinear
@@ -48,7 +43,7 @@ class ReplicatedLinear_TP(ParameterizedLinear, DTensorModule):
         )
 
 
-class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModule):
+class ColumnParallelExperts(ParameterizedExperts, DTensorModule):
     def __init__(
         self,
         num_experts: int,
@@ -94,6 +89,8 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
         grouped_in: bool = False,
         grouped_out: bool = False,
     ) -> torch.Tensor:
+        assert is_kernel_allowed(Kernel.scattermoe)
+
         input = scattered_experts(
             inputs=wait_for_ACT(input, wait_in_forward=True, wait_in_backward=False),
             expert_weights=dtensor_to_tensor(self.weight).permute(0, 2, 1),
@@ -111,7 +108,7 @@ class ColumnParallelScatteredExperts(ParameterizedScatteredExperts, DTensorModul
         return input
 
 
-class RowParallelScatteredExperts(ColumnParallelScatteredExperts):
+class RowParallelExperts(ColumnParallelExperts):
     def __init__(
         self,
         num_experts: int,
@@ -130,7 +127,7 @@ class RowParallelScatteredExperts(ColumnParallelScatteredExperts):
             f"`in_features` ({in_features}) must be divisible by `tensor_parallel_world_size` ({tp_world_size})",
         )
 
-        ParameterizedScatteredExperts.__init__(
+        ParameterizedExperts.__init__(
             self,
             num_experts=num_experts,
             in_features=self.in_features_per_device,
@@ -158,7 +155,7 @@ class SharedExpertsRowParallelLinear(RowParallelLinear):
         return F.linear(input, dtensor_to_tensor(self.weight), dtensor_to_tensor(self.bias))
 
 
-class ScatterMoE_TP(ScatterMoE, DTensorModule):
+class MoE_TP(MoE, DTensorModule):
     def __init__(
         self,
         hidden_size: int,
@@ -197,7 +194,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
             std=std,
         )
 
-        self.c_fc = ColumnParallelScatteredExperts(
+        self.c_fc = ColumnParallelExperts(
             num_experts=num_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
@@ -218,7 +215,7 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
 
         std /= math.sqrt(2 * num_layers)
 
-        self.c_proj = RowParallelScatteredExperts(
+        self.c_proj = RowParallelExperts(
             num_experts=num_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
@@ -257,6 +254,8 @@ class ScatterMoE_TP(ScatterMoE, DTensorModule):
         return router_logits, router_weights, selected_experts
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        assert is_kernel_allowed(Kernel.scattermoe)
+
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
 

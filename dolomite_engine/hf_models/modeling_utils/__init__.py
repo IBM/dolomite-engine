@@ -6,8 +6,6 @@ from .mlp_blocks import (
     MLP,
     MoE,
     ParameterizedExperts,
-    ParameterizedScatteredExperts,
-    ScatterMoE,
     get_mlp_block,
     interleave_up_gate_tensor_for_mlp,
     split_up_gate_tensor_for_mlp,
