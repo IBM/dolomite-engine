@@ -30,7 +30,7 @@ class GLUActivation(nn.Module):
         self.base_activation = base_activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if is_kernel_allowed(Kernel.swiglu_unchunked_cute) and isinstance(self.base_activation, nn.modules.SiLU):
+        if is_kernel_allowed(Kernel.swiglu_unchunked_cute) and isinstance(self.base_activation, nn.SiLU):
             x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
             x = swiglu_unchunked_cute(x)
             x = wait_for_ACT(x, wait_in_forward=False, wait_in_backward=True)

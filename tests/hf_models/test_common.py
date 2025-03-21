@@ -10,7 +10,6 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
     GPTDolomiteConfig,
@@ -19,7 +18,6 @@ from dolomite_engine.hf_models import (
     import_from_huggingface,
 )
 from dolomite_engine.hf_models.config import CommonConfig
-from dolomite_engine.kernels import enable_kernels
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
