@@ -7,6 +7,7 @@ from .padding_free import CrossLayerPaddingFreeAttention, KeyValuePaddingFreePro
 
 _ATTENTION_MODULES = {
     "eager": CrossLayerAttention,
+    "sdpa": CrossLayerAttention,
     "flash_attention_2": CrossLayerFlashAttention2,
 }
 

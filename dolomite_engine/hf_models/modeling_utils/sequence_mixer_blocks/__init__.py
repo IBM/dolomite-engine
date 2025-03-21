@@ -21,6 +21,7 @@ from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
 _ATTENTION_MODULES = {
     "eager": Attention,
+    "sdpa": Attention,
     "flash_attention_2": FlashAttention2,
 }
 
