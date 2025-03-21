@@ -4,7 +4,6 @@ from .mamba2 import Mamba2
 from .softmax_attention import (
     Attention,
     PaddingFreeAttention,
-    get_attention_module,
     interleave_query_key_value_tensor_for_attention,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
