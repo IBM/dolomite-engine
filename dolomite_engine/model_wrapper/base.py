@@ -69,14 +69,13 @@ class ModelWrapper(nn.Module):
         use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.is_pipeline_parallel_enabled
 
         self._setup_config()
+        self.is_custom_model = is_custom_model(self.config.model_type)
 
         log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
 
         if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_model_parallel_class(self.config.model_type)
-
-        self.is_custom_model = is_custom_model(self.config.model_type)
 
         if self.use_padding_free_transformer:
             assert self.is_custom_model, "padding free transformer is not supported with the specified model"
