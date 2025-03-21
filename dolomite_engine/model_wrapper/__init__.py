@@ -41,7 +41,6 @@ def get_model_container(
         "trust_remote_code": args.model_args.trust_remote_code,
         "tokenizer_name": args.tokenizer_args.tokenizer_name,
         "additional_special_tokens": args.tokenizer_args.additional_special_tokens,
-        "kernels": args.kernel_args.kernels,
     }
 
     # pretraining model wrapper needs some extra arguments for initialization
