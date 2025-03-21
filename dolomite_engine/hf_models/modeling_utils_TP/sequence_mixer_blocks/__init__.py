@@ -5,6 +5,7 @@ from .softmax_attention import Attention_TP, FlashAttention2_TP, PaddingFreeAtte
 
 _ATTENTION_MODULES = {
     "eager": Attention_TP,
+    "sdpa": Attention_TP,
     "flash_attention_2": FlashAttention2_TP,
 }
 

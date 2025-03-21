@@ -34,7 +34,7 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_attention_implementations() -> list[str]:
-        return ["eager", "sdpa", "flash_attention_2"]
+        return ["sdpa", "flash_attention_2"]
 
     @staticmethod
     def get_position_embedding_types() -> list[PositionEmbeddingType]:

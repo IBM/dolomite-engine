@@ -18,10 +18,7 @@ from .utils import (
 )
 
 
-_ATTENTION_MODULES = {
-    "eager": Attention,
-    "flash_attention_2": FlashAttention2,
-}
+_ATTENTION_MODULES = {"sdpa": Attention, "flash_attention_2": FlashAttention2}
 
 
 _INTERLEAVE_FUNCTIONS = {

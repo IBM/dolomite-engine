@@ -6,7 +6,6 @@ from .padding_free import CrossLayerPaddingFreeAttention, KeyValuePaddingFreePro
 
 
 _ATTENTION_MODULES = {
-    "eager": CrossLayerAttention,
     "sdpa": CrossLayerAttention,
     "flash_attention_2": CrossLayerFlashAttention2,
 }
@@ -50,7 +49,6 @@ def get_sequence_mixer(
 
 
 _KEY_VALUE_PROJECTION_MODULES = {
-    "eager": KeyValueProjection,
     "sdpa": KeyValueProjection,
     "flash_attention_2": KeyValueProjection,
 }
