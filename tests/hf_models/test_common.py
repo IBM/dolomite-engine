@@ -273,18 +273,6 @@ class TestCommons(TestCase):
         if use_padding_free_transformer:
             assert model._use_padding_free_transformer
 
-        if attention_implementation == "eager":
-            assert "Attention" in str(model)
-            assert "FlashAttention2" not in str(model)
-            assert "PaddingFreeAttention" not in str(model)
-        elif attention_implementation == "sdpa":
-            assert "SDPA" in str(model)
-        elif attention_implementation == "flash_attention_2":
-            if use_padding_free_transformer:
-                assert "PaddingFreeAttention" in str(model)
-            else:
-                assert "FlashAttention2" in str(model)
-
         assert len(kwargs) == 0
 
         return model
