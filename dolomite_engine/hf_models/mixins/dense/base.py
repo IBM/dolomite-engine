@@ -32,7 +32,6 @@ class PreTrainedModelMixin(PreTrainedModel):
         assert self.config_class is not None
 
         self.attention_implementation = self.config._attn_implementation
-        self._use_eager_attention = self.attention_implementation == "eager"
         self._use_sdpa = self.attention_implementation == "sdpa"
         self._use_flash_attention_2 = self.attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
@@ -500,16 +499,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 attention_mask = attention_mask * ~torch.all(
                     attention_mask == self._get_mask_value(attention_mask.device, dtype), dim=-1, keepdim=True
                 )
-        elif self._use_eager_attention:
-            attention_mask = self._prepare_causal_attention_mask(
-                attention_mask, batch_size, query_length, key_length, device
-            )
-
-            attention_mask = torch.where(
-                attention_mask,
-                ~attention_mask,
-                self._get_mask_value(attention_mask.device, dtype),
-            )
 
         return attention_mask
 
