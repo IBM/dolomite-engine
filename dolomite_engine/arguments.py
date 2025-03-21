@@ -7,7 +7,6 @@ from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
 from .defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from .enums import (
-    AttentionImplementation,
     ExperimentsTrackerName,
     GradientCheckpointingMethod,
     Kernel,
@@ -48,7 +47,7 @@ class ModelArgs(BaseArgs):
     # trust remote code for models that are not directly supported by HuggingFace yet
     trust_remote_code: bool = False
     # attention implementation
-    attention_implementation: AttentionImplementation | None = None
+    attention_implementation: str | None = None
     # whether to use padding free transformer: https://huggingface.co/blog/mayank-mishra/padding-free-transformer
     use_padding_free_transformer: bool = False
     # use lower memory to initialize model

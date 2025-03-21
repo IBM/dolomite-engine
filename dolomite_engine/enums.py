@@ -17,15 +17,6 @@ class LRDecaySchedule(Enum):
     power = "power"
 
 
-class AttentionImplementation(Enum):
-    """
-    Enum class for attention implementation
-    """
-
-    sdpa = "sdpa"
-    flash_attention_2 = "flash_attention_2"
-
-
 class DatasetSplit(Enum):
     """dataset split"""
 
