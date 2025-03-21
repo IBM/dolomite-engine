@@ -1,17 +1,17 @@
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ..config import DesyncResidualConfig
-from .base import DesyncResidualSDPA
+from .base import DesyncResidualAttention
 
 
 def get_sequence_mixer(
     config: DesyncResidualConfig, causal: bool, use_padding_free_transformer: bool, layer_idx: int
-) -> DesyncResidualSDPA:
+) -> DesyncResidualAttention:
     if use_padding_free_transformer:
         raise NotImplementedError("padding free transformer is not implemented with DesyncResidual")
 
     block = config.sequence_mixer_blocks[layer_idx]
 
-    return DesyncResidualSDPA(
+    return DesyncResidualAttention(
         hidden_size=config.hidden_size,
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=block.num_key_value_heads,
