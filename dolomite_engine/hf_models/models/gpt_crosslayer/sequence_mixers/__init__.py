@@ -5,11 +5,7 @@ from .padding_free import CrossLayerPaddingFreeAttention, KeyValuePaddingFreePro
 
 
 def get_sequence_mixer(
-    config: GPTCrossLayerConfig,
-    causal: bool,
-    attention_implementation: str,
-    use_padding_free_transformer: bool,
-    layer_idx: int,
+    config: GPTCrossLayerConfig, causal: bool, use_padding_free_transformer: bool, layer_idx: int
 ) -> CrossLayerAttention:
     block = config.sequence_mixer_blocks[layer_idx]
     assert block.sequence_mixer_type == "softmax_attention"
@@ -31,9 +27,6 @@ def get_sequence_mixer(
     )
 
     if use_padding_free_transformer:
-        assert (
-            attention_implementation == "flash_attention_2"
-        ), "padding free transformer only works with flash attention"
         attention_class = CrossLayerPaddingFreeAttention
     else:
         attention_class = CrossLayerAttention
