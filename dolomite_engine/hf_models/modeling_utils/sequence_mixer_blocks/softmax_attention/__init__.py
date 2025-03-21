@@ -116,16 +116,8 @@ class Attention(nn.Module):
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
         # the output of following is a tuple if using MQA with tensor parallel
         hidden_states = self.c_attn(hidden_states)
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, [num_heads + num_key_value_heads * 2] * head_dim)
-        # ==========================================================================================
 
         # for MHA, we can get away with doing just 1 transpose which is not true for GQA
         if self.attention_head_type == AttentionHeadType.mha:
@@ -136,12 +128,6 @@ class Attention(nn.Module):
             query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # ==========================================================================================
 
         return query, key, value
 
