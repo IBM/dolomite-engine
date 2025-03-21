@@ -14,7 +14,6 @@ from .normalization import get_normalization_function
 from .position_embedding import RoPE, YaRNScaledRoPE, apply_rotary_pos_emb
 from .sequence_mixer_blocks import (
     Attention,
-    FlashAttention2,
     Mamba2,
     PaddingFreeAttention,
     get_sequence_mixer,

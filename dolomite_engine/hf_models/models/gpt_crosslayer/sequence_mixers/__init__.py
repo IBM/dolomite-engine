@@ -1,14 +1,7 @@
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ..config import GPTCrossLayerConfig
 from .base import CrossLayerAttention, KeyValueProjection
-from .flash import CrossLayerFlashAttention2
 from .padding_free import CrossLayerPaddingFreeAttention, KeyValuePaddingFreeProjection
-
-
-_ATTENTION_MODULES = {
-    "sdpa": CrossLayerAttention,
-    "flash_attention_2": CrossLayerFlashAttention2,
-}
 
 
 def get_sequence_mixer(
@@ -43,15 +36,9 @@ def get_sequence_mixer(
         ), "padding free transformer only works with flash attention"
         attention_class = CrossLayerPaddingFreeAttention
     else:
-        attention_class = _ATTENTION_MODULES[attention_implementation]
+        attention_class = CrossLayerAttention
 
     return attention_class(**sequence_mixer_kwargs)
-
-
-_KEY_VALUE_PROJECTION_MODULES = {
-    "sdpa": KeyValueProjection,
-    "flash_attention_2": KeyValueProjection,
-}
 
 
 def get_key_value_projection(
@@ -73,6 +60,6 @@ def get_key_value_projection(
         ), "padding free transformer only works with flash attention"
         kv_projection_class = KeyValuePaddingFreeProjection
     else:
-        kv_projection_class = _KEY_VALUE_PROJECTION_MODULES[attention_implementation]
+        kv_projection_class = KeyValueProjection
 
     return kv_projection_class(**kwargs)

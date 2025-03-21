@@ -80,5 +80,6 @@ class Kernel(Enum):
     rmsnorm_cute = "rmsnorm_cute"
     swiglu_unchunked_cute = "swiglu_unchunked_cute"
     # external kernels
+    flash_attention_2 = "flash_attention_2"
     mamba2_ssm = "mamba2_ssm"
     scattermoe = "scattermoe"

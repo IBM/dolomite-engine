@@ -4,7 +4,9 @@ import torch
 from parameterized import parameterized
 from transformers import set_seed
 
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
 
@@ -54,10 +56,11 @@ class GPTDolomiteAttentionTest(TestCommons):
         sdpa_logits = torch.cat([sdpa_logits[i, ex, :] for i, ex in enumerate(attention_mask)])
         sdpa_loss = sdpa_output.loss
 
-        input_ids, attention_mask, labels = self.get_dummy_inputs(device, return_list=True)
-        flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        flash_logits = flash_output.logits
-        flash_loss = flash_output.loss
+        with enable_kernels([Kernel.flash_attention_2]):
+            input_ids, attention_mask, labels = self.get_dummy_inputs(device, return_list=True)
+            flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            flash_logits = flash_output.logits
+            flash_loss = flash_output.loss
 
         self.assert_equal_tensors(
             sdpa_logits,
@@ -106,9 +109,10 @@ class GPTDolomiteAttentionTest(TestCommons):
         sdpa_logits = sdpa_output.logits
         sdpa_loss = sdpa_output.loss
 
-        flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        flash_logits = flash_output.logits
-        flash_loss = flash_output.loss
+        with enable_kernels([Kernel.flash_attention_2]):
+            flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            flash_logits = flash_output.logits
+            flash_loss = flash_output.loss
 
         # we don't care about what happens on masked values (they don't match btw)
         sdpa_logits[attention_mask == 0] = 0
@@ -154,27 +158,30 @@ class GPTDolomiteAttentionTest(TestCommons):
         ).to(device)
         model.eval()
 
-        input_ids, attention_mask, labels = self.get_dummy_inputs(device, return_list=True)
-        list_output = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        list_logits = list_output.logits
-        list_loss = list_output.loss
+        with enable_kernels([Kernel.flash_attention_2]):
+            input_ids, attention_mask, labels = self.get_dummy_inputs(device, return_list=True)
+            list_output = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            list_logits = list_output.logits
+            list_loss = list_output.loss
 
-        seqlens = torch.tensor([0] + [len(i) for i in input_ids])
-        cu_seqlens = seqlens.cumsum(dim=-1).to(device, torch.int32)
-        max_seqlen = seqlens.max().item()
-        position_ids = torch.tensor(list(itertools.chain(*[list(range(len(i))) for i in input_ids])), device=device)
-        input_ids = torch.tensor(list(itertools.chain(*input_ids)), device=device)
-        labels = torch.tensor(list(itertools.chain(*labels)), device=device)
-        tensor_output = model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            labels=labels,
-            cu_seqlens=cu_seqlens,
-            max_seqlen=max_seqlen,
-        )
-        tensor_logits = tensor_output.logits
-        tensor_loss = tensor_output.loss
+            seqlens = torch.tensor([0] + [len(i) for i in input_ids])
+            cu_seqlens = seqlens.cumsum(dim=-1).to(device, torch.int32)
+            max_seqlen = seqlens.max().item()
+            position_ids = torch.tensor(
+                list(itertools.chain(*[list(range(len(i))) for i in input_ids])), device=device
+            )
+            input_ids = torch.tensor(list(itertools.chain(*input_ids)), device=device)
+            labels = torch.tensor(list(itertools.chain(*labels)), device=device)
+            tensor_output = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                labels=labels,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
+            tensor_logits = tensor_output.logits
+            tensor_loss = tensor_output.loss
 
         self.assert_equal_tensors(list_logits, tensor_logits, True)
         self.assert_equal_tensors(list_loss, tensor_loss, True)
@@ -252,13 +259,14 @@ class GPTDolomiteAttentionTest(TestCommons):
         model = self.from_config(config, torch_dtype=torch_dtype, attn_implementation="flash_attention_2").to(device)
         model.eval()
 
-        output_with_mask = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        logits_with_mask = output_with_mask.logits
-        loss_with_mask = output_with_mask.loss
+        with enable_kernels([Kernel.flash_attention_2]):
+            output_with_mask = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            logits_with_mask = output_with_mask.logits
+            loss_with_mask = output_with_mask.loss
 
-        output_without_mask = model(input_ids=input_ids, labels=labels)
-        logits_without_mask = output_without_mask.logits
-        loss_without_mask = output_without_mask.loss
+            output_without_mask = model(input_ids=input_ids, labels=labels)
+            logits_without_mask = output_without_mask.logits
+            loss_without_mask = output_without_mask.loss
 
         self.assert_equal_tensors(logits_with_mask, logits_without_mask, True)
         self.assert_equal_tensors(loss_with_mask, loss_without_mask, True)

@@ -1,13 +1,6 @@
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from .softmax_attention import Attention_TP, FlashAttention2_TP, PaddingFreeAttention_TP
-
-
-_ATTENTION_MODULES = {
-    "eager": Attention_TP,
-    "sdpa": Attention_TP,
-    "flash_attention_2": FlashAttention2_TP,
-}
+from .softmax_attention import Attention_TP, PaddingFreeAttention_TP
 
 
 def get_sequence_mixer_TP(
@@ -47,4 +40,4 @@ def get_sequence_mixer_TP(
             ), "padding free transformer only works with flash attention"
             return PaddingFreeAttention_TP(**sequence_mixer_kwargs)
         else:
-            return _ATTENTION_MODULES[attention_implementation](**sequence_mixer_kwargs)
+            return Attention_TP(**sequence_mixer_kwargs)

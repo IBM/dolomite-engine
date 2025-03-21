@@ -1,7 +1,9 @@
 import torch
 from parameterized import parameterized
 
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import GPTDolomiteConfig
+from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
 
@@ -20,4 +22,5 @@ class TypeCheckTest(TestCommons):
         input_ids, _, labels = self.get_dummy_inputs(device, return_list=True)
         attention_mask = [[1] * len(i) for i in input_ids]
 
-        self.assertRaises(AssertionError, model, input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        with enable_kernels([Kernel.flash_attention_2]):
+            self.assertRaises(AssertionError, model, input_ids=input_ids, attention_mask=attention_mask, labels=labels)

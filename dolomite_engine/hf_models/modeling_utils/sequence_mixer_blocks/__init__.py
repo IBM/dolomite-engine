@@ -3,7 +3,6 @@ from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mamba2 import Mamba2
 from .softmax_attention import (
     Attention,
-    FlashAttention2,
     PaddingFreeAttention,
     get_attention_module,
     interleave_query_key_value_tensor_for_attention,
@@ -17,13 +16,6 @@ from .softmax_attention import (
     split_query_key_value_tensor_for_mqa,
 )
 from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
-
-
-_ATTENTION_MODULES = {
-    "eager": Attention,
-    "sdpa": Attention,
-    "flash_attention_2": FlashAttention2,
-}
 
 
 def get_sequence_mixer(
@@ -83,7 +75,7 @@ def get_sequence_mixer(
                 ), "padding free transformer only works with flash attention"
                 return PaddingFreeAttention(**sequence_mixer_kwargs)
             else:
-                return _ATTENTION_MODULES[attention_implementation](**sequence_mixer_kwargs)
+                return Attention(**sequence_mixer_kwargs)
         elif sequence_mixer_type == "stickbreaking_attention":
             if use_padding_free_transformer:
                 return PaddingFreeSBAttention(**sequence_mixer_kwargs)

@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .....enums import Kernel
+from .....kernels import is_kernel_allowed
 from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear, apply_rotary_pos_emb, get_normalization_function
@@ -79,29 +81,58 @@ class CrossLayerAttention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        batch_size, query_length = hidden_states.shape[:2]
+        if is_kernel_allowed(Kernel.flash_attention_2):
+            batch_size, query_length = hidden_states.shape[:2]
 
-        query = self.q_attn(hidden_states)
-        query = query.view(batch_size, query_length, self.num_heads, -1)
-        query = query.transpose(1, 2)
+            query = self.q_attn(hidden_states)
+            query = query.view(batch_size, query_length, self.num_heads, -1)
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
-            query = apply_rotary_pos_emb(query, rope_cos_sin)
+            if self.position_embedding_type == PositionEmbeddingType.rope:
+                # TODO avoid this extra transpose
+                query = query.transpose(1, 2)
+                query = apply_rotary_pos_emb(query, rope_cos_sin)
+                query = query.transpose(1, 2)
 
-        hidden_states = F.scaled_dot_product_attention(
-            query,
-            key,
-            value,
-            attn_mask=attention_mask,
-            dropout_p=self.softmax_dropout_p if self.training else 0,
-            is_causal=self.causal if attention_mask is None else False,
-            scale=self._get_softmax_scale(),
-        )
+            batch_size, query_length = query.shape[:2]
 
-        del query, key, value
+            hidden_states = _flash_attention_forward(
+                query_states=query,
+                key_states=key,
+                value_states=value,
+                attention_mask=attention_mask,
+                query_length=query_length,
+                is_causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
-        hidden_states = hidden_states.transpose(1, 2)
-        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
+            del query, key, value
+
+            hidden_states = hidden_states.view(batch_size, query_length, -1)
+        else:
+            batch_size, query_length = hidden_states.shape[:2]
+
+            query = self.q_attn(hidden_states)
+            query = query.view(batch_size, query_length, self.num_heads, -1)
+            query = query.transpose(1, 2)
+
+            if self.position_embedding_type == PositionEmbeddingType.rope:
+                query = apply_rotary_pos_emb(query, rope_cos_sin)
+
+            hidden_states = F.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                dropout_p=self.softmax_dropout_p if self.training else 0,
+                is_causal=self.causal if attention_mask is None else False,
+                scale=self._get_softmax_scale(),
+            )
+
+            del query, key, value
+
+            hidden_states = hidden_states.transpose(1, 2)
+            hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         hidden_states = self.c_proj(hidden_states)
         hidden_states = self.dropout(hidden_states)

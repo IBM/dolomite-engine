@@ -2,7 +2,9 @@ import torch
 from parameterized import parameterized
 from transformers import set_seed
 
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
 
@@ -52,10 +54,11 @@ class MoEDolomiteAttentionTest(TestCommons):
         sdpa_logits = torch.cat([sdpa_logits[i, ex, :] for i, ex in enumerate(attention_mask)])
         sdpa_loss = sdpa_output.loss
 
-        input_ids, attention_mask, labels = self.get_dummy_inputs(device, return_list=True)
-        flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        flash_logits = flash_output.logits
-        flash_loss = flash_output.loss
+        with enable_kernels([Kernel.flash_attention_2]):
+            input_ids, attention_mask, labels = self.get_dummy_inputs(device, return_list=True)
+            flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            flash_logits = flash_output.logits
+            flash_loss = flash_output.loss
 
         self.assert_equal_tensors(
             sdpa_logits,
@@ -104,9 +107,10 @@ class MoEDolomiteAttentionTest(TestCommons):
         sdpa_logits = sdpa_output.logits
         sdpa_loss = sdpa_output.loss
 
-        flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        flash_logits = flash_output.logits
-        flash_loss = flash_output.loss
+        with enable_kernels([Kernel.flash_attention_2]):
+            flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            flash_logits = flash_output.logits
+            flash_loss = flash_output.loss
 
         # we don't care about what happens on masked values (they don't match btw)
         sdpa_logits[attention_mask == 0] = 0

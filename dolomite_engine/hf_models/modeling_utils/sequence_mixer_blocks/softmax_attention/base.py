@@ -4,7 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import DynamicCache
+from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
+from .....enums import Kernel
+from .....kernels import is_kernel_allowed, wait_for_ACT
 from .....utils import divide_if_divisible
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ...linear import ParameterizedLinear
@@ -183,17 +186,7 @@ class Attention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # ==========================================================================================
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
             query = apply_rotary_pos_emb(query, rope_cos_sin)
@@ -202,44 +195,56 @@ class Attention(nn.Module):
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
 
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # ==========================================================================================
+        if is_kernel_allowed(Kernel.flash_attention_2):
+            # TODO avoid this extra transpose
+            query = query.transpose(1, 2)
+            if self.attention_head_type == AttentionHeadType.mqa:
+                key = key.squeeze(1).unsqueeze(2)
+                value = value.squeeze(1).unsqueeze(2)
+            else:
+                key = key.transpose(1, 2)
+                value = value.transpose(1, 2)
 
-        key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
-        value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
+            batch_size, query_length = query.shape[:2]
 
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_heads, key_length, head_dim)
-        # value -> (batch_size, num_heads, key_length, head_dim)
-        # ==========================================================================================
+            query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
+            key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
+            value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
-        hidden_states = F.scaled_dot_product_attention(
-            query,
-            key,
-            value,
-            attn_mask=attention_mask,
-            dropout_p=self.softmax_dropout_p if self.training else 0,
-            is_causal=self.causal if attention_mask is None else False,
-            scale=self._get_softmax_scale(),
-        )
+            hidden_states = _flash_attention_forward(
+                query_states=query,
+                key_states=key,
+                value_states=value,
+                attention_mask=attention_mask,
+                query_length=query_length,
+                is_causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
-        del query, key, value
+            del query, key, value
 
-        # ==========================================================================================
-        # hidden_states -> (batch_size, num_heads, query_length, head_dim)
-        # ==========================================================================================
+            hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
+            hidden_states = hidden_states.view(batch_size, query_length, -1)
+        else:
+            key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
+            value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
-        batch_size = hidden_states.shape[0]
-        hidden_states = hidden_states.transpose(1, 2)
-        hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
+            hidden_states = F.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                dropout_p=self.softmax_dropout_p if self.training else 0,
+                is_causal=self.causal if attention_mask is None else False,
+                scale=self._get_softmax_scale(),
+            )
 
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
+            del query, key, value
+
+            batch_size = hidden_states.shape[0]
+            hidden_states = hidden_states.transpose(1, 2)
+            hidden_states = hidden_states.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         hidden_states = self.c_proj(hidden_states)
         hidden_states = self.dropout(hidden_states)
