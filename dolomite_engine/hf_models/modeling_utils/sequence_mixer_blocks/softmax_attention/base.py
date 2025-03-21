@@ -153,22 +153,22 @@ class Attention(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.use_padding_free_transformer:
             total_q = hidden_states.shape[0]
-            hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
+            input_shape = (hidden_states.shape[0], self.num_key_value_heads, -1)
+            output_shape = (total_q, -1, self.head_dim)
         else:
             batch_size, query_length = hidden_states.shape[:-1]
-            hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
+            input_shape = (*hidden_states.shape[:-1], self.num_key_value_heads, -1)
+            output_shape = (batch_size, query_length, -1, self.head_dim)
+
+        hidden_states = hidden_states.view(*input_shape)
 
         query, key, value = hidden_states.split(
             ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
         )
 
-        if self.use_padding_free_transformer:
-            # this needs to be a reshape instead of view sadly
-            query = query.reshape(total_q, -1, self.head_dim)
-        else:
-            # this needs to be a reshape instead of view sadly
-            query = query.reshape(batch_size, query_length, -1, self.head_dim)
+        query = query.reshape(*output_shape)
 
+        if not self.use_padding_free_transformer:
             query = query.transpose(1, 2)
             key = key.transpose(1, 2)
             value = value.transpose(1, 2)
