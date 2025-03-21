@@ -12,10 +12,12 @@ from ...position_embedding import apply_rotary_pos_emb
 from ..softmax_attention import repeat_key_value
 
 
-class Attention(nn.Module):
+class MultiHeadLatentAttention(nn.Module):
     def __init__(
         self,
         hidden_size: int,
+        query_compression_size: int,
+        key_value_compression_size: int,
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
@@ -38,6 +40,9 @@ class Attention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
+
+        self.query_compression_size = query_compression_size
+        self.key_value_compression_size = key_value_compression_size
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,
@@ -75,6 +80,9 @@ class Attention(nn.Module):
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
+        if init_method == InitMethod.mup:
+            raise NotImplementedError("implementation needs to be checked for mup")
+
         # note that the actual layout is different for the output and depends on whether we are using MHA, MQA or GQA
         # (self.hidden_size + 2 * self.num_key_value_heads * self.head_dim) is just the actual number output features
         std = initializer_range
@@ -82,7 +90,23 @@ class Attention(nn.Module):
             std /= math.sqrt(m_width)
         self.c_attn_down_projection = ParameterizedLinear(
             self.hidden_size,
-            self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
+            self.query_compression_size + 2 * self.key_value_compression_size,
+            bias=self.add_bias,
+            std=std,
+        )
+
+        # TODO add mup
+        self.query_up_projection = ParameterizedLinear(
+            self.query_compression_size,
+            (1 + (self.position_embedding_type == PositionEmbeddingType.rope)) * self.num_heads * self.head_dim,
+            bias=self.add_bias,
+            std=std,
+        )
+
+        # TODO add mup
+        self.key_value_up_projection = ParameterizedLinear(
+            self.key_value_compression_size,
+            self.num_key_value_heads * self.head_dim,
             bias=self.add_bias,
             std=std,
         )
@@ -96,36 +120,6 @@ class Attention(nn.Module):
 
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
-
-    def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, num_heads * head_dim)
-        # ==========================================================================================
-
-        # the output of following is a tuple if using MQA with tensor parallel
-        hidden_states = self.c_attn_down_projection(hidden_states)
-
-        # ==========================================================================================
-        # hidden_states -> (batch_size, query_length, [num_heads + num_key_value_heads * 2] * head_dim)
-        # ==========================================================================================
-
-        # for MHA, we can get away with doing just 1 transpose which is not true for GQA
-        if self.attention_head_type == AttentionHeadType.mha:
-            query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.gqa:
-            query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.mqa:
-            query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
-        else:
-            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
-
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # ==========================================================================================
-
-        return query, key, value
 
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor
@@ -187,26 +181,41 @@ class Attention(nn.Module):
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
 
-        query, key, value = self._prepare_qkv_for_forward(hidden_states)
+        # the output of following is a tuple if using MQA with tensor parallel
+        hidden_states = self.c_attn_down_projection(hidden_states)
 
-        # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, query_length, head_dim)
-        # ==========================================================================================
+        compressed_query, compressed_key_value = hidden_states.split(
+            (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
+        )
 
+        query = self.query_up_projection(compressed_query)
+
+        # TODO write a fused kernel for this to avoid copy
         if self.position_embedding_type == PositionEmbeddingType.rope:
-            query = apply_rotary_pos_emb(query, rope_cos_sin)
-            key = apply_rotary_pos_emb(key, rope_cos_sin)
+            query, query_rope = query.chunk(2, dim=-1)
+            query_rope = apply_rotary_pos_emb(query_rope, rope_cos_sin)
+            query = torch.cat([query, query_rope], dim=-1)
 
         if past_key_values is not None:
-            key, value = past_key_values.update(key, value, self.layer_idx)
+            compressed_key_value = past_key_values.update(compressed_key_value, key_rope, self.layer_idx)
+
+        key_value = self.key_value_up_projection(compressed_key_value)
+
+        key, value = key_value.chunk(2, dim=-1)
 
         # ==========================================================================================
-        # query -> (batch_size, num_heads, query_length, head_dim)
-        # key -> (batch_size, num_key_value_heads, key_length, head_dim)
-        # value -> (batch_size, num_key_value_heads, key_length, head_dim)
+        # hidden_states -> (batch_size, query_length, [num_heads + num_key_value_heads * 2] * head_dim)
         # ==========================================================================================
+
+        # for MHA, we can get away with doing just 1 transpose which is not true for GQA
+        if self.attention_head_type == AttentionHeadType.mha:
+            query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
+        elif self.attention_head_type == AttentionHeadType.gqa:
+            query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
+        elif self.attention_head_type == AttentionHeadType.mqa:
+            query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
+        else:
+            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
 
         key = key.transpose(-1, -2)
         dtype = query.dtype
