@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from torch.distributed._tensor.api import DTensor
 
-from dolomite_engine.distributed import dtensor_to_tensor
+from dolomite_engine.dtensors import dtensor_to_tensor
 from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
     AttentionHeadType,
