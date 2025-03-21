@@ -33,6 +33,7 @@ class Attention(nn.Module):
         num_layers: int,
         causal: bool,
         layer_idx: int,
+        use_padding_free_transformer: bool,
     ) -> None:
         super().__init__()
 
@@ -41,6 +42,7 @@ class Attention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
+        self.use_padding_free_transformer = use_padding_free_transformer
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,
