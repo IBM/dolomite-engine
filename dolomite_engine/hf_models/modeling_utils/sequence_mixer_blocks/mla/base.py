@@ -18,6 +18,7 @@ class MultiHeadLatentAttention(nn.Module):
         hidden_size: int,
         query_compression_size: int,
         key_value_compression_size: int,
+        key_rope_size: int,
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
@@ -43,6 +44,7 @@ class MultiHeadLatentAttention(nn.Module):
 
         self.query_compression_size = query_compression_size
         self.key_value_compression_size = key_value_compression_size
+        self.key_rope_size = key_rope_size
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,
@@ -90,7 +92,9 @@ class MultiHeadLatentAttention(nn.Module):
             std /= math.sqrt(m_width)
         self.c_attn_down_projection = ParameterizedLinear(
             self.hidden_size,
-            self.query_compression_size + 2 * self.key_value_compression_size,
+            self.query_compression_size
+            + 2 * self.key_value_compression_size
+            + (self.key_rope_size if self.position_embedding_type == PositionEmbeddingType.rope else 0),
             bias=self.add_bias,
             std=std,
         )
@@ -184,9 +188,15 @@ class MultiHeadLatentAttention(nn.Module):
         # the output of following is a tuple if using MQA with tensor parallel
         hidden_states = self.c_attn_down_projection(hidden_states)
 
-        compressed_query, compressed_key_value = hidden_states.split(
-            (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
-        )
+        if self.position_embedding_type == PositionEmbeddingType.rope:
+            compressed_query, compressed_key_value, key_rope = hidden_states.split(
+                (self.query_compression_size, 2 * self.key_value_compression_size, self.key_rope_size), dim=-1
+            )
+            key_rope = apply_rotary_pos_emb(key_rope, rope_cos_sin)
+        else:
+            compressed_query, compressed_key_value = hidden_states.split(
+                (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
+            )
 
         query = self.query_up_projection(compressed_query)
 
@@ -195,6 +205,10 @@ class MultiHeadLatentAttention(nn.Module):
             query, query_rope = query.chunk(2, dim=-1)
             query_rope = apply_rotary_pos_emb(query_rope, rope_cos_sin)
             query = torch.cat([query, query_rope], dim=-1)
+            del query_rope
+
+            key_rope = apply_rotary_pos_emb(key_rope, rope_cos_sin)
+            key = 0
 
         if past_key_values is not None:
             compressed_key_value = past_key_values.update(compressed_key_value, key_rope, self.layer_idx)
