@@ -166,7 +166,7 @@ class ModelWrapper(nn.Module):
             model_kwargs = {"pretrained_model_name_or_path": self.model_name}
 
         if self.attention_implementation is not None:
-            model_kwargs["attn_implementation"] = self.attention_implementation.value
+            model_kwargs["attn_implementation"] = self.attention_implementation
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
         if self.sequence_parallel:
