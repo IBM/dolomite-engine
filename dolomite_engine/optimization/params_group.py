@@ -10,7 +10,7 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
 )
-from ..hf_models.modeling_utils import MLP, Attention, Mamba2Base, MoE
+from ..hf_models.modeling_utils import MLP, Attention, Mamba2, MoE
 from ..model_wrapper import ModelWrapper
 from ..utils import BaseArgs, log_rank_0
 
@@ -66,7 +66,7 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
         if isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
             for param_name, param in module.named_parameters():
                 no_weight_decay_params[f"{module_name}.{param_name}"] = param
-        elif isinstance(module, Mamba2Base):
+        elif isinstance(module, Mamba2):
             for param_name, param in module.named_parameters():
                 # we don't add bias or norms to mup group
                 if param_name.endswith("A_log") or param_name.endswith("D"):
@@ -138,7 +138,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
                 if not (param_name.endswith("bias") or "norm" in param_name):
                     # add name of module to name of subparam
                     mup_params[f"{module_name}.{param_name}"] = param
-        elif isinstance(module, Mamba2Base):
+        elif isinstance(module, Mamba2):
             for param_name, param in module.named_parameters():
                 if param_name in ["A_log", "D"] or not (param_name.endswith("bias") or "norm" in param_name):
                     mup_params[f"{module_name}.{param_name}"] = param
