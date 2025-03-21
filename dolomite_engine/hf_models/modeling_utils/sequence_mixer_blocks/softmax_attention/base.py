@@ -192,6 +192,10 @@ class Attention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if self.use_padding_free_transformer:
+            assert is_kernel_allowed(Kernel.flash_attention_2)
+            assert past_key_values is None
+
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -203,12 +207,25 @@ class Attention(nn.Module):
 
         if is_kernel_allowed(Kernel.flash_attention_2):
             if self.use_padding_free_transformer:
-                assert past_key_values is None
+                output_shape = (-1, self.hidden_size)
+            else:
+                # TODO avoid this extra transpose
+                query = query.transpose(1, 2)
+                if self.attention_head_type == AttentionHeadType.mqa:
+                    key = key.squeeze(1).unsqueeze(2)
+                    value = value.squeeze(1).unsqueeze(2)
+                else:
+                    key = key.transpose(1, 2)
+                    value = value.transpose(1, 2)
 
-                query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
-                key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
-                value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
+                batch_size, query_length = query.shape[:2]
+                output_shape = (batch_size, query_length, -1)
 
+            query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
+            key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
+            value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
+
+            if self.use_padding_free_transformer:
                 hidden_states = flash_attn_varlen_func(
                     query,
                     key,
@@ -221,27 +238,7 @@ class Attention(nn.Module):
                     softmax_scale=self._get_softmax_scale(),
                     causal=self.causal,
                 )
-
-                del query, key, value
-
-                hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
-                hidden_states = hidden_states.view(-1, self.hidden_size)
             else:
-                # TODO avoid this extra transpose
-                query = query.transpose(1, 2)
-                if self.attention_head_type == AttentionHeadType.mqa:
-                    key = key.squeeze(1).unsqueeze(2)
-                    value = value.squeeze(1).unsqueeze(2)
-                else:
-                    key = key.transpose(1, 2)
-                    value = value.transpose(1, 2)
-
-                batch_size, query_length = query.shape[:2]
-
-                query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
-                key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
-                value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
-
                 hidden_states = _flash_attention_forward(
                     query_states=query,
                     key_states=key,
@@ -253,10 +250,10 @@ class Attention(nn.Module):
                     softmax_scale=self._get_softmax_scale(),
                 )
 
-                del query, key, value
+            del query, key, value
 
-                hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
-                hidden_states = hidden_states.view(batch_size, query_length, -1)
+            hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
+            hidden_states = hidden_states.view(*output_shape)
         else:
             key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
             value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
