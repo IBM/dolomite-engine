@@ -34,13 +34,9 @@ class PreTrainedModelMixin(PreTrainedModel):
         assert self.config_class is not None
 
         self.attention_implementation = self.config._attn_implementation
-        self._use_flash_attention_2 = self.attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
 
         self._tied_word_embeddings = config.tie_word_embeddings
-
-        if self._use_padding_free_transformer:
-            assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
         self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
 
