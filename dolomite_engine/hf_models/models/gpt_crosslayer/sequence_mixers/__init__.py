@@ -1,7 +1,6 @@
 from ....enums import AttentionHeadType, PositionEmbeddingType
 from ..config import GPTCrossLayerConfig
-from .base import CrossLayerAttention, KeyValueProjection
-from .padding_free import CrossLayerPaddingFreeAttention
+from .base import CrossLayerAttention
 
 
 def get_sequence_mixer(
@@ -10,7 +9,7 @@ def get_sequence_mixer(
     block = config.sequence_mixer_blocks[layer_idx]
     assert block.sequence_mixer_type == "softmax_attention"
 
-    sequence_mixer_kwargs = dict(
+    return CrossLayerAttention(
         hidden_size=config.hidden_size,
         num_attention_heads=config.num_attention_heads,
         num_key_value_heads=block.num_key_value_heads,
@@ -24,11 +23,5 @@ def get_sequence_mixer(
         num_layers=config.num_layers,
         causal=causal,
         layer_idx=layer_idx,
+        use_padding_free_transformer=use_padding_free_transformer,
     )
-
-    if use_padding_free_transformer:
-        attention_class = CrossLayerPaddingFreeAttention
-    else:
-        attention_class = CrossLayerAttention
-
-    return attention_class(**sequence_mixer_kwargs)

@@ -28,6 +28,7 @@ class CrossLayerAttention(nn.Module):
         num_layers: int,
         causal: bool,
         layer_idx: int,
+        use_padding_free_transformer: bool,
     ) -> None:
         super().__init__()
 
@@ -37,6 +38,7 @@ class CrossLayerAttention(nn.Module):
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
+        self.use_padding_free_transformer = use_padding_free_transformer
 
         assert (
             self.hidden_size % self.num_heads == 0
@@ -83,33 +85,59 @@ class CrossLayerAttention(nn.Module):
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if is_kernel_allowed(Kernel.flash_attention_2):
-            batch_size, query_length = hidden_states.shape[:2]
+            if self.use_padding_free_transformer:
+                total_q = hidden_states.shape[0]
 
-            query = self.q_attn(hidden_states)
-            query = query.view(batch_size, query_length, self.num_heads, -1)
+                query = self.q_attn(hidden_states)
+                query = query.view(total_q, self.num_heads, -1)
 
-            if self.position_embedding_type == PositionEmbeddingType.rope:
-                # TODO avoid this extra transpose
-                query = query.transpose(1, 2)
-                query = apply_rotary_pos_emb(query, rope_cos_sin)
-                query = query.transpose(1, 2)
+                if self.position_embedding_type == PositionEmbeddingType.rope:
+                    query = apply_rotary_pos_emb(query, rope_cos_sin)
 
-            batch_size, query_length = query.shape[:2]
+                hidden_states = flash_attn_varlen_func(
+                    query,
+                    key,
+                    value,
+                    cu_seqlens_q=cu_seqlens,
+                    cu_seqlens_k=cu_seqlens,
+                    max_seqlen_q=max_seqlen,
+                    max_seqlen_k=max_seqlen,
+                    dropout_p=self.softmax_dropout_p if self.training else 0,
+                    softmax_scale=self._get_softmax_scale(),
+                    causal=self.causal,
+                )
 
-            hidden_states = _flash_attention_forward(
-                query_states=query,
-                key_states=key,
-                value_states=value,
-                attention_mask=attention_mask,
-                query_length=query_length,
-                is_causal=self.causal,
-                dropout=self.softmax_dropout_p if self.training else 0,
-                softmax_scale=self._get_softmax_scale(),
-            )
+                del query, key, value
 
-            del query, key, value
+                hidden_states = hidden_states.view(-1, self.hidden_size)
+            else:
+                batch_size, query_length = hidden_states.shape[:2]
 
-            hidden_states = hidden_states.view(batch_size, query_length, -1)
+                query = self.q_attn(hidden_states)
+                query = query.view(batch_size, query_length, self.num_heads, -1)
+
+                if self.position_embedding_type == PositionEmbeddingType.rope:
+                    # TODO avoid this extra transpose
+                    query = query.transpose(1, 2)
+                    query = apply_rotary_pos_emb(query, rope_cos_sin)
+                    query = query.transpose(1, 2)
+
+                batch_size, query_length = query.shape[:2]
+
+                hidden_states = _flash_attention_forward(
+                    query_states=query,
+                    key_states=key,
+                    value_states=value,
+                    attention_mask=attention_mask,
+                    query_length=query_length,
+                    is_causal=self.causal,
+                    dropout=self.softmax_dropout_p if self.training else 0,
+                    softmax_scale=self._get_softmax_scale(),
+                )
+
+                del query, key, value
+
+                hidden_states = hidden_states.view(batch_size, query_length, -1)
         else:
             batch_size, query_length = hidden_states.shape[:2]
 
