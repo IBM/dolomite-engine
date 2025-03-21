@@ -75,6 +75,7 @@ class ExperimentsTrackerName(Enum):
 
 class Kernel(Enum):
     rmsnorm_cute = "rmsnorm_cute"
+    continuous_count_cute = "continuous_count_cute"
     swiglu_unchunked_cute = "swiglu_unchunked_cute"
     mamba2_ssm = "mamba2_ssm"
     scattermoe = "scattermoe"

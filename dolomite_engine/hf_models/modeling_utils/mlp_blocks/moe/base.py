@@ -228,7 +228,7 @@ class MoE(nn.Module):
             with torch.no_grad():
                 sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
-                if sorted_expert_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
+                if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
                     expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
                 else:
                     expert_offsets = bincount(sorted_expert_idxs, minlength=self.num_experts).cumsum(-1)
