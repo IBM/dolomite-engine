@@ -3,7 +3,6 @@ from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mamba2 import Mamba2
 from .softmax_attention import (
     Attention,
-    PaddingFreeAttention,
     interleave_query_key_value_tensor_for_attention,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
@@ -65,7 +64,7 @@ def get_sequence_mixer(
         )
 
         if sequence_mixer_type == "softmax_attention":
-            return (PaddingFreeAttention if use_padding_free_transformer else Attention)(
+            return Attention(
                 **sequence_mixer_kwargs,
                 softmax_dropout=block.softmax_dropout,
                 use_padding_free_transformer=use_padding_free_transformer,

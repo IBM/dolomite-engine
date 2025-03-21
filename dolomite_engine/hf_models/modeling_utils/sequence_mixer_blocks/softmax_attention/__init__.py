@@ -4,7 +4,6 @@ import torch
 
 from ....enums import AttentionHeadType
 from .base import Attention
-from .padding_free import PaddingFreeAttention
 from .utils import (
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,

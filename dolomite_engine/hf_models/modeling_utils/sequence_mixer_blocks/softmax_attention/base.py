@@ -139,10 +139,13 @@ class Attention(nn.Module):
     def _prepare_qkv_for_forward_mha(
         self, hidden_states: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
-
-        hidden_states = hidden_states.view(batch_size, query_length, self.num_heads, -1)
-        hidden_states = hidden_states.transpose(1, 2)
+        if self.use_padding_free_transformer:
+            total_q = hidden_states.shape[0]
+            hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
+        else:
+            batch_size, query_length = hidden_states.shape[:-1]
+            hidden_states = hidden_states.view(batch_size, query_length, self.num_heads, -1)
+            hidden_states = hidden_states.transpose(1, 2)
 
         query, key, value = hidden_states.chunk(3, dim=-1)
 

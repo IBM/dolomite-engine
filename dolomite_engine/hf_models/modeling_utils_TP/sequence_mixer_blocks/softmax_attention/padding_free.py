@@ -1,11 +1,10 @@
 import torch
 
 from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from ....modeling_utils import PaddingFreeAttention
 from .base import _BaseAttention_TP
 
 
-class PaddingFreeAttention_TP(_BaseAttention_TP, PaddingFreeAttention):
+class PaddingFreeAttention_TP(_BaseAttention_TP):
     def __init__(
         self,
         hidden_size: int,
