@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ....kernels import Kernel, is_kernel_allowed, wait_for_ACT
 from ....utils import is_cute_kernels_available
