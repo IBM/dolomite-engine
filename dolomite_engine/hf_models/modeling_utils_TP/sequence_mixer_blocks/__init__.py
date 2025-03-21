@@ -6,7 +6,6 @@ from .softmax_attention import Attention_TP, PaddingFreeAttention_TP
 def get_sequence_mixer_TP(
     config: CommonConfig,
     causal: bool,
-    attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
     sequence_parallel: bool,
@@ -35,9 +34,6 @@ def get_sequence_mixer_TP(
 
     if sequence_mixer_type == "softmax_attention":
         if use_padding_free_transformer:
-            assert (
-                attention_implementation == "flash_attention_2"
-            ), "padding free transformer only works with flash attention"
             return PaddingFreeAttention_TP(**sequence_mixer_kwargs)
         else:
             return Attention_TP(**sequence_mixer_kwargs)
