@@ -1,6 +1,6 @@
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from .softmax_attention import Attention_TP, PaddingFreeAttention_TP
+from .softmax_attention import Attention_TP
 
 
 def get_sequence_mixer_TP(
