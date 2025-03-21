@@ -72,10 +72,9 @@ export_to_huggingface(
 
 If you are interested in using this optimization outside this repo for some reason, you can do as follows:
 ```python
-import torch
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import GPTDolomiteForCausalLM
 from dolomite_engine.kernels import enable_kernels
-from dolomite_engine.enums import Kernel
 
 
 # we need unpadded lists here for avoiding any useless computations on pad tokens
