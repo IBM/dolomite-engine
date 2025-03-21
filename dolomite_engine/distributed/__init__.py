@@ -41,11 +41,7 @@ if is_torchao_available():
 
     from .fp8 import FP8Manager
 
-# import torch._inductor.config
 torch._inductor.config.reorder_for_compute_comm_overlap = True
-# torch._dynamo.config.skip_fsdp_hooks = False
-# torch._dynamo.config.cache_size_limit = 512
-# torch._dynamo.config.compiled_autograd = True
 
 
 _STAGE_FULL_SHARDING_STRATEGY_MAP = {

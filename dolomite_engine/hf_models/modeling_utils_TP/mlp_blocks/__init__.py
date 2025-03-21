@@ -1,14 +1,12 @@
-from ....enums import Kernel
-from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
 from ...enums import InitMethod
 from .mlp import MLP_TP
-from .moe import ScatterMoE_TP
+from .moe import MoE_TP
 
 
 def get_mlp_block_TP(
     config: CommonConfig, use_padding_free_transformer: bool, sequence_parallel: bool, layer_idx: int
-) -> MLP_TP | ScatterMoE_TP:
+) -> MLP_TP | MoE_TP:
     block = config.mlp_blocks[layer_idx]
     mlp_type = block.mlp_type
 
@@ -27,10 +25,9 @@ def get_mlp_block_TP(
     )
 
     if mlp_type == "MLP":
-        return MLP_TP(**kwargs)
+        mlp = MLP_TP(**kwargs)
     elif mlp_type == "MoE":
-        assert is_kernel_allowed(Kernel.scattermoe)
-        return ScatterMoE_TP(
+        mlp = MoE_TP(
             **kwargs,
             shared_intermediate_size=block.shared_intermediate_size,
             num_experts=block.num_experts,
@@ -38,3 +35,5 @@ def get_mlp_block_TP(
         )
     else:
         raise ValueError(f"invalid mlp_type ({mlp_type}) for layer ({layer_idx})")
+
+    return mlp

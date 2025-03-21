@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed._functional_collectives import all_reduce
 
+from .....enums import Kernel
+from .....kernels import is_kernel_allowed
 from .....utils import ProcessGroupManager, is_cute_kernels_available
 from ....enums import InitMethod
 from ....loss import add_aux_loss
@@ -15,7 +17,7 @@ from ..mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.scattermoe.triton_implementation import bincount
+    from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
 
 
 class ParameterizedExperts(nn.Module):
@@ -45,13 +47,39 @@ class ParameterizedExperts(nn.Module):
 
         self.reset_parameters()
 
-    def forward(self, input: torch.Tensor, num_experts_per_token: torch.Tensor) -> torch.Tensor:
-        input = input.split(num_experts_per_token.tolist(), dim=0)
-        input = [
-            F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
-            for i in range(self.num_experts)
-        ]
-        input = torch.cat(input, dim=0)
+    def forward(
+        self,
+        input: torch.Tensor,
+        num_experts_per_token: int | None = None,
+        sorted_expert_idxs: torch.Tensor | None = None,
+        sorted_scattered_idxs: torch.Tensor | None = None,
+        expert_offsets: torch.Tensor | None = None,
+        gates: torch.Tensor | None = None,
+        grouped_in: bool = False,
+        grouped_out: bool = False,
+    ) -> torch.Tensor:
+        if is_kernel_allowed(Kernel.scattermoe):
+            assert self.bias is None
+
+            input = scattered_experts(
+                inputs=input,
+                expert_weights=self.weight.permute(0, 2, 1),
+                k=num_experts_per_token,
+                sorted_expert_idxs=sorted_expert_idxs,
+                sorted_scattered_idxs=sorted_scattered_idxs,
+                expert_offsets=expert_offsets,
+                gates=gates,
+                grouped_in=grouped_in,
+                grouped_out=grouped_out,
+            )
+        else:
+            input = input.split(num_experts_per_token.tolist(), dim=0)
+            input = [
+                F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
+                for i in range(self.num_experts)
+            ]
+            input = torch.cat(input, dim=0)
+
         return input
 
     def extra_repr(self):
@@ -196,21 +224,50 @@ class MoE(nn.Module):
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
-        total_q = hidden_states.shape[0]
+        if is_kernel_allowed(Kernel.scattermoe):
+            with torch.no_grad():
+                sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
-        batch_index, batch_gates, num_experts_per_token = self._compute_expert_assignment(
-            router_weights, selected_experts
-        )
+                if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+                    expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
+                else:
+                    expert_offsets = bincount(sorted_expert_idxs, minlength=self.num_experts).cumsum(-1)
 
-        hidden_states = hidden_states[batch_index]
+            hidden_states = self.c_fc(
+                hidden_states,
+                self.top_k,
+                sorted_expert_idxs,
+                sorted_scattered_idxs,
+                expert_offsets,
+                grouped_out=True,
+            )
+            hidden_states = self.act(hidden_states)
+            hidden_states = self.c_proj(
+                hidden_states,
+                1,
+                sorted_expert_idxs,
+                sorted_scattered_idxs,
+                expert_offsets,
+                grouped_in=True,
+                gates=router_weights,
+            )
+            hidden_states = self.dropout(hidden_states)
+        else:
+            total_q = hidden_states.shape[0]
 
-        hidden_states = self.c_fc(hidden_states, num_experts_per_token)
-        hidden_states = self.act(hidden_states)
-        hidden_states = self.c_proj(hidden_states, num_experts_per_token)
+            batch_index, batch_gates, num_experts_per_token = self._compute_expert_assignment(
+                router_weights, selected_experts
+            )
 
-        hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
-        zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
-        hidden_states = zeros.index_add(0, batch_index, hidden_states)
+            hidden_states = hidden_states[batch_index]
+
+            hidden_states = self.c_fc(hidden_states, num_experts_per_token)
+            hidden_states = self.act(hidden_states)
+            hidden_states = self.c_proj(hidden_states, num_experts_per_token)
+
+            hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
+            zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
+            hidden_states = zeros.index_add(0, batch_index, hidden_states)
 
         return hidden_states
 
