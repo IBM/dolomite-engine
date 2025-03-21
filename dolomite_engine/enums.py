@@ -76,10 +76,10 @@ class ExperimentsTrackerName(Enum):
 class Kernel(Enum):
     # cute kernels
     continuous_count_cute = "continuous_count_cute"
-    rmsnorm_cute = "rmsnorm_cute"
-    swiglu_unchunked_cute = "swiglu_unchunked_cute"
     cross_entropy_cute = "cross_entropy_cute"
     fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"
+    rmsnorm_cute = "rmsnorm_cute"
+    swiglu_unchunked_cute = "swiglu_unchunked_cute"
     # external kernels
-    scattermoe = "scattermoe"
     mamba2_ssm = "mamba2_ssm"
+    scattermoe = "scattermoe"
