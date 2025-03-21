@@ -151,20 +151,27 @@ class Attention(nn.Module):
     def _prepare_qkv_for_forward_gqa(
         self, hidden_states: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
-
-        hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
+        if self.use_padding_free_transformer:
+            total_q = hidden_states.shape[0]
+            hidden_states = hidden_states.view(total_q, self.num_key_value_heads, -1)
+        else:
+            batch_size, query_length = hidden_states.shape[:-1]
+            hidden_states = hidden_states.view(batch_size, query_length, self.num_key_value_heads, -1)
 
         query, key, value = hidden_states.split(
             ((self.num_heads // self.num_key_value_heads) * self.head_dim, self.head_dim, self.head_dim), dim=-1
         )
 
-        # this needs to be a reshape instead of view sadly
-        query = query.reshape(batch_size, query_length, -1, self.head_dim)
+        if self.use_padding_free_transformer:
+            # this needs to be a reshape instead of view sadly
+            query = query.reshape(total_q, -1, self.head_dim)
+        else:
+            # this needs to be a reshape instead of view sadly
+            query = query.reshape(batch_size, query_length, -1, self.head_dim)
 
-        query = query.transpose(1, 2)
-        key = key.transpose(1, 2)
-        value = value.transpose(1, 2)
+            query = query.transpose(1, 2)
+            key = key.transpose(1, 2)
+            value = value.transpose(1, 2)
 
         return query, key, value
 
