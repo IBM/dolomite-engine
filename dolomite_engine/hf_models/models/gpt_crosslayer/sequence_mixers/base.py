@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
