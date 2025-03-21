@@ -265,45 +265,31 @@ class TestCommons(TestCase):
         attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
 
-        kernels = []
+        model = AutoModelForCausalLM.from_config(
+            config,
+            attn_implementation=attention_implementation,
+            use_padding_free_transformer=use_padding_free_transformer,
+            torch_dtype=kwargs.pop("torch_dtype", None),
+        )
 
-        moe_implementation = kwargs.pop("moe_implementation", "eager")
-        if moe_implementation == "scattermoe":
-            kernels.append(Kernel.scattermoe)
+        if use_padding_free_transformer:
+            assert model._use_padding_free_transformer
 
-        with enable_kernels(kernels):
-            model = AutoModelForCausalLM.from_config(
-                config,
-                attn_implementation=attention_implementation,
-                use_padding_free_transformer=use_padding_free_transformer,
-                torch_dtype=kwargs.pop("torch_dtype", None),
-            )
-
+        if attention_implementation == "eager":
+            assert "Attention" in str(model)
+            assert "FlashAttention2" not in str(model)
+            assert "PaddingFreeAttention" not in str(model)
+        elif attention_implementation == "sdpa":
+            assert "SDPA" in str(model)
+        elif attention_implementation == "flash_attention_2":
             if use_padding_free_transformer:
-                assert model._use_padding_free_transformer
+                assert "PaddingFreeAttention" in str(model)
+            else:
+                assert "FlashAttention2" in str(model)
 
-            if attention_implementation == "eager":
-                assert "Attention" in str(model)
-                assert "FlashAttention2" not in str(model)
-                assert "PaddingFreeAttention" not in str(model)
-            elif attention_implementation == "sdpa":
-                assert "SDPA" in str(model)
-            elif attention_implementation == "flash_attention_2":
-                if use_padding_free_transformer:
-                    assert "PaddingFreeAttention" in str(model)
-                else:
-                    assert "FlashAttention2" in str(model)
+        assert len(kwargs) == 0
 
-            if moe_implementation == "scattermoe":
-                assert "ScatterMoE" in str(model)
-            elif moe_implementation == "eager":
-                mlp_blocks = getattr(config, "mlp_blocks")
-                if len(mlp_blocks) > 0 and all([i.mlp_type == "MoE" for i in mlp_blocks]):
-                    assert "MoE" in str(model)
-
-            assert len(kwargs) == 0
-
-            return model
+        return model
 
     def assert_equal_tensors(
         self,

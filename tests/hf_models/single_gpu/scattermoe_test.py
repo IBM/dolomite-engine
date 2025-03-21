@@ -2,7 +2,9 @@ import torch
 from parameterized import parameterized
 from transformers import set_seed
 
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
 
@@ -24,16 +26,13 @@ class ScatterMoETest(TestCommons):
             AttentionHeadType.mha, PositionEmbeddingType.rope, num_layers=1, add_bias=False
         )
 
-        naive_model = self.from_config(config, torch_dtype=torch_dtype, moe_implementation="eager").to(device)
-        scatter_model = self.from_config(config, torch_dtype=torch_dtype, moe_implementation="scattermoe").to(device)
+        model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        model.eval()
 
-        scatter_model.eval()
-        naive_model.eval()
+        naive_output = model(input_ids=input_ids, attention_mask=attention_mask)
 
-        naive_model.load_state_dict(scatter_model.state_dict())
-
-        naive_output = naive_model(input_ids=input_ids, attention_mask=attention_mask)
-        scatter_output = scatter_model(input_ids=input_ids, attention_mask=attention_mask)
+        with enable_kernels(Kernel.scattermoe):
+            scatter_output = model(input_ids=input_ids, attention_mask=attention_mask)
 
         self.assert_equal_tensors(
             naive_output.logits,
