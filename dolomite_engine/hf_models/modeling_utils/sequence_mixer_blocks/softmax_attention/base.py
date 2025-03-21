@@ -171,15 +171,23 @@ class Attention(nn.Module):
     def _prepare_qkv_for_forward_mqa(
         self, hidden_states: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        batch_size, query_length = hidden_states.shape[:-1]
+        if self.use_padding_free_transformer:
+            total_q = hidden_states.shape[0]
+        else:
+            batch_size, query_length = hidden_states.shape[:-1]
 
         query, key, value = hidden_states.split((self.hidden_size, self.head_dim, self.head_dim), dim=-1)
 
-        query = query.view(batch_size, query_length, self.num_heads, -1)
+        if self.use_padding_free_transformer:
+            query = query.view(total_q, self.num_heads, -1)
+            key = key.unsqueeze(1)
+            value = value.unsqueeze(1)
+        else:
+            query = query.view(batch_size, query_length, self.num_heads, -1)
 
-        query = query.transpose(1, 2)
-        key = key.unsqueeze(1)
-        value = value.unsqueeze(1)
+            query = query.transpose(1, 2)
+            key = key.unsqueeze(1)
+            value = value.unsqueeze(1)
 
         return query, key, value
 
