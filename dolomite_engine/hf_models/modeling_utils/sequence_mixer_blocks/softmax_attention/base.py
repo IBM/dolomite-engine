@@ -188,6 +188,65 @@ class Attention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if self.use_padding_free_transformer:
+            assert past_key_values is None
+
+            # ==========================================================================================
+            # hidden_states -> (total_q, num_heads * head_dim)
+            # ==========================================================================================
+
+            query, key, value = self._prepare_qkv_for_forward(hidden_states)
+
+            # ==========================================================================================
+            # query -> (total_q, num_heads, head_dim)
+            # key -> (total_q, num_key_value_heads, head_dim)
+            # value -> (total_q, num_key_value_heads, head_dim)
+            # ==========================================================================================
+
+            if self.position_embedding_type == PositionEmbeddingType.rope:
+                query = apply_rotary_pos_emb(query, rope_cos_sin)
+                key = apply_rotary_pos_emb(key, rope_cos_sin)
+
+            # ==========================================================================================
+            # query -> (total_q, num_heads, head_dim)
+            # key -> (total_q, num_key_value_heads, head_dim)
+            # value -> (total_q, num_key_value_heads, head_dim)
+            # ==========================================================================================
+
+            query = wait_for_ACT(query, wait_in_forward=True, wait_in_backward=False)
+            key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
+            value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
+
+            hidden_states = flash_attn_varlen_func(
+                query,
+                key,
+                value,
+                cu_seqlens_q=cu_seqlens,
+                cu_seqlens_k=cu_seqlens,
+                max_seqlen_q=max_seqlen,
+                max_seqlen_k=max_seqlen,
+                dropout_p=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+                causal=self.causal,
+            )
+
+            del query, key, value
+
+            # ==========================================================================================
+            # hidden_states -> (total_q, num_heads, head_dim)
+            # ==========================================================================================
+
+            hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
+            hidden_states = hidden_states.view(-1, self.hidden_size)
+
+            # ==========================================================================================
+            # hidden_states -> (total_q, num_heads * head_dim)
+            # ==========================================================================================
+
+            hidden_states = self.c_proj(hidden_states)
+            hidden_states = self.dropout(hidden_states)
+
+            return hidden_states
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
