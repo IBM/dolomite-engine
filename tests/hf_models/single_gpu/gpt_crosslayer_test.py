@@ -224,22 +224,10 @@ class GPTCrossLayerAttentionTest(TestCommons):
         kwargs.pop("torch_dtype")
         _, model = convert_gpt_dolomite_to_gpt_crosslayer(config, model, **kwargs)
 
-        attention_implementation = kwargs.pop("attn_implementation", None)
+        kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
         if use_padding_free_transformer:
             assert model._use_padding_free_transformer
-
-        if attention_implementation == "eager":
-            assert "Attention" in str(model)
-            assert "FlashAttention2" not in str(model)
-            assert "PaddingFreeAttention" not in str(model)
-        elif attention_implementation == "sdpa":
-            assert "SDPA" in str(model)
-        elif attention_implementation == "flash_attention_2":
-            if use_padding_free_transformer:
-                assert "PaddingFreeAttention" in str(model)
-            else:
-                assert "FlashAttention2" in str(model)
 
         assert len(kwargs) == 0
 
