@@ -96,7 +96,6 @@ def main() -> None:
                 model_class=args.model_args.model_class,
                 dtype=args.mixed_precision_args.dtype,
                 efficient_initialization=False,
-                attention_implementation=args.model_args.attention_implementation,
                 use_padding_free_transformer=False,
                 sequence_parallel=False,
                 random_seed=args.random_args.seed,

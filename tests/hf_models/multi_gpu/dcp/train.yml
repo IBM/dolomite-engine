@@ -153,7 +153,6 @@ model_args:
       - mlp_type: MLP
         activation_function: swiglu
         add_bias: false
-  attention_implementation: flash_attention_2
 
 tuning_args:
   tuning_method: pretraining

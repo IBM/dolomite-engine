@@ -235,7 +235,6 @@ model_args:
       - mlp_type: MLP
         activation_function: swiglu
   efficient_initialization: false
-  attention_implementation: sdpa
   use_padding_free_transformer: false
 
 tuning_args:

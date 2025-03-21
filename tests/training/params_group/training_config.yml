@@ -45,7 +45,6 @@ model_args:
       - activation_function: swiglu
         mlp_type: MoE
         shared_intermediate_size: 512
-  attention_implementation: sdpa
 
 tuning_args:
   tuning_method: pretraining

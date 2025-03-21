@@ -279,7 +279,6 @@ model_args:
         activation_function: swiglu
         intermediate_size: 8192
   efficient_initialization: false
-  attention_implementation: flash_attention_2
   use_padding_free_transformer: true
 
 tuning_args:
