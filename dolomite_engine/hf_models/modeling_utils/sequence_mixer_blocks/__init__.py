@@ -1,5 +1,3 @@
-from ....enums import Kernel
-from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mamba2 import Mamba2

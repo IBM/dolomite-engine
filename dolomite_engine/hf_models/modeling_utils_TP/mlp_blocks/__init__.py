@@ -1,5 +1,3 @@
-from ....enums import Kernel
-from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
 from ...enums import InitMethod
 from .mlp import MLP_TP
@@ -29,7 +27,6 @@ def get_mlp_block_TP(
     if mlp_type == "MLP":
         mlp = MLP_TP(**kwargs)
     elif mlp_type == "MoE":
-        assert is_kernel_allowed(Kernel.scattermoe)
         mlp = MoE_TP(
             **kwargs,
             shared_intermediate_size=block.shared_intermediate_size,
