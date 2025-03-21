@@ -12,47 +12,8 @@ from ...dropout import Dropout_TP
 from ...linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 
 
-class _BaseAttention_TP(nn.Module):
+class Attention_TP(Attention):
     def __init__(
-        self,
-        hidden_size: int,
-        num_attention_heads: int,
-        num_key_value_heads: int,
-        attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
-        add_bias: bool,
-        softmax_dropout: float,
-        dropout: float,
-        init_method: InitMethod,
-        initializer_range: float,
-        m_width: float,
-        num_layers: int,
-        causal: bool,
-        layer_idx: int | None = None,
-        sequence_parallel: bool = False,
-    ) -> None:
-        self._init_attention(
-            hidden_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            num_key_value_heads=num_key_value_heads,
-            attention_multiplier=attention_multiplier,
-            attention_head_type=attention_head_type,
-            position_embedding_type=position_embedding_type,
-            add_bias=add_bias,
-            softmax_dropout=softmax_dropout,
-            dropout=dropout,
-            init_method=init_method,
-            initializer_range=initializer_range,
-            m_width=m_width,
-            num_layers=num_layers,
-            causal=causal,
-            layer_idx=layer_idx,
-            use_padding_free_transformer=False,
-            sequence_parallel=sequence_parallel,
-        )
-
-    def _init_attention(
         self,
         hidden_size: int,
         num_attention_heads: int,
@@ -81,6 +42,7 @@ class _BaseAttention_TP(nn.Module):
         self.global_num_heads = num_attention_heads
         self.global_num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
+        self.use_padding_free_transformer = use_padding_free_transformer
 
         divide_if_divisible(
             self.global_hidden_size,
@@ -210,13 +172,20 @@ class _BaseAttention_TP(nn.Module):
         self, query_key_value: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query, key, value = query_key_value
-        batch_size, query_length = query.shape[:-1]
 
-        query = query.view(batch_size, query_length, self.num_heads, -1)
+        if self.use_padding_free_transformer:
+            total_q = query.shape[0]
 
-        query = query.transpose(1, 2)
-        key = key.unsqueeze(1)
-        value = value.unsqueeze(1)
+            query = query.view(total_q, self.num_heads, -1)
+            key = key.unsqueeze(1)
+            value = value.unsqueeze(1)
+        else:
+            batch_size, query_length = query.shape[:-1]
+            query = query.view(batch_size, query_length, self.num_heads, -1)
+
+            query = query.transpose(1, 2)
+            key = key.unsqueeze(1)
+            value = value.unsqueeze(1)
 
         return query, key, value
 
@@ -277,44 +246,3 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         key, value = key_value.chunk(2, -1)
 
         return query, key, value
-
-
-class Attention_TP(_BaseAttention_TP, Attention):
-    def __init__(
-        self,
-        hidden_size: int,
-        num_attention_heads: int,
-        num_key_value_heads: int,
-        attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
-        add_bias: bool,
-        softmax_dropout: float,
-        dropout: float,
-        init_method: InitMethod,
-        initializer_range: float,
-        m_width: float,
-        num_layers: int,
-        causal: bool,
-        layer_idx: int | None = None,
-        sequence_parallel: bool = False,
-    ) -> None:
-        self._init_attention(
-            hidden_size=hidden_size,
-            num_attention_heads=num_attention_heads,
-            num_key_value_heads=num_key_value_heads,
-            attention_multiplier=attention_multiplier,
-            attention_head_type=attention_head_type,
-            position_embedding_type=position_embedding_type,
-            add_bias=add_bias,
-            softmax_dropout=softmax_dropout,
-            dropout=dropout,
-            init_method=init_method,
-            initializer_range=initializer_range,
-            m_width=m_width,
-            num_layers=num_layers,
-            causal=causal,
-            layer_idx=layer_idx,
-            use_padding_free_transformer=False,
-            sequence_parallel=sequence_parallel,
-        )

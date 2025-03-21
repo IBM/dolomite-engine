@@ -33,7 +33,4 @@ def get_sequence_mixer_TP(
     )
 
     if sequence_mixer_type == "softmax_attention":
-        if use_padding_free_transformer:
-            return PaddingFreeAttention_TP(**sequence_mixer_kwargs)
-        else:
-            return Attention_TP(**sequence_mixer_kwargs)
+        return Attention_TP(**sequence_mixer_kwargs, use_padding_free_transformer=use_padding_free_transformer)
