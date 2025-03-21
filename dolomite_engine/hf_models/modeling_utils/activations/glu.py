@@ -42,14 +42,6 @@ class GLUActivation(nn.Module):
         return x
 
 
-class CuteSwiGLUUnchunked(nn.Module):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = wait_for_ACT(x, wait_in_forward=True, wait_in_backward=False)
-        x = swiglu_unchunked_cute(x)
-        x = wait_for_ACT(x, wait_in_forward=False, wait_in_backward=True)
-        return x
-
-
 def get_glu_activation(name: str) -> nn.Module:
     # for glu and sigmoid_glu, we directly return the pytorch's GLU
     if name in ["glu", "sigmoid_glu"]:
