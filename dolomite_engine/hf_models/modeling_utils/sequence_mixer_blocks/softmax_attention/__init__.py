@@ -2,7 +2,6 @@ import inspect
 
 import torch
 
-from ....config import CommonConfig
 from ....enums import AttentionHeadType
 from .base import Attention
 from .flash import FlashAttention2
@@ -19,13 +18,6 @@ from .utils import (
 )
 
 
-_ATTENTION_MODULES = {
-    "eager": Attention,
-    "sdpa": SDPA,
-    "flash_attention_2": FlashAttention2,
-}
-
-
 _INTERLEAVE_FUNCTIONS = {
     AttentionHeadType.mha.value: interleave_query_key_value_tensor_for_mha,
     AttentionHeadType.mqa.value: interleave_query_key_value_tensor_for_mqa,
@@ -38,24 +30,6 @@ _SPLIT_FUNCTIONS = {
     AttentionHeadType.mqa.value: split_query_key_value_tensor_for_mqa,
     AttentionHeadType.gqa.value: split_query_key_value_tensor_for_gqa,
 }
-
-
-def get_attention_module(
-    config: CommonConfig,
-    causal: bool,
-    attention_implementation: str,
-    use_padding_free_transformer: bool,
-    layer_idx: int,
-) -> Attention:
-    if use_padding_free_transformer:
-        assert (
-            attention_implementation == "flash_attention_2"
-        ), "padding free transformer only works with flash attention"
-        attention_class = PaddingFreeAttention
-    else:
-        attention_class = _ATTENTION_MODULES[attention_implementation]
-
-    return attention_class(config, causal=causal, layer_idx=layer_idx)
 
 
 def interleave_query_key_value_tensor_for_attention(

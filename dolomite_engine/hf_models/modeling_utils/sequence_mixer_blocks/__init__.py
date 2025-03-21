@@ -8,7 +8,6 @@ from .softmax_attention import (
     Attention,
     FlashAttention2,
     PaddingFreeAttention,
-    get_attention_module,
     interleave_query_key_value_tensor_for_attention,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
