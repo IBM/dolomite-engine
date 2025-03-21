@@ -13,7 +13,6 @@ from ...convolution import ParameterizedConv1d
 from ...linear import ParameterizedLinear
 from ...mlp_blocks.mlp import _get_std_for_linear
 from ...normalization import get_normalization_function
-from .base import Mamba2Base
 from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
 
 
@@ -25,7 +24,7 @@ if is_causal_conv1d_available():
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
 
 
-class Mamba2Base(nn.Module):
+class Mamba2(nn.Module):
     """
     Compute ∆, A, B, C, and D the state space parameters and compute the `contextualized_states`.
     A, D are input independent (see Mamba paper [1] Section 3.5.2 "Interpretation of A" for why A isn't selective)

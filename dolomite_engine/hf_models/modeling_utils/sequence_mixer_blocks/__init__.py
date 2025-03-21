@@ -2,7 +2,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
-from .mamba2 import Mamba2Base, Mamba2CUDA
+from .mamba2 import Mamba2
 from .softmax_attention import (
     SDPA,
     Attention,
@@ -35,13 +35,12 @@ def get_sequence_mixer(
     attention_implementation: str,
     use_padding_free_transformer: bool,
     layer_idx: int,
-) -> Attention | Mamba2Base:
+) -> Attention | Mamba2:
     block = config.sequence_mixer_blocks[layer_idx]
     sequence_mixer_type = block.sequence_mixer_type
 
     if sequence_mixer_type == "mamba2":
-        mamba_class = Mamba2CUDA if is_kernel_allowed(Kernel.mamba2_ssm) else Mamba2Base
-        return mamba_class(
+        return Mamba2(
             hidden_size=config.hidden_size,
             ssm_state_size=block.state_size,
             ssm_intermediate_size=block.intermediate_size,
