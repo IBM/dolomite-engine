@@ -1,7 +1,6 @@
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
 from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
-from ..kernels import enable_kernels
 from ..utils import get_pipeline_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
@@ -58,10 +57,9 @@ def get_model_container(
         kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
         kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
-    with enable_kernels(args.kernel_args.kernels):
-        model_list = []
-        for pipeline_stage_id in get_pipeline_stage_ids_on_current_rank(num_pipeline_stages):
-            kwargs["pipeline_stage_id"] = pipeline_stage_id
-            model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
+    model_list = []
+    for pipeline_stage_id in get_pipeline_stage_ids_on_current_rank(num_pipeline_stages):
+        kwargs["pipeline_stage_id"] = pipeline_stage_id
+        model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
     return ModelContainer(model_list)

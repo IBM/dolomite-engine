@@ -10,7 +10,7 @@ from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
 from ...enums import PositionEmbeddingType
-from ...loss import add_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
+from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from ..modeling_outputs import (
