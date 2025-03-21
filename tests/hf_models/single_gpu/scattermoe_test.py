@@ -31,7 +31,7 @@ class ScatterMoETest(TestCommons):
 
         naive_output = model(input_ids=input_ids, attention_mask=attention_mask)
 
-        with enable_kernels(Kernel.scattermoe):
+        with enable_kernels([Kernel.scattermoe]):
             scatter_output = model(input_ids=input_ids, attention_mask=attention_mask)
 
         self.assert_equal_tensors(
