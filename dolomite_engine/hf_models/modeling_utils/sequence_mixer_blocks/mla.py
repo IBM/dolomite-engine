@@ -93,12 +93,28 @@ class MultiHeadLatentAttention(nn.Module):
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
-        self.c_attn = ParameterizedLinear(
-            self.hidden_size,
-            self.hidden_size + 2 * self.num_key_value_heads * self.head_dim,
-            bias=self.add_bias,
-            std=std,
-        )
+
+        if self.position_embedding_type == PositionEmbeddingType.rope:
+            raise NotImplementedError()
+        else:
+            self.c_attn_down_projection = ParameterizedLinear(
+                self.hidden_size,
+                self.query_compression_size + 2 * self.key_value_compression_size,
+                bias=self.add_bias,
+                std=std,
+            )
+
+            self.query_up_projection = ParameterizedLinear(
+                self.query_compression_size, self.hidden_size, bias=self.add_bias, std=std
+            )
+
+            self.key_up_projection = ParameterizedLinear(
+                self.key_value_compression_size, self.hidden_size, bias=self.add_bias, std=std
+            )
+
+            self.value_up_projection = ParameterizedLinear(
+                self.key_value_compression_size, self.hidden_size, bias=self.add_bias, std=std
+            )
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == InitMethod.mup:
@@ -117,51 +133,19 @@ class MultiHeadLatentAttention(nn.Module):
         hidden_states = self.c_attn_down_projection(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
-            compressed_query, compressed_key_value, key_rope = hidden_states.split(
-                (
-                    self.query_compression_size,
-                    2 * self.key_value_compression_size,
-                    self.rope_dim,
-                ),
-                dim=-1,
-            )
-            del hidden_states
-
-            query_query_rope = self.query_up_projection(compressed_query)
-            query, query_rope = query_query_rope.split((self.hidden_size, self.rope_dim), dim=-1)
-            del query_query_rope
-
-            query_rope = apply_rotary_pos_emb(query_rope, rope_cos_sin)
-            query = torch.cat([query, query_rope], dim=-1)
-            del query_rope
-
-            key_rope = apply_rotary_pos_emb(key_rope, rope_cos_sin)
-
-            if past_key_values is not None:
-                compressed_key_value, key_rope = past_key_values.update(compressed_key_value, key_rope, self.layer_idx)
-
-            key_value = self.key_value_up_projection(compressed_key_value)
-            key, value = key_value.chunk(2, dim=-1)
-            del key_value
-
-            key = torch.cat([key, key_rope], dim=-1)
-            del key_rope
+            raise NotImplementedError()
         else:
-            compressed_query, compressed_key, compressed_value = hidden_states.split(
+            query, key, value = hidden_states.split(
                 (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
             )
             del hidden_states
 
-            query = self.query_up_projection(compressed_query)
-
             if past_key_values is not None:
-                compressed_key, compressed_value = past_key_values.update(
-                    compressed_key, compressed_value, self.layer_idx
-                )
+                key, value = past_key_values.update(key, value, self.layer_idx)
 
-            key_value = self.key_value_up_projection(compressed_key_value)
-            key, value = key_value.chunk(2, dim=-1)
-            del key_value
+            query = self.query_up_projection(query)
+            key = self.key_up_projection(key)
+            value = self.value_up_projection(value)
 
         return query, key, value
 
