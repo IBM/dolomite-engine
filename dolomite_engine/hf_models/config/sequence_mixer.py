@@ -28,8 +28,8 @@ class _MultiHeadLatentAttention(BaseArgs):
 
     def model_post_init(self, __context: Any) -> None:
         assert self.sequence_mixer_type == "softmax_attention"
-        assert self.query_compression_dimension is not None
-        assert self.key_value_compression_dimension is not None
+        assert self.query_compression_size is not None
+        assert self.key_value_compression_size is not None
 
 
 class _StickbreakingAttentionArgs(BaseArgs):
