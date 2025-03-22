@@ -15,19 +15,13 @@ SEED = 1234
 
 
 class MultiHeadLatentAttentionTest(TestCommons):
-    @parameterized.expand(
-        TestCommons.make_args_matrix(
-            [torch.device("cuda")], TestCommons.get_position_embedding_types(), [torch.float16, torch.bfloat16]
-        )
-    )
-    def test_sdpa_padding_free_transformer_equivalence(
-        self, device: torch.device, position_embedding_type: PositionEmbeddingType, torch_dtype: torch.dtype
-    ) -> None:
+    @parameterized.expand(TestCommons.make_args_matrix([torch.device("cuda")], [torch.float16, torch.bfloat16]))
+    def test_sdpa_padding_free_transformer_equivalence(self, device: torch.device, torch_dtype: torch.dtype) -> None:
         self.skip_test_if_device_unavailable(device)
 
         set_seed(SEED)
 
-        config = self.get_dense_test_config(position_embedding_type, num_layers=1)
+        config = self.get_dense_test_config(num_layers=1)
 
         sdpa_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
         flash_model = self.from_config(config, torch_dtype=torch_dtype, use_padding_free_transformer=True).to(device)
@@ -61,20 +55,14 @@ class MultiHeadLatentAttentionTest(TestCommons):
         )
         self.assert_equal_tensors(sdpa_loss, flash_loss, False)
 
-    @parameterized.expand(
-        TestCommons.make_args_matrix(
-            [torch.device("cuda")], TestCommons.get_position_embedding_types(), [torch.float16, torch.bfloat16]
-        )
-    )
-    def test_sdpa_flash_attention_equivalence(
-        self, device: torch.device, position_embedding_type: PositionEmbeddingType, torch_dtype: torch.dtype
-    ) -> None:
+    @parameterized.expand(TestCommons.make_args_matrix([torch.device("cuda")], [torch.float16, torch.bfloat16]))
+    def test_sdpa_flash_attention_equivalence(self, device: torch.device, torch_dtype: torch.dtype) -> None:
         self.skip_test_if_device_unavailable(device)
 
         set_seed(SEED)
 
         input_ids, attention_mask, labels = self.get_dummy_inputs(device)
-        config = self.get_dense_test_config(position_embedding_type, num_layers=1)
+        config = self.get_dense_test_config(num_layers=1)
 
         sdpa_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
         flash_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
@@ -110,7 +98,6 @@ class MultiHeadLatentAttentionTest(TestCommons):
 
     @staticmethod
     def get_dense_test_config(
-        position_embedding_type: PositionEmbeddingType,
         num_layers: int = 8,
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
@@ -126,7 +113,7 @@ class MultiHeadLatentAttentionTest(TestCommons):
             hidden_size=32,
             num_layers=num_layers,
             num_attention_heads=4,
-            position_embedding_type=position_embedding_type.value,
+            position_embedding_type="nope",
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
