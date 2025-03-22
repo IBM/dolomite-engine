@@ -9,7 +9,6 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import divide_if_divisible, is_flash_attention_available
-from ...enums import InitMethod, PositionEmbeddingType
 from ..linear import ParameterizedLinear
 
 
@@ -25,11 +24,11 @@ class MultiHeadLatentAttention(nn.Module):
         key_value_compression_size: int,
         num_attention_heads: int,
         attention_multiplier: float,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,
@@ -58,10 +57,10 @@ class MultiHeadLatentAttention(nn.Module):
         self.layer_idx = layer_idx
 
         std = initializer_range
-        if init_method == InitMethod.mup:
+        if init_method == "mup":
             std /= math.sqrt(m_width)
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
             self.c_attn_down_projection = ParameterizedLinear(
@@ -84,7 +83,7 @@ class MultiHeadLatentAttention(nn.Module):
             )
 
         std = initializer_range / math.sqrt(2 * num_layers)
-        if init_method == InitMethod.mup:
+        if init_method == "mup":
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
 
@@ -108,7 +107,7 @@ class MultiHeadLatentAttention(nn.Module):
 
         hidden_states = self.c_attn_down_projection(hidden_states)
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
             query, key, value = hidden_states.split(

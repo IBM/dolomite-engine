@@ -1,7 +1,6 @@
 import torch
 
 from .....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
-from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ....modeling_utils_TP import get_tensor_parallel_vocab_info, tensor_parallel_split_safetensor_slice
 from ...gpt_dolomite import GPTDolomiteConfig
@@ -34,7 +33,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
         )
 
         # positional embeddings
-        if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
+        if config.position_embedding_type == "learned_absolute":
             state_dict.update(
                 _get_embeddings_or_lm_head(
                     safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.max_position_embeddings
@@ -137,7 +136,7 @@ def _get_layernorm(safetensors_weights_manager: SafeTensorsWeightsManager, prefi
 def _get_attention(
     hidden_size: int,
     num_attention_heads: int,
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
     add_bias: bool,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     prefix: str,
@@ -146,7 +145,7 @@ def _get_attention(
 ) -> None:
     state_dict = {}
 
-    if attention_head_type == AttentionHeadType.mqa:
+    if attention_head_type == "mqa":
         tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
         tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
 
@@ -164,7 +163,7 @@ def _get_attention(
             bias = safetensors_weights_manager.get_slice(prefix + "c_attn.bias")
             state_dict[prefix + "c_attn.q_attn.bias"] = bias[start_index:end_index]
             state_dict[prefix + "c_attn.kv_attn.bias"] = bias[hidden_size : hidden_size + 2 * head_dim]
-    elif attention_head_type in [AttentionHeadType.mha, AttentionHeadType.gqa]:
+    elif attention_head_type in ["mha", "gqa"]:
         state_dict.update(
             _get_column_parallel(
                 add_bias=add_bias,

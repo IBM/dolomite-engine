@@ -1,7 +1,6 @@
 import torch
 from tqdm import trange
 
-from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ...gpt_dolomite import GPTDolomiteConfig
 
@@ -12,15 +11,13 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
-    position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-
     # word embeddings
     output_state_dict = _get_embeddings_or_lm_head(
         tensor_parallel_state_dicts, prefix=prefix + "transformer.wte.weight", vocab_size=config.vocab_size
     )
 
     # positional embeddings if using learned positional embeddings
-    if position_embedding_type == PositionEmbeddingType.learned_absolute:
+    if config.position_embedding_type == "learned_absolute":
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,
@@ -139,7 +136,7 @@ def _get_layernorm(
 
 def _get_attention(
     tensor_parallel_state_dicts: list[dict],
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
     add_bias: bool,
     prefix: str,
     check_correctness: bool,
@@ -155,7 +152,7 @@ def _get_attention(
             tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
         )
 
-    if attention_head_type == AttentionHeadType.mqa:
+    if attention_head_type == "mqa":
         q_weight = _concatenate_tensors_from_state_dicts(
             tensor_parallel_state_dicts, key=prefix + "c_attn.q_attn.weight", dim=0
         )

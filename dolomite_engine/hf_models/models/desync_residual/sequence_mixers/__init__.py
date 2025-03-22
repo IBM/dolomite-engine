@@ -1,4 +1,3 @@
-from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ..config import DesyncResidualConfig
 from .base import DesyncResidualAttention
 
@@ -17,12 +16,12 @@ def get_sequence_mixer(
         num_key_value_heads=block.num_key_value_heads,
         pretraining_tensor_parallel_size=config.pretraining_tensor_parallel_size,
         attention_multiplier=block.attention_multiplier,
-        attention_head_type=AttentionHeadType(block.attention_head_type),
-        position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
+        attention_head_type=block.attention_head_type,
+        position_embedding_type=config.position_embedding_type,
         add_bias=block.add_bias,
         softmax_dropout=block.softmax_dropout,
         dropout=block.dropout,
-        init_method=InitMethod(config.init_method),
+        init_method=config.init_method,
         initializer_range=config.initializer_range,
         m_width=config.m_width,
         m_residual=config.m_residual,

@@ -7,7 +7,6 @@ from .....enums import Kernel
 from .....kernels import is_kernel_allowed
 from .....utils import divide_if_divisible, is_causal_conv1d_available, is_mamba_2_ssm_available
 from ....cache import HybridMambaAttentionDynamicCache
-from ....enums import InitMethod
 from ...activations import get_activation_function
 from ...convolution import ParameterizedConv1d
 from ...linear import ParameterizedLinear
@@ -48,7 +47,7 @@ class Mamba2(nn.Module):
         layer_norm_epsilon: float,
         initializer_range: float,
         m_width: float,
-        init_method: InitMethod,
+        init_method: str,
         num_layers: int,
         layer_idx: int,
     ) -> None:

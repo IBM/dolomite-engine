@@ -4,7 +4,6 @@ from typing import Any, Callable
 from transformers import PretrainedConfig
 
 from ...utils import BaseArgs
-from ..enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mlp import _MLPArgs, _MoEArgs
 from .sequence_mixer import (
     _Mamba2Args,
@@ -106,8 +105,8 @@ class CommonConfig(PretrainedConfig):
         self.init_method = init_method
 
         # check if enums are valid
-        init_method = InitMethod(init_method)
-        position_embedding_type = PositionEmbeddingType(position_embedding_type)
+        assert init_method in ["normal", "mup"]
+        assert position_embedding_type in ["rope", "learned_absolute", "nope"]
 
         self.sequence_mixer_blocks = sequence_mixer_blocks
         self._set_sequence_mixer_blocks()
@@ -166,22 +165,22 @@ class CommonConfig(PretrainedConfig):
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
             if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
-                attention_head_type = AttentionHeadType(sequence_mixer_block.pop("attention_head_type", "mqa"))
+                attention_head_type = sequence_mixer_block.pop("attention_head_type", "mqa")
                 num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
 
-                if attention_head_type == AttentionHeadType.mha:
+                if attention_head_type == "mha":
                     if num_key_value_heads is None:
                         num_key_value_heads = self.num_attention_heads
 
                     assert (
                         self.num_attention_heads == num_key_value_heads
                     ), "MultiHeadAttention should have same number of heads for query, keys and values"
-                elif attention_head_type == AttentionHeadType.mqa:
+                elif attention_head_type == "mqa":
                     if num_key_value_heads is None:
                         num_key_value_heads = 1
 
                     assert num_key_value_heads == 1, "MultiQueryAttention should have 1 head for keys and values"
-                elif attention_head_type == AttentionHeadType.gqa:
+                elif attention_head_type == "gqa":
                     assert (
                         num_key_value_heads is not None
                     ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"

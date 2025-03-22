@@ -5,7 +5,7 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, GPTDolomiteConfig, LadderResidualConfig, PositionEmbeddingType
+from dolomite_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig
 from dolomite_engine.utils import torch_dtype_to_string
 
 from ...test_common import TestCommons
@@ -23,8 +23,8 @@ class TensorParallelTest(TestCommons):
             [GPTDolomiteConfig.model_type],
         )
         + TestCommons.make_args_matrix(
-            [AttentionHeadType.gqa],
-            [PositionEmbeddingType.rope],
+            ["gqa"],
+            ["rope"],
             ["flash_attention_2"],
             [torch.float16],
             [False, True],
@@ -35,8 +35,8 @@ class TensorParallelTest(TestCommons):
     @TestCommons.slow_test
     def test_tensor_parallel_forward(
         self,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         attention_implementation: str,
         torch_dtype: torch.dtype,
         use_padding_free_transformer: bool,
@@ -64,9 +64,9 @@ class TensorParallelTest(TestCommons):
                 "-m",
                 "tests.hf_models.multi_gpu.tensor_parallel.tensor_parallel_forward",
                 "--attention-head-type",
-                attention_head_type.value,
+                attention_head_type,
                 "--position-embedding-type",
-                position_embedding_type.value,
+                position_embedding_type,
                 "--torch-dtype",
                 torch_dtype_to_string(torch_dtype),
                 "--attention-implementation",

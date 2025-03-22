@@ -5,7 +5,6 @@ from parameterized import parameterized
 from transformers import set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -26,8 +25,8 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_sdpa_padding_free_transformer_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -79,8 +78,8 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_sdpa_flash_attention_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -90,20 +89,15 @@ class GPTDolomiteAttentionTest(TestCommons):
         input_ids, attention_mask, labels = self.get_dummy_inputs(device)
         config = self.get_dense_test_config(attention_head_type, position_embedding_type, num_layers=1)
 
-        sdpa_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
-        flash_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        model.eval()
 
-        sdpa_model.eval()
-        flash_model.eval()
-
-        flash_model.load_state_dict(sdpa_model.state_dict())
-
-        sdpa_output = sdpa_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        sdpa_output = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
         sdpa_logits = sdpa_output.logits
         sdpa_loss = sdpa_output.loss
 
         with enable_kernels([Kernel.flash_attention_2]):
-            flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            flash_output = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             flash_logits = flash_output.logits
             flash_loss = flash_output.loss
 
@@ -133,8 +127,8 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_padding_free_transformer_with_list_and_tensor(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -185,8 +179,8 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_sdpa_flash_enabled(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -231,8 +225,8 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_flash_attention_equivalence_with_and_without_attention_masks(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)

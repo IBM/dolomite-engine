@@ -8,7 +8,6 @@ from torch.distributed._functional_collectives import all_reduce
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
 from .....utils import ProcessGroupManager, is_cute_kernels_available
-from ....enums import InitMethod
 from ....loss import add_aux_loss
 from ...activations import get_activation_function, is_glu
 from ...linear import ParameterizedLinear
@@ -107,7 +106,7 @@ class MoE(nn.Module):
         activation_function: str,
         add_bias: bool,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,

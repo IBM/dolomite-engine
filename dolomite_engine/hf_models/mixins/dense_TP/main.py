@@ -9,7 +9,6 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
-from ...enums import PositionEmbeddingType
 from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
@@ -191,9 +190,9 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
     def load_from_safetensors_weights_manager(self, safetensors_weights_manager: SafeTensorsWeightsManager) -> None:
         with torch.device(torch.cuda.current_device()):
-            position_embedding_type = PositionEmbeddingType(self.config.position_embedding_type)
+            position_embedding_type = self.config.position_embedding_type
 
-            if position_embedding_type == PositionEmbeddingType.rope:
+            if position_embedding_type == "rope":
                 self.transformer.rope.reset_parameters()
 
         state_dict = self.__class__.model_parallel_state_dict_function(

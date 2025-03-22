@@ -7,7 +7,6 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
 from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
-from ...enums import PositionEmbeddingType
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 from ..modeling_outputs import BaseModelOutputWithPast
@@ -125,7 +124,7 @@ class BaseModelMixin(PreTrainedModelMixin):
             config.normalization_function, self.embed_dim, eps=config.layer_norm_epsilon
         )
 
-        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
+        self.position_embedding_type = config.position_embedding_type
         self._setup_positional_encoding()
 
         # Initialize weights and apply final processing
@@ -221,7 +220,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         return position_ids
 
     def _get_rope_cos_sin(self, key_length: int, position_ids: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             cos, sin = self.rope(key_length, dtype=dtype)
             cos = cos[position_ids].unsqueeze(1)
             sin = sin[position_ids].unsqueeze(1)
@@ -290,7 +289,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         if inputs_embeds is None:
             inputs_embeds = self.wte(input_ids)
 
-        if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
+        if self.position_embedding_type == "learned_absolute":
             inputs_embeds = inputs_embeds + self.wpe(position_ids)
 
         if token_type_ids is not None:
@@ -432,9 +431,9 @@ class BaseModelMixin(PreTrainedModelMixin):
     def _setup_positional_encoding(self) -> None:
         max_position_embeddings = self.config.max_position_embeddings
 
-        if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
+        if self.position_embedding_type == "learned_absolute":
             self.wpe = ParameterizedEmbedding(max_position_embeddings, self.embed_dim, std=self.initializer_range)
-        elif self.position_embedding_type == PositionEmbeddingType.rope:
+        elif self.position_embedding_type == "rope":
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
                     self.head_dim,
@@ -449,7 +448,7 @@ class BaseModelMixin(PreTrainedModelMixin):
                     scale=self.config.rope_scaling["factor"],
                     original_max_position_embeddings=self.config.rope_scaling["original_max_position_embeddings"],
                 )
-        elif self.position_embedding_type == PositionEmbeddingType.nope:
+        elif self.position_embedding_type == "nope":
             pass
         else:
             raise NotImplementedError()

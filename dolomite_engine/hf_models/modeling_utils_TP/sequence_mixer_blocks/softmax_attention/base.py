@@ -5,7 +5,6 @@ import torch.distributed
 import torch.nn as nn
 
 from .....utils import ProcessGroupManager, divide_if_divisible
-from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
@@ -19,12 +18,12 @@ class Attention_TP(Attention):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,
@@ -66,7 +65,7 @@ class Attention_TP(Attention):
 
         std = _get_std_for_linear(initializer_range, init_method, m_width)
 
-        if self.attention_head_type == AttentionHeadType.mha:
+        if self.attention_head_type == "mha":
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = self.global_num_heads
 
@@ -84,7 +83,7 @@ class Attention_TP(Attention):
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
-        elif self.attention_head_type == AttentionHeadType.gqa:
+        elif self.attention_head_type == "gqa":
             assert (
                 self.global_num_key_value_heads is not None
             ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
@@ -114,7 +113,7 @@ class Attention_TP(Attention):
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
-        elif self.attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == "mqa":
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = 1
 
@@ -198,7 +197,7 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         add_bias: bool,
         m_width: int,
         num_layers: int,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,

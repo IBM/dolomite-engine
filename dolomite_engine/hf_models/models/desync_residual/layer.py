@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
-from ...enums import AttentionHeadType, InitMethod
 from ...modeling_utils import get_normalization_function
 from .config import DesyncResidualConfig
 from .mlp import DesyncResidualMLP
@@ -53,7 +52,7 @@ class DesyncResidualBlock(nn.Module):
             activation_function=block.activation_function,
             add_bias=block.add_bias,
             dropout=block.dropout,
-            init_method=InitMethod(config.init_method),
+            init_method=config.init_method,
             initializer_range=config.initializer_range,
             m_width=config.m_width,
             m_residual=config.m_residual,

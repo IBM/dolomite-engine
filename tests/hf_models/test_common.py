@@ -10,14 +10,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    GPTDolomiteConfig,
-    PositionEmbeddingType,
-    export_to_huggingface,
-    import_from_huggingface,
-)
-from dolomite_engine.hf_models.config import CommonConfig
+from dolomite_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
@@ -29,16 +22,16 @@ class TestCommons(TestCase):
         return [torch.device("cpu"), torch.device("cuda")]
 
     @staticmethod
-    def get_attention_head_types() -> list[AttentionHeadType]:
-        return [AttentionHeadType.mha, AttentionHeadType.mqa, AttentionHeadType.gqa]
+    def get_attention_head_types() -> list[str]:
+        return ["mha", "mqa", "gqa"]
 
     @staticmethod
     def get_attention_implementations() -> list[str]:
         return ["sdpa", "flash_attention_2"]
 
     @staticmethod
-    def get_position_embedding_types() -> list[PositionEmbeddingType]:
-        return [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope]
+    def get_position_embedding_types() -> list[str]:
+        return ["learned_absolute", "rope"]
 
     @staticmethod
     def get_dtypes() -> list[torch.dtype]:
@@ -65,8 +58,8 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_dense_test_config(
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         num_layers: int = 8,
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
@@ -82,7 +75,7 @@ class TestCommons(TestCase):
             hidden_size=32,
             num_layers=num_layers,
             num_attention_heads=4,
-            position_embedding_type=position_embedding_type.value,
+            position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -95,8 +88,8 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
-                    "attention_head_type": attention_head_type.value,
+                    "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
+                    "attention_head_type": attention_head_type,
                     "attention_multiplier": attention_multiplier,
                 }
                 for _ in range(num_layers)
@@ -109,8 +102,8 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_moe_test_config(
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         num_layers: int = 8,
         num_experts: int = 8,
         num_experts_per_tok: int = 8,
@@ -129,7 +122,7 @@ class TestCommons(TestCase):
             hidden_size=32,
             num_layers=num_layers,
             num_attention_heads=4,
-            position_embedding_type=position_embedding_type.value,
+            position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -142,8 +135,8 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
-                    "attention_head_type": attention_head_type.value,
+                    "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
+                    "attention_head_type": attention_head_type,
                     "attention_multiplier": attention_multiplier,
                 }
                 for _ in range(num_layers)

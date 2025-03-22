@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from .....utils import divide_if_divisible
-from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..linear import DesyncResidualLinear
@@ -21,12 +20,12 @@ class DesyncResidualAttention(Attention):
         num_key_value_heads: int,
         pretraining_tensor_parallel_size: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         m_residual: float,
@@ -71,7 +70,7 @@ class DesyncResidualAttention(Attention):
 
         self.layer_idx = layer_idx
 
-        if self.attention_head_type == AttentionHeadType.mha:
+        if self.attention_head_type == "mha":
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = self.global_num_heads
 
@@ -80,7 +79,7 @@ class DesyncResidualAttention(Attention):
             ), f"{self.__class__.__name__} should have same number of heads for query, keys and values"
 
             self.num_key_value_heads = self.num_heads
-        elif self.attention_head_type == AttentionHeadType.gqa:
+        elif self.attention_head_type == "gqa":
             assert (
                 self.global_num_key_value_heads is not None
             ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
@@ -101,7 +100,7 @@ class DesyncResidualAttention(Attention):
                 self.tp_world_size,
                 f"`num_key_value_heads` ({self.global_num_key_value_heads}) must be divisible by `tensor_parallel_world_size` ({self.tp_world_size})",
             )
-        elif self.attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == "mqa":
             raise ValueError("mqa is not supported with DesyncResidualAttention")
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
@@ -150,11 +149,11 @@ class DesyncResidualAttention(Attention):
         # ==========================================================================================
 
         # for MHA, we can get away with doing just 1 transpose which is not true for GQA
-        if self.attention_head_type == AttentionHeadType.mha:
+        if self.attention_head_type == "mha":
             query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.gqa:
+        elif self.attention_head_type == "gqa":
             query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == "mqa":
             raise NotImplementedError("mqa doesn't work with DesyncResidual")
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
@@ -189,7 +188,7 @@ class DesyncResidualAttention(Attention):
         # value -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 

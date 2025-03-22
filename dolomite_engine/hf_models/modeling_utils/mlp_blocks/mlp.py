@@ -3,7 +3,6 @@ import math
 import torch
 import torch.nn as nn
 
-from ...enums import InitMethod
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 
@@ -16,7 +15,7 @@ class MLP(nn.Module):
         activation_function: str,
         add_bias: bool,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,
@@ -48,11 +47,11 @@ class MLP(nn.Module):
         return hidden_states
 
 
-def _get_std_for_linear(initializer_range: float, init_method: InitMethod, m_width: float | None) -> float:
+def _get_std_for_linear(initializer_range: float, init_method: str, m_width: float | None) -> float:
     std = initializer_range
-    if init_method == InitMethod.mup:
+    if init_method == "mup":
         std /= math.sqrt(m_width)
-    elif init_method != InitMethod.normal:
+    elif init_method != "normal":
         raise ValueError(f"unexpected init_method ({init_method})")
 
     return std

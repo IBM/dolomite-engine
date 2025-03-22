@@ -12,7 +12,6 @@ from dolomite_engine.checkpointing import (
 )
 from dolomite_engine.distributed import wrap_model_container_for_distributed_training
 from dolomite_engine.enums import Mode
-from dolomite_engine.hf_models import AttentionHeadType
 from dolomite_engine.model_wrapper import get_model_container
 from dolomite_engine.utils import ProcessGroupManager, load_yaml
 
@@ -29,7 +28,7 @@ parser.add_argument("--data-parallel-sharding-world-size", type=int)
 args = parser.parse_args()
 
 num_key_value_heads = None
-if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
+if args.attention_head_type == "gqa":
     num_key_value_heads = 8
 
 train_config = TrainingArgs(**load_yaml(args.train_config))

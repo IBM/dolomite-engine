@@ -1,6 +1,5 @@
 import torch
 
-from ....enums import AttentionHeadType
 from ....modeling_utils import is_glu
 from ...gpt_dolomite import GPTDolomiteConfig
 
@@ -13,10 +12,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
     ]
 
     for layer_idx in range(config.num_layers):
-        if (
-            config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type")
-            == AttentionHeadType.mqa
-        ):
+        if config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type") == "mqa":
             q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.q_attn.weight")
             kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.kv_attn.weight")
             state_dict[f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = torch.cat(

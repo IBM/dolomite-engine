@@ -1,7 +1,6 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteConfig, GraniteForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
-from ..enums import AttentionHeadType
 from ..models import GPTDolomiteConfig
 from .llama import _export_state_dict_to_huggingface, _import_state_dict_from_huggingface
 
