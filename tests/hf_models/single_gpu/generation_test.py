@@ -5,7 +5,7 @@ import torch
 from parameterized import parameterized
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import PositionEmbeddingType, export_to_huggingface
+from dolomite_engine.hf_models import export_to_huggingface
 
 from ..test_common import TestCommons
 
@@ -15,7 +15,7 @@ class GenerationTest(TestCommons):
         TestCommons.make_args_matrix(
             TestCommons.get_all_devices(),
             ["mha", "mqa"],
-            [PositionEmbeddingType.learned_absolute],
+            ["learned_absolute"],
             [torch.float32],
             [True, False],
         )
@@ -24,7 +24,7 @@ class GenerationTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
         use_cache: bool,
     ) -> None:
@@ -91,7 +91,7 @@ class GenerationTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)

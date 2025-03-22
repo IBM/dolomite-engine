@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from .....utils import divide_if_divisible
-from ....enums import PositionEmbeddingType
 from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..linear import DesyncResidualLinear
@@ -22,7 +21,7 @@ class DesyncResidualAttention(Attention):
         pretraining_tensor_parallel_size: int,
         attention_multiplier: float,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
@@ -189,7 +188,7 @@ class DesyncResidualAttention(Attention):
         # value -> (TP * batch_size, num_key_value_heads, query_length, head_dim)
         # ==========================================================================================
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 

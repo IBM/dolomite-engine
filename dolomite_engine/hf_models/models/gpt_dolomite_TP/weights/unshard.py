@@ -1,7 +1,6 @@
 import torch
 from tqdm import trange
 
-from ....enums import PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ...gpt_dolomite import GPTDolomiteConfig
 
@@ -12,15 +11,13 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
     prefix: str = "",
     check_correctness: bool = True,
 ) -> dict:
-    position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
-
     # word embeddings
     output_state_dict = _get_embeddings_or_lm_head(
         tensor_parallel_state_dicts, prefix=prefix + "transformer.wte.weight", vocab_size=config.vocab_size
     )
 
     # positional embeddings if using learned positional embeddings
-    if position_embedding_type == PositionEmbeddingType.learned_absolute:
+    if config.position_embedding_type == "learned_absolute":
         output_state_dict.update(
             _get_embeddings_or_lm_head(
                 tensor_parallel_state_dicts,

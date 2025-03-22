@@ -4,7 +4,6 @@ from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
-from ...enums import PositionEmbeddingType
 from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
@@ -86,7 +85,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 sequence_parallel=self.sequence_parallel,
             )
 
-        self.position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
+        self.position_embedding_type = config.position_embedding_type
         self._setup_positional_encoding()
 
         # Initialize weights and apply final processing
@@ -170,7 +169,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
     def _setup_positional_encoding(self) -> None:
         max_position_embeddings = self.config.max_position_embeddings
 
-        if self.position_embedding_type == PositionEmbeddingType.learned_absolute:
+        if self.position_embedding_type == "learned_absolute":
             if self.is_first_stage:
                 self.wpe = Embedding_TP(
                     max_position_embeddings,
@@ -179,7 +178,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
-        elif self.position_embedding_type == PositionEmbeddingType.rope:
+        elif self.position_embedding_type == "rope":
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
                     self.head_dim, max_position_embeddings=max_position_embeddings, base=self.config.rope_theta
@@ -192,7 +191,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     scale=self.config.rope_scaling["factor"],
                     original_max_position_embeddings=self.config.rope_scaling["original_max_position_embeddings"],
                 )
-        elif self.position_embedding_type == PositionEmbeddingType.nope:
+        elif self.position_embedding_type == "nope":
             pass
         else:
             raise NotImplementedError()

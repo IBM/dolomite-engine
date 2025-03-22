@@ -3,7 +3,6 @@ from parameterized import parameterized
 from transformers import set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import PositionEmbeddingType
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -22,7 +21,7 @@ class ScatterMoETest(TestCommons):
 
         input_ids, attention_mask, _ = self.get_dummy_inputs(device)
 
-        config = self.get_moe_test_config("mha", PositionEmbeddingType.rope, num_layers=1, add_bias=False)
+        config = self.get_moe_test_config("mha", "rope", num_layers=1, add_bias=False)
 
         model = self.from_config(config, torch_dtype=torch_dtype).to(device)
         model.eval()

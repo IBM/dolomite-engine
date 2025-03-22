@@ -1,7 +1,6 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig, GPTBigCodeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
-from ..enums import PositionEmbeddingType
 from ..models import GPTDolomiteConfig
 
 
@@ -129,7 +128,7 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
     assert config.normalization_function == "layernorm"
-    assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
+    assert config.position_embedding_type == "learned_absolute"
     assert config.m_emb is None
     assert config.m_residual is None
     assert config.m_width is None

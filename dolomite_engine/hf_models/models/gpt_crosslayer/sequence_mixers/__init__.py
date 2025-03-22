@@ -1,4 +1,3 @@
-from ....enums import PositionEmbeddingType
 from ..config import GPTCrossLayerConfig
 from .base import CrossLayerAttention, KeyValueProjection
 
@@ -15,7 +14,7 @@ def get_sequence_mixer(
         num_key_value_heads=block.num_key_value_heads,
         attention_multiplier=block.attention_multiplier,
         attention_head_type=block.attention_head_type,
-        position_embedding_type=PositionEmbeddingType(config.position_embedding_type),
+        position_embedding_type=config.position_embedding_type,
         add_bias=block.add_bias,
         softmax_dropout=block.softmax_dropout,
         dropout=block.dropout,

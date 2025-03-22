@@ -1,7 +1,6 @@
 import torch
 
 from .....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
-from ....enums import PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ....modeling_utils_TP import get_tensor_parallel_vocab_info, tensor_parallel_split_safetensor_slice
 from ...gpt_dolomite import GPTDolomiteConfig
@@ -34,7 +33,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
         )
 
         # positional embeddings
-        if PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute:
+        if config.position_embedding_type == "learned_absolute":
             state_dict.update(
                 _get_embeddings_or_lm_head(
                     safetensors_weights_manager, prefix="transformer.wpe.", vocab_size=config.max_position_embeddings

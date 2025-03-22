@@ -9,7 +9,6 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import divide_if_divisible, is_flash_attention_available
-from ...enums import PositionEmbeddingType
 from ..linear import ParameterizedLinear
 
 
@@ -25,7 +24,7 @@ class MultiHeadLatentAttention(nn.Module):
         key_value_compression_size: int,
         num_attention_heads: int,
         attention_multiplier: float,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
@@ -61,7 +60,7 @@ class MultiHeadLatentAttention(nn.Module):
         if init_method == "mup":
             std /= math.sqrt(m_width)
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
             self.c_attn_down_projection = ParameterizedLinear(
@@ -108,7 +107,7 @@ class MultiHeadLatentAttention(nn.Module):
 
         hidden_states = self.c_attn_down_projection(hidden_states)
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
             query, key, value = hidden_states.split(

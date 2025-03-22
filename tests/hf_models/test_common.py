@@ -10,13 +10,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.hf_models import (
-    GPTDolomiteConfig,
-    PositionEmbeddingType,
-    export_to_huggingface,
-    import_from_huggingface,
-)
-from dolomite_engine.hf_models.config import CommonConfig
+from dolomite_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
@@ -36,8 +30,8 @@ class TestCommons(TestCase):
         return ["sdpa", "flash_attention_2"]
 
     @staticmethod
-    def get_position_embedding_types() -> list[PositionEmbeddingType]:
-        return [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.rope]
+    def get_position_embedding_types() -> list[str]:
+        return ["learned_absolute", "rope"]
 
     @staticmethod
     def get_dtypes() -> list[torch.dtype]:
@@ -65,7 +59,7 @@ class TestCommons(TestCase):
     @staticmethod
     def get_dense_test_config(
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         num_layers: int = 8,
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
@@ -81,7 +75,7 @@ class TestCommons(TestCase):
             hidden_size=32,
             num_layers=num_layers,
             num_attention_heads=4,
-            position_embedding_type=position_embedding_type.value,
+            position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -109,7 +103,7 @@ class TestCommons(TestCase):
     @staticmethod
     def get_moe_test_config(
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         num_layers: int = 8,
         num_experts: int = 8,
         num_experts_per_tok: int = 8,
@@ -128,7 +122,7 @@ class TestCommons(TestCase):
             hidden_size=32,
             num_layers=num_layers,
             num_attention_heads=4,
-            position_embedding_type=position_embedding_type.value,
+            position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,

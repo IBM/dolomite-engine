@@ -10,7 +10,6 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed, wait_for_ACT
 from .....utils import divide_if_divisible, is_flash_attention_available
-from ....enums import PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
 from .utils import (
@@ -36,7 +35,7 @@ class Attention(nn.Module):
         num_key_value_heads: int,
         attention_multiplier: float,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
@@ -211,7 +210,7 @@ class Attention(nn.Module):
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
-        if self.position_embedding_type == PositionEmbeddingType.rope:
+        if self.position_embedding_type == "rope":
             query = apply_rotary_pos_emb(query, rope_cos_sin)
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 

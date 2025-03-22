@@ -4,7 +4,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM, set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import PositionEmbeddingType, convert_gpt_dolomite_to_gpt_crosslayer
+from dolomite_engine.hf_models import convert_gpt_dolomite_to_gpt_crosslayer
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -25,7 +25,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
@@ -68,7 +68,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
         use_cache: bool,
     ) -> None:
@@ -120,7 +120,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -173,7 +173,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)

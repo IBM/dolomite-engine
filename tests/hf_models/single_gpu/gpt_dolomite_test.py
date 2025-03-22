@@ -5,7 +5,6 @@ from parameterized import parameterized
 from transformers import set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import PositionEmbeddingType
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -27,7 +26,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -80,7 +79,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -129,7 +128,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -181,7 +180,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -227,7 +226,7 @@ class GPTDolomiteAttentionTest(TestCommons):
         self,
         device: torch.device,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         torch_dtype: torch.dtype,
     ) -> None:
         self.skip_test_if_device_unavailable(device)

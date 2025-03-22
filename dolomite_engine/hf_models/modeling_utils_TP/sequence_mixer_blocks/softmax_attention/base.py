@@ -5,7 +5,6 @@ import torch.distributed
 import torch.nn as nn
 
 from .....utils import ProcessGroupManager, divide_if_divisible
-from ....enums import PositionEmbeddingType
 from ....modeling_utils import Attention
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
@@ -20,7 +19,7 @@ class Attention_TP(Attention):
         num_key_value_heads: int,
         attention_multiplier: float,
         attention_head_type: str,
-        position_embedding_type: PositionEmbeddingType,
+        position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
