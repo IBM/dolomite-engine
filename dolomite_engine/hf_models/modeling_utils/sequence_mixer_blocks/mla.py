@@ -26,9 +26,7 @@ class MultiHeadLatentAttention(nn.Module):
         query_compression_size: int,
         key_value_compression_size: int,
         num_attention_heads: int,
-        num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
         softmax_dropout: float,
@@ -46,7 +44,6 @@ class MultiHeadLatentAttention(nn.Module):
         self.causal = causal
         self.hidden_size = hidden_size
         self.num_heads = num_attention_heads
-        self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
         self.use_padding_free_transformer = use_padding_free_transformer
         self.query_compression_size = query_compression_size
@@ -58,38 +55,10 @@ class MultiHeadLatentAttention(nn.Module):
             f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
         )
 
-        self.attention_head_type = attention_head_type
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
 
-        if self.attention_head_type == AttentionHeadType.mha:
-            if self.num_key_value_heads is None:
-                self.num_key_value_heads = self.num_heads
-
-            assert (
-                self.num_heads == self.num_key_value_heads
-            ), f"{self.__class__.__name__} should have same number of heads for query, keys and values"
-        elif self.attention_head_type == AttentionHeadType.gqa:
-            assert (
-                self.num_key_value_heads is not None
-            ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
-
-            divide_if_divisible(
-                self.num_heads,
-                self.num_key_value_heads,
-                f"`num_heads` ({self.num_heads}) should be a multiple of `num_key_value_heads` ({self.num_key_value_heads})",
-            )
-        elif self.attention_head_type == AttentionHeadType.mqa:
-            if self.num_key_value_heads is None:
-                self.num_key_value_heads = 1
-
-            assert self.num_key_value_heads == 1, f"{self.__class__.__name__} should have 1 head for keys and values"
-        else:
-            raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
-
-        # note that the actual layout is different for the output and depends on whether we are using MHA, MQA or GQA
-        # (self.hidden_size + 2 * self.num_key_value_heads * self.head_dim) is just the actual number output features
         std = initializer_range
         if init_method == InitMethod.mup:
             std /= math.sqrt(m_width)
@@ -162,14 +131,9 @@ class MultiHeadLatentAttention(nn.Module):
             assert is_kernel_allowed(Kernel.flash_attention_2)
             assert past_key_values is None
 
-        query, key, value = self._prepare_qkv_for_forward(hidden_states)
-
-        if self.position_embedding_type == PositionEmbeddingType.rope:
-            query = apply_rotary_pos_emb(query, rope_cos_sin)
-            key = apply_rotary_pos_emb(key, rope_cos_sin)
-
-        if past_key_values is not None:
-            key, value = past_key_values.update(key, value, self.layer_idx)
+        query, key, value = self._prepare_qkv_for_forward(
+            hidden_states, past_key_values=past_key_values, rope_cos_sin=rope_cos_sin
+        )
 
         if is_kernel_allowed(Kernel.flash_attention_2):
             if self.use_padding_free_transformer:
@@ -177,12 +141,8 @@ class MultiHeadLatentAttention(nn.Module):
             else:
                 # TODO avoid this extra transpose
                 query = query.transpose(1, 2)
-                if self.attention_head_type == AttentionHeadType.mqa:
-                    key = key.squeeze(1).unsqueeze(2)
-                    value = value.squeeze(1).unsqueeze(2)
-                else:
-                    key = key.transpose(1, 2)
-                    value = value.transpose(1, 2)
+                key = key.transpose(1, 2)
+                value = value.transpose(1, 2)
 
                 batch_size, query_length = query.shape[:2]
                 output_shape = (batch_size, query_length, -1)
@@ -221,9 +181,6 @@ class MultiHeadLatentAttention(nn.Module):
             hidden_states = wait_for_ACT(hidden_states, wait_in_forward=False, wait_in_backward=True)
             hidden_states = hidden_states.view(*output_shape)
         else:
-            key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
-            value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
-
             hidden_states = F.scaled_dot_product_attention(
                 query,
                 key,
