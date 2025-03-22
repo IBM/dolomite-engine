@@ -6,7 +6,12 @@ from transformers import PretrainedConfig
 from ...utils import BaseArgs
 from ..enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mlp import _MLPArgs, _MoEArgs
-from .sequence_mixer import _Mamba2Args, _MultiHeadLatentAttention, _SoftmaxAttentionArgs, _StickbreakingAttentionArgs
+from .sequence_mixer import (
+    _Mamba2Args,
+    _MultiHeadLatentAttentionArgs,
+    _SoftmaxAttentionArgs,
+    _StickbreakingAttentionArgs,
+)
 
 
 def _hold_base_args(key: str) -> Callable:
@@ -153,7 +158,9 @@ class CommonConfig(PretrainedConfig):
         if self.sequence_mixer_blocks is None:
             self.sequence_mixer_blocks = [{} for _ in range(self.num_layers)]
 
-        sequence_mixer_blocks: list[_SoftmaxAttentionArgs | _Mamba2Args] = []
+        sequence_mixer_blocks: list[
+            _SoftmaxAttentionArgs | _Mamba2Args | _MultiHeadLatentAttentionArgs | _StickbreakingAttentionArgs
+        ] = []
         for i in range(self.num_layers):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
@@ -227,7 +234,7 @@ class CommonConfig(PretrainedConfig):
                 ]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
-                sequence_mixer_class = _MultiHeadLatentAttention
+                sequence_mixer_class = _MultiHeadLatentAttentionArgs
             else:
                 raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 

@@ -17,7 +17,7 @@ class _SoftmaxAttentionArgs(BaseArgs):
         assert self.sequence_mixer_type == "softmax_attention"
 
 
-class _MultiHeadLatentAttention(BaseArgs):
+class _MultiHeadLatentAttentionArgs(BaseArgs):
     sequence_mixer_type: str = "multihead_latent_attention"
     softmax_dropout: float = 0
     dropout: float = 0
