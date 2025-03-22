@@ -26,7 +26,6 @@ def get_sequence_mixer(
     block = config.sequence_mixer_blocks[layer_idx]
     sequence_mixer_type = block.sequence_mixer_type
 
-    attention_head_type = AttentionHeadType(block.attention_head_type)
     position_embedding_type = PositionEmbeddingType(config.position_embedding_type)
     init_method = InitMethod(config.init_method)
 
@@ -75,7 +74,7 @@ def get_sequence_mixer(
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=block.num_key_value_heads,
             attention_multiplier=block.attention_multiplier,
-            attention_head_type=attention_head_type,
+            attention_head_type=AttentionHeadType(block.attention_head_type),
             position_embedding_type=position_embedding_type,
             add_bias=block.add_bias,
             dropout=block.dropout,
