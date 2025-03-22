@@ -11,7 +11,6 @@ class DesyncResidualPreTrainedModel(PreTrainedModelMixin):
     config_class = DesyncResidualConfig
     layer_class = DesyncResidualBlock
     _no_split_modules = ["DesyncResidualBlock"]
-    _supports_flash_attn_2 = False
 
 
 class DesyncResidualModel(DesyncResidualPreTrainedModel, GPTDolomiteModel):

@@ -17,16 +17,6 @@ class LRDecaySchedule(Enum):
     power = "power"
 
 
-class AttentionImplementation(Enum):
-    """
-    Enum class for attention implementation
-    """
-
-    eager = "eager"
-    sdpa = "sdpa"
-    flash_attention_2 = "flash_attention_2"
-
-
 class DatasetSplit(Enum):
     """dataset split"""
 
@@ -81,5 +71,6 @@ class Kernel(Enum):
     rmsnorm_cute = "rmsnorm_cute"
     swiglu_unchunked_cute = "swiglu_unchunked_cute"
     # external kernels
+    flash_attention_2 = "flash_attention_2"
     mamba2_ssm = "mamba2_ssm"
     scattermoe = "scattermoe"

@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache, PreTrainedModel
 
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
 from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
@@ -23,24 +25,14 @@ class PreTrainedModelMixin(PreTrainedModel):
     causal = True
     _no_split_modules = None
     _skip_keys_device_placement = "past_key_values"
-    _supports_sdpa = True
-    _supports_flash_attn_2 = True
 
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
         super().__init__(config, *args, **kwargs)
 
         assert self.config_class is not None
 
-        self.attention_implementation = self.config._attn_implementation
-        self._use_eager_attention = self.attention_implementation == "eager"
-        self._use_sdpa = self.attention_implementation == "sdpa"
-        self._use_flash_attention_2 = self.attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
-
         self._tied_word_embeddings = config.tie_word_embeddings
-
-        if self._use_padding_free_transformer:
-            assert self._use_flash_attention_2, "padding free transformer only works with flash attention"
 
         self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
 
@@ -125,12 +117,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         )
         self.h = nn.ModuleList(
             [
-                self.layer_class(
-                    config,
-                    attention_implementation=self.attention_implementation,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
-                    layer_idx=i,
-                )
+                self.layer_class(config, use_padding_free_transformer=self._use_padding_free_transformer, layer_idx=i)
                 for i in range(config.num_layers)
             ]
         )
@@ -482,7 +469,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         dtype: torch.dtype,
         device: torch.device,
     ) -> torch.Tensor:
-        if self._use_sdpa:
+        if not is_kernel_allowed(Kernel.flash_attention_2):
             # we use the causal/non-causal argument of SDPA for attention in this case
             if attention_mask is not None:
                 attention_mask = self._prepare_causal_attention_mask(
@@ -500,16 +487,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 attention_mask = attention_mask * ~torch.all(
                     attention_mask == self._get_mask_value(attention_mask.device, dtype), dim=-1, keepdim=True
                 )
-        elif self._use_eager_attention:
-            attention_mask = self._prepare_causal_attention_mask(
-                attention_mask, batch_size, query_length, key_length, device
-            )
-
-            attention_mask = torch.where(
-                attention_mask,
-                ~attention_mask,
-                self._get_mask_value(attention_mask.device, dtype),
-            )
 
         return attention_mask
 

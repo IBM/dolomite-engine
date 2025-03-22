@@ -9,7 +9,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
     def __init__(
         self,
         config: GPTDolomiteConfig,
-        attention_implementation: str,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,
@@ -30,7 +29,6 @@ class GPTDolomiteBlock_TP(GPTDolomiteBlock):
         self.sequence_mixer = get_sequence_mixer_TP(
             config,
             True,
-            attention_implementation=attention_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             layer_idx=layer_idx,
             sequence_parallel=sequence_parallel,

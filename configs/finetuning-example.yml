@@ -18,7 +18,6 @@ datasets:
 model_args:
   model_name: ibm-granite/granite-3b-code-base
   model_class: AutoModelForCausalLM
-  attention_implementation: flash_attention_2
   # padding free transformer needs a gpt_dolomite model.
   # To convert granite models to this class and convert back after training,
   # take a look at the readme of this repo

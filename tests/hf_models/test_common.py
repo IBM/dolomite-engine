@@ -34,7 +34,7 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_attention_implementations() -> list[str]:
-        return ["eager", "sdpa", "flash_attention_2"]
+        return ["sdpa", "flash_attention_2"]
 
     @staticmethod
     def get_position_embedding_types() -> list[PositionEmbeddingType]:
@@ -260,30 +260,16 @@ class TestCommons(TestCase):
         return False
 
     def from_config(self, config: AutoConfig, **kwargs) -> AutoModelForCausalLM:
-        attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
 
         model = AutoModelForCausalLM.from_config(
             config,
-            attn_implementation=attention_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             torch_dtype=kwargs.pop("torch_dtype", None),
         )
 
         if use_padding_free_transformer:
             assert model._use_padding_free_transformer
-
-        if attention_implementation == "eager":
-            assert "Attention" in str(model)
-            assert "FlashAttention2" not in str(model)
-            assert "PaddingFreeAttention" not in str(model)
-        elif attention_implementation == "sdpa":
-            assert "SDPA" in str(model)
-        elif attention_implementation == "flash_attention_2":
-            if use_padding_free_transformer:
-                assert "PaddingFreeAttention" in str(model)
-            else:
-                assert "FlashAttention2" in str(model)
 
         assert len(kwargs) == 0
 

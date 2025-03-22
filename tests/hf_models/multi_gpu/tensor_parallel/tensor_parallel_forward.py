@@ -91,11 +91,13 @@ elif args.model_type == "ladder_residual":
         ],
     )
 
-enable_kernels([Kernel.scattermoe]).__enter__()
+enable_kernels(
+    [Kernel.scattermoe] + ([Kernel.flash_attention_2] if args.attention_implementation == "flash_attention_2" else [])
+).__enter__()
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
-        model = TestCommons.from_config(None, config, attn_implementation=args.attention_implementation)
+        model = TestCommons.from_config(None, config)
 
     model = model.to_empty(device=torch.cuda.current_device())
     for _, param in model.named_parameters():
@@ -114,7 +116,6 @@ with torch.device("meta"):
 
     model_tp = get_model_parallel_class(config.model_type)._from_config(
         config,
-        attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
     )

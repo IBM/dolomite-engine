@@ -13,7 +13,7 @@ from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..linear import DesyncResidualLinear
 
 
-class DesyncResidualSDPA(Attention):
+class DesyncResidualAttention(Attention):
     def __init__(
         self,
         hidden_size: int,

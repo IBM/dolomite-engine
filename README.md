@@ -72,8 +72,9 @@ export_to_huggingface(
 
 If you are interested in using this optimization outside this repo for some reason, you can do as follows:
 ```python
-import torch
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import GPTDolomiteForCausalLM
+from dolomite_engine.kernels import enable_kernels
 
 
 # we need unpadded lists here for avoiding any useless computations on pad tokens
@@ -84,16 +85,10 @@ labels = [[-100, -100, -100, 4, 5, 0], [-100, -100, 8, 0]]
 
 # this will throw a warning saying that the model is of gpt_bigcode class
 # ignore the warning
-model = GPTDolomiteForCausalLM.from_pretrained(
-    <model_path>,
-    attn_implementation="flash_attention_2"
-    use_padding_free_transformer=True,
-).cuda()
+model = GPTDolomiteForCausalLM.from_pretrained(<model_path>, use_padding_free_transformer=True).cuda()
 
-loss = model(
-    input_ids=input_ids,
-    labels=labels,
-).loss
+with enable_kernels([Kernel.flash_attention_2]):
+    loss = model(input_ids=input_ids, labels=labels).loss
 ```
 
 Note that padding free transformers doesn't support generation and thus for running generation on the model, you will need to load the model without padding-free transformers.
