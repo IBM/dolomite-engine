@@ -222,8 +222,8 @@ class CommonConfig(PretrainedConfig):
                     "dropout",
                     "add_bias",
                     "attention_multiplier",
-                    "query_compression_dimension",
-                    "key_value_compression_dimension",
+                    "query_compression_size",
+                    "key_value_compression_size",
                 ]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 

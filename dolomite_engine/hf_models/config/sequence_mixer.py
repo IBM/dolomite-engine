@@ -23,8 +23,8 @@ class _MultiHeadLatentAttention(BaseArgs):
     dropout: float = 0
     add_bias: bool = True
     attention_multiplier: float | None = None
-    query_compression_dimension: int | None = None
-    key_value_compression_dimension: int | None = None
+    query_compression_size: int | None = None
+    key_value_compression_size: int | None = None
 
     def model_post_init(self, __context: Any) -> None:
         assert self.sequence_mixer_type == "softmax_attention"
