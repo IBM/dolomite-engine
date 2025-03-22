@@ -6,13 +6,7 @@ import torch.distributed
 from transformers import set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    DesyncResidualConfig,
-    GPTDolomiteConfig,
-    LadderResidualConfig,
-    get_model_parallel_class,
-)
+from dolomite_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig, get_model_parallel_class
 from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
@@ -37,7 +31,7 @@ ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
 num_key_value_heads = None
-if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
+if args.attention_head_type == "gqa":
     num_key_value_heads = 8
 
 if args.model_type == "gpt_dolomite":

@@ -1,16 +1,14 @@
 import torch
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.hf_models import PositionEmbeddingType
 
 from ..test_common import TestCommons
 
 
 class ModelConversionTest(TestCommons):
-    @parameterized.expand(
-        TestCommons.make_args_matrix(TestCommons.get_all_devices(), [AttentionHeadType.mha, AttentionHeadType.mqa])
-    )
-    def test_bigcode_model_conversion(self, device: torch.device, attention_head_type: AttentionHeadType) -> None:
+    @parameterized.expand(TestCommons.make_args_matrix(TestCommons.get_all_devices(), ["mha", "mqa"]))
+    def test_bigcode_model_conversion(self, device: torch.device, attention_head_type: str) -> None:
         dolomite_config = self.get_dense_test_config(attention_head_type, PositionEmbeddingType.learned_absolute)
 
         self.model_conversion_test(
@@ -22,9 +20,7 @@ class ModelConversionTest(TestCommons):
             TestCommons.get_all_devices(), TestCommons.get_attention_head_types(), [True, False]
         )
     )
-    def test_llama_model_conversion(
-        self, device: torch.device, attention_head_type: AttentionHeadType, add_bias: bool
-    ) -> None:
+    def test_llama_model_conversion(self, device: torch.device, attention_head_type: str, add_bias: bool) -> None:
         dolomite_config = self.get_dense_test_config(
             attention_head_type,
             PositionEmbeddingType.rope,
@@ -42,9 +38,7 @@ class ModelConversionTest(TestCommons):
             TestCommons.get_all_devices(), TestCommons.get_attention_head_types(), [True, False]
         )
     )
-    def test_granite_model_conversion(
-        self, device: torch.device, attention_head_type: AttentionHeadType, add_bias: bool
-    ) -> None:
+    def test_granite_model_conversion(self, device: torch.device, attention_head_type: str, add_bias: bool) -> None:
         dolomite_config = self.get_dense_test_config(
             attention_head_type,
             PositionEmbeddingType.rope,
@@ -62,7 +56,7 @@ class ModelConversionTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
     )
-    def test_granitemoe_model_conversion(self, device: torch.device, attention_head_type: AttentionHeadType) -> None:
+    def test_granitemoe_model_conversion(self, device: torch.device, attention_head_type: str) -> None:
         dolomite_config = self.get_moe_test_config(
             attention_head_type,
             PositionEmbeddingType.rope,
@@ -84,9 +78,7 @@ class ModelConversionTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
     )
-    def test_granitemoeshared_model_conversion(
-        self, device: torch.device, attention_head_type: AttentionHeadType
-    ) -> None:
+    def test_granitemoeshared_model_conversion(self, device: torch.device, attention_head_type: str) -> None:
         dolomite_config = self.get_moe_test_config(
             attention_head_type,
             PositionEmbeddingType.rope,

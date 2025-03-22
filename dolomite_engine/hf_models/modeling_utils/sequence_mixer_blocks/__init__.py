@@ -1,5 +1,5 @@
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
 from .mamba2 import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
 from .softmax_attention import (
@@ -73,7 +73,7 @@ def get_sequence_mixer(
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=block.num_key_value_heads,
             attention_multiplier=block.attention_multiplier,
-            attention_head_type=AttentionHeadType(block.attention_head_type),
+            attention_head_type=block.attention_head_type,
             position_embedding_type=position_embedding_type,
             add_bias=block.add_bias,
             dropout=block.dropout,

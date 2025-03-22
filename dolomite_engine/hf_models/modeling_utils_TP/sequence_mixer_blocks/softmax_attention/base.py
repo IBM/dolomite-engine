@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn as nn
 
 from .....utils import ProcessGroupManager, divide_if_divisible
-from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....enums import PositionEmbeddingType
 from ....modeling_utils import Attention
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
@@ -19,7 +19,7 @@ class Attention_TP(Attention):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
         softmax_dropout: float,
@@ -66,7 +66,7 @@ class Attention_TP(Attention):
 
         std = _get_std_for_linear(initializer_range, init_method, m_width)
 
-        if self.attention_head_type == AttentionHeadType.mha:
+        if self.attention_head_type == "mha":
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = self.global_num_heads
 
@@ -84,7 +84,7 @@ class Attention_TP(Attention):
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
-        elif self.attention_head_type == AttentionHeadType.gqa:
+        elif self.attention_head_type == "gqa":
             assert (
                 self.global_num_key_value_heads is not None
             ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
@@ -114,7 +114,7 @@ class Attention_TP(Attention):
                 use_padding_free_transformer=use_padding_free_transformer,
                 sequence_parallel=sequence_parallel,
             )
-        elif self.attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == "mqa":
             if self.global_num_key_value_heads is None:
                 self.global_num_key_value_heads = 1
 

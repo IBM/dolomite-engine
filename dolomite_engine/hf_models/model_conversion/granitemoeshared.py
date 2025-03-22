@@ -8,7 +8,6 @@ from transformers import (
 )
 
 from ...utils import SafeTensorsWeightsManager, download_repo
-from ..enums import AttentionHeadType
 from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
@@ -109,7 +108,7 @@ def _import_state_dict_from_huggingface(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
 ) -> None:
     state_dict = {
         "transformer.wte.weight": safetensors_weights_manager.get_tensor("model.embed_tokens.weight"),
@@ -243,7 +242,7 @@ def _export_state_dict_to_huggingface(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
 ) -> None:
     state_dict = {
         "model.embed_tokens.weight": safetensors_weights_manager.get_tensor("transformer.wte.weight"),

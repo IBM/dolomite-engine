@@ -8,7 +8,6 @@ from torch.distributed._tensor.api import DTensor
 from dolomite_engine.dtensors import dtensor_to_tensor
 from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
-    AttentionHeadType,
     GPTDolomiteConfig,
     fix_unsharded_state_dict,
     get_model_parallel_class,
@@ -32,7 +31,7 @@ ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 is_tp_first_rank = ProcessGroupManager.is_tensor_parallel_first_rank()
 
 num_key_value_heads = None
-if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
+if args.attention_head_type == "gqa":
     num_key_value_heads = 8
 
 config = GPTDolomiteConfig(

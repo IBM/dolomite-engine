@@ -10,7 +10,7 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed, wait_for_ACT
 from .....utils import divide_if_divisible, is_flash_attention_available
-from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....enums import PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
 from .utils import (
@@ -35,7 +35,7 @@ class Attention(nn.Module):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
         softmax_dropout: float,
@@ -68,14 +68,14 @@ class Attention(nn.Module):
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
 
-        if self.attention_head_type == AttentionHeadType.mha:
+        if self.attention_head_type == "mha":
             if self.num_key_value_heads is None:
                 self.num_key_value_heads = self.num_heads
 
             assert (
                 self.num_heads == self.num_key_value_heads
             ), f"{self.__class__.__name__} should have same number of heads for query, keys and values"
-        elif self.attention_head_type == AttentionHeadType.gqa:
+        elif self.attention_head_type == "gqa":
             assert (
                 self.num_key_value_heads is not None
             ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
@@ -85,7 +85,7 @@ class Attention(nn.Module):
                 self.num_key_value_heads,
                 f"`num_heads` ({self.num_heads}) should be a multiple of `num_key_value_heads` ({self.num_key_value_heads})",
             )
-        elif self.attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == "mqa":
             if self.num_key_value_heads is None:
                 self.num_key_value_heads = 1
 
@@ -120,11 +120,11 @@ class Attention(nn.Module):
         hidden_states = self.c_attn(hidden_states)
 
         # for MHA, we can get away with doing just 1 transpose which is not true for GQA
-        if self.attention_head_type == AttentionHeadType.mha:
+        if self.attention_head_type == "mha":
             query, key, value = self._prepare_qkv_for_forward_mha(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.gqa:
+        elif self.attention_head_type == "gqa":
             query, key, value = self._prepare_qkv_for_forward_gqa(hidden_states)
-        elif self.attention_head_type == AttentionHeadType.mqa:
+        elif self.attention_head_type == "mqa":
             query, key, value = self._prepare_qkv_for_forward_mqa(hidden_states)
         else:
             raise ValueError(f"unexpected attention_head_type ({self.attention_head_type})")
@@ -224,7 +224,7 @@ class Attention(nn.Module):
             else:
                 # TODO avoid this extra transpose
                 query = query.transpose(1, 2)
-                if self.attention_head_type == AttentionHeadType.mqa:
+                if self.attention_head_type == "mqa":
                     key = key.squeeze(1).unsqueeze(2)
                     value = value.squeeze(1).unsqueeze(2)
                 else:
@@ -302,16 +302,16 @@ class Attention(nn.Module):
 
 
 _INTERLEAVE_FUNCTIONS = {
-    AttentionHeadType.mha.value: interleave_query_key_value_tensor_for_mha,
-    AttentionHeadType.mqa.value: interleave_query_key_value_tensor_for_mqa,
-    AttentionHeadType.gqa.value: interleave_query_key_value_tensor_for_gqa,
+    "mha": interleave_query_key_value_tensor_for_mha,
+    "mqa": interleave_query_key_value_tensor_for_mqa,
+    "gqa": interleave_query_key_value_tensor_for_gqa,
 }
 
 
 _SPLIT_FUNCTIONS = {
-    AttentionHeadType.mha.value: split_query_key_value_tensor_for_mha,
-    AttentionHeadType.mqa.value: split_query_key_value_tensor_for_mqa,
-    AttentionHeadType.gqa.value: split_query_key_value_tensor_for_gqa,
+    "mha": split_query_key_value_tensor_for_mha,
+    "mqa": split_query_key_value_tensor_for_mqa,
+    "gqa": split_query_key_value_tensor_for_gqa,
 }
 
 
@@ -322,7 +322,7 @@ def interleave_query_key_value_tensor_for_attention(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
 ) -> torch.Tensor:
     if attention_head_type.value in _INTERLEAVE_FUNCTIONS:
         interleave_function = _INTERLEAVE_FUNCTIONS[attention_head_type.value]
@@ -345,7 +345,7 @@ def split_query_key_value_tensor_for_attention(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if attention_head_type.value in _SPLIT_FUNCTIONS:
         split_function = _SPLIT_FUNCTIONS[attention_head_type.value]

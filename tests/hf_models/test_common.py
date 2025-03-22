@@ -11,7 +11,6 @@ from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
 from dolomite_engine.hf_models import (
-    AttentionHeadType,
     GPTDolomiteConfig,
     PositionEmbeddingType,
     export_to_huggingface,
@@ -29,8 +28,8 @@ class TestCommons(TestCase):
         return [torch.device("cpu"), torch.device("cuda")]
 
     @staticmethod
-    def get_attention_head_types() -> list[AttentionHeadType]:
-        return [AttentionHeadType.mha, AttentionHeadType.mqa, AttentionHeadType.gqa]
+    def get_attention_head_types() -> list[str]:
+        return ["mha", "mqa", "gqa"]
 
     @staticmethod
     def get_attention_implementations() -> list[str]:
@@ -65,7 +64,7 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_dense_test_config(
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         num_layers: int = 8,
         add_bias: bool = True,
@@ -95,7 +94,7 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
+                    "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
                     "attention_head_type": attention_head_type.value,
                     "attention_multiplier": attention_multiplier,
                 }
@@ -109,7 +108,7 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_moe_test_config(
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         num_layers: int = 8,
         num_experts: int = 8,
@@ -142,7 +141,7 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_key_value_heads": 2 if attention_head_type == AttentionHeadType.gqa else None,
+                    "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
                     "attention_head_type": attention_head_type.value,
                     "attention_multiplier": attention_multiplier,
                 }

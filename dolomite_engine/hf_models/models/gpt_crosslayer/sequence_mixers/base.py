@@ -8,7 +8,7 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
 from .....utils import divide_if_divisible, is_flash_attention_available
-from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....enums import PositionEmbeddingType
 from ....modeling_utils import ParameterizedLinear, apply_rotary_pos_emb, get_normalization_function
 
 
@@ -23,7 +23,7 @@ class CrossLayerAttention(nn.Module):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
         softmax_dropout: float,

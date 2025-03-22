@@ -5,8 +5,6 @@ import torch
 import torch.distributed
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType
-
 from ...test_common import TestCommons
 
 
@@ -15,12 +13,12 @@ class DCPTest(TestCommons):
         TestCommons.make_args_matrix(
             TestCommons.get_attention_head_types(), ["gelu", "geglu"], [(3, 2, 2), (3, 1, 4), (0, 4, 1)]
         )
-        + TestCommons.make_args_matrix([AttentionHeadType.gqa], ["gelu", "geglu"], [(3, 2, 2), (3, 1, 4), (0, 4, 1)])
+        + TestCommons.make_args_matrix(["gqa"], ["gelu", "geglu"], [(3, 2, 2), (3, 1, 4), (0, 4, 1)])
     )
     @TestCommons.slow_test
     def test_dcp(
         self,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         activation_function: str,
         zero_stage_ddp_sizes: tuple[int, int, int],
     ) -> None:

@@ -4,7 +4,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM, set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType, convert_gpt_dolomite_to_gpt_crosslayer
+from dolomite_engine.hf_models import PositionEmbeddingType, convert_gpt_dolomite_to_gpt_crosslayer
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -24,7 +24,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
     def test_crosslayer_attention_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
@@ -67,7 +67,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
     def test_generation_matches_gpt_dolomite(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
         use_cache: bool,
@@ -119,7 +119,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
     def test_sdpa_padding_free_transformer_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:
@@ -172,7 +172,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
     def test_sdpa_flash_attention_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:

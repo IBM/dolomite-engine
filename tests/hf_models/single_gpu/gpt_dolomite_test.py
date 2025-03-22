@@ -5,7 +5,7 @@ from parameterized import parameterized
 from transformers import set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.hf_models import PositionEmbeddingType
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -26,7 +26,7 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_sdpa_padding_free_transformer_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:
@@ -79,7 +79,7 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_sdpa_flash_attention_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:
@@ -128,7 +128,7 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_padding_free_transformer_with_list_and_tensor(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:
@@ -180,7 +180,7 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_sdpa_flash_enabled(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:
@@ -226,7 +226,7 @@ class GPTDolomiteAttentionTest(TestCommons):
     def test_flash_attention_equivalence_with_and_without_attention_masks(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:

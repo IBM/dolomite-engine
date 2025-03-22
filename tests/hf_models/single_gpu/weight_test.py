@@ -1,7 +1,7 @@
 import torch
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.hf_models import PositionEmbeddingType
 from dolomite_engine.hf_models.modeling_utils import (
     get_sequence_mixer,
     interleave_query_key_value_tensor_for_attention,
@@ -13,7 +13,7 @@ from ..test_common import TestCommons
 
 class WeightTest(TestCommons):
     @parameterized.expand(TestCommons.make_args_matrix(TestCommons.get_attention_head_types()))
-    def test_query_key_value_weight_loading_and_saving(self, attention_head_type: AttentionHeadType) -> None:
+    def test_query_key_value_weight_loading_and_saving(self, attention_head_type: str) -> None:
         config = self.get_dense_test_config(attention_head_type, PositionEmbeddingType.learned_absolute)
 
         layer_idx = 1
@@ -48,7 +48,7 @@ class WeightTest(TestCommons):
         num_heads: int,
         num_key_value_heads: int,
         head_dim: int,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
     ) -> torch.Tensor:
         query_weight, key_weight, value_weight = split_query_key_value_tensor_for_attention(
             c_attn_tensor,

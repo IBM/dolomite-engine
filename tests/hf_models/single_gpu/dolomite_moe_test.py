@@ -3,7 +3,7 @@ from parameterized import parameterized
 from transformers import set_seed
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType
+from dolomite_engine.hf_models import PositionEmbeddingType
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -24,7 +24,7 @@ class MoEDolomiteAttentionTest(TestCommons):
     def test_sdpa_padding_free_transformer_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:
@@ -77,7 +77,7 @@ class MoEDolomiteAttentionTest(TestCommons):
     def test_sdpa_flash_attention_equivalence(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:

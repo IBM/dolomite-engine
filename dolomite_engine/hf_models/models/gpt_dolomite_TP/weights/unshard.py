@@ -1,7 +1,7 @@
 import torch
 from tqdm import trange
 
-from ....enums import AttentionHeadType, PositionEmbeddingType
+from ....enums import PositionEmbeddingType
 from ....modeling_utils import is_glu
 from ...gpt_dolomite import GPTDolomiteConfig
 
@@ -139,7 +139,7 @@ def _get_layernorm(
 
 def _get_attention(
     tensor_parallel_state_dicts: list[dict],
-    attention_head_type: AttentionHeadType,
+    attention_head_type: str,
     add_bias: bool,
     prefix: str,
     check_correctness: bool,
@@ -155,7 +155,7 @@ def _get_attention(
             tensor_parallel_state_dicts, key=prefix + "c_proj.bias", check_correctness=check_correctness
         )
 
-    if attention_head_type == AttentionHeadType.mqa:
+    if attention_head_type == "mqa":
         q_weight = _concatenate_tensors_from_state_dicts(
             tensor_parallel_state_dicts, key=prefix + "c_attn.q_attn.weight", dim=0
         )

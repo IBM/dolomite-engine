@@ -5,7 +5,7 @@ import torch
 from parameterized import parameterized
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import AttentionHeadType, PositionEmbeddingType, export_to_huggingface
+from dolomite_engine.hf_models import PositionEmbeddingType, export_to_huggingface
 
 from ..test_common import TestCommons
 
@@ -14,7 +14,7 @@ class GenerationTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             TestCommons.get_all_devices(),
-            [AttentionHeadType.mha, AttentionHeadType.mqa],
+            ["mha", "mqa"],
             [PositionEmbeddingType.learned_absolute],
             [torch.float32],
             [True, False],
@@ -23,7 +23,7 @@ class GenerationTest(TestCommons):
     def test_generation_matches_bigcode(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
         use_cache: bool,
@@ -90,7 +90,7 @@ class GenerationTest(TestCommons):
     def test_generation_works(
         self,
         device: torch.device,
-        attention_head_type: AttentionHeadType,
+        attention_head_type: str,
         position_embedding_type: PositionEmbeddingType,
         torch_dtype: torch.dtype,
     ) -> None:

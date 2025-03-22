@@ -9,13 +9,3 @@ class PositionEmbeddingType(Enum):
     learned_absolute = "learned_absolute"
     rope = "rope"
     nope = "nope"
-
-
-class AttentionHeadType(Enum):
-    """
-    Enum class for attention head type
-    """
-
-    mha = "mha"
-    mqa = "mqa"
-    gqa = "gqa"

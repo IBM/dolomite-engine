@@ -5,7 +5,7 @@ from transformers import DynamicCache
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
-from ...enums import AttentionHeadType, PositionEmbeddingType
+from ...enums import PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
 from .config import GPTCrossLayerConfig
 from .sequence_mixers import KeyValueProjection, get_sequence_mixer
@@ -72,7 +72,7 @@ class GPTCrossLayerBlock(nn.Module):
 
             if is_kernel_allowed(Kernel.flash_attention_2):
                 if not self._use_padding_free_transformer:
-                    if self.attention_head_type == AttentionHeadType.mqa:
+                    if self.attention_head_type == "mqa":
                         key = key.squeeze(1).unsqueeze(2)
                         value = value.squeeze(1).unsqueeze(2)
                     else:
