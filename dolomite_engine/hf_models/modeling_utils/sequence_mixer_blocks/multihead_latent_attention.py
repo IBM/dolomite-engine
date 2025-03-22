@@ -93,10 +93,19 @@ class MultiHeadLatentAttention(nn.Module):
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
-    def _prepare_qkv_for_forward(
-        self, hidden_states: torch.Tensor, past_key_values: DynamicCache | None, rope_cos_sin: torch.Tensor | None
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # the output of following is a tuple if using MQA with tensor parallel
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if self.use_padding_free_transformer:
+            assert is_kernel_allowed(Kernel.flash_attention_2)
+            assert past_key_values is None
+
         hidden_states = self.c_attn_down_projection(hidden_states)
 
         if self.position_embedding_type == PositionEmbeddingType.rope:
@@ -124,25 +133,6 @@ class MultiHeadLatentAttention(nn.Module):
             query = query.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
             key = key.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
             value = value.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
-
-        return query, key, value
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
-        attention_mask: torch.Tensor | None = None,
-        rope_cos_sin: torch.Tensor | None = None,
-        cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        if self.use_padding_free_transformer:
-            assert is_kernel_allowed(Kernel.flash_attention_2)
-            assert past_key_values is None
-
-        query, key, value = self._prepare_qkv_for_forward(
-            hidden_states, past_key_values=past_key_values, rope_cos_sin=rope_cos_sin
-        )
 
         if is_kernel_allowed(Kernel.flash_attention_2):
             if self.use_padding_free_transformer:
