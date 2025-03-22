@@ -114,6 +114,17 @@ class MultiHeadLatentAttention(nn.Module):
             key = self.key_up_projection(key)
             value = self.value_up_projection(value)
 
+        if self.use_padding_free_transformer:
+            total_q = query.shape[0]
+            query = query.view(total_q, self.num_heads, -1)
+            key = key.view(total_q, self.num_heads, -1)
+            value = value.view(total_q, self.num_heads, -1)
+        else:
+            batch_size, query_length = query.shape[:-1]
+            query = query.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
+            key = key.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
+            value = value.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
+
         return query, key, value
 
     def forward(
