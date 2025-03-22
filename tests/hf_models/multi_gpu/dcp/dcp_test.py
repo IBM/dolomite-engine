@@ -38,7 +38,7 @@ class DCPTest(TestCommons):
                 "--unshard-config",
                 "tests/hf_models/multi_gpu/dcp/unshard.yml",
                 "--attention-head-type",
-                attention_head_type.value,
+                attention_head_type,
                 "--activation-function",
                 activation_function,
                 "--tmp-path",

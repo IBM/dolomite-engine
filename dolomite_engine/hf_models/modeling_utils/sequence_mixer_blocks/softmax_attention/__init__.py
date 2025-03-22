@@ -324,8 +324,8 @@ def interleave_query_key_value_tensor_for_attention(
     head_dim: int,
     attention_head_type: str,
 ) -> torch.Tensor:
-    if attention_head_type.value in _INTERLEAVE_FUNCTIONS:
-        interleave_function = _INTERLEAVE_FUNCTIONS[attention_head_type.value]
+    if attention_head_type in _INTERLEAVE_FUNCTIONS:
+        interleave_function = _INTERLEAVE_FUNCTIONS[attention_head_type]
         interleave_function_parameters = inspect.signature(interleave_function).parameters.keys()
 
         parameters_to_pass = {}
@@ -347,8 +347,8 @@ def split_query_key_value_tensor_for_attention(
     head_dim: int,
     attention_head_type: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    if attention_head_type.value in _SPLIT_FUNCTIONS:
-        split_function = _SPLIT_FUNCTIONS[attention_head_type.value]
+    if attention_head_type in _SPLIT_FUNCTIONS:
+        split_function = _SPLIT_FUNCTIONS[attention_head_type]
         split_function_parameters = inspect.signature(split_function).parameters.keys()
 
         parameters_to_pass = {}

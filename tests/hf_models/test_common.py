@@ -95,7 +95,7 @@ class TestCommons(TestCase):
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
                     "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
-                    "attention_head_type": attention_head_type.value,
+                    "attention_head_type": attention_head_type,
                     "attention_multiplier": attention_multiplier,
                 }
                 for _ in range(num_layers)
@@ -142,7 +142,7 @@ class TestCommons(TestCase):
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
                     "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
-                    "attention_head_type": attention_head_type.value,
+                    "attention_head_type": attention_head_type,
                     "attention_multiplier": attention_multiplier,
                 }
                 for _ in range(num_layers)

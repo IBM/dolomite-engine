@@ -24,7 +24,7 @@ class UnshardingTest(TestCommons):
                 "-m",
                 "tests.hf_models.multi_gpu.unsharding.unsharding",
                 "--attention-head-type",
-                attention_head_type.value,
+                attention_head_type,
                 "--activation-function",
                 activation_function,
                 "--tmp-path",

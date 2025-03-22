@@ -64,7 +64,7 @@ class TensorParallelTest(TestCommons):
                 "-m",
                 "tests.hf_models.multi_gpu.tensor_parallel.tensor_parallel_forward",
                 "--attention-head-type",
-                attention_head_type.value,
+                attention_head_type,
                 "--position-embedding-type",
                 position_embedding_type.value,
                 "--torch-dtype",
