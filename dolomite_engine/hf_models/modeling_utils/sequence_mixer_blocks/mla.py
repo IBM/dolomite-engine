@@ -19,7 +19,7 @@ if is_flash_attention_available():
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
-class Attention(nn.Module):
+class MultiHeadLatentAttention(nn.Module):
     def __init__(
         self,
         hidden_size: int,
