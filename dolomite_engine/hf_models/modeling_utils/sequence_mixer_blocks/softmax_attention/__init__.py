@@ -292,9 +292,9 @@ class Attention(nn.Module):
 
         return hidden_states
 
-    def _get_softmax_scale(self, return_none_allowed: bool = True) -> float:
+    def _get_softmax_scale(self) -> float:
         if self.attention_multiplier is None:
-            softmax_scale = None if return_none_allowed else 1 / self.head_dim**0.5
+            softmax_scale = None
         else:
             softmax_scale = self.attention_multiplier
 
