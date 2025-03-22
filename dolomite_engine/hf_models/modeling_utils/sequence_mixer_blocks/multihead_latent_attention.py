@@ -126,16 +126,19 @@ class MultiHeadLatentAttention(nn.Module):
         if is_kernel_allowed(Kernel.flash_attention_2):
             if self.use_padding_free_transformer:
                 total_q = query.shape[0]
+
                 query = query.view(total_q, self.num_heads, -1)
                 key = key.view(total_q, self.num_heads, -1)
                 value = value.view(total_q, self.num_heads, -1)
 
                 output_shape = (-1, self.hidden_size)
             else:
-                batch_size, query_length = query.shape[:2]
+                batch_size, query_length = query.shape[:-1]
+                key_length = key.shape[1]
+
                 query = query.view(batch_size, query_length, self.num_heads, -1)
-                key = key.view(batch_size, query_length, self.num_heads, -1)
-                value = value.view(batch_size, query_length, self.num_heads, -1)
+                key = key.view(batch_size, key_length, self.num_heads, -1)
+                value = value.view(batch_size, key_length, self.num_heads, -1)
 
                 output_shape = (batch_size, query_length, -1)
 
@@ -174,9 +177,11 @@ class MultiHeadLatentAttention(nn.Module):
             hidden_states = hidden_states.view(*output_shape)
         else:
             batch_size, query_length = query.shape[:-1]
+            key_length = key.shape[1]
+
             query = query.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
-            key = key.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
-            value = value.view(batch_size, query_length, self.num_heads, -1).transpose(1, 2)
+            key = key.view(batch_size, key_length, self.num_heads, -1).transpose(1, 2)
+            value = value.view(batch_size, key_length, self.num_heads, -1).transpose(1, 2)
 
             hidden_states = F.scaled_dot_product_attention(
                 query,
