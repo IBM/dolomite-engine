@@ -9,10 +9,8 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import divide_if_divisible, is_flash_attention_available
-from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ...enums import InitMethod, PositionEmbeddingType
 from ..linear import ParameterizedLinear
-from ..position_embedding import apply_rotary_pos_emb
-from .softmax_attention import repeat_key_value
 
 
 if is_flash_attention_available():
@@ -105,7 +103,7 @@ class MultiHeadLatentAttention(nn.Module):
             raise NotImplementedError()
         else:
             query, key, value = hidden_states.split(
-                (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
+                (self.query_compression_size, self.key_value_compression_size, self.key_value_compression_size), dim=-1
             )
             del hidden_states
 

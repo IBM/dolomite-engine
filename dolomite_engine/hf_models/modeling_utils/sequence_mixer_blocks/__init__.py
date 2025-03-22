@@ -1,7 +1,7 @@
 from ...config import CommonConfig
 from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mamba2 import Mamba2
-from .mla import MultiHeadLatentAttention
+from .multihead_latent_attention import MultiHeadLatentAttention
 from .softmax_attention import (
     Attention,
     interleave_query_key_value_tensor_for_attention,
