@@ -46,7 +46,6 @@ class TensorParallelTest(TestCommons):
         self.skip_test_if_device_unavailable(torch.device("cuda"))
 
         if (attention_implementation, torch_dtype) not in [
-            ("eager", torch.float32),
             ("sdpa", torch.float32),
             ("flash_attention_2", torch.float16),
         ]:

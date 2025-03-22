@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
-from ..enums import AttentionImplementation, Mode
+from ..enums import Kernel, Mode
 from ..hf_models import get_model_parallel_class, is_custom_model
+from ..kernels import is_kernel_allowed
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
@@ -20,7 +21,6 @@ class ModelWrapper(nn.Module):
         model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         dtype: torch.dtype,
         efficient_initialization: bool,
-        attention_implementation: AttentionImplementation,
         use_padding_free_transformer: bool,
         sequence_parallel: bool,
         num_pipeline_stages: int,
@@ -38,7 +38,6 @@ class ModelWrapper(nn.Module):
             model_class (AutoModelForCausalLM | AutoModelForSeq2SeqLM): HF model class to use for model loading
             dtype (torch.dtype): dtype for the model
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
-            attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
             sequence_parallel (bool): whether to use sequence parallel
             num_pipeline_stages (int): number of stages for the pipeline
@@ -56,7 +55,6 @@ class ModelWrapper(nn.Module):
         self.model_class = model_class
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
-        self.attention_implementation = attention_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
@@ -71,6 +69,7 @@ class ModelWrapper(nn.Module):
         use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.is_pipeline_parallel_enabled
 
         self._setup_config()
+        self.is_custom_model = is_custom_model(self.config.model_type)
 
         log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
 
@@ -78,14 +77,8 @@ class ModelWrapper(nn.Module):
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
             self.model_class = get_model_parallel_class(self.config.model_type)
 
-        self.is_custom_model = is_custom_model(self.config.model_type)
-
         if self.use_padding_free_transformer:
             assert self.is_custom_model, "padding free transformer is not supported with the specified model"
-
-            assert (
-                self.attention_implementation == AttentionImplementation.flash_attention_2
-            ), "padding free transformer only works with flash attention"
 
         self._setup_tokenizer()
         self._setup_model()
@@ -165,8 +158,11 @@ class ModelWrapper(nn.Module):
         else:
             model_kwargs = {"pretrained_model_name_or_path": self.model_name}
 
-        if self.attention_implementation is not None:
-            model_kwargs["attn_implementation"] = self.attention_implementation.value
+        if not self.is_custom_model:
+            model_kwargs["attn_implementation"] = (
+                "flash_attention_2" if is_kernel_allowed(Kernel.flash_attention_2) else "sdpa"
+            )
+
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
         if self.sequence_parallel:

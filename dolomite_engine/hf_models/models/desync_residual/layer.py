@@ -11,13 +11,7 @@ from .sequence_mixers import get_sequence_mixer
 
 
 class DesyncResidualBlock(nn.Module):
-    def __init__(
-        self,
-        config: DesyncResidualConfig,
-        attention_implementation: str,
-        use_padding_free_transformer: bool,
-        layer_idx: int,
-    ) -> None:
+    def __init__(self, config: DesyncResidualConfig, use_padding_free_transformer: bool, layer_idx: int) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size
@@ -37,9 +31,7 @@ class DesyncResidualBlock(nn.Module):
                 eps=config.layer_norm_epsilon,
             )
 
-        self.sequence_mixer = get_sequence_mixer(
-            config, True, attention_implementation, use_padding_free_transformer, layer_idx
-        )
+        self.sequence_mixer = get_sequence_mixer(config, True, use_padding_free_transformer, layer_idx)
 
         if self.current_attention_all_reduce:
             self.ln_2 = get_normalization_function(

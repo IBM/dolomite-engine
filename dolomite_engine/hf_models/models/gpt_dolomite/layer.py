@@ -8,11 +8,7 @@ from .config import GPTDolomiteConfig
 
 class GPTDolomiteBlock(nn.Module):
     def __init__(
-        self,
-        config: GPTDolomiteConfig,
-        attention_implementation: str,
-        use_padding_free_transformer: bool,
-        layer_idx: int | None = None,
+        self, config: GPTDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
     ) -> None:
         super().__init__()
 
@@ -23,9 +19,7 @@ class GPTDolomiteBlock(nn.Module):
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.sequence_mixer = get_sequence_mixer(
-            config, True, attention_implementation, use_padding_free_transformer, layer_idx
-        )
+        self.sequence_mixer = get_sequence_mixer(config, True, use_padding_free_transformer, layer_idx)
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )

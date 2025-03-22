@@ -2,21 +2,17 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
 from ...enums import AttentionHeadType, PositionEmbeddingType
 from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
 from .config import GPTCrossLayerConfig
-from .sequence_mixers import get_key_value_projection, get_sequence_mixer
+from .sequence_mixers import KeyValueProjection, get_sequence_mixer
 
 
 class GPTCrossLayerBlock(nn.Module):
-    def __init__(
-        self,
-        config: GPTCrossLayerConfig,
-        attention_implementation: str,
-        use_padding_free_transformer: bool,
-        layer_idx: int,
-    ) -> None:
+    def __init__(self, config: GPTCrossLayerConfig, use_padding_free_transformer: bool, layer_idx: int) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size
@@ -28,26 +24,25 @@ class GPTCrossLayerBlock(nn.Module):
         self.head_dim = divide_if_divisible(hidden_size, self.num_heads, "")
         self.num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
-        self._use_eager_attention = attention_implementation == "eager"
-        self._use_sdpa = attention_implementation == "sdpa"
-        self._use_flash_attention_2 = attention_implementation == "flash_attention_2"
         self._use_padding_free_transformer = use_padding_free_transformer
 
         self.kv_proj = None
         if config.sharing_pattern[layer_idx] == layer_idx:
-            self.kv_proj = get_key_value_projection(
-                config,
-                attention_implementation=attention_implementation,
+            self.kv_proj = KeyValueProjection(
+                hidden_size=config.hidden_size,
+                num_attention_heads=config.num_attention_heads,
+                num_key_value_heads=config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
+                add_bias=config.sequence_mixer_blocks[layer_idx].add_bias,
+                initializer_range=config.initializer_range,
+                normalization_function=config.normalization_function,
+                layer_norm_epsilon=config.layer_norm_epsilon,
                 use_padding_free_transformer=use_padding_free_transformer,
-                layer_idx=layer_idx,
             )
 
         self.ln_1 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
-        self.sequence_mixer = get_sequence_mixer(
-            config, True, attention_implementation, use_padding_free_transformer, layer_idx
-        )
+        self.sequence_mixer = get_sequence_mixer(config, True, use_padding_free_transformer, layer_idx)
         self.ln_2 = get_normalization_function(
             config.normalization_function, hidden_size, eps=config.layer_norm_epsilon
         )
@@ -75,15 +70,7 @@ class GPTCrossLayerBlock(nn.Module):
             if past_key_values is not None:
                 key, value = past_key_values.update(key, value, layer_idx=self.layer_idx)
 
-            if self._use_sdpa or self._use_eager_attention:
-                key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
-                value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
-
-                if self._use_eager_attention:
-                    key = key.transpose(-1, -2)
-                    batch_size, _, _, key_length = key.shape
-                    key = key.reshape(batch_size * self.num_heads, self.head_dim, key_length)
-            elif self._use_flash_attention_2:
+            if is_kernel_allowed(Kernel.flash_attention_2):
                 if not self._use_padding_free_transformer:
                     if self.attention_head_type == AttentionHeadType.mqa:
                         key = key.squeeze(1).unsqueeze(2)
@@ -91,6 +78,9 @@ class GPTCrossLayerBlock(nn.Module):
                     else:
                         key = key.transpose(1, 2)
                         value = value.transpose(1, 2)
+            else:
+                key = repeat_key_value(key, self.num_heads, self.num_key_value_heads)
+                value = repeat_key_value(value, self.num_heads, self.num_key_value_heads)
 
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)

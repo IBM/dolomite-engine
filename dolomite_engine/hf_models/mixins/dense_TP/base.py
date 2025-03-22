@@ -69,7 +69,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             {
                 str(i): self.layer_class(
                     config,
-                    attention_implementation=self.attention_implementation,
                     use_padding_free_transformer=self._use_padding_free_transformer,
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,

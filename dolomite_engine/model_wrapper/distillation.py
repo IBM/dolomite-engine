@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, Kernel, KLDivergenceMethod, Mode
+from ..enums import Kernel, KLDivergenceMethod, Mode
 from ..hf_models import get_autoregressive_language_modeling_loss
 from ..kernels import is_kernel_allowed
 from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
@@ -21,7 +21,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         dtype: torch.dtype,
         efficient_initialization: bool,
-        attention_implementation: AttentionImplementation,
         use_padding_free_transformer: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
@@ -48,7 +47,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             model_class (AutoModelForCausalLM | AutoModelForSeq2SeqLM): HF model class to use for model loading
             dtype (torch.dtype): dtype for the model
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
-            attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
             sequence_parallel (bool): whether to use sequence parallel
             num_pipeline_stages (int): number of stages for the pipeline
@@ -75,7 +73,6 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             model_class=model_class,
             dtype=dtype,
             efficient_initialization=efficient_initialization,
-            attention_implementation=attention_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
             sequence_parallel=sequence_parallel,
             micro_batch_size=micro_batch_size,
