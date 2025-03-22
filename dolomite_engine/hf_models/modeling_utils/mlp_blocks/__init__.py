@@ -1,5 +1,4 @@
 from ...config import CommonConfig
-from ...enums import InitMethod
 from .mlp import MLP, interleave_up_gate_tensor_for_mlp, split_up_gate_tensor_for_mlp
 from .moe import AuxFreeMoE, MoE, ParameterizedExperts
 
@@ -14,7 +13,7 @@ def get_mlp_block(config: CommonConfig, use_padding_free_transformer: bool, laye
         activation_function=block.activation_function,
         add_bias=block.add_bias,
         dropout=block.dropout,
-        init_method=InitMethod(config.init_method),
+        init_method=config.init_method,
         initializer_range=config.initializer_range,
         m_width=config.m_width,
         num_layers=config.num_layers,

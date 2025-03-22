@@ -10,7 +10,7 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed, wait_for_ACT
 from .....utils import divide_if_divisible, is_flash_attention_available
-from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ....enums import AttentionHeadType, PositionEmbeddingType
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
 from .utils import (
@@ -40,7 +40,7 @@ class Attention(nn.Module):
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,
@@ -96,7 +96,7 @@ class Attention(nn.Module):
         # note that the actual layout is different for the output and depends on whether we are using MHA, MQA or GQA
         # (self.hidden_size + 2 * self.num_key_value_heads * self.head_dim) is just the actual number output features
         std = initializer_range
-        if init_method == InitMethod.mup:
+        if init_method == "mup":
             std /= math.sqrt(m_width)
         self.c_attn = ParameterizedLinear(
             self.hidden_size,
@@ -106,7 +106,7 @@ class Attention(nn.Module):
         )
 
         std = initializer_range / math.sqrt(2 * num_layers)
-        if init_method == InitMethod.mup:
+        if init_method == "mup":
             std /= math.sqrt(m_width)
         self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
 

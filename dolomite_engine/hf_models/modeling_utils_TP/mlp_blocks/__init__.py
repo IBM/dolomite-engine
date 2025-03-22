@@ -1,5 +1,4 @@
 from ...config import CommonConfig
-from ...enums import InitMethod
 from .mlp import MLP_TP
 from .moe import MoE_TP
 
@@ -16,7 +15,7 @@ def get_mlp_block_TP(
         activation_function=block.activation_function,
         add_bias=block.add_bias,
         dropout=block.dropout,
-        init_method=InitMethod(config.init_method),
+        init_method=config.init_method,
         initializer_range=config.initializer_range,
         m_width=config.m_width,
         num_layers=config.num_layers,

@@ -2,7 +2,6 @@ import math
 
 import torch.nn as nn
 
-from ...enums import InitMethod
 from ...modeling_utils import MLP, get_activation_function, is_glu
 from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..dropout import Dropout_TP
@@ -17,7 +16,7 @@ class MLP_TP(MLP):
         activation_function: str,
         add_bias: bool,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,

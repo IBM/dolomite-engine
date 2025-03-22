@@ -1,5 +1,5 @@
 from ...config import CommonConfig
-from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ...enums import AttentionHeadType, PositionEmbeddingType
 from .softmax_attention import Attention_TP
 
 
@@ -23,7 +23,7 @@ def get_sequence_mixer_TP(
         add_bias=block.add_bias,
         softmax_dropout=block.softmax_dropout,
         dropout=block.dropout,
-        init_method=InitMethod(config.init_method),
+        init_method=config.init_method,
         initializer_range=config.initializer_range,
         m_width=config.m_width,
         num_layers=config.num_layers,

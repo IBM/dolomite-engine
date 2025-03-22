@@ -10,7 +10,6 @@ from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import ProcessGroupManager, divide_if_divisible, is_cute_kernels_available
-from ...enums import InitMethod
 from ...loss import add_aux_loss
 from ...modeling_utils import MoE, ParameterizedExperts, ParameterizedLinear, get_activation_function, is_glu
 from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
@@ -166,7 +165,7 @@ class MoE_TP(MoE, DTensorModule):
         activation_function: str,
         add_bias: bool,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,

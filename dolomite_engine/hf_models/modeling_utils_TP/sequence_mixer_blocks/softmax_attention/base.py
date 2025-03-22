@@ -5,7 +5,7 @@ import torch.distributed
 import torch.nn as nn
 
 from .....utils import ProcessGroupManager, divide_if_divisible
-from ....enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ....enums import AttentionHeadType, PositionEmbeddingType
 from ....modeling_utils import Attention
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
@@ -24,7 +24,7 @@ class Attention_TP(Attention):
         add_bias: bool,
         softmax_dropout: float,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,
@@ -198,7 +198,7 @@ class _MQA_QueryKeyValueProjection(nn.Module):
         add_bias: bool,
         m_width: int,
         num_layers: int,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,

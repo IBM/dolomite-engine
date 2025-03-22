@@ -1,11 +1,6 @@
 from enum import Enum
 
 
-class InitMethod(Enum):
-    normal = "normal"
-    mup = "mup"
-
-
 class PositionEmbeddingType(Enum):
     """
     Enum class for position embeddings

@@ -4,7 +4,7 @@ from typing import Any, Callable
 from transformers import PretrainedConfig
 
 from ...utils import BaseArgs
-from ..enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ..enums import AttentionHeadType, PositionEmbeddingType
 from .mlp import _MLPArgs, _MoEArgs
 from .sequence_mixer import (
     _Mamba2Args,
@@ -106,7 +106,7 @@ class CommonConfig(PretrainedConfig):
         self.init_method = init_method
 
         # check if enums are valid
-        init_method = InitMethod(init_method)
+        assert init_method in ["normal", "mup"]
         position_embedding_type = PositionEmbeddingType(position_embedding_type)
 
         self.sequence_mixer_blocks = sequence_mixer_blocks

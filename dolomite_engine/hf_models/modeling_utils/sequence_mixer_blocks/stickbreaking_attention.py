@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import DynamicCache
 
 from ....utils import is_stickbreaking_available
-from ...enums import AttentionHeadType, InitMethod, PositionEmbeddingType
+from ...enums import AttentionHeadType, PositionEmbeddingType
 from .softmax_attention import Attention
 
 
@@ -48,7 +48,7 @@ class SBAttention(Attention):
         position_embedding_type: PositionEmbeddingType,
         add_bias: bool,
         dropout: float,
-        init_method: InitMethod,
+        init_method: str,
         initializer_range: float,
         m_width: float,
         num_layers: int,
