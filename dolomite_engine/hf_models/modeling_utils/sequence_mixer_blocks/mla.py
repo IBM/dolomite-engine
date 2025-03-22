@@ -23,6 +23,8 @@ class MultiHeadLatentAttention(nn.Module):
     def __init__(
         self,
         hidden_size: int,
+        query_compression_size: int,
+        key_value_compression_size: int,
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
@@ -47,6 +49,8 @@ class MultiHeadLatentAttention(nn.Module):
         self.num_key_value_heads = num_key_value_heads
         self.add_bias = add_bias
         self.use_padding_free_transformer = use_padding_free_transformer
+        self.query_compression_size = query_compression_size
+        self.key_value_compression_size = key_value_compression_size
 
         self.head_dim = divide_if_divisible(
             self.hidden_size,
@@ -143,7 +147,7 @@ class MultiHeadLatentAttention(nn.Module):
             key = torch.cat([key, key_rope], dim=-1)
             del key_rope
         else:
-            compressed_query, compressed_key_value = hidden_states.split(
+            compressed_query, compressed_key, compressed_value = hidden_states.split(
                 (self.query_compression_size, 2 * self.key_value_compression_size), dim=-1
             )
             del hidden_states
@@ -151,7 +155,9 @@ class MultiHeadLatentAttention(nn.Module):
             query = self.query_up_projection(compressed_query)
 
             if past_key_values is not None:
-                compressed_key_value, None = past_key_values.update(compressed_key_value, None, self.layer_idx)
+                compressed_key, compressed_value = past_key_values.update(
+                    compressed_key, compressed_value, self.layer_idx
+                )
 
             key_value = self.key_value_up_projection(compressed_key_value)
             key, value = key_value.chunk(2, dim=-1)
