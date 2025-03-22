@@ -6,7 +6,7 @@ from transformers import PretrainedConfig
 from ...utils import BaseArgs
 from ..enums import AttentionHeadType, InitMethod, PositionEmbeddingType
 from .mlp import _MLPArgs, _MoEArgs
-from .sequence_mixer import _Mamba2Args, _SoftmaxAttentionArgs, _StickbreakingAttentionArgs
+from .sequence_mixer import _Mamba2Args, _MultiHeadLatentAttention, _SoftmaxAttentionArgs, _StickbreakingAttentionArgs
 
 
 def _hold_base_args(key: str) -> Callable:
@@ -214,6 +214,20 @@ class CommonConfig(PretrainedConfig):
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 sequence_mixer_class = _Mamba2Args
+            elif sequence_mixer_type == "multihead_latent_attention":
+                sequence_mixer_kwargs = {}
+
+                for key in [
+                    "softmax_dropout",
+                    "dropout",
+                    "add_bias",
+                    "attention_multiplier",
+                    "query_compression_dimension",
+                    "key_value_compression_dimension",
+                ]:
+                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
+
+                sequence_mixer_class = _MultiHeadLatentAttention
             else:
                 raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
