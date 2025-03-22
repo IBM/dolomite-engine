@@ -183,20 +183,15 @@ class GPTCrossLayerAttentionTest(TestCommons):
         input_ids, attention_mask, labels = self.get_dummy_inputs(device)
         config = self.get_dense_test_config(attention_head_type, position_embedding_type, num_layers=1)
 
-        sdpa_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
-        flash_model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        model = self.from_config(config, torch_dtype=torch_dtype).to(device)
+        model.eval()
 
-        sdpa_model.eval()
-        flash_model.eval()
-
-        flash_model.load_state_dict(sdpa_model.state_dict())
-
-        sdpa_output = sdpa_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        sdpa_output = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
         sdpa_logits = sdpa_output.logits
         sdpa_loss = sdpa_output.loss
 
         with enable_kernels([Kernel.flash_attention_2]):
-            flash_output = flash_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            flash_output = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             flash_logits = flash_output.logits
             flash_loss = flash_output.loss
 
