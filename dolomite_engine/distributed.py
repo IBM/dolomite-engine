@@ -125,21 +125,34 @@ def wrap_model_container_for_distributed_training(
                 **args.distributed_args.gradient_checkpointing_args,
             )
 
-    if fsdp_algorithm == 1:
-        if stage == 0:
-            log_rank_0(logging.INFO, "using DDP")
+    if stage == 0:
+        log_rank_0(logging.INFO, "using DDP")
 
-            assert not efficient_initialization
+        assert not efficient_initialization
 
-            sharding_strategy = ShardingStrategy.NO_SHARD
-        else:
-            log_rank_0(logging.INFO, "using FSDP-1")
-
-            sharding_strategy = (
-                _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
-                if args.distributed_args.zero_topology.data_parallel_sharding_world_size == 8
-                else _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+        for i, model in enumerate(model_container):
+            model_container[i] = FSDP(
+                model,
+                sharding_strategy=ShardingStrategy.NO_SHARD,
+                cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
+                mixed_precision=_get_fsdp_mixed_precision(
+                    dtype=dtype,
+                    communication_dtype=communication_dtype,
+                    fsdp_algorithm=1,
+                ),
+                device_id=torch.cuda.current_device(),
+                limit_all_gathers=True,
+                use_orig_params=True,
+                device_mesh=dp_mesh,
             )
+    elif fsdp_algorithm == 1:
+        log_rank_0(logging.INFO, "using FSDP-1")
+
+        sharding_strategy = (
+            _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
+            if args.distributed_args.zero_topology.data_parallel_sharding_world_size == 8
+            else _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+        )
 
         def _param_init(module: nn.Module) -> None:
             assert len(teacher_block_names) == 0, "efficient initialization doesn't support distillation"
@@ -173,78 +186,59 @@ def wrap_model_container_for_distributed_training(
                 param_init_fn=_param_init if efficient_initialization else None,
                 device_mesh=dp_mesh,
             )
-    else:
-        if stage == 0:
-            log_rank_0(logging.INFO, "using DDP")
+    elif fsdp_algorithm == 2:
+        log_rank_0(logging.INFO, "using FSDP-2")
 
-            assert not efficient_initialization
+        mixed_precision_policy = _get_fsdp_mixed_precision(
+            dtype=dtype,
+            communication_dtype=communication_dtype,
+            fsdp_algorithm=2,
+        )
 
-            for i, model in enumerate(model_container):
-                model_container[i] = FSDP(
-                    model,
-                    sharding_strategy=ShardingStrategy.NO_SHARD,
-                    cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                    mixed_precision=_get_fsdp_mixed_precision(
-                        dtype=dtype,
-                        communication_dtype=communication_dtype,
-                        fsdp_algorithm=1,
-                    ),
-                    device_id=torch.cuda.current_device(),
-                    limit_all_gathers=True,
-                    use_orig_params=True,
-                    device_mesh=dp_mesh,
-                )
-        else:
-            log_rank_0(logging.INFO, "using FSDP-2")
+        zero3 = stage == 3
 
-            mixed_precision_policy = _get_fsdp_mixed_precision(
-                dtype=dtype,
-                communication_dtype=communication_dtype,
-                fsdp_algorithm=2,
+        def _sharding_function(parameter: nn.Parameter) -> Shard:
+            dps = (
+                ProcessGroupManager.get_data_parallel_world_size()
+                if data_parallel_sharding_world_size is None
+                else data_parallel_sharding_world_size
             )
 
-            zero3 = stage == 3
+            if parameter.size(0) > dps or parameter.dim() == 1:
+                return Shard(0)
+            else:
+                for dim in range(1, parameter.dim()):
+                    if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
+                        return Shard(dim)
 
-            def _sharding_function(parameter: nn.Parameter) -> Shard:
-                dps = (
-                    ProcessGroupManager.get_data_parallel_world_size()
-                    if data_parallel_sharding_world_size is None
-                    else data_parallel_sharding_world_size
-                )
+                log_rank_0(logging.WARN, "sharding along dim=0 since no suitable sharding dimension was found")
+                return Shard(0)
 
-                if parameter.size(0) > dps or parameter.dim() == 1:
-                    return Shard(0)
-                else:
-                    for dim in range(1, parameter.dim()):
-                        if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
-                            return Shard(dim)
+        for i, model in enumerate(model_container):
+            for module in model.modules():
+                if isinstance(module, tuple(block_classes)):
+                    fully_shard(
+                        module,
+                        mesh=dp_mesh,
+                        reshard_after_forward=zero3,
+                        shard_placement_fn=_sharding_function,
+                        mp_policy=mixed_precision_policy,
+                        offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+                    )
 
-                    log_rank_0(logging.WARN, "sharding along dim=0 since no suitable sharding dimension was found")
-                    return Shard(0)
+            fully_shard(
+                model,
+                mesh=dp_mesh,
+                reshard_after_forward=zero3,
+                shard_placement_fn=_sharding_function,
+                mp_policy=mixed_precision_policy,
+                offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+            )
 
-            for i, model in enumerate(model_container):
-                for module in model.modules():
-                    if isinstance(module, tuple(block_classes)):
-                        fully_shard(
-                            module,
-                            mesh=dp_mesh,
-                            reshard_after_forward=zero3,
-                            shard_placement_fn=_sharding_function,
-                            mp_policy=mixed_precision_policy,
-                            offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
-                        )
-
-                fully_shard(
-                    model,
-                    mesh=dp_mesh,
-                    reshard_after_forward=zero3,
-                    shard_placement_fn=_sharding_function,
-                    mp_policy=mixed_precision_policy,
-                    offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
-                )
-
-                if efficient_initialization and args.model_args.model_name is None:
-                    _init_model(model)
+            if efficient_initialization and args.model_args.model_name is None:
+                _init_model(model)
+    else:
+        raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
