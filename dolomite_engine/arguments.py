@@ -272,7 +272,7 @@ class DistributedArgs(BaseArgs):
     # distributed timeout for NCCL in minutes
     timeout_minutes: int | None = None
     # fsdp algorithm
-    fsdp_algorithm: int = 1
+    fsdp_algorithm: int = 2
     # whether to sync every gradient accumulation step
     sync_every_gradient_accumulation_step: bool = False
     # total number of pipeline stages
