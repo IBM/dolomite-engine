@@ -127,7 +127,6 @@ def wrap_model_container_for_distributed_training(
 
     if stage == 0:
         log_rank_0(logging.INFO, "using DDP")
-
         assert not efficient_initialization
 
         for i, model in enumerate(model_container):
