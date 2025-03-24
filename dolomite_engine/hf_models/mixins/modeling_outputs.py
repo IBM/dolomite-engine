@@ -13,7 +13,7 @@ class BaseModelOutputWithPast(ModelOutput):
 @dataclass
 class CausalLMOutputWithPast(ModelOutput):
     loss: torch.Tensor | None = None
-    aux_loss: torch.Tensor | float | None = None
+    aux_loss: torch.Tensor | float = 0
     logits: torch.Tensor | None = None
     past_key_values: tuple[tuple[torch.Tensor]] | None = None
     last_hidden_state: torch.Tensor | None = None
