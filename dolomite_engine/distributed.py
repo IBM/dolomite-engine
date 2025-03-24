@@ -78,6 +78,7 @@ def wrap_model_container_for_distributed_training(
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
     data_parallel_sharding_world_size = args.distributed_args.zero_topology.data_parallel_sharding_world_size
     data_parallel_replication_world_size = args.distributed_args.zero_topology.data_parallel_replication_world_size
+    model_name = args.model_args.model_name
 
     if dtype in ["fp16", "bf16"]:
         if communication_dtype != "fp32":
@@ -161,7 +162,7 @@ def wrap_model_container_for_distributed_training(
         def _param_init(module: nn.Module) -> None:
             assert len(teacher_block_names) == 0, "efficient initialization doesn't support distillation"
 
-            if args.model_args.model_name is None:
+            if model_name is None:
                 module = module.to_empty(device=torch.cuda.current_device())
 
                 if hasattr(module, "reset_parameters"):
@@ -188,7 +189,6 @@ def wrap_model_container_for_distributed_training(
             )
     elif fsdp_algorithm == 2:
         log_rank_0(logging.INFO, "using FSDP-2")
-
         zero3 = stage == 3
 
         def _sharding_function(parameter: nn.Parameter) -> Shard:
@@ -229,8 +229,13 @@ def wrap_model_container_for_distributed_training(
                 offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
             )
 
-            if efficient_initialization and args.model_args.model_name is None:
-                _init_model(model)
+            if efficient_initialization and model_name is None:
+                model = model.to_empty(device=torch.cuda.current_device())
+
+                for module in model.modules():
+                    if hasattr(module, "reset_parameters"):
+                        with torch.device(torch.cuda.current_device()):
+                            module.reset_parameters()
     else:
         raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
@@ -346,12 +351,3 @@ def _get_fsdp_mixed_precision(
         mixed_precision = MixedPrecision2(param_dtype=dtype, reduce_dtype=communication_dtype)
 
     return mixed_precision
-
-
-def _init_model(model: nn.Module) -> None:
-    model = model.to_empty(device=torch.cuda.current_device())
-
-    for module in model.modules():
-        if hasattr(module, "reset_parameters"):
-            with torch.device(torch.cuda.current_device()):
-                module.reset_parameters()
