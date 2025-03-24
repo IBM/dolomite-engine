@@ -77,6 +77,7 @@ def wrap_model_container_for_distributed_training(
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
     data_parallel_sharding_world_size = args.distributed_args.zero_topology.data_parallel_sharding_world_size
+    data_parallel_replication_world_size = args.distributed_args.zero_topology.data_parallel_replication_world_size
 
     if dtype in ["fp16", "bf16"]:
         if communication_dtype != "fp32":
@@ -125,7 +126,15 @@ def wrap_model_container_for_distributed_training(
                 **args.distributed_args.gradient_checkpointing_args,
             )
 
-    if stage == 0:
+    use_ddp = stage == 0 or data_parallel_sharding_world_size == 1
+
+    mixed_precision_policy = _get_fsdp_mixed_precision(
+        dtype=dtype,
+        communication_dtype=communication_dtype,
+        fsdp_algorithm=1 if use_ddp else fsdp_algorithm,
+    )
+
+    if use_ddp:
         log_rank_0(logging.INFO, "using DDP")
         assert not efficient_initialization
 
@@ -134,11 +143,7 @@ def wrap_model_container_for_distributed_training(
                 model,
                 sharding_strategy=ShardingStrategy.NO_SHARD,
                 cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                mixed_precision=_get_fsdp_mixed_precision(
-                    dtype=dtype,
-                    communication_dtype=communication_dtype,
-                    fsdp_algorithm=1,
-                ),
+                mixed_precision=mixed_precision_policy,
                 device_id=torch.cuda.current_device(),
                 limit_all_gathers=True,
                 use_orig_params=True,
@@ -148,9 +153,9 @@ def wrap_model_container_for_distributed_training(
         log_rank_0(logging.INFO, "using FSDP-1")
 
         sharding_strategy = (
-            _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
-            if args.distributed_args.zero_topology.data_parallel_sharding_world_size == 8
-            else _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+            _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+            if data_parallel_replication_world_size == 1
+            else _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
         )
 
         def _param_init(module: nn.Module) -> None:
@@ -171,11 +176,7 @@ def wrap_model_container_for_distributed_training(
                 model,
                 sharding_strategy=sharding_strategy,
                 cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                mixed_precision=_get_fsdp_mixed_precision(
-                    dtype=dtype,
-                    communication_dtype=communication_dtype,
-                    fsdp_algorithm=1,
-                ),
+                mixed_precision=mixed_precision_policy,
                 auto_wrap_policy=partial(transformer_auto_wrap_policy, transformer_layer_cls=block_classes),
                 device_id=torch.cuda.current_device(),
                 limit_all_gathers=True,
@@ -187,12 +188,6 @@ def wrap_model_container_for_distributed_training(
             )
     elif fsdp_algorithm == 2:
         log_rank_0(logging.INFO, "using FSDP-2")
-
-        mixed_precision_policy = _get_fsdp_mixed_precision(
-            dtype=dtype,
-            communication_dtype=communication_dtype,
-            fsdp_algorithm=2,
-        )
 
         zero3 = stage == 3
 
