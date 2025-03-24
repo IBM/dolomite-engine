@@ -1,4 +1,5 @@
 import logging
+from contextlib import nullcontext
 
 import torch
 import torch.nn as nn
@@ -201,17 +202,21 @@ class ModelWrapper(nn.Module):
             return model
 
         if self.mode == Mode.training:
+            context = nullcontext
+
             if self.efficient_initialization:
                 if self.model_name is None:
-                    with torch.device("meta"):
-                        self.model = _get_model()
+                    context = torch.device("meta")
                 else:
                     assert (
                         not ProcessGroupManager.is_tensor_parallel_enabled()
                     ), "tensor parallel models don't support efficient init with model name"
 
-                    self.model = _get_model(low_cpu_mem_usage=True)
-            else:
+                    context = (
+                        nullcontext if ProcessGroupManager.get_data_parallel_rank() == 0 else torch.device("meta")
+                    )
+
+            with context:
                 self.model = _get_model()
         else:
             if self.dtype == "fp8":
