@@ -312,12 +312,14 @@ class MoE(nn.Module):
         acc_probs = probs.sum(0)
 
         if topk_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
-            freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts).to(dtype=logits.dtype)
+            freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
         else:
-            freq = bincount(topk_idxs.flatten(), minlength=num_experts).to(dtype=logits.dtype)
+            freq = bincount(topk_idxs.flatten(), minlength=num_experts)
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
+
+        freq = freq.float()
 
         switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
