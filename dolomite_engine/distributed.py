@@ -237,11 +237,8 @@ def wrap_model_container_for_distributed_training(
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
 
-        for i in range(len(model_container)):
-            model_container[i] = torch.compile(model_container[i])
-            # model_container[i] = torch._dynamo.explain(model_container[i])
-            # print(model_container[i]({"text": torch.zeros(2, 4097, dtype=torch.long, device=torch.cuda.current_device())}))
-            # exit()
+        for i, model in enumerate(model_container):
+            model_container[i] = torch.compile(model)
 
     pipeline_stages = []
     pipeline_schedule = None
