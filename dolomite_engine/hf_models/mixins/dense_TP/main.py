@@ -67,6 +67,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         if self.is_pipeline_parallel_enabled:
             past_key_values = None
 
+        clear_aux_loss()
+
         if self.is_first_stage:
             assert pipeline_parallel_input is None, "first stage should not get pipeline_parallel_input"
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -83,9 +85,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             )
         else:
             assert input_ids is None
-
-        clear_aux_loss()
-        add_aux_loss(pipeline_parallel_input.aux_loss)
+            add_aux_loss(pipeline_parallel_input.aux_loss)
 
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids=input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
