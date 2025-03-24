@@ -10,7 +10,6 @@ from ..hf_models import (
     PipelineParallelInput,
     PipelineParallelOutput,
     get_autoregressive_language_modeling_loss,
-    get_aux_loss,
 )
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
@@ -145,7 +144,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
-        aux_loss = get_aux_loss()
+        aux_loss = getattr(model_outputs, "aux_loss", 0)
 
         if aux_loss == 0:
             loss = lm_loss
