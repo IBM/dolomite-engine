@@ -210,6 +210,10 @@ def wrap_model_container_for_distributed_training(
                 return Shard(0)
 
         for i, model in enumerate(model_container):
+            if efficient_initialization and model_name is not None:
+                # state dict with Tensors
+                old_state_dict = model.state_dict()
+
             for module in model.modules():
                 if isinstance(module, tuple(block_classes)):
                     fully_shard(
@@ -231,6 +235,8 @@ def wrap_model_container_for_distributed_training(
             )
 
             if efficient_initialization:
+                # contributed by Yu Chin Fabian Lim
+                # original reference https://github.com/fabianlim/accelerate/pull/1
                 if model_name is None:
                     model = model.to_empty(device=torch.cuda.current_device())
 
@@ -239,22 +245,30 @@ def wrap_model_container_for_distributed_training(
                             with torch.device(torch.cuda.current_device()):
                                 module.reset_parameters()
                 else:
-                    state_dict = model.state_dict()
+                    if ProcessGroupManager.get_data_parallel_rank() == 0:
+                        model = model.to(torch.cuda.current_device())
+                    else:
+                        model = model.to_empty(device=torch.cuda.current_device())
 
-                    for param_name, param in state_dict.items():
+                    # state dict with DTensors
+                    new_state_dict = model.state_dict()
+
+                    for param_name, param in old_state_dict.items():
                         if ProcessGroupManager.get_data_parallel_rank() == 0:
-                            full_tensor = param.to(param.dtype).to(torch.cuda.current_device())
+                            full_tensor = param
                         else:
                             full_tensor = torch.empty(
                                 param.shape, dtype=param.dtype, device=torch.cuda.current_device()
                             )
 
-                        state_dict[param_name] = distribute_tensor(
-                            full_tensor, device_mesh=param.device_mesh, placements=param.placements
+                        new_state_dict[param_name] = distribute_tensor(
+                            full_tensor,
+                            device_mesh=new_state_dict[param_name].device_mesh,
+                            placements=new_state_dict[param_name].placements,
                         )
 
-                    model.load_state_dict(state_dict, assign=True)
-                    del state_dict
+                    model.load_state_dict(new_state_dict, assign=True)
+                    del old_state_dict, new_state_dict
     else:
         raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
