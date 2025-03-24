@@ -277,6 +277,7 @@ def wrap_model_container_for_distributed_training(
                 output_args=dummy_output_tensor,
                 group=ProcessGroupManager.get_pipeline_parallel_group(),
             )
+
             pipeline_stages.append(stage)
 
         lm_loss_multiplier = 1 / (
