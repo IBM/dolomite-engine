@@ -22,8 +22,10 @@ class CausalLMOutputWithPast(ModelOutput):
 @dataclass
 class PipelineParallelInput(ModelOutput):
     hidden_states: torch.Tensor | None = None
+    aux_loss: torch.Tensor | float = 0
 
 
 @dataclass
 class PipelineParallelOutput(ModelOutput):
     hidden_states: torch.Tensor | None = None
+    aux_loss: torch.Tensor | float = 0
