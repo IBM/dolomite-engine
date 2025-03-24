@@ -77,8 +77,8 @@ def wrap_model_container_for_distributed_training(
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
-    data_parallel_sharding_world_size = args.distributed_args.zero_topology.data_parallel_sharding_world_size
-    data_parallel_replication_world_size = args.distributed_args.zero_topology.data_parallel_replication_world_size
+    data_parallel_sharding_world_size = ProcessGroupManager.get_data_parallel_sharding_world_size()
+    data_parallel_replication_world_size = ProcessGroupManager.get_data_parallel_replication_world_size()
     model_name = args.model_args.model_name
 
     if dtype in ["fp16", "bf16"]:
