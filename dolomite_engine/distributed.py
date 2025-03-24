@@ -128,7 +128,8 @@ def wrap_model_container_for_distributed_training(
                 **args.distributed_args.gradient_checkpointing_args,
             )
 
-    use_ddp = stage == 0 or data_parallel_sharding_world_size == 1
+    # for PP, we use FSDP-2 always
+    use_ddp = (stage == 0 or data_parallel_sharding_world_size == 1) and num_pipeline_stages == 1
 
     mixed_precision_policy = _get_fsdp_mixed_precision(
         dtype=dtype,
@@ -138,6 +139,7 @@ def wrap_model_container_for_distributed_training(
 
     if use_ddp:
         log_rank_0(logging.INFO, "using DDP")
+        assert num_pipeline_stages == 1
         assert not efficient_initialization
 
         for i, model in enumerate(model_container):
@@ -153,6 +155,7 @@ def wrap_model_container_for_distributed_training(
             )
     elif fsdp_algorithm == 1:
         log_rank_0(logging.INFO, "using FSDP-1")
+        assert num_pipeline_stages == 1
 
         sharding_strategy = (
             _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
