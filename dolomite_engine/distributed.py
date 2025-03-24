@@ -250,9 +250,7 @@ def wrap_model_container_for_distributed_training(
                             )
 
                         state_dict[param_name] = distribute_tensor(
-                            full_tensor,
-                            device_mesh=param.device_mesh,
-                            placements=param.placements,
+                            full_tensor, device_mesh=param.device_mesh, placements=param.placements
                         )
 
                     model.load_state_dict(state_dict, assign=True)
