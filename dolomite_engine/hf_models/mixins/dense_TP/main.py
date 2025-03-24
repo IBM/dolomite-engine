@@ -106,6 +106,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         lm_logits = None
         loss = None
+        aux_loss = get_aux_loss()
 
         if self.is_last_stage:
             if labels is None:
@@ -143,8 +144,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
                 lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-            aux_loss = get_aux_loss()
-
             if loss is not None and aux_loss != 0:
                 loss = loss + self.router_aux_loss_coef * aux_loss
 
@@ -156,7 +155,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 last_hidden_state=hidden_states,
             )
         else:
-            output = PipelineParallelOutput(hidden_states=hidden_states)
+            output = PipelineParallelOutput(hidden_states=hidden_states, aux_loss=aux_loss)
 
         return output
 
