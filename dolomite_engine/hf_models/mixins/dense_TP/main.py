@@ -9,7 +9,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
-from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
+from ...loss import clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from ..modeling_outputs import (
@@ -83,6 +83,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             )
         else:
             assert input_ids is None
+
+        clear_aux_loss()
 
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids=input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
