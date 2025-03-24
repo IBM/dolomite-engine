@@ -71,7 +71,8 @@ def train_step_with_pipeline_parallel(
     if ProcessGroupManager.is_tensor_parallel_first_rank():
         batch = batch["text"]
 
-    batch = broadcast_tensor_parallel_input(batch, (StepTracker.get_local_batch_size(), sequence_length + 1))
+    if ProcessGroupManager.is_tensor_parallel_enabled():
+        batch = broadcast_tensor_parallel_input(batch, (StepTracker.get_local_batch_size(), sequence_length + 1))
 
     is_first_pipeline_rank = ProcessGroupManager.get_pipeline_parallel_rank() == 0
     is_last_pipeline_rank = (
