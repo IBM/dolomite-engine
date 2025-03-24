@@ -169,7 +169,7 @@ def wrap_model_container_for_distributed_training(
                     with torch.no_grad():
                         module.reset_parameters()
             else:
-                if efficient_initialization and ProcessGroupManager.get_data_parallel_rank() != 0:
+                if ProcessGroupManager.get_data_parallel_rank() != 0:
                     module = module.to_empty(device=torch.cuda.current_device())
 
         for i, model in enumerate(model_container):
@@ -229,13 +229,16 @@ def wrap_model_container_for_distributed_training(
                 offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
             )
 
-            if efficient_initialization and model_name is None:
-                model = model.to_empty(device=torch.cuda.current_device())
+            if efficient_initialization:
+                if model_name is None:
+                    model = model.to_empty(device=torch.cuda.current_device())
 
-                for module in model.modules():
-                    if hasattr(module, "reset_parameters"):
-                        with torch.device(torch.cuda.current_device()):
-                            module.reset_parameters()
+                    for module in model.modules():
+                        if hasattr(module, "reset_parameters"):
+                            with torch.device(torch.cuda.current_device()), torch.no_grad():
+                                module.reset_parameters()
+                else:
+                    raise ValueError()
     else:
         raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
