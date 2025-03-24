@@ -1,7 +1,6 @@
 import torch
 from transformers import DynamicCache
 
-from ...loss import clear_aux_loss
 from ...mixins import BaseModelMixin, BaseModelOutputWithPast, PreTrainedModelMixin
 from .config import GPTCrossLayerConfig
 from .layer import GPTCrossLayerBlock
@@ -50,7 +49,6 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
         )
 
         past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-        clear_aux_loss()
 
         key = None
         value = None

@@ -4,7 +4,6 @@ from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
-from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ...utils import is_generation_cache_enabled
@@ -148,8 +147,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
 
         if is_generation_cache_enabled():
             past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-
-        clear_aux_loss()
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             hidden_states = self.h[str(layer_idx)](
