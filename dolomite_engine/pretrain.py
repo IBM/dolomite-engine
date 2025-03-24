@@ -18,7 +18,7 @@ from .dtensors import dtensor_to_tensor
 from .enums import Mode, TuningMethod
 from .hf_models import disable_generation_cache
 from .kernels import enable_kernels
-from .model_wrapper import get_model_container
+from .model_wrapper import broadcast_tensor_parallel_input, get_model_container
 from .optimization import get_learning_rate, get_optimizer_container, get_scheduler_container
 from .train_utils import all_reduce_metrics_tracker, get_model_tflops, get_torch_profiler, track_metrics
 from .utils import (
@@ -71,9 +71,7 @@ def train_step_with_pipeline_parallel(
     if ProcessGroupManager.is_tensor_parallel_first_rank():
         batch = batch["text"]
 
-    batch = model_container[0].broadcast_tensor_parallel_input(
-        batch, (StepTracker.get_local_batch_size(), sequence_length + 1)
-    )
+    batch = broadcast_tensor_parallel_input(batch, (StepTracker.get_local_batch_size(), sequence_length + 1))
 
     is_first_pipeline_rank = ProcessGroupManager.get_pipeline_parallel_rank() == 0
     is_last_pipeline_rank = (

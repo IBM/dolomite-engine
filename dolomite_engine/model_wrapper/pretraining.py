@@ -15,6 +15,7 @@ from ..hf_models import (
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
+from .utils import broadcast_tensor_parallel_input
 
 
 class ModelWrapperForPretraining(ModelWrapper):
@@ -167,20 +168,6 @@ class ModelWrapperForPretraining(ModelWrapper):
     def reset_extra_metrics(self) -> None:
         self._extra_metrics = MetricsTrackingDict({})
 
-    def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
-        if ProcessGroupManager.is_tensor_parallel_first_rank():
-            tokens = tokens.to(torch.cuda.current_device())
-        else:
-            tokens = torch.empty(shape, dtype=torch.long, device=torch.cuda.current_device())
-
-        torch.distributed.broadcast(
-            tokens,
-            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
-            group=ProcessGroupManager.get_tensor_parallel_group(),
-        )
-
-        return tokens
-
     def _prepare_model_inputs(self, batch: dict) -> dict:
         if self.is_pipeline_parallel_enabled:
             # when using pipeline parallel, we broadcast the input outside the model function
@@ -197,7 +184,7 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
         else:
             if ProcessGroupManager.is_tensor_parallel_enabled():
-                tokens = self.broadcast_tensor_parallel_input(
+                tokens = broadcast_tensor_parallel_input(
                     None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
                 )
             else:
