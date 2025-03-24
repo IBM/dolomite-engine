@@ -215,6 +215,8 @@ class ModelWrapper(nn.Module):
                     else:
                         with torch.device("meta"):
                             self.model = _get_model()
+            else:
+                self.model = _get_model()
         else:
             if self.dtype == "fp8":
                 log_rank_0(logging.WARN, "dtype fp8 was passed but loading model in fp16")
