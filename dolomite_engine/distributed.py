@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
+from torch.distributed._tensor import distribute_tensor
 from torch.distributed._tensor.placement_types import Shard
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -238,7 +239,20 @@ def wrap_model_container_for_distributed_training(
                             with torch.device(torch.cuda.current_device()):
                                 module.reset_parameters()
                 else:
-                    raise ValueError()
+                    state_dict = model.state_dict()
+
+                    for param_name, param in state_dict.items():
+                        if ProcessGroupManager.get_data_parallel_rank() == 0:
+                            state_dict[param_name] = param.to(param.dtype).to(param.device)
+                        else:
+                            state_dict[param_name] = distribute_tensor(
+                                torch.empty(param.shape, dtype=param.dtype, device=torch.cuda.current_device()),
+                                device_mesh=param.device_mesh,
+                                placements=param.placements,
+                            )
+
+                    model.load_state_dict(state_dict, assign=True)
+                    del state_dict
     else:
         raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
