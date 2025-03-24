@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
+from torch.distributed._tensor import distribute_tensor
 from torch.distributed._tensor.placement_types import Shard
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -21,13 +22,13 @@ from torch.distributed.pipelining.schedules import (
     get_schedule_class,
 )
 
-from ..arguments import TrainingArgs
-from ..containers import ModelContainer
-from ..enums import Kernel
-from ..gradient_checkpointing import apply_gradient_checkpointing
-from ..hf_models import CausalLMOutputWithPast
-from ..kernels import is_kernel_allowed
-from ..utils import (
+from .arguments import TrainingArgs
+from .containers import ModelContainer
+from .enums import Kernel
+from .gradient_checkpointing import apply_gradient_checkpointing
+from .hf_models import CausalLMOutputWithPast
+from .kernels import is_kernel_allowed
+from .utils import (
     ProcessGroupManager,
     get_module_class_from_name,
     is_torchao_available,
@@ -77,6 +78,8 @@ def wrap_model_container_for_distributed_training(
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
     data_parallel_sharding_world_size = args.distributed_args.zero_topology.data_parallel_sharding_world_size
+    data_parallel_replication_world_size = args.distributed_args.zero_topology.data_parallel_replication_world_size
+    model_name = args.model_args.model_name
 
     if dtype in ["fp16", "bf16"]:
         if communication_dtype != "fp32":
@@ -125,33 +128,49 @@ def wrap_model_container_for_distributed_training(
                 **args.distributed_args.gradient_checkpointing_args,
             )
 
-    if fsdp_algorithm == 1:
-        if stage == 0:
-            log_rank_0(logging.INFO, "using DDP")
+    use_ddp = stage == 0 or data_parallel_sharding_world_size == 1
 
-            assert not efficient_initialization
+    mixed_precision_policy = _get_fsdp_mixed_precision(
+        dtype=dtype,
+        communication_dtype=communication_dtype,
+        fsdp_algorithm=1 if use_ddp else fsdp_algorithm,
+    )
 
-            sharding_strategy = ShardingStrategy.NO_SHARD
-        else:
-            log_rank_0(logging.INFO, "using FSDP-1")
+    if use_ddp:
+        log_rank_0(logging.INFO, "using DDP")
+        assert not efficient_initialization
 
-            sharding_strategy = (
-                _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
-                if args.distributed_args.zero_topology.data_parallel_sharding_world_size == 8
-                else _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+        for i, model in enumerate(model_container):
+            model_container[i] = FSDP(
+                model,
+                sharding_strategy=ShardingStrategy.NO_SHARD,
+                cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
+                mixed_precision=mixed_precision_policy,
+                device_id=torch.cuda.current_device(),
+                limit_all_gathers=True,
+                use_orig_params=True,
+                device_mesh=dp_mesh,
             )
+    elif fsdp_algorithm == 1:
+        log_rank_0(logging.INFO, "using FSDP-1")
+
+        sharding_strategy = (
+            _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+            if data_parallel_replication_world_size == 1
+            else _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
+        )
 
         def _param_init(module: nn.Module) -> None:
             assert len(teacher_block_names) == 0, "efficient initialization doesn't support distillation"
 
-            if args.model_args.model_name is None:
+            if model_name is None:
                 module = module.to_empty(device=torch.cuda.current_device())
 
                 if hasattr(module, "reset_parameters"):
                     with torch.no_grad():
                         module.reset_parameters()
             else:
-                if efficient_initialization and ProcessGroupManager.get_data_parallel_rank() != 0:
+                if ProcessGroupManager.get_data_parallel_rank() != 0:
                     module = module.to_empty(device=torch.cuda.current_device())
 
         for i, model in enumerate(model_container):
@@ -159,11 +178,7 @@ def wrap_model_container_for_distributed_training(
                 model,
                 sharding_strategy=sharding_strategy,
                 cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                mixed_precision=_get_fsdp_mixed_precision(
-                    dtype=dtype,
-                    communication_dtype=communication_dtype,
-                    fsdp_algorithm=1,
-                ),
+                mixed_precision=mixed_precision_policy,
                 auto_wrap_policy=partial(transformer_auto_wrap_policy, transformer_layer_cls=block_classes),
                 device_id=torch.cuda.current_device(),
                 limit_all_gathers=True,
@@ -173,87 +188,95 @@ def wrap_model_container_for_distributed_training(
                 param_init_fn=_param_init if efficient_initialization else None,
                 device_mesh=dp_mesh,
             )
-    else:
-        if stage == 0:
-            log_rank_0(logging.INFO, "using DDP")
+    elif fsdp_algorithm == 2:
+        log_rank_0(logging.INFO, "using FSDP-2")
+        zero3 = stage == 3
 
-            assert not efficient_initialization
-
-            for i, model in enumerate(model_container):
-                model_container[i] = FSDP(
-                    model,
-                    sharding_strategy=ShardingStrategy.NO_SHARD,
-                    cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                    mixed_precision=_get_fsdp_mixed_precision(
-                        dtype=dtype,
-                        communication_dtype=communication_dtype,
-                        fsdp_algorithm=1,
-                    ),
-                    device_id=torch.cuda.current_device(),
-                    limit_all_gathers=True,
-                    use_orig_params=True,
-                    device_mesh=dp_mesh,
-                )
-        else:
-            log_rank_0(logging.INFO, "using FSDP-2")
-
-            mixed_precision_policy = _get_fsdp_mixed_precision(
-                dtype=dtype,
-                communication_dtype=communication_dtype,
-                fsdp_algorithm=2,
+        def _sharding_function(parameter: nn.Parameter) -> Shard:
+            dps = (
+                ProcessGroupManager.get_data_parallel_world_size()
+                if data_parallel_sharding_world_size is None
+                else data_parallel_sharding_world_size
             )
 
-            zero3 = stage == 3
+            if parameter.size(0) > dps or parameter.dim() == 1:
+                return Shard(0)
+            else:
+                for dim in range(1, parameter.dim()):
+                    if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
+                        return Shard(dim)
 
-            def _sharding_function(parameter: nn.Parameter) -> Shard:
-                dps = (
-                    ProcessGroupManager.get_data_parallel_world_size()
-                    if data_parallel_sharding_world_size is None
-                    else data_parallel_sharding_world_size
-                )
+                log_rank_0(logging.WARN, "sharding along dim=0 since no suitable sharding dimension was found")
+                return Shard(0)
 
-                if parameter.size(0) > dps or parameter.dim() == 1:
-                    return Shard(0)
+        for i, model in enumerate(model_container):
+            if efficient_initialization and model_name is not None:
+                # state dict with Tensors
+                old_state_dict = model.state_dict()
+
+            for module in model.modules():
+                if isinstance(module, tuple(block_classes)):
+                    fully_shard(
+                        module,
+                        mesh=dp_mesh,
+                        reshard_after_forward=zero3,
+                        shard_placement_fn=_sharding_function,
+                        mp_policy=mixed_precision_policy,
+                        offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+                    )
+
+            fully_shard(
+                model,
+                mesh=dp_mesh,
+                reshard_after_forward=zero3,
+                shard_placement_fn=_sharding_function,
+                mp_policy=mixed_precision_policy,
+                offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+            )
+
+            if efficient_initialization:
+                # contributed by Yu Chin Fabian Lim
+                # original reference https://github.com/fabianlim/accelerate/pull/1
+                if model_name is None:
+                    model = model.to_empty(device=torch.cuda.current_device())
+
+                    for module in model.modules():
+                        if hasattr(module, "reset_parameters"):
+                            with torch.device(torch.cuda.current_device()):
+                                module.reset_parameters()
                 else:
-                    for dim in range(1, parameter.dim()):
-                        if parameter.size(dim) > dps and parameter.size(dim) % dps == 0:
-                            return Shard(dim)
+                    if ProcessGroupManager.get_data_parallel_rank() == 0:
+                        model = model.to(torch.cuda.current_device())
+                    else:
+                        model = model.to_empty(device=torch.cuda.current_device())
 
-                    log_rank_0(logging.WARN, "sharding along dim=0 since no suitable sharding dimension was found")
-                    return Shard(0)
+                    # state dict with DTensors
+                    new_state_dict = model.state_dict()
 
-            for i, model in enumerate(model_container):
-                for module in model.modules():
-                    if isinstance(module, tuple(block_classes)):
-                        fully_shard(
-                            module,
-                            mesh=dp_mesh,
-                            reshard_after_forward=zero3,
-                            shard_placement_fn=_sharding_function,
-                            mp_policy=mixed_precision_policy,
-                            offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
+                    for param_name, param in old_state_dict.items():
+                        if ProcessGroupManager.get_data_parallel_rank() == 0:
+                            full_tensor = param
+                        else:
+                            full_tensor = torch.empty(
+                                param.shape, dtype=param.dtype, device=torch.cuda.current_device()
+                            )
+
+                        new_state_dict[param_name] = distribute_tensor(
+                            full_tensor,
+                            device_mesh=new_state_dict[param_name].device_mesh,
+                            placements=new_state_dict[param_name].placements,
                         )
 
-                fully_shard(
-                    model,
-                    mesh=dp_mesh,
-                    reshard_after_forward=zero3,
-                    shard_placement_fn=_sharding_function,
-                    mp_policy=mixed_precision_policy,
-                    offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
-                )
-
-                if efficient_initialization and args.model_args.model_name is None:
-                    _init_model(model)
+                    model.load_state_dict(new_state_dict, assign=True)
+                    del old_state_dict, new_state_dict
+    else:
+        raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
     if torch_compile:
         log_rank_0(logging.INFO, "using torch compile")
 
-        for i in range(len(model_container)):
-            model_container[i] = torch.compile(model_container[i])
-            # model_container[i] = torch._dynamo.explain(model_container[i])
-            # print(model_container[i]({"text": torch.zeros(2, 4097, dtype=torch.long, device=torch.cuda.current_device())}))
-            # exit()
+        for i, model in enumerate(model_container):
+            model_container[i] = torch.compile(model)
 
     pipeline_stages = []
     pipeline_schedule = None
@@ -292,6 +315,7 @@ def wrap_model_container_for_distributed_training(
                 output_args=dummy_output_tensor,
                 group=ProcessGroupManager.get_pipeline_parallel_group(),
             )
+
             pipeline_stages.append(stage)
 
         lm_loss_multiplier = 1 / (
@@ -360,12 +384,3 @@ def _get_fsdp_mixed_precision(
         mixed_precision = MixedPrecision2(param_dtype=dtype, reduce_dtype=communication_dtype)
 
     return mixed_precision
-
-
-def _init_model(model: nn.Module) -> None:
-    model = model.to_empty(device=torch.cuda.current_device())
-
-    for module in model.modules():
-        if hasattr(module, "reset_parameters"):
-            with torch.device(torch.cuda.current_device()):
-                module.reset_parameters()

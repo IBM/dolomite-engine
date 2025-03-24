@@ -17,8 +17,8 @@ from typing import Callable
 
 import torch
 
-from ..containers import ModelContainer
-from ..utils import is_torchao_available
+from .containers import ModelContainer
+from .utils import is_torchao_available
 
 
 if is_torchao_available():
