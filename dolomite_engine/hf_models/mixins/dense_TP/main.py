@@ -216,8 +216,11 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 micro_batch_size, sequence_length + 1, device=torch.cuda.current_device(), dtype=torch.long
             )
         else:
-            dummy_input = self._get_dummy_intermediate_tensor(
-                micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+            dummy_input = (
+                self._get_dummy_intermediate_tensor(
+                    micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
+                ),
+                torch.empty(1, device=torch.cuda.current_device(), dtype=torch.float32),
             )
 
         return dummy_input
@@ -254,7 +257,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
 
-        return tensor
+        return tensor, torch.empty(1, device=torch.cuda.current_device(), dtype=torch.float32)
 
     def _get_dummy_intermediate_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
