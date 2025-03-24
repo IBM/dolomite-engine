@@ -116,7 +116,7 @@ def wrap_model_container_for_distributed_training(
 
     assert stage in [0, 2, 3]
 
-    dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
+    dp_mesh = ProcessGroupManager.get_data_parallel_context_parallel_mesh()
     block_classes = [
         get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
     ]

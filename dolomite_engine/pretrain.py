@@ -29,6 +29,8 @@ from .utils import (
     is_torchao_available,
     log_rank_0,
     setup_tf32,
+    create_context_parallel_ctx,
+    get_train_context,
 )
 
 
@@ -172,17 +174,32 @@ def train_step_without_pipeline_parallel(
 
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
+    world_mesh = ProcessGroupManager.get_mesh()
+
     with no_sync():
         for _ in range(gradient_accumulation_steps - 1):
             batch = get_next_batch(train_dataloader)
-            with forward_context():
-                loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
-
-            # compute gradients
-            with backward_context():
+            # with forward_context():
+            
+            # print(f"world_mesh: {world_mesh['cp']}")
+            # print(f"batch: {batch['text'].shape}")
+            # exit()
+            input_ids, labels = model._prepare_inputs_ids_and_labels_for_forward(batch)
+            optional_context_parallel_ctx = (
+                create_context_parallel_ctx(
+                    cp_mesh=world_mesh["cp"],
+                    cp_buffers=[input_ids, labels],
+                    cp_seq_dims=[1, 1],
+                    cp_no_restore_buffers={input_ids, labels},
+                    cp_rotate_method="allgather",
+                )
+            )
+            
+            with forward_context(optional_context_parallel_ctx):
+                loss_micro_step_dict = model((input_ids, labels), lm_loss_multiplier=lm_loss_multiplier)
                 loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
                 loss_micro_step_scaled.backward()
-
+            
             with torch.inference_mode():
                 metrics_tracker = metrics_tracker + loss_micro_step_dict
 
@@ -190,14 +207,24 @@ def train_step_without_pipeline_parallel(
         model.set_requires_gradient_sync(True)
 
     batch = get_next_batch(train_dataloader)
-    with forward_context():
-        loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
-    # compute gradients
-    with backward_context():
+    input_ids, labels = model._prepare_inputs_ids_and_labels_for_forward(batch)
+    # print(f"input_ids: {input_ids.shape}, labels: {labels.shape}")
+    optional_context_parallel_ctx = (
+        create_context_parallel_ctx(
+            cp_mesh=world_mesh["cp"],
+            cp_buffers=[input_ids, labels],
+            cp_seq_dims=[1, 1],
+            cp_no_restore_buffers={input_ids, labels},
+            cp_rotate_method="allgather",
+        )
+    )
+    # print(f"cp_mesh: {world_mesh['cp']}")
+    with forward_context(optional_context_parallel_ctx):
+        loss_micro_step_dict = model((input_ids, labels), lm_loss_multiplier=lm_loss_multiplier)
         loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"] / gradient_accumulation_steps
         loss_micro_step_scaled.backward()
-
+    # print(f"loss_micro_step_dict: {loss_micro_step_dict}")
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
 
@@ -225,7 +252,7 @@ def train_step_without_pipeline_parallel(
 
         for key in metrics_tracker:
             metrics_tracker[key] = dtensor_to_tensor(metrics_tracker[key])
-
+        # print(f"metrics_tracker: {metrics_tracker}")
         metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
 
     return metrics_tracker
@@ -345,6 +372,8 @@ def train(
     start_time = time.perf_counter()
     steps_since_start_time = 0
     metrics_tracker = MetricsTrackingDict({})
+    # train_context = get_train_context(ProcessGroupManager.is_tensor_parallel_enabled(), False)
+    train_context = get_train_context(False, False)
 
     global_step = starting_iteration
     while global_step < num_training_steps:
@@ -368,10 +397,10 @@ def train(
                 lr_scheduler=lr_scheduler_container[0],
                 train_dataloader=train_dataloader,
                 gradient_clipping=gradient_clipping,
-                forward_context=forward_context,
+                forward_context=train_context,
                 backward_context=backward_context,
                 sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
-                lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+                lm_loss_multiplier=1 / (micro_batch_size * sequence_length / args.distributed_args.context_parallel_world_size),
             )
 
         metrics_tracker = metrics_tracker + loss_step_dict
@@ -529,6 +558,7 @@ def main(mode: Mode = Mode.training) -> None:
         data_parallel_size=args.distributed_args.data_parallel_size,
         data_parallel_replication_world_size=args.distributed_args.zero_topology.data_parallel_replication_world_size,
         data_parallel_sharding_world_size=args.distributed_args.zero_topology.data_parallel_sharding_world_size,
+        context_parallel_world_size=args.distributed_args.context_parallel_world_size,
         zero_stage=args.distributed_args.stage,
         timeout_minutes=args.distributed_args.timeout_minutes,
         use_async_tensor_parallel=args.distributed_args.use_async_tensor_parallel,

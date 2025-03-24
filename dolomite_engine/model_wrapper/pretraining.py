@@ -109,10 +109,11 @@ class ModelWrapperForPretraining(ModelWrapper):
         if isinstance(batch, torch.Tensor):
             batch = {"text": batch}
 
-        input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
-        batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
+        # input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
+        # batch = self._prepare_model_inputs(input_ids, prev_aux_loss)
+        input_ids, labels = batch
 
-        output = self.model(**batch, return_dict=True)
+        output = self.model(input_ids=input_ids, return_dict=True)
 
         # without pipeline parallel, we compute the loss outside
         if not self.is_pipeline_parallel_enabled:

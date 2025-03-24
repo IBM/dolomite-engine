@@ -377,7 +377,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         )
 
         if use_cache is None:
-            use_cache = False if self._use_padding_free_transformer else self.config.use_cache
+            use_cache = False # if self._use_padding_free_transformer else self.config.use_cache
 
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
@@ -516,7 +516,10 @@ class BaseModelMixin(PreTrainedModelMixin):
                     base=self.config.rope_theta,
                     scale=self.config.rope_scaling["factor"],
                     original_max_position_embeddings=self.config.rope_scaling["original_max_position_embeddings"],
+                    beta_fast=self.config.rope_scaling["beta_fast"],
+                    beta_slow=self.config.rope_scaling["beta_slow"],
                 )
+                print("Using YaRNScaledRoPE with scaling factor:", self.config.rope_scaling["factor"])
         elif self.position_embedding_type == PositionEmbeddingType.nope:
             pass
         else:

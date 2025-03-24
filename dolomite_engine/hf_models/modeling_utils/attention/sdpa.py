@@ -21,9 +21,11 @@ class SDPA(Attention):
         # ==========================================================================================
         # hidden_states -> (batch_size, query_length, num_heads * head_dim)
         # ==========================================================================================
-
+        # print(f"hidden_states: {hidden_states.shape}")
+        # print(f"hidden_states: {hidden_states}")
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
 
+        # print(f"shape1: {query.shape}, {key.shape}, {value.shape}")
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
         # key -> (batch_size, num_key_value_heads, query_length, head_dim)
@@ -36,7 +38,8 @@ class SDPA(Attention):
 
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
-
+        assert past_key_values is None, "past_key_values is not supported for SDPA"
+        # print(f"shape2: {query.shape}, {key.shape}, {value.shape}")
         # ==========================================================================================
         # query -> (batch_size, num_heads, query_length, head_dim)
         # key -> (batch_size, num_key_value_heads, key_length, head_dim)
@@ -54,7 +57,7 @@ class SDPA(Attention):
 
         softmax_scale = self._get_softmax_scale()
         dropout_p = self.attn_pdrop if self.training else 0
-
+        # print(f"shape3: {query.shape}, {key.shape}, {value.shape}")
         attn_output = F.scaled_dot_product_attention(
             query,
             key,

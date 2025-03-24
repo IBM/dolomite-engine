@@ -286,6 +286,8 @@ class DistributedArgs(BaseArgs):
     pipeline_parallel_schedule: str | None = None
     # whether to use async-TP
     use_async_tensor_parallel: bool = False
+    # world size for each Context Parallel group
+    context_parallel_world_size: int = 1
 
     def model_post_init(self, __context: Any) -> None:
         # communication dtype
