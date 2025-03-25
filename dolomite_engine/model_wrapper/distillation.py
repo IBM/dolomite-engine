@@ -86,7 +86,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             reset_position_ids=reset_position_ids,
         )
 
-        if ProcessGroupManager.is_tensor_parallel_enabled():
+        if ProcessGroupManager.is_tensor_parallel_enabled() or num_pipeline_stages > 1:
             raise NotImplementedError()
 
     def forward(self, batch: dict) -> dict:

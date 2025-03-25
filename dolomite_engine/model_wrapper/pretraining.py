@@ -10,11 +10,11 @@ from ..hf_models import (
     PipelineParallelInput,
     PipelineParallelOutput,
     get_autoregressive_language_modeling_loss,
-    get_aux_loss,
 )
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
+from .utils import broadcast_tensor_parallel_input
 
 
 class ModelWrapperForPretraining(ModelWrapper):
@@ -87,7 +87,12 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             self._extra_metrics = MetricsTrackingDict({})
 
-    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
+    def forward(
+        self,
+        batch: dict | torch.Tensor,
+        aux_loss_from_pipeline_parallel: torch.Tensor | float = 0,
+        lm_loss_multiplier: float = 1,
+    ) -> dict:
         """forward function for a batch
 
         Args:
@@ -102,24 +107,36 @@ class ModelWrapperForPretraining(ModelWrapper):
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
 
-        if isinstance(batch, torch.Tensor):
-            batch = {"text": batch}
-
-        batch = self._prepare_model_inputs(batch)
-        labels = batch.pop("labels")
-
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
+        if isinstance(batch, torch.Tensor):
+            batch = {"text": batch}
+
+        if self.is_pipeline_parallel_enabled:
+            batch["aux_loss_from_pipeline_parallel"] = aux_loss_from_pipeline_parallel
+        else:
+            assert aux_loss_from_pipeline_parallel == 0
+
+        batch = self._prepare_model_inputs(batch)
+        labels = batch.pop("labels")
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
         if self.is_pipeline_parallel_enabled:
+            # aux_loss is returned as a 0 dimensional tensor
+            aux_loss = output.aux_loss
+            if aux_loss != 0 and aux_loss.dim() == 0:
+                aux_loss = aux_loss.unsqueeze(0)
+
             if self.is_last_stage:
                 assert isinstance(output, CausalLMOutputWithPast)
                 output = output.logits
             else:
                 assert isinstance(output, PipelineParallelOutput)
                 output = output.hidden_states
+
+            if aux_loss != 0:
+                output = (output, aux_loss)
         else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
@@ -144,7 +161,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
-        aux_loss = get_aux_loss()
+        aux_loss = getattr(model_outputs, "aux_loss", 0)
 
         if aux_loss == 0:
             loss = lm_loss
@@ -162,29 +179,20 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_extra_metrics(self) -> dict:
+        if "aux_loss" in self._extra_metrics:
+            self._extra_metrics["aux_loss"] = self._extra_metrics["aux_loss"].squeeze(0)
+
         return self._extra_metrics
 
     def reset_extra_metrics(self) -> None:
         self._extra_metrics = MetricsTrackingDict({})
 
-    def broadcast_tensor_parallel_input(self, tokens: dict, shape: tuple[int]) -> torch.Tensor:
-        if ProcessGroupManager.is_tensor_parallel_first_rank():
-            tokens = tokens.to(torch.cuda.current_device())
-        else:
-            tokens = torch.empty(shape, dtype=torch.long, device=torch.cuda.current_device())
-
-        torch.distributed.broadcast(
-            tokens,
-            src=ProcessGroupManager.get_tensor_parallel_first_rank(),
-            group=ProcessGroupManager.get_tensor_parallel_group(),
-        )
-
-        return tokens
-
     def _prepare_model_inputs(self, batch: dict) -> dict:
         if self.is_pipeline_parallel_enabled:
             # when using pipeline parallel, we broadcast the input outside the model function
             tokens = batch["text"]
+            aux_loss_from_pipeline_parallel = batch["aux_loss_from_pipeline_parallel"]
+
             tokens = tokens.to(torch.cuda.current_device())
 
             if self.is_first_stage:
@@ -192,12 +200,14 @@ class ModelWrapperForPretraining(ModelWrapper):
                 pipeline_parallel_input = None
             else:
                 input_ids = None
-                pipeline_parallel_input = PipelineParallelInput(hidden_states=tokens)
+                pipeline_parallel_input = PipelineParallelInput(
+                    hidden_states=tokens, aux_loss=aux_loss_from_pipeline_parallel
+                )
 
             batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
         else:
             if ProcessGroupManager.is_tensor_parallel_enabled():
-                tokens = self.broadcast_tensor_parallel_input(
+                tokens = broadcast_tensor_parallel_input(
                     None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
                 )
             else:

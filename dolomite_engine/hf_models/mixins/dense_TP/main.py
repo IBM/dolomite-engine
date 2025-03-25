@@ -9,7 +9,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
-from ...loss import get_autoregressive_language_modeling_loss, get_aux_loss
+from ...loss import add_aux_loss, clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from ..modeling_outputs import (
@@ -67,6 +67,8 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         if self.is_pipeline_parallel_enabled:
             past_key_values = None
 
+        clear_aux_loss()
+
         if self.is_first_stage:
             assert pipeline_parallel_input is None, "first stage should not get pipeline_parallel_input"
             input_ids, position_ids, token_type_ids, labels, cu_seqlens, max_seqlen = self.prepare_inputs_for_model(
@@ -83,6 +85,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             )
         else:
             assert input_ids is None
+            add_aux_loss(pipeline_parallel_input.aux_loss)
 
         transformer_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids=input_ids if pipeline_parallel_input is None else pipeline_parallel_input.hidden_states,
@@ -104,6 +107,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
 
         lm_logits = None
         loss = None
+        aux_loss = get_aux_loss()
 
         if self.is_last_stage:
             if labels is None:
@@ -141,19 +145,18 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
                 lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-            aux_loss = get_aux_loss()
-
             if loss is not None and aux_loss != 0:
                 loss = loss + self.router_aux_loss_coef * aux_loss
 
             output = CausalLMOutputWithPast(
                 loss=loss,
+                aux_loss=aux_loss,
                 logits=lm_logits,
                 past_key_values=past_key_values,
                 last_hidden_state=hidden_states,
             )
         else:
-            output = PipelineParallelOutput(hidden_states=hidden_states)
+            output = PipelineParallelOutput(hidden_states=hidden_states, aux_loss=aux_loss)
 
         return output
 
@@ -217,6 +220,12 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
 
+            if self.all_moe:
+                dummy_input = (
+                    dummy_input,
+                    torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype),
+                )
+
         return dummy_input
 
     def get_dummy_output_tensor(
@@ -250,6 +259,9 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
             tensor = self._get_dummy_intermediate_tensor(
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
+
+        if self.all_moe:
+            tensor = (tensor, torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype))
 
         return tensor
 

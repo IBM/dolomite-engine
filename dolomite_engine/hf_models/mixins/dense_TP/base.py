@@ -4,7 +4,6 @@ from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, divide_if_divisible
 from ...config import CommonConfig
-from ...loss import clear_aux_loss
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
 from ...utils import is_generation_cache_enabled
@@ -22,6 +21,10 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
         self.is_first_stage = self.pipeline_stage_id == 0
         self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
         self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
+
+        self.all_mlp = all([block.mlp_type == "MLP" for block in config.mlp_blocks])
+        self.all_moe = all([block.mlp_type == "MoE" for block in config.mlp_blocks])
+        assert self.all_mlp or self.all_moe
 
         super().__init__(config, *args, **kwargs)
 
@@ -148,8 +151,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
 
         if is_generation_cache_enabled():
             past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
-
-        clear_aux_loss()
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             hidden_states = self.h[str(layer_idx)](

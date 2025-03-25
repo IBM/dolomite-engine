@@ -145,6 +145,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
         return CausalLMOutputWithPast(
             loss=loss,
+            aux_loss=aux_loss,
             logits=lm_logits,
             past_key_values=past_key_values,
             last_hidden_state=hidden_states,

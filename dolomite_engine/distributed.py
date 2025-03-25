@@ -77,8 +77,8 @@ def wrap_model_container_for_distributed_training(
     efficient_initialization = args.model_args.efficient_initialization
     fsdp_algorithm = args.distributed_args.fsdp_algorithm
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
-    data_parallel_sharding_world_size = args.distributed_args.zero_topology.data_parallel_sharding_world_size
-    data_parallel_replication_world_size = args.distributed_args.zero_topology.data_parallel_replication_world_size
+    data_parallel_sharding_world_size = ProcessGroupManager.get_data_parallel_sharding_world_size()
+    data_parallel_replication_world_size = ProcessGroupManager.get_data_parallel_replication_world_size()
     model_name = args.model_args.model_name
 
     if dtype in ["fp16", "bf16"]:
@@ -128,7 +128,8 @@ def wrap_model_container_for_distributed_training(
                 **args.distributed_args.gradient_checkpointing_args,
             )
 
-    use_ddp = stage == 0 or data_parallel_sharding_world_size == 1
+    # for PP, we use FSDP-2 always
+    use_ddp = (stage == 0 or data_parallel_sharding_world_size == 1) and num_pipeline_stages == 1
 
     mixed_precision_policy = _get_fsdp_mixed_precision(
         dtype=dtype,
@@ -138,6 +139,7 @@ def wrap_model_container_for_distributed_training(
 
     if use_ddp:
         log_rank_0(logging.INFO, "using DDP")
+        assert num_pipeline_stages == 1
         assert not efficient_initialization
 
         for i, model in enumerate(model_container):
@@ -153,6 +155,7 @@ def wrap_model_container_for_distributed_training(
             )
     elif fsdp_algorithm == 1:
         log_rank_0(logging.INFO, "using FSDP-1")
+        assert num_pipeline_stages == 1
 
         sharding_strategy = (
             _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
@@ -324,11 +327,20 @@ def wrap_model_container_for_distributed_training(
 
         def _pipeline_parallel_loss(input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
             use_fused_linear_cross_entropy = is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
+            if isinstance(input, tuple):
+                input, aux_loss = input
+            else:
+                aux_loss = 0
+
             output = CausalLMOutputWithPast(
                 logits=None if use_fused_linear_cross_entropy else input,
+                aux_loss=aux_loss,
                 last_hidden_state=input if use_fused_linear_cross_entropy else None,
             )
-            return model.get_loss(output, target, lm_loss_multiplier)
+            loss = model.get_loss(output, target, lm_loss_multiplier)
+
+            return loss
 
         pipeline_schedule = _get_pipeline_parallel_schedule(
             pipeline_parallel_schedule=args.distributed_args.pipeline_parallel_schedule,

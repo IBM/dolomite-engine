@@ -5,7 +5,7 @@ from torch.distributed._tensor.placement_types import Replicate
 from ..communication import Communication
 from ..dtensors import tensor_to_dtensor
 from ..enums import Kernel
-from ..hf_models import CausalLMOutputWithPast, get_autoregressive_language_modeling_loss, get_aux_loss
+from ..hf_models import CausalLMOutputWithPast, get_autoregressive_language_modeling_loss
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
@@ -61,7 +61,7 @@ class ModelWrapperForFinetuning(ModelWrapper):
         )
 
         lm_loss = lm_loss * lm_loss_multiplier
-        aux_loss = get_aux_loss()
+        aux_loss = getattr(model_outputs, "aux_loss", 0)
 
         if aux_loss == 0:
             loss = lm_loss
