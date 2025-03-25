@@ -316,10 +316,10 @@ class MoE(nn.Module):
         else:
             freq = bincount(topk_idxs.flatten(), minlength=num_experts)
 
+        freq = freq.float()
+
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
             freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
-
-        freq = freq.float()
 
         switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
