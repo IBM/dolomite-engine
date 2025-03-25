@@ -330,6 +330,8 @@ def wrap_model_container_for_distributed_training(
 
             if isinstance(input, tuple):
                 input, aux_loss = input
+            else:
+                aux_loss = 0
 
             output = CausalLMOutputWithPast(
                 logits=None if use_fused_linear_cross_entropy else input,
