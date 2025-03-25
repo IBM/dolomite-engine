@@ -232,8 +232,6 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         intermediate_dtype: torch.dtype,
         output_parallel_lm_logits_if_possible: bool,
     ) -> tuple[torch.Tensor] | torch.Tensor:
-        aux_loss = torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype)
-
         if self.is_last_stage:
             vocab_size = self.config.vocab_size
             if output_parallel_lm_logits_if_possible:
@@ -254,14 +252,12 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     device=torch.cuda.current_device(),
                     dtype=intermediate_dtype,
                 )
-
-            aux_loss = aux_loss.squeeze(0).contiguous()
         else:
             tensor = self._get_dummy_intermediate_tensor(
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
             )
 
-        return tensor, aux_loss
+        return tensor, torch.empty(1, device=torch.cuda.current_device(), dtype=intermediate_dtype)
 
     def _get_dummy_intermediate_tensor(
         self, micro_batch_size: int, sequence_length: int, intermediate_dtype: torch.dtype
