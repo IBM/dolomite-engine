@@ -8,8 +8,8 @@ def get_learning_rate(model_container: ModelContainer, lr_scheduler_container: O
         parameters = model_container[0].parameters()
         param = next(parameters)
 
-        lr = param._lr_scheduler.get_lr()[0]
+        lr = param._lr_scheduler.get_last_lr()[0]
     else:
-        lr = lr_scheduler_container[0].get_lr()[0]
+        lr = lr_scheduler_container[0].get_last_lr()[0]
 
     return lr
