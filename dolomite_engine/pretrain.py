@@ -114,6 +114,7 @@ def train_step_with_pipeline_parallel(
 
         if is_last_pipeline_rank:
             losses = sum(losses)
+            losses = losses.squeeze(0)
 
             metrics_tracker = metrics_tracker + {"loss": losses, "grad_norm": grad_norm}
             metrics_tracker = metrics_tracker + model.get_extra_metrics()
