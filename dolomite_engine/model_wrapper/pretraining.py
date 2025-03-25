@@ -188,6 +188,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             tokens = batch["text"]
             aux_loss_from_pipeline_parallel = batch["aux_loss_from_pipeline_parallel"]
 
+            tokens = tokens.to(torch.cuda.current_device())
+
             if self.is_first_stage:
                 input_ids = tokens[:, :-1]
                 pipeline_parallel_input = None
