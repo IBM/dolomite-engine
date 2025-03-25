@@ -130,10 +130,13 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             if self.is_last_stage:
                 assert isinstance(output, CausalLMOutputWithPast)
-                output = output.logits, aux_loss
+                output = output.logits
             else:
                 assert isinstance(output, PipelineParallelOutput)
-                output = output.hidden_states, aux_loss
+                output = output.hidden_states
+
+            if aux_loss != 0:
+                output = (output, aux_loss)
         else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
