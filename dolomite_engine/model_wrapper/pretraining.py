@@ -87,7 +87,12 @@ class ModelWrapperForPretraining(ModelWrapper):
 
             self._extra_metrics = MetricsTrackingDict({})
 
-    def forward(self, batch: dict, lm_loss_multiplier: float = 1) -> dict:
+    def forward(
+        self,
+        batch: dict | torch.Tensor,
+        aux_loss_from_pipeline_parallel: torch.Tensor | float = 0,
+        lm_loss_multiplier: float = 1,
+    ) -> dict:
         """forward function for a batch
 
         Args:
@@ -102,15 +107,19 @@ class ModelWrapperForPretraining(ModelWrapper):
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
 
-        if isinstance(batch, torch.Tensor):
-            batch = {"text": batch}
-
-        batch = self._prepare_model_inputs(batch)
-        labels = batch.pop("labels")
-
         if not self.is_custom_model:
             assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
 
+        if isinstance(batch, torch.Tensor):
+            batch = {"text": batch}
+
+        if self.is_pipeline_parallel_enabled:
+            batch["aux_loss_from_pipeline_parallel"] = aux_loss_from_pipeline_parallel
+        else:
+            assert aux_loss_from_pipeline_parallel == 0
+
+        batch = self._prepare_model_inputs(batch)
+        labels = batch.pop("labels")
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
         if self.is_pipeline_parallel_enabled:
@@ -171,6 +180,8 @@ class ModelWrapperForPretraining(ModelWrapper):
         if self.is_pipeline_parallel_enabled:
             # when using pipeline parallel, we broadcast the input outside the model function
             tokens = batch["text"]
+            aux_loss_from_pipeline_parallel = batch["aux_loss_from_pipeline_parallel"]
+
             tokens = tokens.to(torch.cuda.current_device())
 
             if self.is_first_stage:
@@ -178,7 +189,9 @@ class ModelWrapperForPretraining(ModelWrapper):
                 pipeline_parallel_input = None
             else:
                 input_ids = None
-                pipeline_parallel_input = PipelineParallelInput(hidden_states=tokens)
+                pipeline_parallel_input = PipelineParallelInput(
+                    hidden_states=tokens, aux_loss=aux_loss_from_pipeline_parallel
+                )
 
             batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
         else:
