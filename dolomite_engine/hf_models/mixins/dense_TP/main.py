@@ -255,7 +255,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                     dtype=intermediate_dtype,
                 )
 
-            aux_loss = aux_loss.squeeze(0)
+            aux_loss = aux_loss.squeeze(0).contiguous()
         else:
             tensor = self._get_dummy_intermediate_tensor(
                 micro_batch_size, sequence_length, intermediate_dtype=intermediate_dtype
