@@ -23,7 +23,7 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
         self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
 
         self.all_mlp = all([block.mlp_type == "MLP" for block in config.mlp_blocks])
-        self.all_moe = all([block.mlp_type == "MLP" for block in config.mlp_blocks])
+        self.all_moe = all([block.mlp_type == "MoE" for block in config.mlp_blocks])
         assert self.all_mlp or self.all_moe
 
         super().__init__(config, *args, **kwargs)
