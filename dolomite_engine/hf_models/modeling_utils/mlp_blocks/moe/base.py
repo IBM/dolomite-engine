@@ -326,4 +326,4 @@ class MoE(nn.Module):
 
         loss = switch_loss + 0.1 * z_loss
 
-        return loss
+        return loss.type_as(logits)
