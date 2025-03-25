@@ -123,12 +123,17 @@ class ModelWrapperForPretraining(ModelWrapper):
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
         if self.is_pipeline_parallel_enabled:
+            # aux_loss is returned as a 0 dimensional tensor
+            aux_loss = output.aux_loss
+            if aux_loss.dim() == 0:
+                aux_loss = aux_loss.unsqueeze(0)
+
             if self.is_last_stage:
                 assert isinstance(output, CausalLMOutputWithPast)
-                output = output.logits, output.aux_loss
+                output = output.logits, aux_loss
             else:
                 assert isinstance(output, PipelineParallelOutput)
-                output = output.hidden_states, output.aux_loss
+                output = output.hidden_states, aux_loss
         else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
