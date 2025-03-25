@@ -179,7 +179,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         return output
 
     def get_extra_metrics(self) -> dict:
-        self._extra_metrics["aux_loss"] = self._extra_metrics["aux_loss"].squeeze(0)
+        if "aux_loss" in self._extra_metrics:
+            self._extra_metrics["aux_loss"] = self._extra_metrics["aux_loss"].squeeze(0)
+
         return self._extra_metrics
 
     def reset_extra_metrics(self) -> None:
