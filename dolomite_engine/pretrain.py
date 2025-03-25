@@ -70,6 +70,7 @@ def train_step_with_pipeline_parallel(
 
     if ProcessGroupManager.is_tensor_parallel_first_rank():
         batch = batch["text"]
+        batch = batch.to(torch.cuda.current_device())
 
     if ProcessGroupManager.is_tensor_parallel_enabled():
         batch = broadcast_tensor_parallel_input(batch, (StepTracker.get_local_batch_size(), sequence_length + 1))
