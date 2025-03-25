@@ -22,6 +22,10 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
         self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
         self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
 
+        self.all_mlp = all([block.mlp_type == "MLP" for block in self.config.mlp_blocks])
+        self.all_moe = all([block.mlp_type == "MLP" for block in self.config.mlp_blocks])
+        assert self.all_mlp or self.all_moe
+
         super().__init__(config, *args, **kwargs)
 
         if self.is_pipeline_parallel_enabled and self._tied_word_embeddings:
