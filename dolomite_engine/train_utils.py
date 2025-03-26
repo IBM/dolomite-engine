@@ -88,9 +88,21 @@ def get_model_tflops(
         block = config.sequence_mixer_blocks[layer_idx]
         sequence_mixer_type = block.sequence_mixer_type
 
-        # FIXME fix FLOPs computation for Mamba2
-        if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention", "mamba2"]:
+        if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
             attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / n) + s)
+        elif sequence_mixer_type == "multihead_latent_attention":
+            attention_flops = (
+                2 * b * s * h * (h + 2 * (s + block.query_compression_size + 2 * block.key_value_compression_size))
+            )
+        elif sequence_mixer_type == "mamba2":
+            # NOTE taken from NexaAI's fork
+            # Mamba2 FLOP calculation based on its specific architecture
+            # Core components: projection, convolution, SSM operations
+            # Input projection + convolution + SSM computation + output projection
+            projection_flops = 4 * b * s * h * block.intermediate_size
+            ssm_flops = 4 * b * s * block.intermediate_size * block.state_size
+
+            attention_flops = projection_flops + ssm_flops
         else:
             raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
