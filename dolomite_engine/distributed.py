@@ -253,6 +253,11 @@ def wrap_model_container_for_distributed_training(
                     else:
                         model = model.to_empty(device=torch.cuda.current_device())
 
+                        for module in model.modules():
+                            if hasattr(module, "reset_parameters"):
+                                with torch.device(torch.cuda.current_device()):
+                                    module.reset_parameters()
+
                     # state dict with DTensors
                     new_state_dict = model.state_dict()
 
