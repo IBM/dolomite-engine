@@ -160,7 +160,7 @@ class CommonConfig(PretrainedConfig):
         blocks = getattr(self, key)
         seq_mixer_type_blocks = []
         for block in blocks:
-            if _get(block, sequence_mixer_type) == sequence_mixer_type:
+            if _get(block, "sequence_mixer_type") == sequence_mixer_type:
                 seq_mixer_type_blocks.append(block)
         value = _get(seq_mixer_type_blocks[0], key_block)
 
