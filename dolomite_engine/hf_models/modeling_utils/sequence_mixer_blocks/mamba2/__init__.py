@@ -168,7 +168,7 @@ class Mamba2(nn.Module):
             hidden_states_B_C = torch.sum(conv_states * self.conv1d.weight.squeeze(1), dim=-1)
             if self.use_conv_bias:
                 hidden_states_B_C = hidden_states_B_C + self.conv1d.bias
-            hidden_states_B_C = self.act(hidden_states_B_C)
+            hidden_states_B_C = self.activation(hidden_states_B_C)
         else:
             # Init cache
             if cache_params is not None:
