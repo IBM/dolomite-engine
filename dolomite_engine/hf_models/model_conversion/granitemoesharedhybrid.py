@@ -15,6 +15,24 @@ from ..modeling_utils import (
 from ..models import GPTDolomiteConfig
 
 
+def check_equal_for_all_seq_mixer_and_get_value(self, key: str, sequence_mixer_type: str, key_block: str, expected_value: Any | None = None) -> Any:
+    def _get(block, key):
+        return block.get(key) if isinstance(block, dict) else getattr(block, key)
+
+    blocks = getattr(self, key)
+    sex_mixer_type_blocks = []
+    for block in blocks:
+        if _get(block, sequence_mixer_type) == sequence_mixer_type:
+            sex_mixer_type_blocks.append(block)
+    value = _get(sex_mixer_type_blocks[0], key_block)
+
+    if expected_value is not None:
+        assert value == expected_value, f"{value} {expected_value}"
+
+    assert all([_get(block, key_block) == value for block in sex_mixer_type_blocks])
+
+    return value
+
 def import_from_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
     original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
@@ -209,7 +227,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         num_hidden_layers=config.num_layers,
         num_attention_heads=config.num_attention_heads,
         shared_intermediate_size=0 if shared_intermediate_size is None else shared_intermediate_size,
-        num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
+        #num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",
         rms_norm_eps=config.layer_norm_epsilon,
@@ -219,7 +237,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         initializer_range=config.initializer_range,
         rope_theta=config.rope_theta,
         rope_scaling=config.rope_scaling,
-        attention_dropout=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
+        #attention_dropout=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         num_local_experts=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts"),
         num_experts_per_tok=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts_per_tok"),
         router_aux_loss_coef=config.router_aux_loss_coef,
@@ -229,7 +247,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         embedding_multiplier=1 if config.m_emb is None else config.m_emb,
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
-        attention_multiplier=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier"),
+        attention_multiplier=check_equal_for_all_seq_mixer_and_get_value("sequence_mixer_blocks", "multihead_latent_attention", "attention_multiplier"),
         normalization_function=config.normalization_function,
         position_embedding_type=config.position_embedding_type,
         init_method=config.init_method,
