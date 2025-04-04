@@ -194,7 +194,7 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybridConfig:
     assert config.normalization_function == "rmsnorm"
-    assert config.position_embedding_type == "rope"
+    # assert config.position_embedding_type == "rope"
 
     config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias", False)
     config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias", False)

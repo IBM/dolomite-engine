@@ -14,7 +14,7 @@ _MODEL_IMPORT_FUNCTIONS = {
     "granitemoe": import_from_huggingface_granitemoe,
     "granitemoeshared": import_from_huggingface_granitemoeshared,
     "llama": import_from_huggingface_llama,
-    "granitemoesharedhybrid": import_from_huggingface_granitemoehybrid,
+    "granitemoehybrid": import_from_huggingface_granitemoehybrid,
 }
 
 
@@ -34,7 +34,7 @@ _MODEL_EXPORT_FUNCTIONS = {
     "granite": export_to_huggingface_granite,
     "granitemoe": export_to_huggingface_granitemoe,
     "granitemoeshared": export_to_huggingface_granitemoeshared,
-    "granitemoesharedhybrid": export_to_huggingface_granitemoehybrid,
+    "granitemoehybrid": export_to_huggingface_granitemoehybrid,
     "llama": export_to_huggingface_llama,
 }
 

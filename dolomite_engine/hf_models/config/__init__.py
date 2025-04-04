@@ -152,6 +152,20 @@ class CommonConfig(PretrainedConfig):
         assert all([_get(block, key_block) == value for block in blocks])
 
         return value
+    
+    # def check_equal_for_all_and_get_value(self, key: str, key_block: str, expected_value: Any | None = None) -> Any:
+    #     def _get(block, key):
+    #         return block.get(key) if isinstance(block, dict) else getattr(block, key)
+
+    #     blocks = getattr(self, key)
+    #     value = _get(blocks[0], key_block)
+
+    #     if expected_value is not None:
+    #         assert value == expected_value, f"{value} {expected_value}"
+
+    #     assert all([_get(block, key_block) == value for block in blocks])
+
+    #     return value
 
     def _set_sequence_mixer_blocks(self) -> None:
         if self.sequence_mixer_blocks is None:
