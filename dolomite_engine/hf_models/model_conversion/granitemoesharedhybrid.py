@@ -15,7 +15,7 @@ from ..modeling_utils import (
 from ..models import GPTDolomiteConfig
 
 
-def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
+def import_from_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
     original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
 
@@ -165,7 +165,7 @@ def _import_state_dict_from_huggingface(
     return state_dict
 
 
-def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
+def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
