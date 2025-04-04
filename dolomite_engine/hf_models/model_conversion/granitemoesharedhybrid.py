@@ -15,156 +15,6 @@ from ..modeling_utils import (
 from ..models import GPTDolomiteConfig
 
 
-def import_from_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
-    original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
-    config = _import_config_from_huggingface(original_config)
-
-    safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
-    state_dict = _import_state_dict_from_huggingface(
-        safetensors_weights_manager,
-        config.num_layers,
-        config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
-    )
-
-    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
-    config.save_pretrained(save_path)
-
-    generation_config = GenerationConfig.from_model_config(config)
-    generation_config.save_pretrained(save_path)
-
-    if tokenizer is not None:
-        tokenizer.save_pretrained(save_path, legacy_format=False)
-
-
-def _import_config_from_huggingface(original_config: GraniteMoeHybridConfig) -> GPTDolomiteConfig:
-    assert original_config.hidden_act == "silu"
-
-    if original_config.num_attention_heads == original_config.num_key_value_heads:
-        attention_head_type = "mha"
-    elif original_config.num_key_value_heads == 1:
-        attention_head_type = "mqa"
-    elif original_config.num_attention_heads > original_config.num_key_value_heads:
-        attention_head_type = "gqa"
-
-    assert not original_config.attention_bias
-
-    config = GPTDolomiteConfig(
-        vocab_size=original_config.vocab_size,
-        max_position_embeddings=original_config.max_position_embeddings,
-        hidden_size=original_config.hidden_size,
-        num_layers=original_config.num_hidden_layers,
-        num_attention_heads=original_config.num_attention_heads,
-        position_embedding_type="rope",
-        normalization_function="rmsnorm",
-        layer_norm_epsilon=original_config.rms_norm_eps,
-        use_cache=original_config.use_cache,
-        tie_word_embeddings=original_config.tie_word_embeddings,
-        initializer_range=original_config.initializer_range,
-        rope_theta=original_config.rope_theta,
-        rope_scaling=original_config.rope_scaling,
-        router_aux_loss_coef=original_config.router_aux_loss_coef,
-        bos_token_id=original_config.bos_token_id,
-        eos_token_id=original_config.eos_token_id,
-        pad_token_id=original_config.pad_token_id,
-        m_emb=None if original_config.embedding_multiplier == 1 else original_config.embedding_multiplier,
-        m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
-        m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
-        sequence_mixer_blocks=[
-            {
-                "sequence_mixer_type": "softmax_attention",
-                "num_key_value_heads": original_config.num_key_value_heads,
-                "attention_head_type": attention_head_type,
-                "attention_multiplier": original_config.attention_multiplier,
-                "add_bias": False,
-                "softmax_dropout": original_config.attention_dropout,
-            }
-            for _ in range(original_config.num_hidden_layers)
-        ],
-        mlp_blocks=[
-            {
-                "mlp_type": "MoE",
-                "intermediate_size": original_config.intermediate_size,
-                "shared_intermediate_size": (
-                    None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
-                ),
-                "num_experts": original_config.num_local_experts,
-                "num_experts_per_tok": original_config.num_experts_per_tok,
-                "activation_function": "swiglu",
-                "add_bias": False,
-            }
-            for _ in range(original_config.num_hidden_layers)
-        ],
-    )
-
-    return config
-
-
-def _import_state_dict_from_huggingface(
-    safetensors_weights_manager: SafeTensorsWeightsManager,
-    num_layers: int,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: str,
-) -> None:
-    state_dict = {
-        "transformer.wte.weight": safetensors_weights_manager.get_tensor("model.embed_tokens.weight"),
-        "transformer.ln_f.weight": safetensors_weights_manager.get_tensor("model.norm.weight"),
-    }
-
-    if safetensors_weights_manager.has_tensor("lm_head.weight"):
-        state_dict["lm_head.weight"] = safetensors_weights_manager.get_tensor("lm_head.weight")
-
-    for layer_idx in range(num_layers):
-        state_dict[f"transformer.h.{layer_idx}.ln_1.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.input_layernorm.weight"
-        )
-        state_dict[f"transformer.h.{layer_idx}.ln_2.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.post_attention_layernorm.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.mlp_block.gate.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"
-        )
-
-        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"),
-            dim=1,
-        )
-        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"
-        )
-
-        if safetensors_weights_manager.has_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"):
-            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"] = _split_and_reorder_for_glu(
-                safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"),
-                dim=0,
-            )
-            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj_shared.weight"] = (
-                safetensors_weights_manager.get_tensor(f"model.layers.{layer_idx}.shared_mlp.output_linear.weight")
-            )
-
-        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = (
-            interleave_query_key_value_tensor_for_attention(
-                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.q_proj.weight"),
-                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.k_proj.weight"),
-                safetensors_weights_manager.get_slice(f"model.layers.{layer_idx}.self_attn.v_proj.weight"),
-                num_heads,
-                num_key_value_heads,
-                head_dim,
-                attention_head_type,
-            )
-        )
-        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = safetensors_weights_manager.get_tensor(
-            f"model.layers.{layer_idx}.self_attn.o_proj.weight"
-        )
-
-    return state_dict
-
-
 def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
@@ -174,9 +24,9 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
         safetensors_weights_manager,
         config.num_layers,
         config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
+        # config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         config.hidden_size // config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
+        # config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -230,6 +80,16 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         residual_multiplier=1 if config.m_residual is None else config.m_residual,
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="attention_multiplier"),
+        mamba_n_groups = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="num_groups"),
+        mamba_num_heads = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="num_heads"),
+        mamba_d_state = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="state_size"),
+        mamba_d_conv = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="conv_kernel_size"),
+        mamba_chunk_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="chunk_size"),
+        mamba_conv_bias = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="use_conv_bias"),
+        mamba_proj_bias = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="add_bias"),
+        mla_query_comp_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="query_compression_size"),
+        mla_key_value_comp_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="key_value_compression_size"),
+        #mla_dropout = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="key_value_compression_size"),
         normalization_function=config.normalization_function,
         position_embedding_type=config.position_embedding_type,
         init_method=config.init_method,
