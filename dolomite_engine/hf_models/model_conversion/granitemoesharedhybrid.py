@@ -6,6 +6,7 @@ from transformers import (
     GraniteMoeHybridConfig,
     GraniteMoeHybridForCausalLM,
 )
+from typing import List
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..modeling_utils import (
@@ -41,6 +42,16 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
     except:
         pass
 
+def _get_sequence_mixer_block_types(config: GPTDolomiteConfig) -> List:
+        blocks = config.getattr("sequence_mixer_blocks")
+
+        def _get(block, key):
+            return block.get(key) if isinstance(block, dict) else getattr(block, key)
+
+        seq_mixer_block_types = []
+        for block in blocks:
+            seq_mixer_block_types.append(_get(block, "sequence_mixer_type"))
+        return seq_mixer_block_types
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybridConfig:
     assert config.normalization_function == "rmsnorm"
@@ -89,6 +100,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         mamba_proj_bias = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="add_bias"),
         mla_query_comp_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="query_compression_size"),
         mla_key_value_comp_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="key_value_compression_size"),
+        layer_types = _get_sequence_mixer_block_types(config)
         #mla_dropout = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="key_value_compression_size"),
         normalization_function=config.normalization_function,
         position_embedding_type=config.position_embedding_type,
