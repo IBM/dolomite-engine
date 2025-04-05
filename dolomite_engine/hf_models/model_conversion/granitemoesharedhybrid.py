@@ -43,7 +43,7 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
         pass
 
 def _get_sequence_mixer_block_types(config: GPTDolomiteConfig) -> List:
-        blocks = config.getattr("sequence_mixer_blocks")
+        blocks = getattr(config, "sequence_mixer_blocks")
 
         def _get(block, key):
             return block.get(key) if isinstance(block, dict) else getattr(block, key)
