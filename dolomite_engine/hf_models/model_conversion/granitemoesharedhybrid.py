@@ -100,7 +100,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         mamba_proj_bias = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="add_bias"),
         mla_query_comp_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="query_compression_size"),
         mla_key_value_comp_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="key_value_compression_size"),
-        layer_types = _get_sequence_mixer_block_types(config)
+        layer_types = _get_sequence_mixer_block_types(config),
         #mla_dropout = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="key_value_compression_size"),
         normalization_function=config.normalization_function,
         position_embedding_type=config.position_embedding_type,
