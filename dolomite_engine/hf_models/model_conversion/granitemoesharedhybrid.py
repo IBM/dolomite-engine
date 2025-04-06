@@ -24,6 +24,7 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
+        seq_mixer_block_types = _get_sequence_mixer_block_types(config)
         # config.num_attention_heads,
         # config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         # config.hidden_size // config.num_attention_heads,
@@ -115,6 +116,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
 def _export_state_dict_to_huggingface(
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_layers: int,
+    seq_mixer_block_types: List,
 ) -> None:
     state_dict = {
         "model.embed_tokens.weight": safetensors_weights_manager.get_tensor("transformer.wte.weight"),
@@ -142,44 +144,47 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
         )
-        # mamba weights
-        state_dict[f"model.layers.{layer_idx}.self_attn.conv1d.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.conv1d.bias"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.bias")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.in_proj.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.in_proj.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.dt_bias"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.dt_bias")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.A_log"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.A_log")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.D"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.D")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.out_proj.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.out_proj.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.norm.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.norm.weight")
-        )
-        # mla weights
-        state_dict[f"model.layers.{layer_idx}.self_attn.c_attn_down_projection.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.c_attn_down_projection.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.key_up_projection.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.key_up_projection.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.query_up_projection.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.query_up_projection.weight")
-        )
-        state_dict[f"model.layers.{layer_idx}.self_attn.value_up_projection.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.value_up_projection.weight")
-        )
+
+        if seq_mixer_block_types[layer_idx] == "mamba2":
+            # mamba weights
+            state_dict[f"model.layers.{layer_idx}.self_attn.conv1d.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.conv1d.bias"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.bias")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.in_proj.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.in_proj.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.dt_bias"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.dt_bias")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.A_log"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.A_log")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.D"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.D")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.out_proj.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.out_proj.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.norm.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.norm.weight")
+            )
+        elif seq_mixer_block_types[layer_idx] == "multihead_latent_attention":
+            # mla weights
+            state_dict[f"model.layers.{layer_idx}.self_attn.c_attn_down_projection.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.c_attn_down_projection.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.key_up_projection.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.key_up_projection.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.query_up_projection.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.query_up_projection.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.self_attn.value_up_projection.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.value_up_projection.weight")
+            )
 
         if safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"):
             state_dict[f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"] = _split_and_reorder_for_glu(
