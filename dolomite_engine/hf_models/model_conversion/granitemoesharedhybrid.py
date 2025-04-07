@@ -185,6 +185,9 @@ def _export_state_dict_to_huggingface(
             state_dict[f"model.layers.{layer_idx}.self_attn.value_up_projection.weight"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.value_up_projection.weight")
             )
+            state_dict[f"model.layers.{layer_idx}.self_attn.c_proj.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight")
+            )
 
         if safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"):
             state_dict[f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"] = _split_and_reorder_for_glu(
