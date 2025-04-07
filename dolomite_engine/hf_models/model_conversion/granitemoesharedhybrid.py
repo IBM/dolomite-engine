@@ -93,7 +93,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         logits_scaling=1 if config.m_width is None else config.m_width,
         attention_multiplier=config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="multihead_latent_attention", key_block="attention_multiplier"),
         mamba_n_groups = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="num_groups"),
-        mamba_num_heads = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="num_heads"),
+        mamba_n_heads = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="num_heads"),
         mamba_d_state = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="state_size"),
         mamba_d_conv = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="conv_kernel_size"),
         mamba_chunk_size = config.check_equal_for_all_seq_mixer_and_get_value(key="sequence_mixer_blocks", sequence_mixer_type="mamba2", key_block="chunk_size"),
