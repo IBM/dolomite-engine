@@ -1,6 +1,5 @@
 from ...config import CommonConfig
 from .mamba2 import Mamba2
-from .multihead_latent_attention import MultiHeadLatentAttention
 from .softmax_attention import (
     Attention,
     interleave_query_key_value_tensor_for_attention,
@@ -13,6 +12,7 @@ from .softmax_attention import (
     split_query_key_value_tensor_for_mha,
     split_query_key_value_tensor_for_mqa,
 )
+from .softmax_latent_attention import MultiHeadLatentAttention
 from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
 
@@ -51,6 +51,7 @@ def get_sequence_mixer(
             query_compression_size=block.query_compression_size,
             key_value_compression_size=block.key_value_compression_size,
             num_attention_heads=config.num_attention_heads,
+            head_dim=block.head_dim,
             attention_multiplier=block.attention_multiplier,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,

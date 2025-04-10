@@ -8,7 +8,7 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
-from ....utils import divide_if_divisible, is_flash_attention_available
+from ....utils import is_flash_attention_available
 from ..linear import ParameterizedLinear
 
 
@@ -23,6 +23,7 @@ class MultiHeadLatentAttention(nn.Module):
         query_compression_size: int,
         key_value_compression_size: int,
         num_attention_heads: int,
+        head_dim: int,
         attention_multiplier: float,
         position_embedding_type: str,
         add_bias: bool,
@@ -41,17 +42,11 @@ class MultiHeadLatentAttention(nn.Module):
         self.causal = causal
         self.hidden_size = hidden_size
         self.num_heads = num_attention_heads
+        self.head_dim = head_dim
         self.add_bias = add_bias
         self.use_padding_free_transformer = use_padding_free_transformer
         self.query_compression_size = query_compression_size
         self.key_value_compression_size = key_value_compression_size
-
-        self.head_dim = divide_if_divisible(
-            self.hidden_size,
-            self.num_heads,
-            f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
-        )
-
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
@@ -71,15 +66,15 @@ class MultiHeadLatentAttention(nn.Module):
             )
 
             self.query_up_projection = ParameterizedLinear(
-                self.query_compression_size, self.hidden_size, bias=self.add_bias, std=std
+                self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
 
             self.key_up_projection = ParameterizedLinear(
-                self.key_value_compression_size, self.hidden_size, bias=self.add_bias, std=std
+                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
 
             self.value_up_projection = ParameterizedLinear(
-                self.key_value_compression_size, self.hidden_size, bias=self.add_bias, std=std
+                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
 
         std = initializer_range / math.sqrt(2 * num_layers)
