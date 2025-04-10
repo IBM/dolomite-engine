@@ -230,6 +230,8 @@ class CommonConfig(PretrainedConfig):
                     "attention_multiplier",
                     "query_compression_size",
                     "key_value_compression_size",
+                    "num_attention_heads",
+                    "head_dim",
                 ]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
