@@ -80,7 +80,9 @@ class MultiHeadLatentAttention(nn.Module):
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
             std /= math.sqrt(m_width)
-        self.c_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=self.add_bias, std=std)
+        self.c_proj = ParameterizedLinear(
+            self.num_heads * self.head_dim, self.hidden_size, bias=self.add_bias, std=std
+        )
 
         self.softmax_dropout_p = softmax_dropout
 
