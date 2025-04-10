@@ -1,5 +1,6 @@
 from ...config import CommonConfig
 from .mamba2 import Mamba2
+from .multihead_latent_attention import MultiHeadLatentAttention
 from .softmax_attention import (
     Attention,
     interleave_query_key_value_tensor_for_attention,
@@ -12,7 +13,6 @@ from .softmax_attention import (
     split_query_key_value_tensor_for_mha,
     split_query_key_value_tensor_for_mqa,
 )
-from .softmax_latent_attention import MultiHeadLatentAttention
 from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
 
