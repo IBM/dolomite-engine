@@ -50,7 +50,7 @@ def get_sequence_mixer(
             hidden_size=config.hidden_size,
             query_compression_size=block.query_compression_size,
             key_value_compression_size=block.key_value_compression_size,
-            num_attention_heads=config.num_attention_heads,
+            num_attention_heads=block.num_attention_heads,
             head_dim=block.head_dim,
             attention_multiplier=block.attention_multiplier,
             position_embedding_type=config.position_embedding_type,
