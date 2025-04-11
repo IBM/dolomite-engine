@@ -58,23 +58,31 @@ class MultiHeadLatentAttention(nn.Module):
         if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
-            self.c_attn_down_projection = ParameterizedLinear(
-                self.hidden_size,
-                self.query_compression_size + 2 * self.key_value_compression_size,
-                bias=self.add_bias,
-                std=std,
+            _std = std * math.sqrt(2 / self.query_compression_size)
+
+            self.query_down_projection = ParameterizedLinear(
+                self.hidden_size, self.query_compression_size, bias=self.add_bias, std=_std
             )
 
             self.query_up_projection = ParameterizedLinear(
-                self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
+                self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=_std
+            )
+
+            _std = std * math.sqrt(2 / self.key_value_compression_size)
+
+            self.key_value_down_projection = ParameterizedLinear(
+                self.hidden_size,
+                2 * self.key_value_compression_size,
+                bias=self.add_bias,
+                std=_std,
             )
 
             self.key_up_projection = ParameterizedLinear(
-                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
+                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=_std
             )
 
             self.value_up_projection = ParameterizedLinear(
-                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
+                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=_std
             )
 
         std = initializer_range / math.sqrt(2 * num_layers)
@@ -102,16 +110,15 @@ class MultiHeadLatentAttention(nn.Module):
             assert is_kernel_allowed(Kernel.flash_attention_2)
             assert past_key_values is None
 
-        hidden_states = self.c_attn_down_projection(hidden_states)
+        query = self.query_down_projection(hidden_states)
+        key_value = self.key_value_down_projection(hidden_states)
+        key, value = key_value.chunk(2, dim=-1)
+
+        del hidden_states, key_value
 
         if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
-            query, key, value = hidden_states.split(
-                (self.query_compression_size, self.key_value_compression_size, self.key_value_compression_size), dim=-1
-            )
-            del hidden_states
-
             if past_key_values is not None:
                 key, value = past_key_values.update(key.unsqueeze(1), value.unsqueeze(1), self.layer_idx)
                 key = key.squeeze(1)
