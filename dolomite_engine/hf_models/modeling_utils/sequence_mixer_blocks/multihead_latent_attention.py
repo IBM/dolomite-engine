@@ -85,7 +85,7 @@ class MultiHeadLatentAttention(nn.Module):
             )
 
             self.key_value_ln = get_normalization_function(
-                normalization_function, self.query_compression_size, eps=layer_norm_epsilon
+                normalization_function, 2 * self.key_value_down_projection, eps=layer_norm_epsilon
             )
 
             self.key_up_projection = ParameterizedLinear(
