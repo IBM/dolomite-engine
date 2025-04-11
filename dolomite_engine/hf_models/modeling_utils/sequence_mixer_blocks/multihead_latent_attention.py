@@ -54,13 +54,13 @@ class MultiHeadLatentAttention(nn.Module):
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
 
+        std = initializer_range
+        if init_method == "mup":
+            std /= math.sqrt(m_width)
+
         if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
-            std = initializer_range * math.sqrt(2 / self.query_compression_size)
-            if init_method == "mup":
-                std /= math.sqrt(m_width)
-
             self.query_down_projection = ParameterizedLinear(
                 self.hidden_size, self.query_compression_size, bias=self.add_bias, std=std
             )
@@ -72,10 +72,6 @@ class MultiHeadLatentAttention(nn.Module):
             self.query_up_projection = ParameterizedLinear(
                 self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
-
-            std = initializer_range * math.sqrt(2 / self.key_value_compression_size)
-            if init_method == "mup":
-                std /= math.sqrt(m_width)
 
             self.key_value_down_projection = ParameterizedLinear(
                 self.hidden_size,
