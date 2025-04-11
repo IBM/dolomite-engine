@@ -51,38 +51,38 @@ class MultiHeadLatentAttention(nn.Module):
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
 
-        std = initializer_range
-        if init_method == "mup":
-            std /= math.sqrt(m_width)
-
         if self.position_embedding_type == "rope":
             raise NotImplementedError()
         else:
-            _std = std * math.sqrt(2 / self.query_compression_size)
+            std = initializer_range * math.sqrt(2 / self.query_compression_size)
+            if init_method == "mup":
+                std /= math.sqrt(m_width)
 
             self.query_down_projection = ParameterizedLinear(
-                self.hidden_size, self.query_compression_size, bias=self.add_bias, std=_std
+                self.hidden_size, self.query_compression_size, bias=self.add_bias, std=std
             )
 
             self.query_up_projection = ParameterizedLinear(
-                self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=_std
+                self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
 
-            _std = std * math.sqrt(2 / self.key_value_compression_size)
+            std = initializer_range * math.sqrt(2 / self.key_value_compression_size)
+            if init_method == "mup":
+                std /= math.sqrt(m_width)
 
             self.key_value_down_projection = ParameterizedLinear(
                 self.hidden_size,
                 2 * self.key_value_compression_size,
                 bias=self.add_bias,
-                std=_std,
+                std=std,
             )
 
             self.key_up_projection = ParameterizedLinear(
-                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=_std
+                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
 
             self.value_up_projection = ParameterizedLinear(
-                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=_std
+                self.key_value_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
 
         std = initializer_range / math.sqrt(2 * num_layers)
