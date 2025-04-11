@@ -64,6 +64,8 @@ def get_sequence_mixer(
             causal=True,
             layer_idx=layer_idx,
             use_padding_free_transformer=use_padding_free_transformer,
+            normalization_function=block.normalization_function,
+            layer_norm_epsilon=config.layer_norm_epsilon,
         )
     else:
         sequence_mixer_kwargs = dict(

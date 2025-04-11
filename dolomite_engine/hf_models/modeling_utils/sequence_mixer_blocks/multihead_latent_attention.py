@@ -10,6 +10,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import is_flash_attention_available
 from ..linear import ParameterizedLinear
+from ..normalization import get_normalization_function
 
 
 if is_flash_attention_available():
@@ -36,6 +37,8 @@ class MultiHeadLatentAttention(nn.Module):
         causal: bool,
         layer_idx: int,
         use_padding_free_transformer: bool,
+        normalization_function: str,
+        layer_norm_epsilon: float = 1e-5,
     ) -> None:
         super().__init__()
 
@@ -62,6 +65,10 @@ class MultiHeadLatentAttention(nn.Module):
                 self.hidden_size, self.query_compression_size, bias=self.add_bias, std=std
             )
 
+            self.query_ln = get_normalization_function(
+                normalization_function, self.query_compression_size, eps=layer_norm_epsilon
+            )
+
             self.query_up_projection = ParameterizedLinear(
                 self.query_compression_size, self.num_heads * self.head_dim, bias=self.add_bias, std=std
             )
@@ -75,6 +82,10 @@ class MultiHeadLatentAttention(nn.Module):
                 2 * self.key_value_compression_size,
                 bias=self.add_bias,
                 std=std,
+            )
+
+            self.key_value_ln = get_normalization_function(
+                normalization_function, self.query_compression_size, eps=layer_norm_epsilon
             )
 
             self.key_up_projection = ParameterizedLinear(
@@ -111,7 +122,10 @@ class MultiHeadLatentAttention(nn.Module):
             assert past_key_values is None
 
         query = self.query_down_projection(hidden_states)
+        query = self.query_ln(query)
+
         key_value = self.key_value_down_projection(hidden_states)
+        key_value = self.key_value_ln(key_value)
         key, value = key_value.chunk(2, dim=-1)
 
         del hidden_states, key_value

@@ -26,6 +26,7 @@ class _MultiHeadLatentAttentionArgs(BaseArgs):
     key_value_compression_size: int | None = None
     num_attention_heads: int | None = None
     head_dim: int | None = None
+    normalization_function: str = "layernorm"
 
     def model_post_init(self, __context: Any) -> None:
         assert self.sequence_mixer_type == "multihead_latent_attention"
