@@ -1,6 +1,7 @@
 import torch
 from transformers import DynamicCache
 
+from ...cache import HybridMambaAttentionDynamicCache
 from ...mixins import BaseModelMixin_TP, BaseModelOutputWithPast, PreTrainedModelMixin_TP
 from ...utils import is_generation_cache_enabled
 from ..ladder_residual import LadderResidualConfig
@@ -68,6 +69,9 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
+
+        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
+            past_key_values.has_previous_state = True
 
         hidden_states = hidden_states + current_attention_out + current_mlp_out
         hidden_states = self.ln_f(hidden_states)
