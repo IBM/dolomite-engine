@@ -89,8 +89,3 @@ class RNNTorch(nn.Module):
     @torch.no_grad()
     def reset_parameters(self) -> None:
         nn.init.normal_(self.state_weight, std=self.std)
-        nn.init.normal_(self.output_projection.weight, std=self.std)
-
-        nn.init.normal_(self.input_projection.weight, std=self.std)
-        if self.input_projection.bias is not None:
-            nn.init.zeros_(self.input_projection.bias)
