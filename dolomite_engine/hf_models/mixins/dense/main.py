@@ -140,7 +140,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
         aux_loss = get_aux_loss()
 
-        if loss is not None and aux_loss != 0:
+        if loss is not None:
             loss = loss + self.router_aux_loss_coef * aux_loss
 
         return CausalLMOutputWithPast(
