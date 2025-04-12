@@ -8,6 +8,7 @@ from .mlp import _MLPArgs, _MoEArgs
 from .sequence_mixer import (
     _Mamba2Args,
     _MultiHeadLatentAttentionArgs,
+    _RNNArgs,
     _SoftmaxAttentionArgs,
     _StickbreakingAttentionArgs,
 )
@@ -220,6 +221,13 @@ class CommonConfig(PretrainedConfig):
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 sequence_mixer_class = _Mamba2Args
+            elif sequence_mixer_type == "rnn":
+                sequence_mixer_kwargs = {}
+
+                for key in ["state_size", "num_heads", "add_bias"]:
+                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
+
+                sequence_mixer_class = _RNNArgs
             elif sequence_mixer_type == "multihead_latent_attention":
                 sequence_mixer_kwargs = {}
 
