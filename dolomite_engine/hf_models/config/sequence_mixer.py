@@ -58,3 +58,13 @@ class _Mamba2Args(BaseArgs):
 
     def model_post_init(self, __context: Any) -> None:
         assert self.sequence_mixer_type == "mamba2"
+
+
+class _RNNArgs(BaseArgs):
+    sequence_mixer_type: str = "rnn"
+    state_size: int = 2048
+    num_heads: int = 128
+    add_bias: bool = True
+
+    def model_post_init(self, __context: Any) -> None:
+        assert self.sequence_mixer_type == "rnn"

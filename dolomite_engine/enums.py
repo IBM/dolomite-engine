@@ -69,6 +69,7 @@ class Kernel(Enum):
     cross_entropy_cute = "cross_entropy_cute"
     fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"
     rmsnorm_cute = "rmsnorm_cute"
+    rnn_cute = "rnn_cute"
     swiglu_unchunked_cute = "swiglu_unchunked_cute"
     # external kernels
     flash_attention_2 = "flash_attention_2"
