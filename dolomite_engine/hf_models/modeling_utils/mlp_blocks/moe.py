@@ -281,7 +281,7 @@ class MoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        if selected_experts.is_cuda and is_cute_kernels_available():
+        if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
             num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
         else:
             num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
@@ -311,7 +311,7 @@ class MoE(nn.Module):
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        if topk_idxs.is_cuda and is_cute_kernels_available() and self.is_hopper_or_newer_gpu:
+        if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
             freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
         else:
             freq = bincount(topk_idxs.flatten(), minlength=num_experts)
