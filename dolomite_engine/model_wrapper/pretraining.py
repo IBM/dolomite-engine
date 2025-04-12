@@ -163,7 +163,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         lm_loss = lm_loss * lm_loss_multiplier
         aux_loss = getattr(model_outputs, "aux_loss", 0)
 
-        if aux_loss == 0:
+        if is_auxloss_zero(aux_loss):
             loss = lm_loss
             output = {"loss": loss, "lm_loss": loss}
         else:
@@ -308,3 +308,10 @@ class _F(torch.autograd.Function):
     @torch._dynamo.disable
     def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
         return grad_output, ctx.router_aux_loss_coef * grad_output, None
+
+
+def is_auxloss_zero(aux_loss: torch.Tensor | float) -> bool:
+    if isinstance(aux_loss, torch.Tensor):
+        return not aux_loss.is_nonzero()
+
+    return aux_loss == 0
