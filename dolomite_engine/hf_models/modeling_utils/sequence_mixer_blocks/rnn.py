@@ -12,7 +12,7 @@ if is_cute_kernels_available():
     from cute_kernels import rnn_cute
 
 
-class RNNTorch(nn.Module):
+class RNN(nn.Module):
     def __init__(
         self,
         input_size: int,
