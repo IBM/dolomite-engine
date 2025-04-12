@@ -311,7 +311,9 @@ class _F(torch.autograd.Function):
 
 
 def is_auxloss_zero(aux_loss: torch.Tensor | float) -> bool:
-    if isinstance(aux_loss, torch.Tensor):
-        return not aux_loss.is_nonzero()
+    if aux_loss is None:
+        return True
+    elif isinstance(aux_loss, torch.Tensor):
+        return False
 
     return aux_loss == 0
