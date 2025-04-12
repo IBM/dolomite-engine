@@ -20,7 +20,7 @@ class RNN(nn.Module):
         output_size: int,
         num_heads: int,
         add_bias: bool = True,
-        std: float = 0.01,
+        std: float = 1,
     ) -> None:
         super().__init__()
 
