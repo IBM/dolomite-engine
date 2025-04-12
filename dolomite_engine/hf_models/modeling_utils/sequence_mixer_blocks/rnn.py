@@ -56,16 +56,14 @@ class RNNTorch(nn.Module):
 
         return input
 
-    def _torch_forward(
-        input: torch.Tensor, weight: torch.Tensor, input_state: torch.Tensor | None = None
-    ) -> torch.Tensor:
+    def _torch_forward(self, input: torch.Tensor, input_state: torch.Tensor | None = None) -> torch.Tensor:
         B, S, N, H = input.size()
         output = torch.empty_like(input)
 
         if input_state is None:
             input_state = torch.zeros(B, N, H, device=input.device, dtype=input.dtype)
 
-        weight = weight.unsqueeze(0)
+        weight = self.state_weight.unsqueeze(0)
         input = input.unsqueeze(-2)
 
         # input -> (B, S, N, 1, H)
