@@ -29,8 +29,8 @@ class RNN(nn.Module):
         self.output_size = output_size
         self.num_heads = num_heads
 
-        self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads)
-        self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads)
+        self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
+        self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
 
         self.std = std
 
