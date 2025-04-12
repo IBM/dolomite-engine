@@ -159,7 +159,11 @@ class CommonConfig(PretrainedConfig):
             self.sequence_mixer_blocks = [{} for _ in range(self.num_layers)]
 
         sequence_mixer_blocks: list[
-            _SoftmaxAttentionArgs | _Mamba2Args | _MultiHeadLatentAttentionArgs | _StickbreakingAttentionArgs
+            _SoftmaxAttentionArgs
+            | _Mamba2Args
+            | _MultiHeadLatentAttentionArgs
+            | _RNNArgs
+            | _StickbreakingAttentionArgs
         ] = []
         for i in range(self.num_layers):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
