@@ -62,7 +62,7 @@ class _Mamba2Args(BaseArgs):
 
 class _RNNArgs(BaseArgs):
     sequence_mixer_type: str = "rnn"
-    state_size: int = 16
+    state_size: int = 2048
     num_heads: int = 128
     add_bias: bool = True
 
