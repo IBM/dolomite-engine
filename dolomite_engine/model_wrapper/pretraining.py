@@ -125,7 +125,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         if self.is_pipeline_parallel_enabled:
             # aux_loss is returned as a 0 dimensional tensor
             aux_loss = output.aux_loss
-            use_aux_loss = is_aux_loss_zero(aux_loss)
+            use_aux_loss = not is_aux_loss_zero(aux_loss)
 
             if use_aux_loss and aux_loss.dim() == 0:
                 aux_loss = aux_loss.unsqueeze(0)
