@@ -5,7 +5,7 @@ from transformers import DynamicCache, GenerationMixin
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ...config import CommonConfig
-from ...loss import clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
+from ...loss import clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss, is_aux_loss_zero
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
 from ..modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
 from .base import PreTrainedModelMixin
@@ -140,7 +140,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
         aux_loss = get_aux_loss()
 
-        if loss is not None:
+        if loss is not None and not is_aux_loss_zero(aux_loss):
             loss = loss + self.router_aux_loss_coef * aux_loss
 
         return CausalLMOutputWithPast(
