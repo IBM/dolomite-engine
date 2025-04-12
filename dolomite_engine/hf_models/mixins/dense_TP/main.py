@@ -9,7 +9,13 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ...config import CommonConfig
-from ...loss import add_aux_loss, clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss
+from ...loss import (
+    add_aux_loss,
+    clear_aux_loss,
+    get_autoregressive_language_modeling_loss,
+    get_aux_loss,
+    is_aux_loss_zero,
+)
 from ...modeling_utils_TP import LMHead_TP
 from ..dense import CausalLMModelMixin
 from ..modeling_outputs import (
@@ -145,7 +151,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
                 lm_logits = tensor_to_dtensor(lm_logits, device_mesh=self.tp_mesh, current_placement=Shard(-1))
                 lm_logits = dtensor_to_tensor(lm_logits, device_mesh=self.tp_mesh, desired_placement=Replicate())
 
-            if loss is not None:
+            if loss is not None and not is_aux_loss_zero(aux_loss):
                 loss = loss + self.router_aux_loss_coef * aux_loss
 
             output = CausalLMOutputWithPast(
