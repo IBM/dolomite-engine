@@ -78,7 +78,7 @@ def get_sequence_mixer(
     else:
         sequence_mixer_kwargs = dict(
             hidden_size=config.hidden_size,
-            num_attention_heads=block.num_query_heads,
+            num_attention_heads=block.num_attention_heads,
             num_key_value_heads=block.num_key_value_heads,
             attention_multiplier=block.attention_multiplier,
             position_embedding_type=config.position_embedding_type,

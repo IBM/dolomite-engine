@@ -177,7 +177,7 @@ class CommonConfig(PretrainedConfig):
                     "dropout",
                     "add_bias",
                     "attention_multiplier",
-                    "num_query_heads",
+                    "num_attention_heads",
                     "num_key_value_heads",
                 ]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)

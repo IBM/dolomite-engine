@@ -69,10 +69,10 @@ class TestCommons(TestCase):
         m_residual: float = None,
         attention_multiplier: float = None,
         rope_dim: int = 8,
-        num_query_heads: int = 4,
+        num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
         if attention_head_type == "mha":
-            num_key_value_heads = num_query_heads
+            num_key_value_heads = num_attention_heads
         elif attention_head_type == "mqa":
             num_key_value_heads = 1
         elif attention_head_type == "gqa":
@@ -99,7 +99,7 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_query_heads": num_query_heads,
+                    "num_attention_heads": num_attention_heads,
                     "num_key_value_heads": num_key_value_heads,
                     "attention_multiplier": attention_multiplier,
                 }
@@ -127,10 +127,10 @@ class TestCommons(TestCase):
         m_residual: float = None,
         attention_multiplier: float = None,
         rope_dim: int = 8,
-        num_query_heads: int = 4,
+        num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
         if attention_head_type == "mha":
-            num_key_value_heads = num_query_heads
+            num_key_value_heads = num_attention_heads
         elif attention_head_type == "mqa":
             num_key_value_heads = 1
         elif attention_head_type == "gqa":
@@ -157,7 +157,7 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_query_heads": num_query_heads,
+                    "num_attention_heads": num_attention_heads,
                     "num_key_value_heads": num_key_value_heads,
                     "attention_multiplier": attention_multiplier,
                 }

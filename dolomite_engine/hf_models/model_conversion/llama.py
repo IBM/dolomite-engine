@@ -14,15 +14,15 @@ from ..models import GPTDolomiteConfig
 def import_from_huggingface_llama(pretrained_model_name_or_path: str, save_path: str) -> None:
     original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
-    num_query_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads")
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
     safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        num_query_heads,
+        num_attention_heads,
         config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // num_query_heads,
+        config.hidden_size // num_attention_heads,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -60,7 +60,7 @@ def _import_config_from_huggingface(original_config: LlamaConfig) -> GPTDolomite
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": original_config.attention_bias,
-                "num_query_heads": original_config.num_attention_heads,
+                "num_attention_heads": original_config.num_attention_heads,
                 "num_key_value_heads": original_config.num_key_value_heads,
                 "softmax_dropout": original_config.attention_dropout,
             }
@@ -162,15 +162,15 @@ def export_to_huggingface_llama(pretrained_model_name_or_path: str, save_path: s
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
-    num_query_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads")
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        num_query_heads,
+        num_attention_heads,
         config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // num_query_heads,
+        config.hidden_size // num_attention_heads,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -201,7 +201,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> LlamaConfig:
         max_position_embeddings=config.max_position_embeddings,
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
-        num_attention_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads"),
+        num_attention_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads"),
         num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",

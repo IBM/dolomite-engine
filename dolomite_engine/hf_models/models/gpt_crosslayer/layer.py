@@ -25,10 +25,10 @@ class GPTCrossLayerBlock(nn.Module):
         self.layer_idx = layer_idx
         self.position_embedding_type = config.position_embedding_type
         self.attention_head_type = get_attention_head_type(
-            config.sequence_mixer_blocks[layer_idx].num_query_heads,
+            config.sequence_mixer_blocks[layer_idx].num_attention_heads,
             config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
         )
-        self.num_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads")
+        self.num_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
         self.head_dim = divide_if_divisible(hidden_size, self.num_heads, "")
         self.num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 

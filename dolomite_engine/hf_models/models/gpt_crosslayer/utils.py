@@ -33,7 +33,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     model = AutoModelForCausalLM.from_config(config, torch_dtype=original_model.dtype, **kwargs)
 
     hidden_size = config.hidden_size
-    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads")
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
     head_dim = hidden_size // num_attention_heads
 
     state_dict = original_model.state_dict()
