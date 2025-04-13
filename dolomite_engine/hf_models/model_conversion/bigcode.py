@@ -1,6 +1,6 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig, GPTBigCodeForCausalLM
 
-from ...utils import SafeTensorsWeightsManager, download_repo
+from ...utils import SafeTensorsWeightsManager, divide_if_divisible, download_repo
 from ..modeling_utils import get_attention_head_type
 from ..models import GPTDolomiteConfig
 
@@ -30,7 +30,6 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         max_position_embeddings=original_config.n_positions,
         hidden_size=original_config.n_embd,
         num_layers=original_config.n_layer,
-        num_attention_heads=original_config.n_head,
         position_embedding_type="learned_absolute",
         normalization_function="layernorm",
         layer_norm_epsilon=original_config.layer_norm_epsilon,
@@ -40,11 +39,13 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        rope_dim=original_config.n_embd // original_config.n_head,
         sequence_mixer_blocks=[
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": True,
-                "attention_head_type": "mqa" if original_config.multi_query else "mha",
+                "num_query_heads": original_config.n_head,
+                "num_key_value_heads": 1 if original_config.multi_query else original_config.n_head,
             }
             for _ in range(original_config.n_layer)
         ],
