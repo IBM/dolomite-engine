@@ -34,6 +34,7 @@ model_args:
     m_emb: 12
     m_residual: 0.22
     init_method: mup
+    rope_dim: 64
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
         num_attention_heads: 16
