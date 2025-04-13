@@ -22,7 +22,6 @@ model_args:
     layer_norm_epsilon: 1e-05
     model_type: palm
     hidden_size: 2304
-    num_attention_heads: 36
     num_layers: 40
     max_position_embeddings: 2048
     normalization_function: rmsnorm
@@ -35,123 +34,163 @@ model_args:
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
       - sequence_mixer_type: softmax_attention
         attention_head_type: mha
+        num_attention_heads: 36
         add_bias: false
     mlp_blocks:
       - mlp_type: MLP
