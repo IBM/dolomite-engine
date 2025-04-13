@@ -12,20 +12,16 @@ def fix_gpt_dolomite_unsharded_state_dict(
     ]
 
     for layer_idx in range(config.num_layers):
-        if (
-            get_attention_head_type(
-                config.sequence_mixer_blocks[layer_idx].num_attention_heads,
-                config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
-            )
-            == "mqa"
-        ):
+        block = config.sequence_mixer_blocks[layer_idx]
+
+        if get_attention_head_type(block.num_attention_heads, block.num_key_value_heads) == "mqa":
             q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.q_attn.weight")
             kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.kv_attn.weight")
             state_dict[f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = torch.cat(
                 [q_attn_w, kv_attn_w]
             )
 
-            if config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias"):
+            if block.add_bias:
                 q_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.q_attn.bias")
                 kv_attn_w = state_dict.pop(f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.kv_attn.bias")
                 state_dict[f"{prefix}transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"] = torch.cat(
@@ -36,7 +32,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
 
         if is_glu(block.activation_function):
             mlp_type = block.mlp_type
-            add_bias = config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias")
+            add_bias = block.add_bias
 
             if mlp_type == "MLP":
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
