@@ -231,8 +231,7 @@ class ModelWrapper(nn.Module):
 
         with torch.device("meta"):
             if self.model_name is not None:
-                config = AutoConfig.from_pretrained(model_kwargs.pop("pretrained_model_name_or_path"))
-                model_kwargs["config"] = config
+                model_kwargs["config"] = AutoConfig.from_pretrained(model_kwargs.pop("pretrained_model_name_or_path"))
 
             model = self.model_class.from_config(**model_kwargs)
 
