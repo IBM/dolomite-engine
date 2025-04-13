@@ -45,6 +45,7 @@ _NAKED_DISALLOWED_ARGS = [
     "add_bias",
     "attention_blocks",
     "num_key_value_heads",
+    "attention_head_type",
     "attention_multiplier",
     "n_embd",
     "n_head",
