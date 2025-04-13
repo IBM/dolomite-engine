@@ -30,8 +30,11 @@ ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
-num_key_value_heads = None
-if args.attention_head_type == "gqa":
+if args.attention_head_type == "mha":
+    num_key_value_heads = 16
+elif args.attention_head_type == "mqa":
+    num_key_value_heads = 1
+else:
     num_key_value_heads = 8
 
 if args.model_type == "gpt_dolomite":
