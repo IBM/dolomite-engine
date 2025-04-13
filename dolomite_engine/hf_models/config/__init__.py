@@ -232,6 +232,7 @@ class CommonConfig(PretrainedConfig):
                     "softmax_dropout",
                     "dropout",
                     "add_bias",
+                    "num_attention_heads",
                     "attention_multiplier",
                     "query_compression_size",
                     "key_value_compression_size",
