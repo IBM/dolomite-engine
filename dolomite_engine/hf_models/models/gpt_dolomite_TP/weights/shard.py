@@ -45,7 +45,7 @@ def get_gpt_dolomite_model_parallel_state_dict(
 
         state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
 
-        num_attention_heads = get_attention_head_type(config.sequence_mixer_blocks[layer_idx].num_attention_heads)
+        num_attention_heads = config.sequence_mixer_blocks[layer_idx].num_attention_heads
 
         state_dict.update(
             _get_attention(
