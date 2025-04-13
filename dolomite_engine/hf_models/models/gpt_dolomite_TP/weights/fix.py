@@ -31,10 +31,7 @@ def fix_gpt_dolomite_unsharded_state_dict(
         block = config.mlp_blocks[layer_idx]
 
         if is_glu(block.activation_function):
-            mlp_type = block.mlp_type
-            add_bias = block.add_bias
-
-            if mlp_type == "MLP":
+            if block.mlp_type == "MLP":
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
                 weight = state_dict[key].chunk(tensor_parallel_world_size)
                 weight = [w.chunk(2) for w in weight]
@@ -42,15 +39,15 @@ def fix_gpt_dolomite_unsharded_state_dict(
                 w1 = torch.cat([w[1] for w in weight])
                 state_dict[key] = torch.cat([w0, w1])
 
-                if add_bias:
+                if block.add_bias:
                     key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.bias"
                     weight = state_dict[key].chunk(tensor_parallel_world_size)
                     weight = [w.chunk(2) for w in weight]
                     w0 = torch.cat([w[0] for w in weight])
                     w1 = torch.cat([w[1] for w in weight])
                     state_dict[key] = torch.cat([w0, w1])
-            elif mlp_type == "MoE":
-                assert not add_bias
+            elif block.mlp_type == "MoE":
+                assert not block.add_bias
 
                 key = f"{prefix}transformer.h.{layer_idx}.mlp_block.c_fc.weight"
                 weight = state_dict[key]
@@ -60,6 +57,6 @@ def fix_gpt_dolomite_unsharded_state_dict(
                 w1 = torch.cat([w[1] for w in weight], dim=1)
                 state_dict[key] = torch.cat([w0, w1], dim=1)
             else:
-                raise ValueError(f"unexpected mlp_type ({mlp_type})")
+                raise ValueError(f"unexpected mlp_type ({block.mlp_type})")
 
     return state_dict
