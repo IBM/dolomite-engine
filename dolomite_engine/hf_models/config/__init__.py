@@ -3,7 +3,7 @@ from typing import Any, Callable
 
 from transformers import PretrainedConfig
 
-from ...utils import BaseArgs
+from ...utils import BaseArgs, divide_if_divisible
 from .mlp import _MLPArgs, _MoEArgs
 from .sequence_mixer import (
     _Mamba2Args,
@@ -84,7 +84,7 @@ class CommonConfig(PretrainedConfig):
         mlp_blocks: list[dict] = None,
         router_aux_loss_coef: float = 0.001,
         tie_word_embeddings: bool = True,
-        rope_dim: int = 128,
+        rope_dim: int | None = None,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -103,7 +103,6 @@ class CommonConfig(PretrainedConfig):
         self.m_width = m_width
         self.m_residual = m_residual
         self.init_method = init_method
-        self.rope_dim = rope_dim
 
         # check if enums are valid
         assert init_method in ["normal", "mup"]
@@ -112,6 +111,16 @@ class CommonConfig(PretrainedConfig):
         self.sequence_mixer_blocks = sequence_mixer_blocks
         self._set_sequence_mixer_blocks()
         assert len(self.sequence_mixer_blocks) == self.num_layers
+
+        self.rope_dim = (
+            divide_if_divisible(
+                self.hidden_size,
+                self.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads"),
+                "",
+            )
+            if rope_dim is None
+            else rope_dim
+        )
 
         self.mlp_blocks = mlp_blocks
         self._set_mlp_blocks()
