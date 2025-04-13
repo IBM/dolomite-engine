@@ -39,6 +39,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         self.max_position_embeddings = config.max_position_embeddings
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
+        self.rope_dim = config.rope_dim
 
         self.layers_per_stage = divide_if_divisible(
             config.num_layers, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
