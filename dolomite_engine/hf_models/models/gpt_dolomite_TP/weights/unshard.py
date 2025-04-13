@@ -1,7 +1,7 @@
 import torch
 from tqdm import trange
 
-from ....modeling_utils import is_glu
+from ....modeling_utils import get_attention_head_type, is_glu
 from ...gpt_dolomite import GPTDolomiteConfig
 
 
@@ -44,7 +44,7 @@ def unshard_gpt_dolomite_tensor_parallel_state_dicts(
         output_state_dict.update(
             _get_attention(
                 tensor_parallel_state_dicts,
-                attention_head_type=block.attention_head_type,
+                attention_head_type=get_attention_head_type(block.num_attention_heads, block.num_key_value_heads),
                 add_bias=block.add_bias,
                 prefix=prefix + f"transformer.h.{layer_idx}.sequence_mixer.",
                 check_correctness=check_correctness,
