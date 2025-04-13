@@ -112,15 +112,18 @@ class CommonConfig(PretrainedConfig):
         self._set_sequence_mixer_blocks()
         assert len(self.sequence_mixer_blocks) == self.num_layers
 
-        self.rope_dim = (
-            divide_if_divisible(
+        self.rope_dim = rope_dim
+        if self.rope_dim is None:
+            assert (
+                self.check_equal_for_all_and_get_value("sequence_mixer_blocks", "sequence_mixer_type")
+                == "softmax_attention"
+            ), "specify rope_dim"
+
+            self.rope_dim = divide_if_divisible(
                 self.hidden_size,
                 self.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads"),
                 "",
             )
-            if rope_dim is None
-            else rope_dim
-        )
 
         self.mlp_blocks = mlp_blocks
         self._set_mlp_blocks()
