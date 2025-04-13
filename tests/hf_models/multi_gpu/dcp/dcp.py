@@ -31,7 +31,7 @@ train_config = TrainingArgs(**load_yaml(args.train_config))
 unshard_config = UnshardingArgs(**load_yaml(args.unshard_config))
 
 if args.attention_head_type == "mha":
-    num_key_value_heads = train_config.model_args.pretrained_config.sequence_mixer_blocks[0]["num_attention_heads"]
+    num_key_value_heads = train_config.model_args.pretrained_config["sequence_mixer_blocks"][0]["num_attention_heads"]
 elif args.attention_head_type == "mqa":
     num_key_value_heads = 1
 else:
