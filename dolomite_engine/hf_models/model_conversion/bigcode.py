@@ -39,7 +39,6 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
-        rope_dim=original_config.n_embd // original_config.n_head,
         sequence_mixer_blocks=[
             {
                 "sequence_mixer_type": "softmax_attention",

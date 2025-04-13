@@ -52,7 +52,6 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         m_emb=None if original_config.embedding_multiplier == 1 else original_config.embedding_multiplier,
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
-        rope_dim=original_config.hidden_size // original_config.num_attention_heads,
         sequence_mixer_blocks=[
             {
                 "sequence_mixer_type": "softmax_attention",

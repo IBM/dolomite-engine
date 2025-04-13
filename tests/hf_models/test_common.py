@@ -68,7 +68,6 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
-        rope_dim: int = 8,
         num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
         if attention_head_type == "mha":
@@ -94,7 +93,6 @@ class TestCommons(TestCase):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            rope_dim=rope_dim,
             sequence_mixer_blocks=[
                 {
                     "sequence_mixer_type": "softmax_attention",
@@ -126,7 +124,6 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
-        rope_dim: int = 8,
         num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
         if attention_head_type == "mha":
@@ -152,7 +149,6 @@ class TestCommons(TestCase):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            rope_dim=rope_dim,
             sequence_mixer_blocks=[
                 {
                     "sequence_mixer_type": "softmax_attention",

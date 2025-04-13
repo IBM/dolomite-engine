@@ -28,7 +28,6 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         tie_word_embeddings=original_config.tie_word_embeddings,
         sequence_mixer_blocks=[i.to_dict() for i in original_config.sequence_mixer_blocks],
         mlp_blocks=[i.to_dict() for i in original_config.mlp_blocks],
-        rope_dim=original_config.rope_dim,
     )
     model = AutoModelForCausalLM.from_config(config, torch_dtype=original_model.dtype, **kwargs)
 
