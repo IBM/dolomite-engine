@@ -45,7 +45,6 @@ _NAKED_DISALLOWED_ARGS = [
     "add_bias",
     "attention_blocks",
     "num_key_value_heads",
-    "attention_head_type",
     "attention_multiplier",
     "n_embd",
     "n_head",
@@ -53,6 +52,7 @@ _NAKED_DISALLOWED_ARGS = [
     "n_layer",
     "n_positions",
     "scale_attn_weights",
+    "num_attention_heads",
 ]
 
 
@@ -65,7 +65,6 @@ class CommonConfig(PretrainedConfig):
         max_position_embeddings: int = 1024,
         hidden_size: int = 768,
         num_layers: int = 12,
-        num_attention_heads: int = 12,
         embedding_dropout: float = 0,
         normalization_function: str = "layernorm",
         layer_norm_epsilon: float = 1e-5,
@@ -85,13 +84,13 @@ class CommonConfig(PretrainedConfig):
         mlp_blocks: list[dict] = None,
         router_aux_loss_coef: float = 0.001,
         tie_word_embeddings: bool = True,
+        rope_dim: int = 128,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.num_attention_heads = num_attention_heads
         self.embedding_dropout = embedding_dropout
         self.normalization_function = normalization_function
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -104,6 +103,7 @@ class CommonConfig(PretrainedConfig):
         self.m_width = m_width
         self.m_residual = m_residual
         self.init_method = init_method
+        self.rope_dim = rope_dim
 
         # check if enums are valid
         assert init_method in ["normal", "mup"]
@@ -170,36 +170,16 @@ class CommonConfig(PretrainedConfig):
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
             if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
-                attention_head_type = sequence_mixer_block.pop("attention_head_type", "mqa")
-                num_key_value_heads = sequence_mixer_block.pop("num_key_value_heads", None)
+                sequence_mixer_kwargs = {}
 
-                if attention_head_type == "mha":
-                    if num_key_value_heads is None:
-                        num_key_value_heads = self.num_attention_heads
-
-                    assert (
-                        self.num_attention_heads == num_key_value_heads
-                    ), "MultiHeadAttention should have same number of heads for query, keys and values"
-                elif attention_head_type == "mqa":
-                    if num_key_value_heads is None:
-                        num_key_value_heads = 1
-
-                    assert num_key_value_heads == 1, "MultiQueryAttention should have 1 head for keys and values"
-                elif attention_head_type == "gqa":
-                    assert (
-                        num_key_value_heads is not None
-                    ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
-
-                    assert (
-                        self.num_attention_heads % num_key_value_heads == 0
-                    ), "GroupedQueryAttention should have more than 1 head for keys and values"
-
-                sequence_mixer_kwargs = {
-                    "num_key_value_heads": num_key_value_heads,
-                    "attention_head_type": attention_head_type,
-                }
-
-                for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
+                for key in [
+                    "softmax_dropout",
+                    "dropout",
+                    "add_bias",
+                    "attention_multiplier",
+                    "num_query_heads",
+                    "num_key_value_heads",
+                ]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 if sequence_mixer_type == "softmax_attention":

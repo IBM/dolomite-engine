@@ -1,6 +1,7 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig, GPTBigCodeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
+from ..modeling_utils import get_attention_head_type
 from ..models import GPTDolomiteConfig
 
 
@@ -133,7 +134,9 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
     assert config.m_residual is None
     assert config.m_width is None
 
-    attention_head_type = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type")
+    num_query_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads")
+    num_key_value_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads")
+    attention_head_type = get_attention_head_type(num_query_heads, num_key_value_heads)
 
     assert attention_head_type in ["mha", "mqa"]
     assert config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier") is None
@@ -143,7 +146,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
         n_positions=config.max_position_embeddings,
         n_embd=config.hidden_size,
         n_layer=config.num_layers,
-        n_head=config.num_attention_heads,
+        n_head=num_query_heads,
         n_inner=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         activation_function=config.check_equal_for_all_and_get_value(
             "mlp_blocks", "activation_function", "gelu_pytorch_tanh"

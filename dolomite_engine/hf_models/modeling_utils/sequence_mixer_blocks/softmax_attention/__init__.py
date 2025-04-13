@@ -34,7 +34,6 @@ class Attention(nn.Module):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: str,
         position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
@@ -62,7 +61,13 @@ class Attention(nn.Module):
             f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
         )
 
-        self.attention_head_type = attention_head_type
+        if num_attention_heads == num_key_value_heads:
+            self.attention_head_type = "mha"
+        elif num_key_value_heads == 1:
+            self.attention_head_type = "mqa"
+        else:
+            self.attention_head_type = "gqa"
+
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx

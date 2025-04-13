@@ -77,10 +77,9 @@ def get_sequence_mixer(
     else:
         sequence_mixer_kwargs = dict(
             hidden_size=config.hidden_size,
-            num_attention_heads=config.num_attention_heads,
+            num_attention_heads=block.num_query_heads,
             num_key_value_heads=block.num_key_value_heads,
             attention_multiplier=block.attention_multiplier,
-            attention_head_type=block.attention_head_type,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,
             dropout=block.dropout,
@@ -105,3 +104,12 @@ def get_sequence_mixer(
                 return SBAttention(**sequence_mixer_kwargs)
         else:
             raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
+
+
+def get_attention_head_type(num_query_heads: int, num_key_value_heads: int) -> str:
+    if num_query_heads == num_key_value_heads:
+        return "mha"
+    elif num_key_value_heads == 1:
+        return "mqa"
+    else:
+        return "gqa"
