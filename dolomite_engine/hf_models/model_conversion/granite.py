@@ -57,6 +57,7 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": original_config.attention_bias,
+                "num_attention_heads": original_config.num_attention_heads,
                 "num_key_value_heads": original_config.num_key_value_heads,
                 "attention_multiplier": original_config.attention_multiplier,
                 "softmax_dropout": original_config.attention_dropout,
