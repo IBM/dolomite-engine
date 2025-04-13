@@ -230,10 +230,11 @@ class ModelWrapper(nn.Module):
         model_kwargs = self._get_model_kwargs()
 
         with torch.device("meta"):
-            if self.model_name is None:
-                model = self.model_class.from_config(**model_kwargs)
-            else:
-                model = self.model_class.from_pretrained(**model_kwargs)
+            if self.model_name is not None:
+                config = AutoConfig.from_pretrained(model_kwargs.pop("pretrained_model_name_or_path"))
+                model_kwargs["config"] = config
+
+            model = self.model_class.from_config(**model_kwargs)
 
             num_parameters = 0
             for param in model.parameters():
