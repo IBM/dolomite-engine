@@ -105,7 +105,6 @@ class MultiHeadLatentAttentionTest(TestCommons):
             max_position_embeddings=1024,
             hidden_size=32,
             num_layers=num_layers,
-            num_attention_heads=4,
             position_embedding_type="nope",
             normalization_function=normalization_function,
             tie_word_embeddings=False,
@@ -120,6 +119,7 @@ class MultiHeadLatentAttentionTest(TestCommons):
                     "sequence_mixer_type": "multihead_latent_attention",
                     "add_bias": add_bias,
                     "attention_multiplier": attention_multiplier,
+                    "num_attention_heads": 4,
                     "query_compression_size": 12,
                     "key_value_compression_size": 8,
                 }
