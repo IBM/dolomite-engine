@@ -110,6 +110,7 @@ class Mamba2(nn.Module):
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
 
+    @torch._dynamo.disable
     def forward(
         self,
         hidden_states: torch.Tensor,
