@@ -28,7 +28,7 @@ class GPTCrossLayerBlock(nn.Module):
             config.sequence_mixer_blocks[layer_idx].num_query_heads,
             config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
         )
-        self.num_heads = config.num_attention_heads
+        self.num_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_query_heads")
         self.head_dim = divide_if_divisible(hidden_size, self.num_heads, "")
         self.num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
@@ -38,7 +38,7 @@ class GPTCrossLayerBlock(nn.Module):
         if config.sharing_pattern[layer_idx] == layer_idx:
             self.kv_proj = KeyValueProjection(
                 hidden_size=config.hidden_size,
-                num_attention_heads=config.num_attention_heads,
+                num_attention_heads=self.num_heads,
                 num_key_value_heads=config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
                 add_bias=config.sequence_mixer_blocks[layer_idx].add_bias,
                 initializer_range=config.initializer_range,

@@ -4,6 +4,7 @@ from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
 from .softmax_attention import (
     Attention,
+    get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
@@ -104,12 +105,3 @@ def get_sequence_mixer(
                 return SBAttention(**sequence_mixer_kwargs)
         else:
             raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
-
-
-def get_attention_head_type(num_query_heads: int, num_key_value_heads: int) -> str:
-    if num_query_heads == num_key_value_heads:
-        return "mha"
-    elif num_key_value_heads == 1:
-        return "mqa"
-    else:
-        return "gqa"

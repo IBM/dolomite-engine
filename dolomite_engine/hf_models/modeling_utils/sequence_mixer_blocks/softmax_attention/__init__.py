@@ -13,6 +13,7 @@ from .....utils import divide_if_divisible, is_flash_attention_available
 from ...linear import ParameterizedLinear
 from ...position_embedding import apply_rotary_pos_emb
 from .utils import (
+    get_attention_head_type,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
     interleave_query_key_value_tensor_for_mqa,
@@ -61,13 +62,7 @@ class Attention(nn.Module):
             f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})",
         )
 
-        if num_attention_heads == num_key_value_heads:
-            self.attention_head_type = "mha"
-        elif num_key_value_heads == 1:
-            self.attention_head_type = "mqa"
-        else:
-            self.attention_head_type = "gqa"
-
+        self.attention_head_type = get_attention_head_type(num_attention_heads, num_key_value_heads)
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
