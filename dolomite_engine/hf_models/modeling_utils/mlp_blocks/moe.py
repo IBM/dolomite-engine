@@ -222,11 +222,7 @@ class MoE(nn.Module):
         if is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-
-                if is_kernel_allowed(Kernel.continuous_count_cute):
-                    expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
-                else:
-                    expert_offsets = bincount(sorted_expert_idxs, minlength=self.num_experts).cumsum(-1)
+                expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
 
             hidden_states = self.c_fc(
                 hidden_states,
@@ -276,11 +272,7 @@ class MoE(nn.Module):
         self, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
-
-        if is_kernel_allowed(Kernel.continuous_count_cute):
-            num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
-        else:
-            num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
+        num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -307,11 +299,7 @@ class MoE(nn.Module):
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        if is_kernel_allowed(Kernel.continuous_count_cute):
-            freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
-        else:
-            freq = bincount(topk_idxs.flatten(), minlength=num_experts)
-
+        freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
         freq = freq.float()
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
