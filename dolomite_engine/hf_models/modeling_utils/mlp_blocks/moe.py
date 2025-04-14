@@ -169,10 +169,6 @@ class MoE(nn.Module):
 
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
-        self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
-            torch.cuda.current_device()
-        ) >= (9, 0)
-
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
@@ -227,7 +223,7 @@ class MoE(nn.Module):
             with torch.no_grad():
                 sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
-                if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+                if is_kernel_allowed(Kernel.continuous_count_cute):
                     expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
                 else:
                     expert_offsets = bincount(sorted_expert_idxs, minlength=self.num_experts).cumsum(-1)
@@ -281,7 +277,7 @@ class MoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+        if is_kernel_allowed(Kernel.continuous_count_cute):
             num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
         else:
             num_experts_per_token = selected_experts.bincount(minlength=self.num_experts)
@@ -311,7 +307,7 @@ class MoE(nn.Module):
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+        if is_kernel_allowed(Kernel.continuous_count_cute):
             freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
         else:
             freq = bincount(topk_idxs.flatten(), minlength=num_experts)
