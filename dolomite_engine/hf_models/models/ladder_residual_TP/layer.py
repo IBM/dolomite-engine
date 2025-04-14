@@ -41,15 +41,36 @@ class _OverlappableBlock(torch.autograd.Function):
         mlp0_c_proj_weight: torch.Tensor,
         mlp_c_fc_weight: torch.Tensor,
         mlp_c_proj_weight: torch.Tensor,
-        eps: float,
+        eps1: float,
+        eps2: float,
     ) -> tuple[torch.Tensor]:
+        # if current_attention_out is not None:
+        #     residual = residual + current_attention_out
+
+        # current_attention_out = self.ln_1(residual)
+        # current_attention_out = self._sequence_mixer_forward(
+        #     current_attention_out,
+        #     past_key_values=past_key_values,
+        #     attention_mask=attention_mask,
+        #     rope_cos_sin=rope_cos_sin,
+        #     cu_seqlens=cu_seqlens,
+        #     max_seqlen=max_seqlen,
+        # )
+
+        # if current_mlp_out is not None:
+        #     residual = residual + current_mlp_out
+
+        # current_mlp_out = self.ln_2(residual)
+        # current_mlp_out = self.mlp_block(current_mlp_out)
+
+        # return current_attention_out, current_mlp_out, residual
         if current_attention_out is not None:
             attention_rmsnorm_input = residual + current_attention_out
 
         attention_input, attention_rmsnorm_denominator = rmsnorm_forward(
             x=attention_rmsnorm_input,
             weight=ln_1_weight,
-            eps=eps,
+            eps=eps1,
             memory_efficient=False,
             kernel_backend=CutoTuneParameter(),
             BLOCK_SIZE_B=CutoTuneParameter(),
@@ -66,7 +87,7 @@ class _OverlappableBlock(torch.autograd.Function):
         mlp_input, mlp_rmsnorm_denominator = rmsnorm_forward(
             x=mlp_rmsnorm_input,
             weight=ln_2_weight,
-            eps=eps,
+            eps=eps2,
             memory_efficient=False,
             kernel_backend=CutoTuneParameter(),
             BLOCK_SIZE_B=CutoTuneParameter(),
@@ -94,7 +115,8 @@ class _OverlappableBlock(torch.autograd.Function):
             mlp_c_proj_weight,
         )
 
-        ctx.eps = eps
+        ctx.eps1 = eps1
+        ctx.eps2 = eps2
 
         return attention_c_proj_out, mlp_c_proj_out, mlp_rmsnorm_input
 
@@ -123,6 +145,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
     ) -> tuple[torch.Tensor]:
         if is_kernel_allowed(Kernel.ladder_residual_overlapped_layer):
             assert self.m_residual in [None, 1]
+            assert self.ln_1.eps == self.ln_2.eps
 
             current_attention_out, current_mlp_out, residual = _OverlappableBlock.apply(
                 current_attention_out,
@@ -135,6 +158,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
                 self.mlp_block.c_fc.weight,
                 self.mlp_block.c_proj.weight,
                 self.ln_1.eps,
+                self.ln_2.eps,
             )
         else:
             current_attention_out, current_mlp_out, residual = LadderResidualBlock.forward(
