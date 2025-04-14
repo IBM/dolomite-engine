@@ -44,10 +44,10 @@ class _OverlappableBlock(torch.autograd.Function):
         eps: float,
     ) -> tuple[torch.Tensor]:
         if current_attention_out is not None:
-            residual = residual + current_attention_out
+            attention_rmsnorm_input = residual + current_attention_out
 
         attention_input, attention_rmsnorm_denominator = rmsnorm_forward(
-            x=residual,
+            x=attention_rmsnorm_input,
             weight=ln_1_weight,
             eps=eps,
             memory_efficient=False,
@@ -61,10 +61,10 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         if current_mlp_out is not None:
-            residual = residual + current_mlp_out
+            mlp_rmsnorm_input = attention_rmsnorm_input + current_mlp_out
 
         mlp_input, mlp_rmsnorm_denominator = rmsnorm_forward(
-            x=residual,
+            x=mlp_rmsnorm_input,
             weight=ln_2_weight,
             eps=eps,
             memory_efficient=False,
@@ -73,7 +73,7 @@ class _OverlappableBlock(torch.autograd.Function):
             BLOCK_SIZE_H=CutoTuneParameter(),
         )
 
-        c_fc_out, swiglu_out, c_proj_out = _mlp_forward(
+        mlp_c_fc_out, mlp_swiglu_out, mlp_c_proj_out = _mlp_forward(
             x=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
         )
 
@@ -82,14 +82,21 @@ class _OverlappableBlock(torch.autograd.Function):
             attention_c_fc_out,
             attention_swiglu_out,
             attention_c_proj_out,
+            mlp_rmsnorm_denominator,
+            mlp_c_fc_out,
+            mlp_swiglu_out,
+            mlp_c_proj_out,
             ln_1_weight,
+            ln_2_weight,
             mlp0_c_fc_weight,
             mlp0_c_proj_weight,
+            mlp_c_fc_weight,
+            mlp_c_proj_weight,
         )
 
         ctx.eps = eps
 
-        return attention_c_proj_out, c_proj_out, residual
+        return attention_c_proj_out, mlp_c_proj_out, mlp_rmsnorm_input
 
 
 class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
