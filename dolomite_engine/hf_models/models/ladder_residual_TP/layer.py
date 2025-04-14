@@ -4,27 +4,17 @@ from cute_kernels import CutoTuneParameter
 from cute_kernels.kernels.rmsnorm.backward import rmsnorm_backward_triton
 from cute_kernels.kernels.rmsnorm.forward import _forward as rmsnorm_forward
 from cute_kernels.kernels.swiglu_unchunked.forward import _forward as swiglu_unchunked_forward
-from cute_kernels.math import get_next_power_of_2
 from transformers import DynamicCache
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
-from ..gpt_dolomite.layer import GPTDolomiteBlock
+from ...modeling_utils_TP import get_mlp_block_TP
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
 
 
-def _mlp_forward(
-    x: torch.Tensor,
-    c_fc_weight: torch.Tensor,
-    c_fc_bias: torch.Tensor,
-    c_proj_weight: torch.Tensor,
-    c_proj_bias: torch.Tensor,
-) -> tuple[torch.Tensor]:
-    assert c_fc_bias is None
-    assert c_proj_bias is None
-
-    c_fc_out = F.linear(x, c_fc_weight, c_fc_bias)
+def _mlp_forward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor) -> tuple[torch.Tensor]:
+    c_fc_out = F.linear(x, c_fc_weight)
 
     swiglu_output = swiglu_unchunked_forward(
         c_fc_out,
@@ -33,7 +23,7 @@ def _mlp_forward(
         BLOCK_SIZE_H=CutoTuneParameter(),
     )
 
-    c_proj_out = F.linear(swiglu_output, c_proj_weight, c_proj_bias)
+    c_proj_out = F.linear(swiglu_output, c_proj_weight)
 
     return c_fc_out, swiglu_output, c_proj_out
 
@@ -48,18 +38,11 @@ class _OverlappableBlock(torch.autograd.Function):
         ln_1_weight: torch.Tensor,
         ln_2_weight: torch.Tensor,
         mlp0_c_fc_weight: torch.Tensor,
-        mlp0_c_fc_bias: torch.Tensor,
         mlp0_c_proj_weight: torch.Tensor,
-        mlp0_c_proj_bias: torch.Tensor,
         mlp_c_fc_weight: torch.Tensor,
-        mlp_c_fc_bias: torch.Tensor,
         mlp_c_proj_weight: torch.Tensor,
-        mlp_c_proj_bias: torch.Tensor,
-        m_residual: float,
         eps: float,
     ) -> tuple[torch.Tensor]:
-        assert m_residual in [None, 1]
-
         if current_attention_out is not None:
             residual = residual + current_attention_out
 
@@ -74,11 +57,7 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         attention_c_fc_out, attention_swiglu_out, attention_c_proj_out = _mlp_forward(
-            x=attention_input,
-            c_fc_weight=mlp0_c_fc_weight,
-            c_fc_bias=mlp0_c_fc_bias,
-            c_proj_weight=mlp0_c_proj_weight,
-            c_proj_bias=mlp0_c_proj_bias,
+            x=attention_input, c_fc_weight=mlp0_c_fc_weight, c_proj_weight=mlp0_c_proj_weight
         )
 
         if current_mlp_out is not None:
@@ -95,11 +74,7 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         c_fc_out, swiglu_out, c_proj_out = _mlp_forward(
-            x=mlp_input,
-            c_fc_weight=mlp_c_fc_weight,
-            c_fc_bias=mlp_c_fc_bias,
-            c_proj_weight=mlp_c_proj_weight,
-            c_proj_bias=mlp_c_proj_bias,
+            x=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
         )
 
         ctx.save_for_backward(
@@ -109,9 +84,7 @@ class _OverlappableBlock(torch.autograd.Function):
             attention_c_proj_out,
             ln_1_weight,
             mlp0_c_fc_weight,
-            mlp0_c_fc_bias,
             mlp0_c_proj_weight,
-            mlp0_c_proj_bias,
         )
 
         ctx.eps = eps
@@ -120,6 +93,16 @@ class _OverlappableBlock(torch.autograd.Function):
 
 
 class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
+    def __init__(self, config, use_padding_free_transformer, layer_idx=None, sequence_parallel=False):
+        super().__init__(config, use_padding_free_transformer, layer_idx, sequence_parallel)
+
+        self.mlp0_block = get_mlp_block_TP(
+            config,
+            use_padding_free_transformer=use_padding_free_transformer,
+            sequence_parallel=sequence_parallel,
+            layer_idx=layer_idx,
+        )
+
     def forward(
         self,
         current_attention_out: torch.Tensor,
@@ -132,7 +115,20 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         max_seqlen: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor]:
         if is_kernel_allowed(Kernel.ladder_residual_overlapped_layer):
-            pass
+            assert self.m_residual in [None, 1]
+
+            current_attention_out, current_mlp_out, residual = _OverlappableBlock.apply(
+                current_attention_out,
+                current_mlp_out,
+                residual,
+                self.ln_1.weight,
+                self.ln_2.weight,
+                self.mlp0_block.c_fc.weight,
+                self.mlp0_block.c_proj.weight,
+                self.mlp_block.c_fc.weight,
+                self.mlp_block.c_proj.weight,
+                self.ln_1.eps,
+            )
         else:
             current_attention_out, current_mlp_out, residual = LadderResidualBlock.forward(
                 self,
