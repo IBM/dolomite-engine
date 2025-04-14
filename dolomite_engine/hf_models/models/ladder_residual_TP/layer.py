@@ -100,6 +100,27 @@ class _OverlappableBlock(torch.autograd.Function):
 
         return attention_c_proj_out, mlp_c_proj_out, mlp_rmsnorm_input
 
+    @staticmethod
+    def backward(
+        ctx,
+        attention_c_proj_out_grad: torch.Tensor,
+        mlp_c_proj_out_grad: torch.Tensor,
+        mlp_rmsnorm_input_grad: torch.Tensor,
+    ) -> tuple[torch.Tensor]:
+        return (
+            attention_c_proj_out_grad,
+            mlp_c_proj_out_grad,
+            mlp_rmsnorm_input_grad,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
 
 class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
     def __init__(self, config, use_padding_free_transformer, layer_idx=None, sequence_parallel=False):
