@@ -53,8 +53,6 @@ class _OverlappableBlock(torch.autograd.Function):
         mlp_c_proj_bias: torch.Tensor,
         eps: float,
     ) -> tuple[torch.Tensor]:
-        residual.size(-1)
-
         if current_attention_out is not None:
             residual = residual + current_attention_out
 
