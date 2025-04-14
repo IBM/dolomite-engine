@@ -5,8 +5,8 @@ from ...utils import BaseArgs
 
 class _SoftmaxAttentionArgs(BaseArgs):
     sequence_mixer_type: str = "softmax_attention"
+    num_attention_heads: int = 12
     num_key_value_heads: int = 1
-    attention_head_type: str = "mqa"
     softmax_dropout: float = 0
     dropout: float = 0
     add_bias: bool = True
@@ -18,6 +18,7 @@ class _SoftmaxAttentionArgs(BaseArgs):
 
 class _MultiHeadLatentAttentionArgs(BaseArgs):
     sequence_mixer_type: str = "multihead_latent_attention"
+    num_attention_heads: int | None = None
     softmax_dropout: float = 0
     dropout: float = 0
     add_bias: bool = True
@@ -27,14 +28,15 @@ class _MultiHeadLatentAttentionArgs(BaseArgs):
 
     def model_post_init(self, __context: Any) -> None:
         assert self.sequence_mixer_type == "multihead_latent_attention"
+        assert self.num_attention_heads is not None
         assert self.query_compression_size is not None
         assert self.key_value_compression_size is not None
 
 
 class _StickbreakingAttentionArgs(BaseArgs):
     sequence_mixer_type: str = "stickbreaking_attention"
+    num_attention_heads: int = 12
     num_key_value_heads: int = 1
-    attention_head_type: str = "mqa"
     dropout: float = 0
     add_bias: bool = True
     attention_multiplier: float | None = None

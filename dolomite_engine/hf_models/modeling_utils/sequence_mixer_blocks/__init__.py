@@ -4,6 +4,7 @@ from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
 from .softmax_attention import (
     Attention,
+    get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
@@ -51,7 +52,7 @@ def get_sequence_mixer(
             hidden_size=config.hidden_size,
             query_compression_size=block.query_compression_size,
             key_value_compression_size=block.key_value_compression_size,
-            num_attention_heads=config.num_attention_heads,
+            num_attention_heads=block.num_attention_heads,
             attention_multiplier=block.attention_multiplier,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,
@@ -77,10 +78,9 @@ def get_sequence_mixer(
     else:
         sequence_mixer_kwargs = dict(
             hidden_size=config.hidden_size,
-            num_attention_heads=config.num_attention_heads,
+            num_attention_heads=block.num_attention_heads,
             num_key_value_heads=block.num_key_value_heads,
             attention_multiplier=block.attention_multiplier,
-            attention_head_type=block.attention_head_type,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,
             dropout=block.dropout,

@@ -96,18 +96,11 @@ class BaseModelMixin(PreTrainedModelMixin):
 
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.embed_dim = config.hidden_size
-        self.num_heads = config.num_attention_heads
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
         self.sequence_mixer_block_types = [
             config.sequence_mixer_blocks[i].sequence_mixer_type for i in range(config.num_layers)
         ]
-
-        self.head_dim = divide_if_divisible(
-            self.embed_dim,
-            self.num_heads,
-            f"`embed_dim` ({self.embed_dim}) must be divisible by `num_heads` ({self.num_heads})",
-        )
 
         self.wte = ParameterizedEmbedding(config.vocab_size, self.embed_dim, std=self.initializer_range)
 
@@ -123,6 +116,8 @@ class BaseModelMixin(PreTrainedModelMixin):
         self.ln_f = get_normalization_function(
             config.normalization_function, self.embed_dim, eps=config.layer_norm_epsilon
         )
+
+        self.rope_dim = config.rope_dim
 
         self.position_embedding_type = config.position_embedding_type
         self._setup_positional_encoding()
@@ -439,13 +434,13 @@ class BaseModelMixin(PreTrainedModelMixin):
         elif self.position_embedding_type == "rope":
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
-                    self.head_dim,
+                    self.rope_dim,
                     max_position_embeddings=max_position_embeddings,
                     base=self.config.rope_theta,
                 )
             else:
                 self.rope = YaRNScaledRoPE(
-                    self.head_dim,
+                    self.rope_dim,
                     max_position_embeddings=max_position_embeddings,
                     base=self.config.rope_theta,
                     scale=self.config.rope_scaling["factor"],

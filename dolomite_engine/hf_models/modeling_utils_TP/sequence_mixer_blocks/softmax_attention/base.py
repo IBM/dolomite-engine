@@ -1,11 +1,10 @@
 import math
 
 import torch
-import torch.distributed
 import torch.nn as nn
 
 from .....utils import ProcessGroupManager, divide_if_divisible
-from ....modeling_utils import Attention
+from ....modeling_utils import Attention, get_attention_head_type
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ...dropout import Dropout_TP
 from ...linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
@@ -18,7 +17,6 @@ class Attention_TP(Attention):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: str,
         position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
@@ -58,7 +56,7 @@ class Attention_TP(Attention):
         )
 
         self.head_dim = divide_if_divisible(self.hidden_size, self.num_heads, "")
-        self.attention_head_type = attention_head_type
+        self.attention_head_type = get_attention_head_type(self.global_num_heads, self.global_num_key_value_heads)
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier
         self.layer_idx = layer_idx
