@@ -114,7 +114,6 @@ class MultiHeadLatentAttentionTest(TestCommons):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            rope_dim=8,
             sequence_mixer_blocks=[
                 {
                     "sequence_mixer_type": "multihead_latent_attention",
