@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,8 +21,11 @@ class RNN(nn.Module):
         state_size: int,
         output_size: int,
         num_heads: int,
+        m_width: float,
+        num_layers: int,
         add_bias: bool = True,
-        std: float = 1,
+        initializer_range: float = 1,
+        init_method: str = "normal",
     ) -> None:
         super().__init__()
 
@@ -32,11 +37,18 @@ class RNN(nn.Module):
         self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
 
-        self.std = std
+        std = initializer_range
+        if init_method == "mup":
+            std /= math.sqrt(m_width)
+        self.state_weight_std = std
 
         self.input_projection = ParameterizedLinear(self.input_size, self.state_size, bias=add_bias, std=std)
-        self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
         self.state_weight = nn.Parameter(torch.empty(self.num_heads, self.state_head_dim, self.state_head_dim))
+
+        std = initializer_range / math.sqrt(2 * num_layers)
+        if init_method == "mup":
+            std /= math.sqrt(m_width)
+        self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
         self.reset_parameters()
 
