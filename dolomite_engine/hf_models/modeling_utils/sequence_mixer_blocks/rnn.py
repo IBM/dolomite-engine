@@ -100,4 +100,4 @@ class RNN(nn.Module):
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
-        nn.init.normal_(self.state_weight, std=self.std)
+        nn.init.normal_(self.state_weight, std=self.state_weight_std)
