@@ -20,6 +20,11 @@
         "model.transformer.h.1.sequence_mixer.in_proj.bias",
         "model.transformer.h.1.sequence_mixer.norm.weight",
         "model.transformer.h.1.sequence_mixer.out_proj.bias",
+        "model.transformer.h.2.ln_1.weight",
+        "model.transformer.h.2.ln_2.weight",
+        "model.transformer.h.2.mlp_block.c_fc.bias",
+        "model.transformer.h.2.mlp_block.c_proj.bias",
+        "model.transformer.h.2.sequence_mixer.input_projection.bias",
         "model.transformer.ln_f.weight"
     ],
     "mup": [
@@ -36,6 +41,11 @@
         "model.transformer.h.1.sequence_mixer.D",
         "model.transformer.h.1.sequence_mixer.conv1d.weight",
         "model.transformer.h.1.sequence_mixer.in_proj.weight",
-        "model.transformer.h.1.sequence_mixer.out_proj.weight"
+        "model.transformer.h.1.sequence_mixer.out_proj.weight",
+        "model.transformer.h.2.mlp_block.c_fc.weight",
+        "model.transformer.h.2.mlp_block.c_proj.weight",
+        "model.transformer.h.2.sequence_mixer.input_projection.weight",
+        "model.transformer.h.2.sequence_mixer.output_projection.weight",
+        "model.transformer.h.2.sequence_mixer.state_weight"
     ]
 }
