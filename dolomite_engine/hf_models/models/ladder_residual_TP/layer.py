@@ -44,7 +44,9 @@ class _OverlappableBlock(torch.autograd.Function):
         eps1: float,
         eps2: float,
     ) -> tuple[torch.Tensor]:
-        if current_attention_out is not None:
+        if current_attention_out is None:
+            attention_rmsnorm_input = residual
+        else:
             attention_rmsnorm_input = residual + current_attention_out
 
         attention_input, attention_rmsnorm_denominator = rmsnorm_forward(
@@ -62,6 +64,8 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         if current_mlp_out is not None:
+            mlp_rmsnorm_input = attention_rmsnorm_input
+        else:
             mlp_rmsnorm_input = attention_rmsnorm_input + current_mlp_out
 
         mlp_input, mlp_rmsnorm_denominator = rmsnorm_forward(
