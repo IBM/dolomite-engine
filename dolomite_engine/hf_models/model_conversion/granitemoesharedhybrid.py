@@ -147,28 +147,28 @@ def _export_state_dict_to_huggingface(
 
         if seq_mixer_block_types[layer_idx] == "mamba2":
             # mamba weights
-            state_dict[f"model.layers.{layer_idx}.self_attn.conv1d.weight"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.conv1d.weight"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.weight")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.conv1d.bias"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.conv1d.bias"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.bias")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.in_proj.weight"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.in_proj.weight"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.in_proj.weight")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.dt_bias"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.dt_bias"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.dt_bias")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.A_log"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.A_log"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.A_log")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.D"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.D"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.D")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.out_proj.weight"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.out_proj.weight"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.out_proj.weight")
             )
-            state_dict[f"model.layers.{layer_idx}.self_attn.norm.weight"] = (
+            state_dict[f"model.layers.{layer_idx}.mamba.norm.weight"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.norm.weight")
             )
         elif seq_mixer_block_types[layer_idx] == "multihead_latent_attention":
