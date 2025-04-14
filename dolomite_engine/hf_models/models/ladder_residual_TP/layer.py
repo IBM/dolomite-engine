@@ -63,7 +63,7 @@ class _OverlappableBlock(torch.autograd.Function):
             x=attention_input, c_fc_weight=mlp0_c_fc_weight, c_proj_weight=mlp0_c_proj_weight
         )
 
-        if current_mlp_out is not None:
+        if current_mlp_out is None:
             mlp_rmsnorm_input = attention_rmsnorm_input
         else:
             mlp_rmsnorm_input = attention_rmsnorm_input + current_mlp_out
