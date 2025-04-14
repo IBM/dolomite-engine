@@ -68,7 +68,7 @@ class _OverlappableBlock(torch.autograd.Function):
             BLOCK_SIZE_H=CutoTuneParameter(),
         )
 
-        c_fc_out0, swiglu_out0, c_proj_out0 = _mlp_forward(
+        attention_c_fc_out, attention_swiglu_out, attention_c_proj_out = _mlp_forward(
             x=attention_input,
             c_fc_weight=mlp0_c_fc_weight,
             c_fc_bias=mlp0_c_fc_bias,
@@ -99,9 +99,9 @@ class _OverlappableBlock(torch.autograd.Function):
 
         ctx.save_for_backward(
             attention_rmsnorm_denominator,
-            c_fc_out0,
-            swiglu_out0,
-            c_proj_out0,
+            attention_c_fc_out,
+            attention_swiglu_out,
+            attention_c_proj_out,
             ln_1_weight,
             mlp0_c_fc_weight,
             mlp0_c_fc_bias,
@@ -111,7 +111,7 @@ class _OverlappableBlock(torch.autograd.Function):
 
         ctx.eps = eps
 
-        return c_proj_out0, c_proj_out, residual
+        return attention_c_proj_out, c_proj_out, residual
 
 
 class LadderResidualBlock(GPTDolomiteBlock):
