@@ -51,7 +51,10 @@ def _get_sequence_mixer_block_types(config: GPTDolomiteConfig) -> List:
 
         seq_mixer_block_types = []
         for block in blocks:
-            seq_mixer_block_types.append(_get(block, "sequence_mixer_type"))
+            block_type = _get(block, "sequence_mixer_type")
+            if block_type == "mamba2":
+                block_type = "mamba"
+            seq_mixer_block_types.append(block_type)
         return seq_mixer_block_types
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybridConfig:
@@ -145,7 +148,7 @@ def _export_state_dict_to_huggingface(
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
         )
 
-        if seq_mixer_block_types[layer_idx] == "mamba2":
+        if seq_mixer_block_types[layer_idx] == "mamba":
             # mamba weights
             state_dict[f"model.layers.{layer_idx}.mamba.conv1d.weight"] = (
                 safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.sequence_mixer.conv1d.weight")
