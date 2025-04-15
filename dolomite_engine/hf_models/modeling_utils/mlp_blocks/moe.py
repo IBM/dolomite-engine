@@ -169,6 +169,10 @@ class MoE(nn.Module):
 
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
+        self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
+            torch.cuda.current_device()
+        ) >= (9, 0)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
@@ -222,7 +226,11 @@ class MoE(nn.Module):
         if is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-                expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
+
+                if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+                    expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
+                else:
+                    expert_offsets = bincount(sorted_expert_idxs, minlength=self.num_experts).cumsum(-1)
 
             hidden_states = self.c_fc(
                 hidden_states,
@@ -272,7 +280,11 @@ class MoE(nn.Module):
         self, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
-        num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
+
+        if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+            num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
+        else:
+            num_experts_per_token = bincount(selected_experts, minlength=self.num_experts)
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -299,7 +311,11 @@ class MoE(nn.Module):
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
+        if self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute):
+            freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
+        else:
+            freq = bincount(topk_idxs.flatten(), minlength=num_experts)
+
         freq = freq.float()
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
