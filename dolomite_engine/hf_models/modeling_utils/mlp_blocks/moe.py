@@ -18,6 +18,8 @@ if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
     from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
 
+from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
+
 
 def compute_bincount(x: torch.Tensor, size: int, use_continuous_count: bool) -> torch.Tensor:
     if use_continuous_count:
