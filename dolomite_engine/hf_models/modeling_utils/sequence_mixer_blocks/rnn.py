@@ -26,6 +26,7 @@ class RNN(nn.Module):
         add_bias: bool = True,
         initializer_range: float = 1,
         init_method: str = "normal",
+        gradient_clipping: float | None = None,
     ) -> None:
         super().__init__()
 
@@ -33,6 +34,7 @@ class RNN(nn.Module):
         self.state_size = state_size
         self.output_size = output_size
         self.num_heads = num_heads
+        self.gradient_clipping = gradient_clipping
 
         self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
@@ -59,7 +61,12 @@ class RNN(nn.Module):
         input = input.view(batch_size, sequence_length, self.num_heads, -1)
 
         if is_kernel_allowed(Kernel.rnn_cute):
-            input = rnn_cute(input=input, weight=self.state_weight, input_state=input_state)
+            input = rnn_cute(
+                input=input,
+                weight=self.state_weight,
+                input_state=input_state,
+                gradient_clipping=self.gradient_clipping,
+            )
         else:
             input = self._torch_forward(input, input_state)
 
@@ -69,6 +76,9 @@ class RNN(nn.Module):
         return input
 
     def _torch_forward(self, input: torch.Tensor, input_state: torch.Tensor | None = None) -> torch.Tensor:
+        if self.gradient_clipping is not None:
+            raise NotImplementedError("rnn_torch doesn't support gradient_clipping")
+
         B, S, N, H = input.size()
         output = torch.empty_like(input)
 
