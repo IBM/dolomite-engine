@@ -16,7 +16,26 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
+    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
+
+
+@torch.library.custom_op("dolomite_engine::bincount", mutates_args={})
+def bincount(x: torch.Tensor, minlength: int) -> torch.Tensor:
+    return x.bincount(minlength=minlength)
+
+
+@bincount.register_fake
+def _(x: torch.Tensor, minlength: int) -> torch.Tensor:
+    return torch.empty(minlength, dtype=torch.int)
+
+
+def compute_bincount(x: torch.Tensor, size: int, use_continuous_count: bool) -> torch.Tensor:
+    if use_continuous_count:
+        count = continuous_count_cute(x, size=size)
+    else:
+        count = bincount(x, minlength=size)
+
+    return count
 
 
 class ParameterizedExperts(nn.Module):
@@ -169,6 +188,10 @@ class MoE(nn.Module):
 
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
+        self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
+            torch.cuda.current_device()
+        ) >= (9, 0)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
@@ -222,7 +245,13 @@ class MoE(nn.Module):
         if is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-                expert_offsets = continuous_count_cute(x=sorted_expert_idxs, size=self.num_experts).cumsum(-1)
+
+                expert_offsets = compute_bincount(
+                    x=sorted_expert_idxs,
+                    size=self.num_experts,
+                    use_continuous_count=self.is_hopper_or_newer_gpu
+                    and is_kernel_allowed(Kernel.continuous_count_cute),
+                ).cumsum(-1)
 
             hidden_states = self.c_fc(
                 hidden_states,
@@ -272,7 +301,12 @@ class MoE(nn.Module):
         self, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
-        num_experts_per_token = continuous_count_cute(x=selected_experts, size=self.num_experts)
+
+        num_experts_per_token = compute_bincount(
+            x=selected_experts,
+            size=self.num_experts,
+            use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
+        )
 
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
@@ -299,7 +333,12 @@ class MoE(nn.Module):
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        freq = continuous_count_cute(x=topk_idxs.flatten(), size=num_experts)
+        freq = compute_bincount(
+            x=topk_idxs.flatten(),
+            size=num_experts,
+            use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
+        )
+
         freq = freq.float()
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:

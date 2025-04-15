@@ -1,9 +1,12 @@
 install:
-	pip install --extra-index-url https://download.pytorch.org/whl/nightly/cpu .
+	pip install -r requirements.txt
+	git submodule update --init --recursive
+	cd cute-kernels && make install
 
 install-dev:
-	pip install --extra-index-url https://download.pytorch.org/whl/nightly/cpu -e .
 	pip install -r requirements-dev.txt
+	git submodule update --init --recursive
+	cd cute-kernels && make install
 
 test:
 	RUN_SLOW=True pytest tests
