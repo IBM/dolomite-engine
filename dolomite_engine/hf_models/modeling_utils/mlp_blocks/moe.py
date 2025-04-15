@@ -26,7 +26,7 @@ def bincount(x: torch.Tensor, minlength: int) -> torch.Tensor:
 
 @bincount.register_fake
 def _(x: torch.Tensor, minlength: int) -> torch.Tensor:
-    return torch.empty(minlength, dtype=torch.int)
+    return torch.empty(minlength, device=x.device, dtype=torch.int)
 
 
 def compute_bincount(x: torch.Tensor, size: int, use_continuous_count: bool) -> torch.Tensor:
