@@ -221,7 +221,7 @@ class CommonConfig(PretrainedConfig):
             elif sequence_mixer_type == "rnn":
                 sequence_mixer_kwargs = {}
 
-                for key in ["state_size", "num_heads", "add_bias"]:
+                for key in ["state_size", "num_heads", "add_bias", "gradient_clipping"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 sequence_mixer_class = _RNNArgs
