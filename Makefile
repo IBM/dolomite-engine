@@ -6,8 +6,8 @@ install:
 	cd ..
 
 install-dev:
-	pip install -r requirements.txt
 	pip install -r requirements-dev.txt
+	git submodule update --init --recursive
 	cd cute-kernels
 	pip install .
 	cd ..
