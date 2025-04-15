@@ -25,6 +25,7 @@ jobs:
       - name: Installation
         run: |
           make install-dev
+          pip uninstall -y triton
 
       - name: Unit Tests
         run: make test
