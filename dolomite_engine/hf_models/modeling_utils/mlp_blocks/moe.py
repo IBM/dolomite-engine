@@ -16,9 +16,17 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
+    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
 
-from cute_kernels.kernels.scattermoe.triton_implementation import bincount, scattered_experts
+
+@torch.library.custom_op("dolomite_engine::bincount", mutates_args={})
+def bincount(x: torch.Tensor, minlength: int) -> torch.Tensor:
+    return x.bincount(minlength=minlength)
+
+
+@bincount.register_fake
+def _(x: torch.Tensor, minlength: int) -> torch.Tensor:
+    return torch.empty(minlength, dtype=torch.int)
 
 
 def compute_bincount(x: torch.Tensor, size: int, use_continuous_count: bool) -> torch.Tensor:
