@@ -1,16 +1,12 @@
 install:
 	pip install -r requirements.txt
 	git submodule update --init --recursive
-	cd cute-kernels
-	make install
-	cd ..
+	cd cute-kernels && make install
 
 install-dev:
 	pip install -r requirements-dev.txt
 	git submodule update --init --recursive
-	cd cute-kernels
-	make install
-	cd ..
+	cd cute-kernels && make install
 
 test:
 	RUN_SLOW=True pytest tests
