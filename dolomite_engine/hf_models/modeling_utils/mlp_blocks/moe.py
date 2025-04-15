@@ -19,6 +19,7 @@ if is_cute_kernels_available():
     from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
 
 
+# TODO add support for combileable bincount in PyTorch directly
 @torch.library.custom_op("dolomite_engine::bincount", mutates_args={})
 def bincount(x: torch.Tensor, minlength: int) -> torch.Tensor:
     return x.bincount(minlength=minlength)
