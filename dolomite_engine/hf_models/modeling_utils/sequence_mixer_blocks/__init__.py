@@ -77,6 +77,7 @@ def get_sequence_mixer(
             add_bias=block.add_bias,
             initializer_range=config.initializer_range,
             init_method=config.init_method,
+            gradient_clipping=block.gradient_clipping,
         )
     else:
         sequence_mixer_kwargs = dict(
