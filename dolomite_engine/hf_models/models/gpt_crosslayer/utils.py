@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoModelForCausalLM
 
-from ...modeling_utils import split_query_key_value_tensor_for_attention
+from ...modeling_utils import get_attention_head_type, split_query_key_value_tensor_for_attention
 from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM
 from .config import GPTCrossLayerConfig
 from .main import GPTCrossLayerForCausalLM
@@ -18,7 +18,6 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_layers,
-        num_attention_heads=original_config.num_attention_heads,
         embedding_dropout=original_config.embedding_dropout,
         normalization_function=original_config.normalization_function,
         layer_norm_epsilon=original_config.layer_norm_epsilon,
@@ -33,7 +32,7 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
     model = AutoModelForCausalLM.from_config(config, torch_dtype=original_model.dtype, **kwargs)
 
     hidden_size = config.hidden_size
-    num_attention_heads = config.num_attention_heads
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
     head_dim = hidden_size // num_attention_heads
 
     state_dict = original_model.state_dict()
@@ -53,8 +52,8 @@ def convert_gpt_dolomite_to_gpt_crosslayer(
         new_state_dict["transformer.ln_f.bias"] = state_dict["transformer.ln_f.bias"]
 
     for layer_idx in range(original_config.num_layers):
-        attention_head_type = config.sequence_mixer_blocks[layer_idx].attention_head_type
         num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
+        attention_head_type = get_attention_head_type(num_attention_heads, num_key_value_heads)
         add_bias = config.sequence_mixer_blocks[layer_idx].add_bias
 
         q_attn_weight, k_attn_weight, v_attn_weight = split_query_key_value_tensor_for_attention(

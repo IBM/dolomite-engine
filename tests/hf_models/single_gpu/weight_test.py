@@ -20,13 +20,14 @@ class WeightTest(TestCommons):
         num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
         state_dict = attention.state_dict()
+        num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
         c_attn_weight = state_dict["c_attn.weight"]
         query_key_value_weight = self._split_and_interleave(
             c_attn_weight,
-            config.num_attention_heads,
+            num_attention_heads,
             num_key_value_heads,
-            config.hidden_size // config.num_attention_heads,
+            config.hidden_size // num_attention_heads,
             attention_head_type,
         )
         assert (c_attn_weight == query_key_value_weight).all()
@@ -34,9 +35,9 @@ class WeightTest(TestCommons):
         c_attn_bias = state_dict["c_attn.bias"]
         query_key_value_bias = self._split_and_interleave(
             c_attn_bias,
-            config.num_attention_heads,
+            num_attention_heads,
             num_key_value_heads,
-            config.hidden_size // config.num_attention_heads,
+            config.hidden_size // num_attention_heads,
             attention_head_type,
         )
         assert (c_attn_bias == query_key_value_bias).all()

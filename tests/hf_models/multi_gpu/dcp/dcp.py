@@ -27,18 +27,20 @@ parser.add_argument("--data-parallel-replication-world-size", type=int)
 parser.add_argument("--data-parallel-sharding-world-size", type=int)
 args = parser.parse_args()
 
-num_key_value_heads = None
-if args.attention_head_type == "gqa":
-    num_key_value_heads = 8
-
 train_config = TrainingArgs(**load_yaml(args.train_config))
 unshard_config = UnshardingArgs(**load_yaml(args.unshard_config))
+
+if args.attention_head_type == "mha":
+    num_key_value_heads = train_config.model_args.pretrained_config["sequence_mixer_blocks"][0]["num_attention_heads"]
+elif args.attention_head_type == "mqa":
+    num_key_value_heads = 1
+else:
+    num_key_value_heads = 8
 
 # set zero stage
 train_config.distributed_args.stage = args.zero_stage
 # attention head type
 for block in train_config.model_args.pretrained_config["sequence_mixer_blocks"]:
-    block["attention_head_type"] = args.attention_head_type
     block["num_key_value_heads"] = num_key_value_heads
 # activation function
 for block in train_config.model_args.pretrained_config["mlp_blocks"]:

@@ -1,5 +1,4 @@
 import torch
-import torch.distributed
 from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
@@ -10,6 +9,7 @@ from ..hf_models import (
     PipelineParallelInput,
     PipelineParallelOutput,
     get_autoregressive_language_modeling_loss,
+    is_aux_loss_zero,
 )
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
@@ -125,7 +125,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         if self.is_pipeline_parallel_enabled:
             # aux_loss is returned as a 0 dimensional tensor
             aux_loss = output.aux_loss
-            if aux_loss != 0 and aux_loss.dim() == 0:
+            use_aux_loss = not is_aux_loss_zero(aux_loss)
+
+            if use_aux_loss and aux_loss.dim() == 0:
                 aux_loss = aux_loss.unsqueeze(0)
 
             if self.is_last_stage:
@@ -135,7 +137,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                 assert isinstance(output, PipelineParallelOutput)
                 output = output.hidden_states
 
-            if aux_loss != 0:
+            if use_aux_loss:
                 output = (output, aux_loss)
         else:
             output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
@@ -163,7 +165,7 @@ class ModelWrapperForPretraining(ModelWrapper):
         lm_loss = lm_loss * lm_loss_multiplier
         aux_loss = getattr(model_outputs, "aux_loss", 0)
 
-        if aux_loss == 0:
+        if is_aux_loss_zero(aux_loss):
             loss = lm_loss
             output = {"loss": loss, "lm_loss": loss}
         else:

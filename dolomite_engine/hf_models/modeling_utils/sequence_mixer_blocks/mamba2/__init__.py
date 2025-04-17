@@ -110,6 +110,7 @@ class Mamba2(nn.Module):
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
 
+    @torch._dynamo.disable
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -495,7 +496,6 @@ class Mamba2(nn.Module):
                 # Init cache
                 if ssm_state is not None and cache_params is not None:
                     cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
-                    cache_params.has_previous_state = True
 
                 scan_output = scan_output.view(batch_size, seq_len, -1)
                 # Multiply "gate" branch and apply extra normalization layer

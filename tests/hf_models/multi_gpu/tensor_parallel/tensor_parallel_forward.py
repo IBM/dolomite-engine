@@ -30,8 +30,11 @@ ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
-num_key_value_heads = None
-if args.attention_head_type == "gqa":
+if args.attention_head_type == "mha":
+    num_key_value_heads = 16
+elif args.attention_head_type == "mqa":
+    num_key_value_heads = 1
+else:
     num_key_value_heads = 8
 
 if args.model_type == "gpt_dolomite":
@@ -39,19 +42,18 @@ if args.model_type == "gpt_dolomite":
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
         hidden_size=128,
-        num_attention_heads=16,
         sequence_mixer_blocks=[
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
+                "num_attention_heads": 16,
                 "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
             },
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
+                "num_attention_heads": 16,
                 "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
             },
         ],
         mlp_blocks=[
@@ -64,19 +66,18 @@ elif args.model_type == "ladder_residual":
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
         hidden_size=128,
-        num_attention_heads=16,
         sequence_mixer_blocks=[
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
+                "num_attention_heads": 16,
                 "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
             },
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": False,
+                "num_attention_heads": 16,
                 "num_key_value_heads": num_key_value_heads,
-                "attention_head_type": args.attention_head_type,
             },
         ],
         mlp_blocks=[

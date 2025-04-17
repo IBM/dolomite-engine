@@ -8,15 +8,15 @@ from .llama import _export_state_dict_to_huggingface, _import_state_dict_from_hu
 def import_from_huggingface_granite(pretrained_model_name_or_path: str, save_path: str) -> None:
     original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
     safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_attention_heads,
+        num_attention_heads,
         config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
+        config.hidden_size // num_attention_heads,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -31,14 +31,6 @@ def import_from_huggingface_granite(pretrained_model_name_or_path: str, save_pat
 
 def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomiteConfig:
     assert original_config.hidden_act == "silu"
-
-    if original_config.num_attention_heads == original_config.num_key_value_heads:
-        attention_head_type = "mha"
-    elif original_config.num_key_value_heads == 1:
-        attention_head_type = "mqa"
-    elif original_config.num_attention_heads > original_config.num_key_value_heads:
-        attention_head_type = "gqa"
-
     assert original_config.mlp_bias == original_config.attention_bias
 
     config = GPTDolomiteConfig(
@@ -46,7 +38,6 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_hidden_layers,
-        num_attention_heads=original_config.num_attention_heads,
         position_embedding_type="rope",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
@@ -65,8 +56,8 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
             {
                 "sequence_mixer_type": "softmax_attention",
                 "add_bias": original_config.attention_bias,
+                "num_attention_heads": original_config.num_attention_heads,
                 "num_key_value_heads": original_config.num_key_value_heads,
-                "attention_head_type": attention_head_type,
                 "attention_multiplier": original_config.attention_multiplier,
                 "softmax_dropout": original_config.attention_dropout,
             }
@@ -89,15 +80,15 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
 def export_to_huggingface_granite(pretrained_model_name_or_path: str, save_path: str) -> None:
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_attention_heads,
+        num_attention_heads,
         config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
+        config.hidden_size // num_attention_heads,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -125,7 +116,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
         max_position_embeddings=config.max_position_embeddings,
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
-        num_attention_heads=config.num_attention_heads,
+        num_attention_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads"),
         num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
         hidden_act="silu",

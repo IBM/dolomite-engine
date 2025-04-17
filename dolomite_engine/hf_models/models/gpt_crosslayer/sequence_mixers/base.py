@@ -8,7 +8,12 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
 from .....utils import divide_if_divisible, is_flash_attention_available
-from ....modeling_utils import ParameterizedLinear, apply_rotary_pos_emb, get_normalization_function
+from ....modeling_utils import (
+    ParameterizedLinear,
+    apply_rotary_pos_emb,
+    get_attention_head_type,
+    get_normalization_function,
+)
 
 
 if is_flash_attention_available():
@@ -22,7 +27,6 @@ class CrossLayerAttention(nn.Module):
         num_attention_heads: int,
         num_key_value_heads: int,
         attention_multiplier: float,
-        attention_head_type: str,
         position_embedding_type: str,
         add_bias: bool,
         softmax_dropout: float,
@@ -48,7 +52,7 @@ class CrossLayerAttention(nn.Module):
         ), f"`hidden_size` ({self.hidden_size}) must be divisible by `num_heads` ({self.num_heads})"
 
         self.head_dim = self.hidden_size // self.num_heads
-        self.attention_head_type = attention_head_type
+        self.attention_head_type = get_attention_head_type(num_attention_heads, num_key_value_heads)
 
         self.position_embedding_type = position_embedding_type
         self.attention_multiplier = attention_multiplier

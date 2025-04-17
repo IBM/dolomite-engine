@@ -20,7 +20,6 @@ model_args:
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
     hidden_size: 512
-    num_attention_heads: 16
     num_layers: 24
     max_position_embeddings: 512
     normalization_function: rmsnorm
@@ -33,52 +32,76 @@ model_args:
     pad_token_id: 0
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
       - sequence_mixer_type: softmax_attention
+        num_attention_heads: 16
         add_bias: false
     mlp_blocks:
       - mlp_type: MLP
