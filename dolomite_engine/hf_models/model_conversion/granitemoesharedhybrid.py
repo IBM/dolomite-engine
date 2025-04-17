@@ -10,6 +10,7 @@ from typing import List
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..modeling_utils import (
+    get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
@@ -20,15 +21,6 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
-    if original_config.num_attention_heads == original_config.num_key_value_heads:
-        attention_head_type = "mha"
-    elif original_config.num_key_value_heads == 1:
-        attention_head_type = "mqa"
-    elif original_config.num_attention_heads > original_config.num_key_value_heads:
-        attention_head_type = "gqa"
-    else:
-        raise ValueError("could not figure attention head type")
-
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
@@ -37,7 +29,6 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
         num_heads = original_config.num_attention_heads,
         num_key_value_heads = original_config.num_key_value_heads,
         head_dim = original_config.hidden_size // original_config.num_attention_heads,
-        attention_head_type = attention_head_type
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -131,12 +122,12 @@ def _export_state_dict_to_huggingface(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: str,
 ) -> None:
     state_dict = {
         "model.embed_tokens.weight": safetensors_weights_manager.get_tensor("transformer.wte.weight"),
         "model.norm.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight"),
     }
+    attention_head_type = get_attention_head_type(num_heads, num_key_value_heads)
 
     if safetensors_weights_manager.has_tensor("lm_head.weight"):
         state_dict["lm_head.weight"] = safetensors_weights_manager.get_tensor("lm_head.weight")
