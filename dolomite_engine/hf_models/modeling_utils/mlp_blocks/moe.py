@@ -22,12 +22,12 @@ if is_cute_kernels_available():
 # TODO add support for combileable bincount in PyTorch directly
 @torch.library.custom_op("dolomite_engine::bincount", mutates_args={})
 def bincount(x: torch.Tensor, minlength: int) -> torch.Tensor:
-    return x.bincount(minlength=minlength)
+    return x.bincount(minlength=minlength).to(torch.uint32)
 
 
 @bincount.register_fake
 def _(x: torch.Tensor, minlength: int) -> torch.Tensor:
-    return torch.empty(minlength, device=x.device, dtype=torch.int)
+    return torch.empty(minlength, device=x.device, dtype=torch.uint32)
 
 
 def compute_bincount(x: torch.Tensor, size: int, use_continuous_count: bool) -> torch.Tensor:
