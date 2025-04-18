@@ -66,7 +66,7 @@ class RNN(nn.Module):
                 input=self.factor * input,
                 weight=self.factor * self.state_weight,
                 input_state=input_state,
-                gradient_clipping=None,  # self.gradient_clipping,
+                gradient_clipping=self.gradient_clipping,
             )
         else:
             raise NotImplementedError("No torch rnn")
