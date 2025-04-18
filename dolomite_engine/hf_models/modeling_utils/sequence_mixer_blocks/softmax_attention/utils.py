@@ -102,3 +102,12 @@ def repeat_key_value(x: torch.Tensor, num_heads: int, num_key_value_heads: int) 
         return x.expand(-1, num_heads, -1, -1)
 
     return x.repeat_interleave(num_groups, dim=1)
+
+
+def get_attention_head_type(num_attention_heads: int, num_key_value_heads: int) -> str:
+    if num_attention_heads == num_key_value_heads:
+        return "mha"
+    elif num_key_value_heads == 1:
+        return "mqa"
+    else:
+        return "gqa"

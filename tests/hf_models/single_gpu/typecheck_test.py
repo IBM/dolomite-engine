@@ -2,7 +2,6 @@ import torch
 from parameterized import parameterized
 
 from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import GPTDolomiteConfig
 from dolomite_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
@@ -13,7 +12,9 @@ class TypeCheckTest(TestCommons):
     def test_no_attention_mask_flash_attention(self, device: torch.device) -> None:
         self.skip_test_if_device_unavailable(device)
 
-        config = GPTDolomiteConfig(2048, 1024, 32, 8, 4)
+        config = self.get_dense_test_config(
+            attention_head_type="mha", position_embedding_type="learned_absolute", num_layers=8, num_attention_heads=32
+        )
         model = self.from_config(config, use_padding_free_transformer=True).to(device)
         model.eval()
 

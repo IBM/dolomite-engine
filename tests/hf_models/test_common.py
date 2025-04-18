@@ -68,13 +68,22 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
+        num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
+        if attention_head_type == "mha":
+            num_key_value_heads = num_attention_heads
+        elif attention_head_type == "mqa":
+            num_key_value_heads = 1
+        elif attention_head_type == "gqa":
+            num_key_value_heads = 2
+        else:
+            raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+
         return GPTDolomiteConfig(
             vocab_size=2048,
             max_position_embeddings=1024,
             hidden_size=32,
             num_layers=num_layers,
-            num_attention_heads=4,
             position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
@@ -88,8 +97,8 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
-                    "attention_head_type": attention_head_type,
+                    "num_attention_heads": num_attention_heads,
+                    "num_key_value_heads": num_key_value_heads,
                     "attention_multiplier": attention_multiplier,
                 }
                 for _ in range(num_layers)
@@ -115,13 +124,22 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
+        num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
+        if attention_head_type == "mha":
+            num_key_value_heads = num_attention_heads
+        elif attention_head_type == "mqa":
+            num_key_value_heads = 1
+        elif attention_head_type == "gqa":
+            num_key_value_heads = 2
+        else:
+            raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+
         return GPTDolomiteConfig(
             vocab_size=2048,
             max_position_embeddings=1024,
             hidden_size=32,
             num_layers=num_layers,
-            num_attention_heads=4,
             position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
@@ -135,8 +153,8 @@ class TestCommons(TestCase):
                 {
                     "sequence_mixer_type": "softmax_attention",
                     "add_bias": add_bias,
-                    "num_key_value_heads": 2 if attention_head_type == "gqa" else None,
-                    "attention_head_type": attention_head_type,
+                    "num_attention_heads": num_attention_heads,
+                    "num_key_value_heads": num_key_value_heads,
                     "attention_multiplier": attention_multiplier,
                 }
                 for _ in range(num_layers)

@@ -20,8 +20,7 @@ model_args:
     layer_norm_epsilon: 1e-05
     model_type: gpt_dolomite
     hidden_size: 512
-    num_attention_heads: 16
-    num_layers: 2
+    num_layers: 3
     max_position_embeddings: 512
     normalization_function: rmsnorm
     position_embedding_type: rope
@@ -35,16 +34,20 @@ model_args:
     m_emb: 12
     m_residual: 0.22
     init_method: mup
+    rope_dim: 64
     sequence_mixer_blocks:
       - sequence_mixer_type: softmax_attention
-        attention_head_type: mha
+        num_attention_heads: 16
       - sequence_mixer_type: mamba2
+      - sequence_mixer_type: rnn
     mlp_blocks:
       - activation_function: swiglu
         mlp_type: MLP
       - activation_function: swiglu
         mlp_type: MoE
         shared_intermediate_size: 512
+      - activation_function: swiglu
+        mlp_type: MLP
 
 tuning_args:
   tuning_method: pretraining

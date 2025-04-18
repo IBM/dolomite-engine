@@ -79,7 +79,6 @@ def get_model_tflops(
     b = batch_size
     s = sequence_length
     h = config.hidden_size
-    n = config.num_attention_heads
     l = config.num_layers
     v = config.vocab_size
 
@@ -89,7 +88,7 @@ def get_model_tflops(
         sequence_mixer_type = block.sequence_mixer_type
 
         if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
-            attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / n) + s)
+            attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / block.num_attention_heads) + s)
         elif sequence_mixer_type == "multihead_latent_attention":
             attention_flops = (
                 2 * b * s * h * (h + 2 * (s + block.query_compression_size + 2 * block.key_value_compression_size))
@@ -103,6 +102,10 @@ def get_model_tflops(
             ssm_flops = 4 * b * s * block.intermediate_size * block.state_size
 
             attention_flops = projection_flops + ssm_flops
+        elif sequence_mixer_type == "rnn":
+            attention_flops = 4 * b * s * h * block.state_size
+            head_dim = block.state_size / block.num_heads
+            attention_flops += b * s * block.num_heads * head_dim * (2 * head_dim + 1)
         else:
             raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 

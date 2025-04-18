@@ -3,6 +3,7 @@ import torch.nn as nn
 from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, divide_if_divisible
+from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
@@ -22,10 +23,6 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
         self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
         self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
 
-        self.all_mlp = all([block.mlp_type == "MLP" for block in config.mlp_blocks])
-        self.all_moe = all([block.mlp_type == "MoE" for block in config.mlp_blocks])
-        assert self.all_mlp or self.all_moe
-
         super().__init__(config, *args, **kwargs)
 
         if self.is_pipeline_parallel_enabled and self._tied_word_embeddings:
@@ -35,11 +32,10 @@ class PreTrainedModelMixin_TP(PreTrainedModelMixin):
 class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
     def _init_model(self, config: CommonConfig, **kwargs) -> None:
         self.embed_dim = config.hidden_size
-        self.num_heads = config.num_attention_heads
         self.max_position_embeddings = config.max_position_embeddings
         self.m_emb = config.m_emb
         self.initializer_range = config.initializer_range
-        self.head_dim = self.embed_dim // self.num_heads
+        self.rope_dim = config.rope_dim
 
         self.layers_per_stage = divide_if_divisible(
             config.num_layers, self.num_pipeline_stages, "layers should be divisible by num_pipeline_stages"
@@ -162,6 +158,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 max_seqlen=max_seqlen,
             )
 
+        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
+            past_key_values.has_previous_state = True
+
         if self.is_last_stage:
             hidden_states = self.ln_f(hidden_states)
 
@@ -182,11 +181,11 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         elif self.position_embedding_type == "rope":
             if self.config.rope_scaling is None:
                 self.rope = RoPE(
-                    self.head_dim, max_position_embeddings=max_position_embeddings, base=self.config.rope_theta
+                    self.rope_dim, max_position_embeddings=max_position_embeddings, base=self.config.rope_theta
                 )
             else:
                 self.rope = YaRNScaledRoPE(
-                    self.head_dim,
+                    self.rope_dim,
                     max_position_embeddings=max_position_embeddings,
                     base=self.config.rope_theta,
                     scale=self.config.rope_scaling["factor"],

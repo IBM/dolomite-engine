@@ -10,7 +10,7 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
 )
-from ..hf_models.modeling_utils import MLP, Attention, Mamba2, MoE
+from ..hf_models.modeling_utils import MLP, RNN, Attention, Mamba2, MoE
 from ..model_wrapper import ModelWrapper
 from ..utils import BaseArgs, log_rank_0
 
@@ -132,7 +132,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 
     # collect parameters with mup learning rate
     for module_name, module in model.named_modules():
-        if isinstance(module, (Attention, MLP, MoE)):
+        if isinstance(module, (Attention, MLP, MoE, RNN)):
             for param_name, param in module.named_parameters():
                 # we don't add bias or norms to mup group
                 if not (param_name.endswith("bias") or "norm" in param_name):

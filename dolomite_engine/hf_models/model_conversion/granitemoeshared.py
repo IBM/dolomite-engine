@@ -9,6 +9,7 @@ from transformers import (
 
 from ...utils import SafeTensorsWeightsManager, download_repo
 from ..modeling_utils import (
+    get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
@@ -18,15 +19,15 @@ from ..models import GPTDolomiteConfig
 def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
     original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
     safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
     state_dict = _import_state_dict_from_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_attention_heads,
+        num_attention_heads,
         config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
+        config.hidden_size // num_attention_heads,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -41,14 +42,6 @@ def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str,
 
 def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> GPTDolomiteConfig:
     assert original_config.hidden_act == "silu"
-
-    if original_config.num_attention_heads == original_config.num_key_value_heads:
-        attention_head_type = "mha"
-    elif original_config.num_key_value_heads == 1:
-        attention_head_type = "mqa"
-    elif original_config.num_attention_heads > original_config.num_key_value_heads:
-        attention_head_type = "gqa"
-
     assert not original_config.attention_bias
 
     config = GPTDolomiteConfig(
@@ -56,7 +49,6 @@ def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> 
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
         num_layers=original_config.num_hidden_layers,
-        num_attention_heads=original_config.num_attention_heads,
         position_embedding_type="rope",
         normalization_function="rmsnorm",
         layer_norm_epsilon=original_config.rms_norm_eps,
@@ -75,8 +67,8 @@ def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> 
         sequence_mixer_blocks=[
             {
                 "sequence_mixer_type": "softmax_attention",
+                "num_attention_heads": original_config.num_attention_heads,
                 "num_key_value_heads": original_config.num_key_value_heads,
-                "attention_head_type": attention_head_type,
                 "attention_multiplier": original_config.attention_multiplier,
                 "add_bias": False,
                 "softmax_dropout": original_config.attention_dropout,
@@ -108,8 +100,9 @@ def _import_state_dict_from_huggingface(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: str,
 ) -> None:
+    attention_head_type = get_attention_head_type(num_heads, num_key_value_heads)
+
     state_dict = {
         "transformer.wte.weight": safetensors_weights_manager.get_tensor("model.embed_tokens.weight"),
         "transformer.ln_f.weight": safetensors_weights_manager.get_tensor("model.norm.weight"),
@@ -168,15 +161,15 @@ def _import_state_dict_from_huggingface(
 def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
     config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
     state_dict = _export_state_dict_to_huggingface(
         safetensors_weights_manager,
         config.num_layers,
-        config.num_attention_heads,
+        num_attention_heads,
         config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
-        config.hidden_size // config.num_attention_heads,
-        config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_head_type"),
+        config.hidden_size // num_attention_heads,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -207,7 +200,7 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeShared
         max_position_embeddings=config.max_position_embeddings,
         hidden_size=config.hidden_size,
         num_hidden_layers=config.num_layers,
-        num_attention_heads=config.num_attention_heads,
+        num_attention_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads"),
         shared_intermediate_size=0 if shared_intermediate_size is None else shared_intermediate_size,
         num_key_value_heads=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads"),
         intermediate_size=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
@@ -242,8 +235,9 @@ def _export_state_dict_to_huggingface(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
-    attention_head_type: str,
 ) -> None:
+    attention_head_type = get_attention_head_type(num_heads, num_key_value_heads)
+
     state_dict = {
         "model.embed_tokens.weight": safetensors_weights_manager.get_tensor("transformer.wte.weight"),
         "model.norm.weight": safetensors_weights_manager.get_tensor("transformer.ln_f.weight"),

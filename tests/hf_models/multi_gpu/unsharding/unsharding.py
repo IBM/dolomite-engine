@@ -30,27 +30,29 @@ ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 is_tp_first_rank = ProcessGroupManager.is_tensor_parallel_first_rank()
 
-num_key_value_heads = None
-if args.attention_head_type == "gqa":
+if args.attention_head_type == "mha":
+    num_key_value_heads = 16
+elif args.attention_head_type == "mqa":
+    num_key_value_heads = 1
+else:
     num_key_value_heads = 8
 
 config = GPTDolomiteConfig(
     num_layers=2,
     position_embedding_type="learned_absolute",
     hidden_size=128,
-    num_attention_heads=16,
     sequence_mixer_blocks=[
         {
             "sequence_mixer_type": "softmax_attention",
             "add_bias": False,
+            "num_attention_heads": 16,
             "num_key_value_heads": num_key_value_heads,
-            "attention_head_type": args.attention_head_type,
         },
         {
             "sequence_mixer_type": "softmax_attention",
             "add_bias": False,
+            "num_attention_heads": 16,
             "num_key_value_heads": num_key_value_heads,
-            "attention_head_type": args.attention_head_type,
         },
     ],
     mlp_blocks=[

@@ -101,3 +101,12 @@ def add_aux_loss(aux_loss: torch.Tensor) -> None:
 
 def get_aux_loss() -> torch.Tensor:
     return _AUX_LOSS
+
+
+def is_aux_loss_zero(aux_loss: torch.Tensor | float) -> bool:
+    if aux_loss is None:
+        return True
+    elif isinstance(aux_loss, torch.Tensor):
+        return False
+
+    return aux_loss == 0

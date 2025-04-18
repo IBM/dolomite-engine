@@ -1,7 +1,7 @@
 import torch
 
 from .....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
-from ....modeling_utils import is_glu
+from ....modeling_utils import get_attention_head_type, is_glu
 from ....modeling_utils_TP import get_tensor_parallel_vocab_info, tensor_parallel_split_safetensor_slice
 from ...gpt_dolomite import GPTDolomiteConfig
 
@@ -45,12 +45,14 @@ def get_gpt_dolomite_model_parallel_state_dict(
 
         state_dict.update(_get_layernorm(safetensors_weights_manager, prefix=prefix + "ln_1."))
 
+        num_attention_heads = config.sequence_mixer_blocks[layer_idx].num_attention_heads
+
         state_dict.update(
             _get_attention(
                 hidden_size=config.hidden_size,
-                num_attention_heads=config.num_attention_heads,
-                attention_head_type=config.check_equal_for_all_and_get_value(
-                    "sequence_mixer_blocks", "attention_head_type"
+                num_attention_heads=num_attention_heads,
+                attention_head_type=get_attention_head_type(
+                    num_attention_heads, config.sequence_mixer_blocks[layer_idx].num_key_value_heads
                 ),
                 add_bias=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "add_bias"),
                 safetensors_weights_manager=safetensors_weights_manager,

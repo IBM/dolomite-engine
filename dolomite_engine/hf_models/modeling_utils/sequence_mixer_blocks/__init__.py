@@ -1,8 +1,10 @@
 from ...config import CommonConfig
 from .mamba2 import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
+from .rnn import RNN
 from .softmax_attention import (
     Attention,
+    get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
     interleave_query_key_value_tensor_for_gqa,
     interleave_query_key_value_tensor_for_mha,
@@ -67,13 +69,25 @@ def get_sequence_mixer(
             normalization_function=block.normalization_function,
             layer_norm_epsilon=config.layer_norm_epsilon,
         )
+    elif sequence_mixer_type == "rnn":
+        return RNN(
+            input_size=config.hidden_size,
+            state_size=block.state_size,
+            output_size=config.hidden_size,
+            num_heads=block.num_heads,
+            m_width=config.m_width,
+            num_layers=config.num_layers,
+            add_bias=block.add_bias,
+            initializer_range=config.initializer_range,
+            init_method=config.init_method,
+            gradient_clipping=block.gradient_clipping,
+        )
     else:
         sequence_mixer_kwargs = dict(
             hidden_size=config.hidden_size,
-            num_attention_heads=config.num_attention_heads,
+            num_attention_heads=block.num_attention_heads,
             num_key_value_heads=block.num_key_value_heads,
             attention_multiplier=block.attention_multiplier,
-            attention_head_type=block.attention_head_type,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,
             dropout=block.dropout,

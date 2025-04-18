@@ -5,7 +5,13 @@ from transformers import DynamicCache
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
-from ...modeling_utils import apply_rotary_pos_emb, get_mlp_block, get_normalization_function, repeat_key_value
+from ...modeling_utils import (
+    apply_rotary_pos_emb,
+    get_attention_head_type,
+    get_mlp_block,
+    get_normalization_function,
+    repeat_key_value,
+)
 from .config import GPTCrossLayerConfig
 from .sequence_mixers import KeyValueProjection, get_sequence_mixer
 
@@ -18,8 +24,11 @@ class GPTCrossLayerBlock(nn.Module):
         self.m_residual = config.m_residual
         self.layer_idx = layer_idx
         self.position_embedding_type = config.position_embedding_type
-        self.attention_head_type = config.sequence_mixer_blocks[layer_idx].attention_head_type
-        self.num_heads = config.num_attention_heads
+        self.attention_head_type = get_attention_head_type(
+            config.sequence_mixer_blocks[layer_idx].num_attention_heads,
+            config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
+        )
+        self.num_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
         self.head_dim = divide_if_divisible(hidden_size, self.num_heads, "")
         self.num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
@@ -29,7 +38,7 @@ class GPTCrossLayerBlock(nn.Module):
         if config.sharing_pattern[layer_idx] == layer_idx:
             self.kv_proj = KeyValueProjection(
                 hidden_size=config.hidden_size,
-                num_attention_heads=config.num_attention_heads,
+                num_attention_heads=self.num_heads,
                 num_key_value_heads=config.sequence_mixer_blocks[layer_idx].num_key_value_heads,
                 add_bias=config.sequence_mixer_blocks[layer_idx].add_bias,
                 initializer_range=config.initializer_range,
