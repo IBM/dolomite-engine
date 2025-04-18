@@ -69,7 +69,6 @@ class RNN(nn.Module):
                 gradient_clipping=self.gradient_clipping,
             )
         else:
-            raise NotImplementedError("No torch rnn")
             input = self._torch_forward(input, input_state)
 
         input = input.view(batch_size, sequence_length, -1)
@@ -93,6 +92,9 @@ class RNN(nn.Module):
         # input -> (B, S, N, 1, H)
         # weight -> (1, N, H, H)
         # input_state -> (B, N, H)
+
+        input = input * self.factor
+        weight = weight * self.factor
 
         for s in range(S):
             input_state = input_state.unsqueeze(-2)
