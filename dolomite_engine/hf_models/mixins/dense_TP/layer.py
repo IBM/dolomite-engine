@@ -1,14 +1,14 @@
 import torch.nn as nn
 
+from ...config import CommonConfig
+from ...mixins import BaseBlock
 from ...modeling_utils_TP import get_mlp_block_TP, get_normalization_function_TP, get_sequence_mixer_TP
-from ..gpt_dolomite import GPTDolomiteConfig
-from ..gpt_dolomite.layer import GPTDolomiteBlock
 
 
-class GPTDolomiteBlock_TP(GPTDolomiteBlock):
+class BaseBlock_TP(BaseBlock):
     def __init__(
         self,
-        config: GPTDolomiteConfig,
+        config: CommonConfig,
         use_padding_free_transformer: bool,
         layer_idx: int | None = None,
         sequence_parallel: bool = False,

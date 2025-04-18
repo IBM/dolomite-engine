@@ -4,12 +4,12 @@ from transformers import DynamicCache, PreTrainedModel
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
-from ....utils import divide_if_divisible
 from ...cache import HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 from ..modeling_outputs import BaseModelOutputWithPast
+from .layer import BaseBlock
 
 
 class PreTrainedModelMixin(PreTrainedModel):
@@ -19,10 +19,10 @@ class PreTrainedModelMixin(PreTrainedModel):
     """
 
     config_class = None
-    layer_class = None
+    layer_class = BaseBlock
     base_model_prefix = "transformer"
     causal = True
-    _no_split_modules = None
+    _no_split_modules = ["BaseBlock"]
     _skip_keys_device_placement = "past_key_values"
 
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
@@ -119,6 +119,29 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         self.rope_dim = config.rope_dim
 
+        # configure if mtp block exists
+        if config.num_nextn_predict_layers > 0:
+            self.is_mtp_blocks = True
+
+            self.mtp_blocks = nn.ModuleList(
+                [
+                    self.mtp_layer_class(
+                        config, use_padding_free_transformer=self._use_padding_free_transformer, layer_idx=i
+                    )
+                    for i in range(config.num_nextn_predict_layers)
+                ]
+            )
+            self.sequence_mixer_block_types_MTP = [
+                config.mtp_blocks[i].sequence_mixer.sequence_mixer_type for i in range(config.num_nextn_predict_layers)
+            ]
+
+            self.ln_f_mtp = get_normalization_function(
+                config.normalization_function, self.embed_dim, eps=config.layer_norm_epsilon
+            )
+
+        else:
+            self.is_mtp_blocks = False
+
         self.position_embedding_type = config.position_embedding_type
         self._setup_positional_encoding()
 
@@ -142,6 +165,9 @@ class BaseModelMixin(PreTrainedModelMixin):
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
+        prev_hidden_state_mtp: torch.Tensor | None = None,
+        mtp_block_idx: int = -1,
+        is_mtp_block: bool = False,
     ) -> BaseModelOutputWithPast:
         (
             use_cache,
@@ -179,15 +205,18 @@ class BaseModelMixin(PreTrainedModelMixin):
         mamba_mask = None
         mamba_mask_computed = False
 
-        for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
+        if is_mtp_block:
+            sequence_mixer_type = self.sequence_mixer_block_types_MTP[mtp_block_idx]
+
             is_mamba_layer = sequence_mixer_type == "mamba2"
 
             if is_mamba_layer and not mamba_mask_computed:
                 mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
                 mamba_mask_computed = True
 
-            hidden_states = block(
-                hidden_states,
+            mtp_hidden_states = self.mtp_blocks[mtp_block_idx](
+                x_emb=hidden_states,
+                past_hidden_layer=prev_hidden_state_mtp,
                 past_key_values=past_key_values,
                 attention_mask=mamba_mask if is_mamba_layer else causal_mask,
                 rope_cos_sin=rope_cos_sin,
@@ -195,12 +224,36 @@ class BaseModelMixin(PreTrainedModelMixin):
                 max_seqlen=max_seqlen,
             )
 
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
+            if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
+                past_key_values.has_previous_state = True
 
-        hidden_states = self.ln_f(hidden_states)
+            mtp_hidden_states = self.ln_f_mtp(mtp_hidden_states)
 
-        return BaseModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)
+            return BaseModelOutputWithPast(last_hidden_state=mtp_hidden_states, past_key_values=past_key_values)
+        else:
+
+            for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
+                is_mamba_layer = sequence_mixer_type == "mamba2"
+
+                if is_mamba_layer and not mamba_mask_computed:
+                    mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
+                    mamba_mask_computed = True
+
+                hidden_states = block(
+                    hidden_states,
+                    past_key_values=past_key_values,
+                    attention_mask=mamba_mask if is_mamba_layer else causal_mask,
+                    rope_cos_sin=rope_cos_sin,
+                    cu_seqlens=cu_seqlens,
+                    max_seqlen=max_seqlen,
+                )
+
+            if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
+                past_key_values.has_previous_state = True
+
+            hidden_states = self.ln_f(hidden_states)
+
+            return BaseModelOutputWithPast(last_hidden_state=hidden_states, past_key_values=past_key_values)
 
     def _get_position_ids(
         self, attention_mask: torch.Tensor, past_length: int, query_length: int, key_length: int, device: torch.device

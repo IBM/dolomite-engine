@@ -1,11 +1,11 @@
 import torch
 from transformers import DynamicCache
 
-from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
+from ...mixins import BaseBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
 
 
-class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
+class LadderResidualBlock_TP(BaseBlock_TP):
     def forward(
         self,
         current_attention_out: torch.Tensor,

@@ -325,11 +325,18 @@ def train(
     global_batch_size = StepTracker.get_global_batch_size()
     tokens_per_batch = global_batch_size * sequence_length
 
+    if args.model_args.pretrained_config["num_nextn_predict_layers"] > 0:
+        # as we are passing extra "num_nextn_predict_layers" in seq_len for MTP input preparations
+        tokens_per_batch = global_batch_size * (
+            sequence_length - args.model_args.pretrained_config["num_nextn_predict_layers"]
+        )
+
     is_pipeline_parallel_enabled = args.distributed_args.num_pipeline_stages > 1
     if not is_pipeline_parallel_enabled:
         assert len(model_container) == 1
 
     # model flops per GPU
+    # Note : MTP MODULE Flops calculations are not done yet
     model_flops = (
         get_model_tflops(
             config=model_container[0].config,
@@ -378,7 +385,15 @@ def train(
                 forward_context=forward_context,
                 backward_context=backward_context,
                 sync_every_gradient_accumulation_step=args.distributed_args.sync_every_gradient_accumulation_step,
-                lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+                lm_loss_multiplier=(
+                    1 / (micro_batch_size * sequence_length)
+                    if args.model_args.pretrained_config["num_nextn_predict_layers"] <= 0
+                    else 1
+                    / (
+                        micro_batch_size
+                        * (sequence_length - args.model_args.pretrained_config["num_nextn_predict_layers"])
+                    )
+                ),
             )
 
         metrics_tracker = metrics_tracker + loss_step_dict

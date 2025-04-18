@@ -61,6 +61,9 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
         reduction: str = "mean",
+        is_mtp_block: bool = False,
+        prev_hidden_state_mtp: torch.Tensor = None,
+        mtp_block_idx: int = -1,
     ) -> CausalLMOutputWithPast:
         assert return_dict
 
@@ -90,7 +93,107 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
 
         clear_aux_loss()
 
-        transformer_outputs: BaseModelOutputWithPast = self.transformer(
+        if is_mtp_block:
+            mtp_outputs: CausalLMOutputWithPast = self.forward_mtp(
+                input_ids,
+                past_key_values,
+                attention_mask,
+                token_type_ids,
+                position_ids,
+                inputs_embeds,
+                labels,
+                use_cache,
+                return_dict,
+                cu_seqlens,
+                max_seqlen,
+                reduction,
+                prev_hidden_state_mtp,
+                mtp_block_idx,
+            )
+
+            return mtp_outputs
+        else:
+            transformer_outputs: BaseModelOutputWithPast = self.transformer(
+                input_ids,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+                use_cache=use_cache,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
+
+            hidden_states = transformer_outputs.last_hidden_state
+            past_key_values = transformer_outputs.past_key_values
+            del transformer_outputs
+
+            lm_logits = None
+            loss = None
+
+            if labels is None:
+                if is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute):
+                    if self.m_width is not None:
+                        hidden_states = hidden_states / self.m_width
+                else:
+                    lm_logits = self.get_lm_logits(hidden_states)
+
+                    if self.m_width is not None:
+                        lm_logits = lm_logits / self.m_width
+            else:
+                assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+
+                lm_logits = self.get_lm_logits(hidden_states)
+
+                if self.m_width is not None:
+                    lm_logits = lm_logits / self.m_width
+
+                loss = get_autoregressive_language_modeling_loss(
+                    lm_logits=lm_logits,
+                    labels=labels,
+                    hidden_states=None,
+                    vocab_weight=None,
+                    cu_seqlens=cu_seqlens,
+                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    reduction=reduction,
+                    shift_logits_and_labels=True,
+                    tensor_parallel_enabled=False,
+                )
+
+            aux_loss = get_aux_loss()
+
+            if loss is not None and not is_aux_loss_zero(aux_loss):
+                loss = loss + self.router_aux_loss_coef * aux_loss
+
+            return CausalLMOutputWithPast(
+                loss=loss,
+                aux_loss=aux_loss,
+                logits=lm_logits,
+                past_key_values=past_key_values,
+                last_hidden_state=hidden_states,
+            )
+
+    def forward_mtp(
+        self,
+        input_ids: torch.Tensor | list[list[int]] | None = None,
+        past_key_values: DynamicCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | list[list[int]] | None = None,
+        position_ids: torch.Tensor | list[list[int]] | None = None,
+        inputs_embeds: torch.Tensor | list[list[float]] | None = None,
+        labels: torch.Tensor | list[list[int]] | None = None,
+        use_cache: bool | None = None,
+        return_dict: bool = True,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+        reduction: str = "mean",
+        prev_hidden_state_mtp: torch.Tensor = None,
+        mtp_block_idx: int = -1,
+    ) -> CausalLMOutputWithPast:
+        assert return_dict
+
+        mtp_outputs: BaseModelOutputWithPast = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -100,11 +203,14 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
             use_cache=use_cache,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
+            prev_hidden_state_mtp=prev_hidden_state_mtp,
+            mtp_block_idx=mtp_block_idx,
+            is_mtp_block=True,
         )
 
-        hidden_states = transformer_outputs.last_hidden_state
-        past_key_values = transformer_outputs.past_key_values
-        del transformer_outputs
+        hidden_states = mtp_outputs.last_hidden_state
+        past_key_values = mtp_outputs.past_key_values
+        del mtp_outputs
 
         lm_logits = None
         loss = None

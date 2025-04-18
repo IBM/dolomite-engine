@@ -14,7 +14,7 @@ from ..hf_models import (
 from ..kernels import is_kernel_allowed
 from ..utils import MetricsTrackingDict, ProcessGroupManager
 from .base import ModelWrapper
-from .utils import broadcast_tensor_parallel_input
+from .utils import broadcast_tensor_parallel_input, split_main_and_mtp_inputs
 
 
 class ModelWrapperForPretraining(ModelWrapper):
@@ -118,29 +118,92 @@ class ModelWrapperForPretraining(ModelWrapper):
         else:
             assert aux_loss_from_pipeline_parallel == 0
 
-        batch = self._prepare_model_inputs(batch)
+        batch = self._prepare_model_inputs(batch, self.config.num_nextn_predict_layers)
         labels = batch.pop("labels")
-        output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
-        if self.is_pipeline_parallel_enabled:
-            # aux_loss is returned as a 0 dimensional tensor
-            aux_loss = output.aux_loss
-            use_aux_loss = not is_aux_loss_zero(aux_loss)
+        if self.config.num_nextn_predict_layers > 0:
+            # Case with MTP modules
+            # Note: Prepare inputs for the main and mtp module (Note : Input token for MTP module will be one shifted from the Main inputs)
+            # So we need to pass in the config (Seq_len + 1)
+            main_inputs, mtp_inputs = split_main_and_mtp_inputs(
+                input_ids=batch.get("input_ids"), num_mtp_modules=self.config.num_nextn_predict_layers
+            )
 
-            if use_aux_loss and aux_loss.dim() == 0:
-                aux_loss = aux_loss.unsqueeze(0)
+            # Forward pass through main model
+            main_labels = main_inputs.pop("labels")
+            output: CausalLMOutputWithPast = self.model(**main_inputs, return_dict=True)
 
-            if self.is_last_stage:
-                assert isinstance(output, CausalLMOutputWithPast)
-                output = output.logits
+            last_hidden_state_main = output.last_hidden_state
+
+            main_loss = self.get_loss(output, main_labels, lm_loss_multiplier=lm_loss_multiplier)
+
+            mtp_losses = []
+            mtp_aux_losses = []
+            mtp_lm_losses = []
+            # collect loss for MTP modules
+            for i, mtp_ip in enumerate(mtp_inputs):
+                mtp_label = mtp_ip.pop("labels")
+                output: CausalLMOutputWithPast = self.model(
+                    **mtp_ip,
+                    prev_hidden_state_mtp=last_hidden_state_main,
+                    return_dict=True,
+                    is_mtp_block=True,
+                    mtp_block_idx=i,
+                )
+
+                # update last_hidden_state
+                last_hidden_state_main = output.last_hidden_state
+
+                mtp_loss_dict = self.get_loss(output, mtp_label, lm_loss_multiplier=lm_loss_multiplier)
+                mtp_losses.append(mtp_loss_dict["loss"])
+                mtp_lm_losses.append(mtp_loss_dict["lm_loss"])
+                if "aux_loss" in mtp_loss_dict:
+                    mtp_aux_losses.append(mtp_loss_dict["aux_loss"])
+
+            # Aggregate all losses:
+            if len(mtp_losses) > 0:
+                avg_mtp_loss = torch.stack(mtp_losses).mean()
+                avg_mtp_lm_loss = torch.stack(mtp_lm_losses).mean()
             else:
-                assert isinstance(output, PipelineParallelOutput)
-                output = output.hidden_states
+                avg_mtp_loss = torch.tensor(0.0, device=main_loss.device)
+                avg_mtp_lm_loss = torch.stack(0.0, device=main_loss.device)
 
-            if use_aux_loss:
-                output = (output, aux_loss)
+            if len(mtp_aux_losses) > 0:
+                mtp_aux_loss = torch.stack(mtp_aux_losses).sum()
+
+            final_weighted_loss = main_loss["loss"] + self.config.mtp_loss_weight * avg_mtp_loss
+
+            output = {
+                "loss": final_weighted_loss,
+                "lm_loss": main_loss["lm_loss"],
+                "aux_loss": main_loss["aux_loss"],
+                "avg_mtp_loss": avg_mtp_loss,
+                "avg_mtp_lm_loss": avg_mtp_lm_loss,
+                "mtp_aux_loss": mtp_aux_loss,
+            }
+            return output
         else:
-            output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
+            output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
+
+            if self.is_pipeline_parallel_enabled:
+                # aux_loss is returned as a 0 dimensional tensor
+                aux_loss = output.aux_loss
+                use_aux_loss = not is_aux_loss_zero(aux_loss)
+
+                if use_aux_loss and aux_loss.dim() == 0:
+                    aux_loss = aux_loss.unsqueeze(0)
+
+                if self.is_last_stage:
+                    assert isinstance(output, CausalLMOutputWithPast)
+                    output = output.logits
+                else:
+                    assert isinstance(output, PipelineParallelOutput)
+                    output = output.hidden_states
+
+                if use_aux_loss:
+                    output = (output, aux_loss)
+            else:
+                output = self.get_loss(output, labels, lm_loss_multiplier=lm_loss_multiplier)
 
         return output
 
@@ -189,8 +252,9 @@ class ModelWrapperForPretraining(ModelWrapper):
     def reset_extra_metrics(self) -> None:
         self._extra_metrics = MetricsTrackingDict({})
 
-    def _prepare_model_inputs(self, batch: dict) -> dict:
+    def _prepare_model_inputs(self, batch: dict, num_nextn_predict_layers: int) -> dict:
         if self.is_pipeline_parallel_enabled:
+            assert num_nextn_predict_layers <= 0, "pipeline parallel not supported yet with MTP training"
             # when using pipeline parallel, we broadcast the input outside the model function
             tokens = batch["text"]
             aux_loss_from_pipeline_parallel = batch["aux_loss_from_pipeline_parallel"]
@@ -209,6 +273,8 @@ class ModelWrapperForPretraining(ModelWrapper):
             batch = {"labels": None, "pipeline_parallel_input": pipeline_parallel_input}
         else:
             if ProcessGroupManager.is_tensor_parallel_enabled():
+                assert num_nextn_predict_layers <= 0, "Tensor parallel not supported yet with MTP training"
+
                 tokens = broadcast_tensor_parallel_input(
                     None if batch is None else batch["text"], (self.micro_batch_size, self.sequence_length + 1)
                 )
@@ -216,8 +282,13 @@ class ModelWrapperForPretraining(ModelWrapper):
                 tokens = batch["text"]
                 tokens = tokens.to(torch.cuda.current_device())
 
-            input_ids = tokens[:, :-1]
-            batch = {"labels": tokens[:, 1:]}
+            if num_nextn_predict_layers <= 0:
+                input_ids = tokens[:, :-1]
+                batch = {"labels": tokens[:, 1:]}
+            else:
+                # Don't shift the tokens and labels here, we will do it in split_fn for main and mtp module later
+                input_ids = tokens
+                batch = {"labels": tokens}
 
         if self.use_padding_free_transformer:
             batch_size, sequence_length = input_ids.shape

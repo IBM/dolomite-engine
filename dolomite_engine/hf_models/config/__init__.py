@@ -18,9 +18,14 @@ def _hold_base_args(key: str) -> Callable:
     def _holded_function(function: Callable) -> Callable:
         def _run(self, *args, **kwargs):
             value: list[BaseArgs] = getattr(self, key)
-            setattr(self, key, [i.to_dict() if isinstance(i, BaseArgs) else i for i in value])
+            if value is not None:
+                setattr(self, key, [i.to_dict() if isinstance(i, BaseArgs) else i for i in value])
+
             output = function(self, *args, **kwargs)
-            setattr(self, key, value)
+
+            if value is not None:
+                setattr(self, key, value)
+
             return output
 
         return _run
@@ -57,6 +62,13 @@ _NAKED_DISALLOWED_ARGS = [
 ]
 
 
+class _MtpBlockArgs(BaseArgs):
+    normalization_function: str = "rmsnorm"
+    add_bias: bool = False
+    mlp_block: _MoEArgs | _MLPArgs
+    sequence_mixer: _SoftmaxAttentionArgs | _Mamba2Args | _MultiHeadLatentAttentionArgs | _StickbreakingAttentionArgs
+
+
 class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
 
@@ -86,6 +98,9 @@ class CommonConfig(PretrainedConfig):
         router_aux_loss_coef: float = 0.001,
         tie_word_embeddings: bool = True,
         rope_dim: int | None = None,
+        mtp_loss_weight: int = 0,
+        num_nextn_predict_layers: int = 0,
+        mtp_blocks: list[dict] = None,
         **kwargs,
     ) -> None:
         self.vocab_size = vocab_size
@@ -104,6 +119,9 @@ class CommonConfig(PretrainedConfig):
         self.m_width = m_width
         self.m_residual = m_residual
         self.init_method = init_method
+
+        self.num_nextn_predict_layers = num_nextn_predict_layers
+        self.mtp_loss_weight = mtp_loss_weight
 
         # check if enums are valid
         assert init_method in ["normal", "mup"]
@@ -130,6 +148,11 @@ class CommonConfig(PretrainedConfig):
         self._set_mlp_blocks()
         assert len(self.mlp_blocks) == self.num_layers
 
+        self.mtp_blocks = mtp_blocks
+        if mtp_blocks is not None:
+            self._set_mtp_blocks()
+            assert len(self.mtp_blocks) == self.num_nextn_predict_layers
+
         self.router_aux_loss_coef = router_aux_loss_coef
 
         for i in _NAKED_DISALLOWED_ARGS:
@@ -145,11 +168,13 @@ class CommonConfig(PretrainedConfig):
 
     @_hold_base_args(key="sequence_mixer_blocks")
     @_hold_base_args(key="mlp_blocks")
+    @_hold_base_args(key="mtp_blocks")
     def save_pretrained(self, save_directory, push_to_hub=False, **kwargs) -> None:
         return super().save_pretrained(save_directory, push_to_hub, **kwargs)
 
     @_hold_base_args(key="sequence_mixer_blocks")
     @_hold_base_args(key="mlp_blocks")
+    @_hold_base_args(key="mtp_blocks")
     def to_json_string(self, use_diff: bool = True) -> str:
         return super().to_json_string(use_diff)
 
@@ -280,3 +305,128 @@ class CommonConfig(PretrainedConfig):
             mlp_blocks.append(mlp_class(**mlp_kwargs))
 
         self.mlp_blocks = mlp_blocks
+
+    def _set_mtp_blocks(self) -> None:
+        if self.mtp_blocks is None:
+            self.mtp_blocks = [{} for _ in range(self.num_nextn_predict_layers)]
+
+        mtp_blocks: list[_MtpBlockArgs] = []  # List to hold MtpBlockArgs
+
+        for i in range(self.num_nextn_predict_layers):
+            mtp_block = deepcopy(self.mtp_blocks[i])
+
+            # MTP Block
+            normalization_function = mtp_block.pop("normalization_function", "rmsnorm")
+            add_bias_down = mtp_block.pop("add_bias", "false")
+
+            mlp_block = mtp_block.pop("mlp_block", {})
+            sequence_mixer = mtp_block.pop("sequence_mixer", {})
+
+            # MLP Block
+            mlp_type = mlp_block.pop("mlp_type", "MLP")
+            mlp_kwargs = {"intermediate_size": mlp_block.pop("intermediate_size", 4 * self.hidden_size)}
+
+            for key in ["activation_function", "dropout", "add_bias"]:
+                _update_with_key_value(mlp_block, mlp_kwargs, key)
+
+            if mlp_type == "MLP":
+                mlp_class = _MLPArgs
+            elif mlp_type == "MoE":
+                for key in ["shared_intermediate_size", "num_experts", "num_experts_per_tok"]:
+                    _update_with_key_value(mlp_block, mlp_kwargs, key)
+
+                mlp_class = _MoEArgs
+            else:
+                raise ValueError(f"unexpected mlp_type ({mlp_type})")
+
+            # Sequence_Mixer Block
+            sequence_mixer_type = sequence_mixer.pop("sequence_mixer_type", "softmax_attention")
+            sequence_mixer_kwargs = {}
+
+            if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
+                attention_head_type = sequence_mixer.pop("attention_head_type", "mqa")
+                num_key_value_heads = sequence_mixer.pop("num_key_value_heads", None)
+
+                if attention_head_type == "mha":
+                    if num_key_value_heads is None:
+                        num_key_value_heads = self.num_attention_heads
+
+                    assert (
+                        self.num_attention_heads == num_key_value_heads
+                    ), "MultiHeadAttention should have same number of heads for query, keys and values"
+                elif attention_head_type == "mqa":
+                    if num_key_value_heads is None:
+                        num_key_value_heads = 1
+
+                    assert num_key_value_heads == 1, "MultiQueryAttention should have 1 head for keys and values"
+                elif attention_head_type == "gqa":
+                    assert (
+                        num_key_value_heads is not None
+                    ), "`num_key_value_heads` needs to be specified with GroupedQueryAttention"
+
+                    assert (
+                        self.num_attention_heads % num_key_value_heads == 0
+                    ), "GroupedQueryAttention should have more than 1 head for keys and values"
+
+                sequence_mixer_kwargs = {
+                    "num_key_value_heads": num_key_value_heads,
+                    "attention_head_type": attention_head_type,
+                }
+
+                for key in ["softmax_dropout", "dropout", "add_bias", "attention_multiplier"]:
+                    _update_with_key_value(sequence_mixer, sequence_mixer_kwargs, key)
+
+                if sequence_mixer_type == "softmax_attention":
+                    sequence_mixer_class = _SoftmaxAttentionArgs
+                elif sequence_mixer_type == "stickbreaking_attention":
+                    sequence_mixer_class = _StickbreakingAttentionArgs
+            elif sequence_mixer_type == "mamba2":
+                sequence_mixer_kwargs = {
+                    "intermediate_size": sequence_mixer.pop("intermediate_size", 2 * self.hidden_size),
+                }
+
+                for key in [
+                    "state_size",
+                    "num_heads",
+                    "conv_kernel_size",
+                    "time_step_limit",
+                    "add_bias",
+                    "use_conv_bias",
+                    "activation_function",
+                    "num_groups",
+                    "chunk_size",
+                ]:
+                    _update_with_key_value(sequence_mixer, sequence_mixer_kwargs, key)
+
+                sequence_mixer_class = _Mamba2Args
+            elif sequence_mixer_type == "multihead_latent_attention":
+                sequence_mixer_kwargs = {}
+
+                for key in [
+                    "softmax_dropout",
+                    "dropout",
+                    "add_bias",
+                    "num_attention_heads",
+                    "attention_multiplier",
+                    "query_compression_size",
+                    "key_value_compression_size",
+                ]:
+                    _update_with_key_value(sequence_mixer, sequence_mixer_kwargs, key)
+
+                sequence_mixer_class = _MultiHeadLatentAttentionArgs
+            else:
+                raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
+
+            assert len(sequence_mixer) == 0, f"leftover keys in the sequence_mixer ({sequence_mixer}) at position {i}"
+
+            # Create the mtp block argument
+            mtp_kwargs = {
+                "normalization_function": normalization_function,
+                "add_bias": add_bias_down,
+                "mlp_block": mlp_class(**mlp_kwargs),
+                "sequence_mixer": sequence_mixer_class(**sequence_mixer_kwargs),
+            }
+
+            mtp_blocks.append(_MtpBlockArgs(**mtp_kwargs))
+
+        self.mtp_blocks = mtp_blocks

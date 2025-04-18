@@ -102,7 +102,8 @@ def wrap_model_container_for_distributed_training(
 
         dtype = "bf16"
 
-    block_names = model_container[0].model._no_split_modules
+    block_names = model_container[0].model._no_split_modules + ["MTPBlock"]
+
     teacher_block_names = (
         model_container[0].teacher_model._no_split_modules if model_container[0].has_teacher_model() else []
     )
@@ -116,6 +117,7 @@ def wrap_model_container_for_distributed_training(
     block_classes = [
         get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
     ]
+    block_classes = list(filter(lambda i: i is not None, block_classes))
 
     if args.distributed_args.gradient_checkpointing_method is not None:
         assert len(block_names) == 1

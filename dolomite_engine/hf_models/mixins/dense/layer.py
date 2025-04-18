@@ -2,14 +2,12 @@ import torch
 import torch.nn as nn
 from transformers import DynamicCache
 
+from ...config import CommonConfig
 from ...modeling_utils import get_mlp_block, get_normalization_function, get_sequence_mixer
-from .config import GPTDolomiteConfig
 
 
-class GPTDolomiteBlock(nn.Module):
-    def __init__(
-        self, config: GPTDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
-    ) -> None:
+class BaseBlock(nn.Module):
+    def __init__(self, config: CommonConfig, use_padding_free_transformer: bool, layer_idx: int | None = None) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size

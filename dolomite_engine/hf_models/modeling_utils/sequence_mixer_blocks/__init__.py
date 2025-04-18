@@ -19,12 +19,13 @@ from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
 
 def get_sequence_mixer(
-    config: CommonConfig,
-    causal: bool,
-    use_padding_free_transformer: bool,
-    layer_idx: int,
+    config: CommonConfig, causal: bool, use_padding_free_transformer: bool, layer_idx: int, is_mtp_block: bool = False
 ) -> Attention | Mamba2:
-    block = config.sequence_mixer_blocks[layer_idx]
+    if is_mtp_block:
+        block = config.mtp_blocks[layer_idx].sequence_mixer
+    else:
+        block = config.sequence_mixer_blocks[layer_idx]
+
     sequence_mixer_type = block.sequence_mixer_type
 
     if sequence_mixer_type == "mamba2":
