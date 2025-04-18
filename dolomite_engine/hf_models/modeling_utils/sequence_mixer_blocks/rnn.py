@@ -8,7 +8,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ..linear import ParameterizedLinear
-
+import math
 
 if is_cute_kernels_available():
     from cute_kernels import rnn_cute
@@ -52,22 +52,26 @@ class RNN(nn.Module):
             std /= math.sqrt(m_width)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
+        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor, input_state: torch.Tensor | None = None) -> torch.Tensor:
         batch_size, sequence_length, _ = input.size()
+
+        
 
         input = self.input_projection(input)
         input = input.view(batch_size, sequence_length, self.num_heads, -1)
 
         if is_kernel_allowed(Kernel.rnn_cute):
             input = rnn_cute(
-                input=input,
-                weight=self.state_weight,
+                input=self.factor * input,
+                weight=self.factor * self.state_weight,
                 input_state=input_state,
-                gradient_clipping=self.gradient_clipping,
+                gradient_clipping=None, # self.gradient_clipping,
             )
         else:
+            raise NotImplementedError("No torch rnn")
             input = self._torch_forward(input, input_state)
 
         input = input.view(batch_size, sequence_length, -1)
