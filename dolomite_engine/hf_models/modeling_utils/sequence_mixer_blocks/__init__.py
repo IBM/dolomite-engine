@@ -72,8 +72,12 @@ def get_sequence_mixer(
             state_size=block.state_size,
             output_size=config.hidden_size,
             num_heads=block.num_heads,
+            m_width=config.m_width,
+            num_layers=config.num_layers,
             add_bias=block.add_bias,
-            std=config.initializer_range,
+            initializer_range=config.initializer_range,
+            init_method=config.init_method,
+            gradient_clipping=block.gradient_clipping,
         )
     else:
         sequence_mixer_kwargs = dict(
