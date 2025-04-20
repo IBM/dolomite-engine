@@ -1,9 +1,11 @@
 import torch
 import torch.nn.functional as F
+from torch.distributed._tensor.api import DTensor
 from transformers import DynamicCache
 
+from ....dtensors import dtensor_to_tensor
 from ....enums import Kernel
-from ....kernels import is_kernel_allowed
+from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import is_cute_kernels_available
 from ...modeling_utils_TP import get_mlp_block_TP
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
@@ -198,7 +200,7 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         attention_swiglu_input, attention_c_proj_input, attention_c_proj_output = _mlp_forward(
-            x=attention_input, c_fc_weight=attention_c_fc_weight, c_proj_weight=attention_c_proj_weight
+            c_fc_input=attention_input, c_fc_weight=attention_c_fc_weight, c_proj_weight=attention_c_proj_weight
         )
 
         if ctx.current_mlp_out_is_none:
@@ -349,21 +351,24 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
     ) -> tuple[torch.Tensor]:
         if is_kernel_allowed(Kernel.ladder_residual_overlapped_layer):
             assert self.m_residual in [None, 1]
-            assert self.ln_1.eps == self.ln_2.eps
 
             current_attention_out, current_mlp_out, residual = _OverlappableBlock.apply(
-                current_attention_out,
-                current_mlp_out,
-                residual,
-                self.ln_1.weight,
-                self.ln_2.weight,
-                self.mlp0_block.c_fc.weight,
-                self.mlp0_block.c_proj.weight,
-                self.mlp_block.c_fc.weight,
-                self.mlp_block.c_proj.weight,
+                wait_for_ACT(current_attention_out, wait_in_forward=True, wait_in_backward=False),
+                wait_for_ACT(current_mlp_out, wait_in_forward=True, wait_in_backward=False),
+                wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False),
+                dtensor_to_tensor(self.ln_1.weight),
+                dtensor_to_tensor(self.ln_2.weight),
+                dtensor_to_tensor(self.mlp0_block.c_fc.weight),
+                dtensor_to_tensor(self.mlp0_block.c_proj.weight),
+                dtensor_to_tensor(self.mlp_block.c_fc.weight),
+                dtensor_to_tensor(self.mlp_block.c_proj.weight),
                 self.ln_1.eps,
                 self.ln_2.eps,
             )
+
+            current_attention_out = wait_for_ACT(current_attention_out, wait_in_forward=False, wait_in_backward=True)
+            current_mlp_out = wait_for_ACT(current_mlp_out, wait_in_forward=False, wait_in_backward=True)
+            residual = wait_for_ACT(residual, wait_in_forward=False, wait_in_backward=True)
         else:
             current_attention_out, current_mlp_out, residual = LadderResidualBlock.forward(
                 self,
