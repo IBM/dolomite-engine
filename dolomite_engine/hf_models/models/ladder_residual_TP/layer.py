@@ -1,20 +1,24 @@
 import torch
 import torch.nn.functional as F
-from cute_kernels.constants import MAX_TRITON_BLOCK_SIZE
-from cute_kernels.kernels.rmsnorm import _rmsnorm_backward_triton_kernel, _rmsnorm_forward_triton_kernel
-from cute_kernels.kernels.swiglu_unchunked import (
-    _swiglu_unchunked_backward_triton_kernel,
-    _swiglu_unchunked_forward_triton_kernel,
-)
-from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
-from cute_kernels.utils import get_num_elements_and_hidden_size, get_sm_count
 from transformers import DynamicCache
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
+from ....utils import is_cute_kernels_available
 from ...modeling_utils_TP import get_mlp_block_TP
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
+
+
+if is_cute_kernels_available():
+    from cute_kernels.constants import MAX_TRITON_BLOCK_SIZE
+    from cute_kernels.kernels.rmsnorm import _rmsnorm_backward_triton_kernel, _rmsnorm_forward_triton_kernel
+    from cute_kernels.kernels.swiglu_unchunked import (
+        _swiglu_unchunked_backward_triton_kernel,
+        _swiglu_unchunked_forward_triton_kernel,
+    )
+    from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
+    from cute_kernels.utils import get_num_elements_and_hidden_size, get_sm_count
 
 
 def _swiglu_unchunked_forward(x: torch.Tensor) -> torch.Tensor:
