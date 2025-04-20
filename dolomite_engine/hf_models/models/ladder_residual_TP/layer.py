@@ -193,7 +193,7 @@ class _OverlappableBlock(torch.autograd.Function):
         ctx.eps2 = eps2
 
         if ctx.current_attention_out_is_none:
-            attention_rmsnorm_input = residual
+            attention_rmsnorm_input = residual.wait()
         else:
             attention_rmsnorm_input = residual + current_attention_out
 
@@ -363,7 +363,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
             current_attention_out, current_mlp_out, residual = _OverlappableBlock.apply(
                 current_attention_out,
                 current_mlp_out,
-                wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False),
+                residual,
                 dtensor_to_tensor(self.ln_1.weight),
                 dtensor_to_tensor(self.ln_2.weight),
                 dtensor_to_tensor(self.mlp0_block.c_fc.weight),
