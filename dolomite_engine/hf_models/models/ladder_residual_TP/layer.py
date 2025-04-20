@@ -6,8 +6,8 @@ from cute_kernels.kernels.swiglu_unchunked import (
     _swiglu_unchunked_backward_triton_kernel,
     _swiglu_unchunked_forward_triton_kernel,
 )
-from cute_kernels.math import ceil_divide, get_next_power_of_2
-from cute_kernels.utils import get_num_elements_and_hidden_size
+from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
+from cute_kernels.utils import get_num_elements_and_hidden_size, get_sm_count
 from transformers import DynamicCache
 
 from ....enums import Kernel
@@ -17,19 +17,61 @@ from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
 
 
+def _swiglu_unchunked_forward(x: torch.Tensor) -> torch.Tensor:
+    B, H = get_num_elements_and_hidden_size(x)
+    BLOCK_SIZE_B = 64
+    BLOCK_SIZE_H = 64
+
+    output = torch.empty(*x.size()[:-1], divide_if_divisible(H, 2), device=x.device, dtype=x.dtype)
+
+    with torch.cuda.device(x.device):
+        _swiglu_unchunked_forward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
+            x_ptr=x,
+            output_ptr=output,
+            B=B,
+            H=H,
+            BLOCK_SIZE_B=BLOCK_SIZE_B,
+            BLOCK_SIZE_H=BLOCK_SIZE_H,
+        )
+
+    return output
+
+
+def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> torch.Tensor:
+    B, H = get_num_elements_and_hidden_size(x)
+    BLOCK_SIZE_B = 64
+    BLOCK_SIZE_H = 64
+
+    x_grad = torch.empty_like(x)
+
+    B, H = get_num_elements_and_hidden_size(x)
+
+    with torch.cuda.device(x.device):
+        _swiglu_unchunked_backward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
+            x_ptr=x,
+            output_grad_ptr=output_grad,
+            x_grad_ptr=x_grad,
+            B=B,
+            H=H,
+            BLOCK_SIZE_B=BLOCK_SIZE_B,
+            BLOCK_SIZE_H=BLOCK_SIZE_H,
+        )
+
+    return x_grad
+
+
 def _mlp_forward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor) -> tuple[torch.Tensor]:
     c_fc_out = F.linear(x, c_fc_weight)
+    swiglu_out = _swiglu_unchunked_forward(c_fc_out)
+    c_proj_out = F.linear(swiglu_out, c_proj_weight)
+    return c_fc_out, swiglu_out, c_proj_out
 
-    swiglu_output = swiglu_unchunked_forward(
-        c_fc_out,
-        kernel_backend=CutoTuneParameter(),
-        BLOCK_SIZE_B=CutoTuneParameter(),
-        BLOCK_SIZE_H=CutoTuneParameter(),
-    )
 
-    c_proj_out = F.linear(swiglu_output, c_proj_weight)
-
-    return c_fc_out, swiglu_output, c_proj_out
+def _mlp_backward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor) -> tuple[torch.Tensor]:
+    c_fc_out = F.linear(x, c_fc_weight)
+    swiglu_out = _swiglu_unchunked_forward(c_fc_out)
+    c_proj_out = F.linear(swiglu_out, c_proj_weight)
+    return c_fc_out, swiglu_out, c_proj_out
 
 
 def _rmsnorm_forward(
@@ -62,6 +104,47 @@ def _rmsnorm_forward(
         )
 
     return output, rmsnorm_denominator
+
+
+def _rmsnorm_backward(
+    x: torch.Tensor,
+    weight: torch.Tensor | None,
+    rmsnorm_denominator: torch.Tensor,
+    output_grad: torch.Tensor,
+    eps: float | None = None,
+) -> tuple[torch.Tensor | None]:
+    B, H = get_num_elements_and_hidden_size(x)
+    BLOCK_SIZE_B = 1
+    BLOCK_SIZE_H = get_next_power_of_2(H)
+    assert BLOCK_SIZE_H <= MAX_TRITON_BLOCK_SIZE
+
+    x_grad = torch.empty_like(x)
+    weight_grad = None if weight is None else torch.zeros_like(weight, dtype=torch.float32)
+
+    sm_count = get_sm_count(x.device)
+    num_programs = min(sm_count, ceil_divide(B, BLOCK_SIZE_B))
+
+    with torch.cuda.device(x.device):
+        _rmsnorm_backward_triton_kernel[num_programs,](
+            x_ptr=x,
+            has_weight=weight is not None,
+            weight_ptr=weight,
+            output_grad_ptr=output_grad,
+            x_grad_ptr=x_grad,
+            weight_grad_ptr=weight_grad,
+            eps=eps,
+            has_rmsnorm_denominator=rmsnorm_denominator is not None,
+            rmsnorm_denominator_ptr=rmsnorm_denominator,
+            B=B,
+            H=H,
+            BLOCK_SIZE_B=BLOCK_SIZE_B,
+            BLOCK_SIZE_H=BLOCK_SIZE_H,
+        )
+
+    if weight_grad is not None:
+        weight_grad = weight_grad.type_as(weight)
+
+    return x_grad, weight_grad
 
 
 class _OverlappableBlock(torch.autograd.Function):
@@ -105,16 +188,22 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         ctx.save_for_backward(
+            # attention RMSNorm
+            attention_rmsnorm_input,
+            ln_1_weight,
             attention_rmsnorm_denominator,
+            # attention
             attention_c_fc_out,
             attention_swiglu_out,
             attention_c_proj_out,
+            # MLP RMSNorm
+            mlp_rmsnorm_input,
+            ln_2_weight,
             mlp_rmsnorm_denominator,
+            # MLP
             mlp_c_fc_out,
             mlp_swiglu_out,
             mlp_c_proj_out,
-            ln_1_weight,
-            ln_2_weight,
             mlp0_c_fc_weight,
             mlp0_c_proj_weight,
             mlp_c_fc_weight,
