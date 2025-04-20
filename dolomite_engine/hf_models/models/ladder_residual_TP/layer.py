@@ -1,9 +1,13 @@
 import torch
 import torch.nn.functional as F
-from cute_kernels import CutoTuneParameter
-from cute_kernels.kernels.rmsnorm.backward import rmsnorm_backward_triton
-from cute_kernels.kernels.rmsnorm.forward import _forward as rmsnorm_forward
-from cute_kernels.kernels.swiglu_unchunked.forward import _forward as swiglu_unchunked_forward
+from cute_kernels.constants import MAX_TRITON_BLOCK_SIZE
+from cute_kernels.kernels.rmsnorm import _rmsnorm_backward_triton_kernel, _rmsnorm_forward_triton_kernel
+from cute_kernels.kernels.swiglu_unchunked import (
+    _swiglu_unchunked_backward_triton_kernel,
+    _swiglu_unchunked_forward_triton_kernel,
+)
+from cute_kernels.math import ceil_divide, get_next_power_of_2
+from cute_kernels.utils import get_num_elements_and_hidden_size
 from transformers import DynamicCache
 
 from ....enums import Kernel
@@ -28,6 +32,38 @@ def _mlp_forward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torc
     return c_fc_out, swiglu_output, c_proj_out
 
 
+def _rmsnorm_forward(
+    x: torch.Tensor, weight: torch.Tensor | None = None, eps: float | None = None
+) -> tuple[torch.Tensor]:
+    if eps is None:
+        eps = torch.finfo(x.dtype).eps
+
+    B, H = get_num_elements_and_hidden_size(x)
+    BLOCK_SIZE_B = 1
+    BLOCK_SIZE_H = get_next_power_of_2(H)
+    assert BLOCK_SIZE_H <= MAX_TRITON_BLOCK_SIZE
+
+    output = torch.empty_like(x)
+    rmsnorm_denominator = torch.empty(B, device=x.device, dtype=torch.float32)
+
+    with torch.cuda.device(x.device):
+        _rmsnorm_forward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B),](
+            x_ptr=x,
+            has_weight=weight is not None,
+            weight_ptr=weight,
+            output_ptr=output,
+            eps=eps,
+            has_rmsnorm_denominator=rmsnorm_denominator is not None,
+            rmsnorm_denominator_ptr=rmsnorm_denominator,
+            B=B,
+            H=H,
+            BLOCK_SIZE_B=BLOCK_SIZE_B,
+            BLOCK_SIZE_H=BLOCK_SIZE_H,
+        )
+
+    return output, rmsnorm_denominator
+
+
 class _OverlappableBlock(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -49,14 +85,8 @@ class _OverlappableBlock(torch.autograd.Function):
         else:
             attention_rmsnorm_input = residual + current_attention_out
 
-        attention_input, attention_rmsnorm_denominator = rmsnorm_forward(
-            x=attention_rmsnorm_input,
-            weight=ln_1_weight,
-            eps=eps1,
-            memory_efficient=False,
-            kernel_backend=CutoTuneParameter(),
-            BLOCK_SIZE_B=CutoTuneParameter(),
-            BLOCK_SIZE_H=CutoTuneParameter(),
+        attention_input, attention_rmsnorm_denominator = _rmsnorm_forward(
+            x=attention_rmsnorm_input, weight=ln_1_weight, eps=eps1
         )
 
         attention_c_fc_out, attention_swiglu_out, attention_c_proj_out = _mlp_forward(
@@ -68,15 +98,7 @@ class _OverlappableBlock(torch.autograd.Function):
         else:
             mlp_rmsnorm_input = attention_rmsnorm_input + current_mlp_out
 
-        mlp_input, mlp_rmsnorm_denominator = rmsnorm_forward(
-            x=mlp_rmsnorm_input,
-            weight=ln_2_weight,
-            eps=eps2,
-            memory_efficient=False,
-            kernel_backend=CutoTuneParameter(),
-            BLOCK_SIZE_B=CutoTuneParameter(),
-            BLOCK_SIZE_H=CutoTuneParameter(),
-        )
+        mlp_input, mlp_rmsnorm_denominator = _rmsnorm_forward(x=mlp_rmsnorm_input, weight=ln_2_weight, eps=eps2)
 
         mlp_c_fc_out, mlp_swiglu_out, mlp_c_proj_out = _mlp_forward(
             x=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
