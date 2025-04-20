@@ -362,7 +362,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
 
             current_attention_out, current_mlp_out, residual = _OverlappableBlock.apply(
                 current_attention_out,
-                wait_for_ACT(current_mlp_out, wait_in_forward=True, wait_in_backward=False),
+                current_mlp_out,
                 wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False),
                 dtensor_to_tensor(self.ln_1.weight),
                 dtensor_to_tensor(self.ln_2.weight),
