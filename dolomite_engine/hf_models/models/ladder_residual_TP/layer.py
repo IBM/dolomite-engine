@@ -159,15 +159,14 @@ def _mlp_backward(
     output_grad: torch.Tensor,
 ) -> tuple[torch.Tensor]:
     c_proj_input_grad = F.linear(output_grad, c_proj_weight.T)
-    c_proj_weight_grad = output_grad.transpose(-1, -2) @ c_proj_input.unsqueeze(0).unsqueeze(0)
-    c_proj_weight_grad = c_proj_weight_grad.squeeze(0).squeeze(0)
-
     c_fc_output_grad = _swiglu_unchunked_backward(swiglu_input, c_proj_input_grad)
-
     c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight.T)
     c_fc_input_grad = funcol.all_reduce(
         c_fc_input_grad, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
     )
+
+    c_proj_weight_grad = output_grad.transpose(-1, -2) @ c_proj_input.unsqueeze(0).unsqueeze(0)
+    c_proj_weight_grad = c_proj_weight_grad.squeeze(0).squeeze(0)
     c_fc_weight_grad = c_fc_output_grad.transpose(-1, -2) @ c_fc_input.unsqueeze(0).unsqueeze(0)
     c_fc_weight_grad = c_fc_weight_grad.squeeze(0).squeeze(0)
 
