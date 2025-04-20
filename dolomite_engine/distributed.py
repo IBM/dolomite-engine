@@ -8,7 +8,7 @@ from torch.distributed._composable.fsdp import CPUOffloadPolicy
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy as MixedPrecision2
 from torch.distributed._composable.fsdp import OffloadPolicy, fully_shard
 from torch.distributed._tensor import distribute_tensor
-from torch.distributed._tensor.placement_types import Shard
+from torch.distributed._tensor.placement_types import Replicate, Shard
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision as MixedPrecision1
@@ -134,68 +134,17 @@ def wrap_model_container_for_distributed_training(
     mixed_precision_policy = _get_fsdp_mixed_precision(
         dtype=dtype,
         communication_dtype=communication_dtype,
-        fsdp_algorithm=1 if use_ddp else fsdp_algorithm,
+        fsdp_algorithm=2 if use_ddp else fsdp_algorithm,
     )
 
-    if use_ddp:
-        log_rank_0(logging.INFO, "using DDP")
-        assert num_pipeline_stages == 1
-        assert not efficient_initialization
-
-        for i, model in enumerate(model_container):
-            model_container[i] = FSDP(
-                model,
-                sharding_strategy=ShardingStrategy.NO_SHARD,
-                cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                mixed_precision=mixed_precision_policy,
-                device_id=torch.cuda.current_device(),
-                limit_all_gathers=True,
-                use_orig_params=True,
-                device_mesh=dp_mesh,
-            )
-    elif fsdp_algorithm == 1:
-        log_rank_0(logging.INFO, "using FSDP-1")
-        assert num_pipeline_stages == 1
-
-        sharding_strategy = (
-            _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
-            if data_parallel_replication_world_size == 1
-            else _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
-        )
-
-        def _param_init(module: nn.Module) -> None:
-            assert len(teacher_block_names) == 0, "efficient initialization doesn't support distillation"
-
-            if model_name is None:
-                module = module.to_empty(device=torch.cuda.current_device())
-
-                if hasattr(module, "reset_parameters"):
-                    with torch.no_grad():
-                        module.reset_parameters()
-            else:
-                if ProcessGroupManager.get_data_parallel_rank() != 0:
-                    module = module.to_empty(device=torch.cuda.current_device())
-
-        for i, model in enumerate(model_container):
-            model_container[i] = FSDP(
-                model,
-                sharding_strategy=sharding_strategy,
-                cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
-                mixed_precision=mixed_precision_policy,
-                auto_wrap_policy=partial(transformer_auto_wrap_policy, transformer_layer_cls=block_classes),
-                device_id=torch.cuda.current_device(),
-                limit_all_gathers=True,
-                use_orig_params=True,
-                # https://github.com/meta-llama/llama-recipes/blob/492455dc080f6c25f356e283e443be0cce86aaeb/src/llama_recipes/finetuning.py#L191
-                sync_module_states=efficient_initialization,
-                param_init_fn=_param_init if efficient_initialization else None,
-                device_mesh=dp_mesh,
-            )
-    elif fsdp_algorithm == 2:
+    if use_ddp or fsdp_algorithm == 2:
         log_rank_0(logging.INFO, "using FSDP-2")
         zero3 = stage == 3
 
         def _sharding_function(parameter: nn.Parameter) -> Shard:
+            if use_ddp:
+                return Replicate()
+
             dps = (
                 ProcessGroupManager.get_data_parallel_world_size()
                 if data_parallel_sharding_world_size is None
@@ -277,6 +226,44 @@ def wrap_model_container_for_distributed_training(
 
                     model.load_state_dict(new_state_dict, assign=True)
                     del old_state_dict, new_state_dict
+    elif fsdp_algorithm == 1:
+        log_rank_0(logging.INFO, "using FSDP-1")
+        assert num_pipeline_stages == 1
+
+        sharding_strategy = (
+            _STAGE_FULL_SHARDING_STRATEGY_MAP[stage]
+            if data_parallel_replication_world_size == 1
+            else _STAGE_HYBRID_SHARDING_STRATEGY_MAP[stage]
+        )
+
+        def _param_init(module: nn.Module) -> None:
+            assert len(teacher_block_names) == 0, "efficient initialization doesn't support distillation"
+
+            if model_name is None:
+                module = module.to_empty(device=torch.cuda.current_device())
+
+                if hasattr(module, "reset_parameters"):
+                    with torch.no_grad():
+                        module.reset_parameters()
+            else:
+                if ProcessGroupManager.get_data_parallel_rank() != 0:
+                    module = module.to_empty(device=torch.cuda.current_device())
+
+        for i, model in enumerate(model_container):
+            model_container[i] = FSDP(
+                model,
+                sharding_strategy=sharding_strategy,
+                cpu_offload=CPUOffload(offload_params=True) if cpu_offload else None,
+                mixed_precision=mixed_precision_policy,
+                auto_wrap_policy=partial(transformer_auto_wrap_policy, transformer_layer_cls=block_classes),
+                device_id=torch.cuda.current_device(),
+                limit_all_gathers=True,
+                use_orig_params=True,
+                # https://github.com/meta-llama/llama-recipes/blob/492455dc080f6c25f356e283e443be0cce86aaeb/src/llama_recipes/finetuning.py#L191
+                sync_module_states=efficient_initialization,
+                param_init_fn=_param_init if efficient_initialization else None,
+                device_mesh=dp_mesh,
+            )
     else:
         raise ValueError(f"unexpected fsdp_algorithm ({fsdp_algorithm})")
 
