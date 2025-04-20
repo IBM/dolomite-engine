@@ -165,6 +165,9 @@ def _mlp_backward(
     c_fc_output_grad = _swiglu_unchunked_backward(swiglu_input, c_proj_input_grad)
 
     c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight.T)
+    c_fc_input_grad = funcol.all_reduce(
+        c_fc_input_grad, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
+    )
     c_fc_weight_grad = c_fc_output_grad.transpose(-1, -2) @ c_fc_input.unsqueeze(0).unsqueeze(0)
     c_fc_weight_grad = c_fc_weight_grad.squeeze(0).squeeze(0)
 
@@ -193,7 +196,9 @@ class _OverlappableBlock(torch.autograd.Function):
         ctx.eps2 = eps2
 
         if ctx.current_attention_out_is_none:
-            attention_rmsnorm_input = residual.wait()
+            attention_rmsnorm_input = (
+                residual.wait() if isinstance(residual, funcol.AsyncCollectiveTensor) else residual
+            )
         else:
             attention_rmsnorm_input = residual + current_attention_out
 
@@ -291,7 +296,7 @@ class _OverlappableBlock(torch.autograd.Function):
             x=mlp_rmsnorm_input,
             weight=ln_2_weight,
             rmsnorm_denominator=mlp_rmsnorm_denominator,
-            output_grad=mlp_input_grad,
+            output_grad=mlp_input_grad.wait(),
             eps=ctx.eps2,
         )
 
@@ -311,7 +316,7 @@ class _OverlappableBlock(torch.autograd.Function):
             x=attention_rmsnorm_input,
             weight=ln_1_weight,
             rmsnorm_denominator=attention_rmsnorm_denominator,
-            output_grad=attention_input_grad,
+            output_grad=attention_input_grad.wait(),
             eps=ctx.eps1,
         )
         attention_rmsnorm_input_grad += tmp
