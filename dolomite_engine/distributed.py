@@ -142,9 +142,6 @@ def wrap_model_container_for_distributed_training(
         zero3 = stage == 3
 
         def _sharding_function(parameter: nn.Parameter) -> Shard:
-            if use_ddp:
-                return Replicate()
-
             dps = (
                 ProcessGroupManager.get_data_parallel_world_size()
                 if data_parallel_sharding_world_size is None
@@ -181,7 +178,7 @@ def wrap_model_container_for_distributed_training(
                 model,
                 mesh=dp_mesh,
                 reshard_after_forward=zero3,
-                shard_placement_fn=_sharding_function,
+                shard_placement_fn=None if use_ddp else _sharding_function,
                 mp_policy=mixed_precision_policy,
                 offload_policy=CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy(),
             )
