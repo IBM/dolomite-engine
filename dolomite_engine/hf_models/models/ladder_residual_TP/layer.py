@@ -64,32 +64,6 @@ def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> to
     return x_grad
 
 
-def _mlp_forward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor) -> tuple[torch.Tensor]:
-    c_fc_out = F.linear(x, c_fc_weight)
-    swiglu_out = _swiglu_unchunked_forward(c_fc_out)
-    c_proj_out = F.linear(swiglu_out, c_proj_weight)
-    return c_fc_out, swiglu_out, c_proj_out
-
-
-def _mlp_backward(
-    x: torch.Tensor,
-    c_fc_input: torch.Tensor,
-    c_fc_weight: torch.Tensor,
-    c_proj_input: torch.Tensor,
-    c_proj_weight: torch.Tensor,
-    output_grad: torch.Tensor,
-) -> tuple[torch.Tensor]:
-    c_proj_input_grad = F.linear(output_grad, c_proj_weight)
-    c_proj_weight_grad = F.linear(output_grad.T, c_proj_input)
-
-    c_fc_output_grad = _swiglu_unchunked_backward(c_proj_input, c_proj_input_grad)
-
-    c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight)
-    c_fc_weight_grad = F.linear(c_fc_output_grad.T, c_fc_input)
-
-    return c_fc_input_grad, c_fc_weight_grad, c_proj_input_grad, c_proj_weight_grad
-
-
 def _rmsnorm_forward(
     x: torch.Tensor, weight: torch.Tensor | None = None, eps: float | None = None
 ) -> tuple[torch.Tensor]:
@@ -163,6 +137,33 @@ def _rmsnorm_backward(
     return x_grad, weight_grad
 
 
+def _mlp_forward(
+    c_fc_input: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor
+) -> tuple[torch.Tensor]:
+    swiglu_input = F.linear(c_fc_input, c_fc_weight)
+    c_proj_input = _swiglu_unchunked_forward(swiglu_input)
+    c_proj_output = F.linear(c_proj_input, c_proj_weight)
+    return swiglu_input, c_proj_input, c_proj_output
+
+
+def _mlp_backward(
+    c_fc_input: torch.Tensor,
+    c_fc_weight: torch.Tensor,
+    c_proj_input: torch.Tensor,
+    c_proj_weight: torch.Tensor,
+    output_grad: torch.Tensor,
+) -> tuple[torch.Tensor]:
+    c_proj_input_grad = F.linear(output_grad, c_proj_weight)
+    c_proj_weight_grad = F.linear(output_grad.T, c_proj_input)
+
+    c_fc_output_grad = _swiglu_unchunked_backward(c_proj_input, c_proj_input_grad)
+
+    c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight)
+    c_fc_weight_grad = F.linear(c_fc_output_grad.T, c_fc_input)
+
+    return c_fc_input_grad, c_fc_weight_grad, c_proj_input_grad, c_proj_weight_grad
+
+
 class _OverlappableBlock(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -199,8 +200,8 @@ class _OverlappableBlock(torch.autograd.Function):
 
         mlp_input, mlp_rmsnorm_denominator = _rmsnorm_forward(x=mlp_rmsnorm_input, weight=ln_2_weight, eps=eps2)
 
-        mlp_c_fc_out, mlp_swiglu_out, mlp_c_proj_out = _mlp_forward(
-            x=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
+        mlp_swiglu_input, mlp_c_proj_input, mlp_c_proj_output = _mlp_forward(
+            c_fc_input=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
         )
 
         ctx.save_for_backward(
@@ -217,27 +218,53 @@ class _OverlappableBlock(torch.autograd.Function):
             ln_2_weight,
             mlp_rmsnorm_denominator,
             # MLP
-            mlp_c_fc_out,
-            mlp_swiglu_out,
-            mlp_c_proj_out,
-            mlp0_c_fc_weight,
-            mlp0_c_proj_weight,
+            mlp_input,
             mlp_c_fc_weight,
+            mlp_swiglu_input,
+            mlp_c_proj_input,
             mlp_c_proj_weight,
         )
 
         ctx.eps1 = eps1
         ctx.eps2 = eps2
 
-        return attention_c_proj_out, mlp_c_proj_out, mlp_rmsnorm_input
+        return attention_c_proj_out, mlp_c_proj_output, mlp_rmsnorm_input
 
     @staticmethod
     def backward(
         ctx,
-        attention_c_proj_out_grad: torch.Tensor,
-        mlp_c_proj_out_grad: torch.Tensor,
+        attention_c_proj_output_grad: torch.Tensor,
+        mlp_c_proj_output_grad: torch.Tensor,
         mlp_rmsnorm_input_grad: torch.Tensor,
     ) -> tuple[torch.Tensor]:
+        (  # attention RMSNorm
+            attention_rmsnorm_input,
+            ln_1_weight,
+            attention_rmsnorm_denominator,
+            # attention
+            attention_c_fc_out,
+            attention_swiglu_out,
+            attention_c_proj_out,
+            # MLP RMSNorm
+            mlp_rmsnorm_input,
+            ln_2_weight,
+            mlp_rmsnorm_denominator,
+            # MLP
+            mlp_input,
+            mlp_c_fc_weight,
+            mlp_swiglu_input,
+            mlp_c_proj_input,
+            mlp_c_proj_weight,
+        ) = ctx.saved_tensors
+
+        _mlp_backward(
+            c_fc_input=mlp_input,
+            c_fc_weight=mlp_c_fc_weight,
+            c_proj_input=mlp_c_proj_input,
+            c_proj_weight=mlp_c_proj_weight,
+            output_grad=mlp_c_proj_output_grad,
+        )
+
         return (
             attention_c_proj_out_grad,
             mlp_c_proj_out_grad,
