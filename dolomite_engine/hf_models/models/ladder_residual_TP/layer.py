@@ -71,11 +71,23 @@ def _mlp_forward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torc
     return c_fc_out, swiglu_out, c_proj_out
 
 
-def _mlp_backward(x: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor) -> tuple[torch.Tensor]:
-    c_fc_out = F.linear(x, c_fc_weight)
-    swiglu_out = _swiglu_unchunked_forward(c_fc_out)
-    c_proj_out = F.linear(swiglu_out, c_proj_weight)
-    return c_fc_out, swiglu_out, c_proj_out
+def _mlp_backward(
+    x: torch.Tensor,
+    c_fc_input: torch.Tensor,
+    c_fc_weight: torch.Tensor,
+    c_proj_input: torch.Tensor,
+    c_proj_weight: torch.Tensor,
+    output_grad: torch.Tensor,
+) -> tuple[torch.Tensor]:
+    c_proj_input_grad = F.linear(output_grad, c_proj_weight)
+    c_proj_weight_grad = F.linear(output_grad.T, c_proj_input)
+
+    c_fc_output_grad = _swiglu_unchunked_backward(c_proj_input, c_proj_input_grad)
+
+    c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight)
+    c_fc_weight_grad = F.linear(c_fc_output_grad.T, c_fc_input)
+
+    return c_fc_input_grad, c_fc_weight_grad, c_proj_input_grad, c_proj_weight_grad
 
 
 def _rmsnorm_forward(
