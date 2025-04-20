@@ -220,6 +220,10 @@ class _OverlappableBlock(torch.autograd.Function):
             c_fc_input=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
         )
 
+        mlp_c_proj_output = funcol.all_reduce(
+            mlp_c_proj_output, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
+        )
+
         ctx.save_for_backward(
             # attention RMSNorm
             attention_rmsnorm_input,
