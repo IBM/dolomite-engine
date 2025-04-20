@@ -5,7 +5,7 @@ from transformers import DynamicCache
 
 from ....dtensors import dtensor_to_tensor
 from ....enums import Kernel
-from ....kernels import is_kernel_allowed, wait_for_ACT
+from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, is_cute_kernels_available
 from ...modeling_utils_TP import get_mlp_block_TP
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
