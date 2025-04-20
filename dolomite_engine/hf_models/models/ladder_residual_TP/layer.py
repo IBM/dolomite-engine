@@ -1,12 +1,12 @@
 import torch
+import torch.distributed._functional_collectives as funcol
 import torch.nn.functional as F
-from torch.distributed._tensor.api import DTensor
 from transformers import DynamicCache
 
 from ....dtensors import dtensor_to_tensor
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
-from ....utils import is_cute_kernels_available
+from ....utils import ProcessGroupManager, is_cute_kernels_available
 from ...modeling_utils_TP import get_mlp_block_TP
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
@@ -205,6 +205,10 @@ class _OverlappableBlock(torch.autograd.Function):
             c_fc_input=attention_input, c_fc_weight=attention_c_fc_weight, c_proj_weight=attention_c_proj_weight
         )
 
+        attention_c_proj_output = funcol.all_reduce(
+            attention_c_proj_output, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
+        )
+
         if ctx.current_mlp_out_is_none:
             mlp_rmsnorm_input = attention_rmsnorm_input
         else:
@@ -353,7 +357,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
             assert self.m_residual in [None, 1]
 
             current_attention_out, current_mlp_out, residual = _OverlappableBlock.apply(
-                wait_for_ACT(current_attention_out, wait_in_forward=True, wait_in_backward=False),
+                current_attention_out,
                 wait_for_ACT(current_mlp_out, wait_in_forward=True, wait_in_backward=False),
                 wait_for_ACT(residual, wait_in_forward=True, wait_in_backward=False),
                 dtensor_to_tensor(self.ln_1.weight),
