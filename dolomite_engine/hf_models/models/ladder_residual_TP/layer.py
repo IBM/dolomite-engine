@@ -292,6 +292,7 @@ class _OverlappableBlock(torch.autograd.Function):
             swiglu_input=attention_swiglu_input,
             c_proj_input=attention_c_proj_input,
             c_proj_weight=attention_c_proj_weight,
+            output_grad=attention_c_proj_output_grad,
         )
 
         tmp, ln_1_weight_grad = _rmsnorm_backward(
