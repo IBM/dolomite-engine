@@ -292,17 +292,6 @@ class _OverlappableBlock(torch.autograd.Function):
             output_grad=mlp_c_proj_output_grad,
         )
 
-        mlp_rmsnorm_input_grad, ln_2_weight_grad = _rmsnorm_backward(
-            x=mlp_rmsnorm_input,
-            weight=ln_2_weight,
-            rmsnorm_denominator=mlp_rmsnorm_denominator,
-            output_grad=mlp_input_grad.wait(),
-            eps=ctx.eps2,
-        )
-
-        attention_rmsnorm_input_grad = mlp_rmsnorm_input_grad
-        current_mlp_out_grad = None if ctx.current_mlp_out_is_none else mlp_rmsnorm_input_grad
-
         attention_input_grad, attention_c_fc_weight_grad, attention_c_proj_weight_grad = _mlp_backward(
             c_fc_input=attention_input,
             c_fc_weight=attention_c_fc_weight,
@@ -312,6 +301,19 @@ class _OverlappableBlock(torch.autograd.Function):
             output_grad=attention_c_proj_output_grad,
         )
 
+        tmp, ln_2_weight_grad = _rmsnorm_backward(
+            x=mlp_rmsnorm_input,
+            weight=ln_2_weight,
+            rmsnorm_denominator=mlp_rmsnorm_denominator,
+            output_grad=mlp_input_grad.wait(),
+            eps=ctx.eps2,
+        )
+        mlp_rmsnorm_input_grad = mlp_rmsnorm_input_grad + tmp
+        del tmp
+
+        attention_rmsnorm_input_grad = mlp_rmsnorm_input_grad
+        current_mlp_out_grad = None if ctx.current_mlp_out_is_none else mlp_rmsnorm_input_grad
+
         tmp, ln_1_weight_grad = _rmsnorm_backward(
             x=attention_rmsnorm_input,
             weight=ln_1_weight,
@@ -319,7 +321,7 @@ class _OverlappableBlock(torch.autograd.Function):
             output_grad=attention_input_grad.wait(),
             eps=ctx.eps1,
         )
-        attention_rmsnorm_input_grad += tmp
+        attention_rmsnorm_input_grad = attention_rmsnorm_input_grad + tmp
         del tmp
 
         residual_grad = attention_rmsnorm_input_grad
@@ -378,10 +380,6 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
                 self.ln_1.eps,
                 self.ln_2.eps,
             )
-
-            current_attention_out = wait_for_ACT(current_attention_out, wait_in_forward=False, wait_in_backward=True)
-            current_mlp_out = wait_for_ACT(current_mlp_out, wait_in_forward=False, wait_in_backward=True)
-            residual = wait_for_ACT(residual, wait_in_forward=False, wait_in_backward=True)
         else:
             current_attention_out, current_mlp_out, residual = LadderResidualBlock.forward(
                 self,
