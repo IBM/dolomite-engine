@@ -48,8 +48,6 @@ def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> to
 
     x_grad = torch.empty_like(x)
 
-    B, H = get_num_elements_and_hidden_size(x)
-
     with torch.cuda.device(x.device):
         _swiglu_unchunked_backward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
             x_ptr=x,
@@ -149,6 +147,7 @@ def _mlp_forward(
 def _mlp_backward(
     c_fc_input: torch.Tensor,
     c_fc_weight: torch.Tensor,
+    swiglu_input: torch.Tensor,
     c_proj_input: torch.Tensor,
     c_proj_weight: torch.Tensor,
     output_grad: torch.Tensor,
@@ -156,12 +155,12 @@ def _mlp_backward(
     c_proj_input_grad = F.linear(output_grad, c_proj_weight)
     c_proj_weight_grad = F.linear(output_grad.T, c_proj_input)
 
-    c_fc_output_grad = _swiglu_unchunked_backward(c_proj_input, c_proj_input_grad)
+    c_fc_output_grad = _swiglu_unchunked_backward(swiglu_input, c_proj_input_grad)
 
     c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight)
     c_fc_weight_grad = F.linear(c_fc_output_grad.T, c_fc_input)
 
-    return c_fc_input_grad, c_fc_weight_grad, c_proj_input_grad, c_proj_weight_grad
+    return c_fc_input_grad, c_fc_weight_grad, c_proj_weight_grad
 
 
 class _OverlappableBlock(torch.autograd.Function):
@@ -257,18 +256,16 @@ class _OverlappableBlock(torch.autograd.Function):
             mlp_c_proj_weight,
         ) = ctx.saved_tensors
 
-        _mlp_backward(
+        mlp_c_fc_input_grad, mlp_c_fc_weight_grad, mlp_c_proj_weight_grad = _mlp_backward(
             c_fc_input=mlp_input,
             c_fc_weight=mlp_c_fc_weight,
+            swiglu_input=mlp_swiglu_input,
             c_proj_input=mlp_c_proj_input,
             c_proj_weight=mlp_c_proj_weight,
             output_grad=mlp_c_proj_output_grad,
         )
 
         return (
-            attention_c_proj_out_grad,
-            mlp_c_proj_out_grad,
-            mlp_rmsnorm_input_grad,
             None,
             None,
             None,
@@ -276,7 +273,10 @@ class _OverlappableBlock(torch.autograd.Function):
             None,
             None,
             None,
-            None,
+            mlp_c_fc_weight_grad,
+            mlp_c_proj_weight_grad,
+            None,  # eps1
+            None,  # eps2
         )
 
 
