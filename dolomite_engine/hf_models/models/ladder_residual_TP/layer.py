@@ -18,9 +18,10 @@ if is_cute_kernels_available():
         _swiglu_unchunked_forward_triton_kernel,
     )
     from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
-    from cute_kernels.utils import get_num_elements_and_hidden_size, get_sm_count
+    from cute_kernels.utils import ensure_contiguous, get_num_elements_and_hidden_size, get_sm_count
 
 
+@ensure_contiguous
 def _swiglu_unchunked_forward(x: torch.Tensor) -> torch.Tensor:
     B, H = get_num_elements_and_hidden_size(x)
     BLOCK_SIZE_B = 64
@@ -41,6 +42,7 @@ def _swiglu_unchunked_forward(x: torch.Tensor) -> torch.Tensor:
     return output
 
 
+@ensure_contiguous
 def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> torch.Tensor:
     B, H = get_num_elements_and_hidden_size(x)
     BLOCK_SIZE_B = 64
@@ -62,6 +64,7 @@ def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> to
     return x_grad
 
 
+@ensure_contiguous
 def _rmsnorm_forward(
     x: torch.Tensor, weight: torch.Tensor | None = None, eps: float | None = None
 ) -> tuple[torch.Tensor]:
@@ -94,6 +97,7 @@ def _rmsnorm_forward(
     return output, rmsnorm_denominator
 
 
+@ensure_contiguous
 def _rmsnorm_backward(
     x: torch.Tensor,
     weight: torch.Tensor | None,
@@ -172,14 +176,19 @@ class _OverlappableBlock(torch.autograd.Function):
         residual: torch.Tensor,
         ln_1_weight: torch.Tensor,
         ln_2_weight: torch.Tensor,
-        mlp0_c_fc_weight: torch.Tensor,
-        mlp0_c_proj_weight: torch.Tensor,
+        attention_c_fc_weight: torch.Tensor,
+        attention_c_proj_weight: torch.Tensor,
         mlp_c_fc_weight: torch.Tensor,
         mlp_c_proj_weight: torch.Tensor,
         eps1: float,
         eps2: float,
     ) -> tuple[torch.Tensor]:
-        if current_attention_out is None:
+        ctx.current_attention_out_is_none = current_attention_out is None
+        ctx.current_mlp_out_is_none = current_mlp_out is None
+        ctx.eps1 = eps1
+        ctx.eps2 = eps2
+
+        if ctx.current_attention_out_is_none:
             attention_rmsnorm_input = residual
         else:
             attention_rmsnorm_input = residual + current_attention_out
@@ -188,11 +197,11 @@ class _OverlappableBlock(torch.autograd.Function):
             x=attention_rmsnorm_input, weight=ln_1_weight, eps=eps1
         )
 
-        attention_c_fc_out, attention_swiglu_out, attention_c_proj_out = _mlp_forward(
-            x=attention_input, c_fc_weight=mlp0_c_fc_weight, c_proj_weight=mlp0_c_proj_weight
+        attention_swiglu_input, attention_c_proj_input, attention_c_proj_output = _mlp_forward(
+            x=attention_input, c_fc_weight=attention_c_fc_weight, c_proj_weight=attention_c_proj_weight
         )
 
-        if current_mlp_out is None:
+        if ctx.current_mlp_out_is_none:
             mlp_rmsnorm_input = attention_rmsnorm_input
         else:
             mlp_rmsnorm_input = attention_rmsnorm_input + current_mlp_out
@@ -209,9 +218,11 @@ class _OverlappableBlock(torch.autograd.Function):
             ln_1_weight,
             attention_rmsnorm_denominator,
             # attention
-            attention_c_fc_out,
-            attention_swiglu_out,
-            attention_c_proj_out,
+            attention_input,
+            attention_c_fc_weight,
+            attention_swiglu_input,
+            attention_c_proj_input,
+            attention_c_proj_weight,
             # MLP RMSNorm
             mlp_rmsnorm_input,
             ln_2_weight,
@@ -224,10 +235,7 @@ class _OverlappableBlock(torch.autograd.Function):
             mlp_c_proj_weight,
         )
 
-        ctx.eps1 = eps1
-        ctx.eps2 = eps2
-
-        return attention_c_proj_out, mlp_c_proj_output, mlp_rmsnorm_input
+        return attention_c_proj_output, mlp_c_proj_output, mlp_rmsnorm_input
 
     @staticmethod
     def backward(
@@ -241,9 +249,11 @@ class _OverlappableBlock(torch.autograd.Function):
             ln_1_weight,
             attention_rmsnorm_denominator,
             # attention
-            attention_c_fc_out,
-            attention_swiglu_out,
-            attention_c_proj_out,
+            attention_input,
+            attention_c_fc_weight,
+            attention_swiglu_input,
+            attention_c_proj_input,
+            attention_c_proj_weight,
             # MLP RMSNorm
             mlp_rmsnorm_input,
             ln_2_weight,
@@ -256,7 +266,7 @@ class _OverlappableBlock(torch.autograd.Function):
             mlp_c_proj_weight,
         ) = ctx.saved_tensors
 
-        mlp_c_fc_input_grad, mlp_c_fc_weight_grad, mlp_c_proj_weight_grad = _mlp_backward(
+        mlp_input_grad, mlp_c_fc_weight_grad, mlp_c_proj_weight_grad = _mlp_backward(
             c_fc_input=mlp_input,
             c_fc_weight=mlp_c_fc_weight,
             swiglu_input=mlp_swiglu_input,
@@ -265,14 +275,48 @@ class _OverlappableBlock(torch.autograd.Function):
             output_grad=mlp_c_proj_output_grad,
         )
 
+        mlp_rmsnorm_input_grad, ln_2_weight_grad = _rmsnorm_backward(
+            x=mlp_rmsnorm_input,
+            weight=ln_2_weight,
+            rmsnorm_denominator=mlp_rmsnorm_denominator,
+            output_grad=mlp_input_grad,
+            eps=ctx.eps2,
+        )
+
+        attention_rmsnorm_input_grad = mlp_rmsnorm_input_grad
+        current_mlp_out_grad = None if ctx.current_mlp_out_is_none is None else mlp_rmsnorm_input_grad
+
+        attention_input_grad, attention_c_fc_weight_grad, attention_c_proj_weight_grad = _mlp_backward(
+            c_fc_input=attention_input,
+            c_fc_weight=attention_c_fc_weight,
+            swiglu_input=attention_swiglu_input,
+            c_proj_input=attention_c_proj_input,
+            c_proj_weight=attention_c_proj_input,
+        )
+
+        tmp, ln_1_weight_grad = _rmsnorm_backward(
+            x=attention_rmsnorm_input,
+            weight=ln_1_weight,
+            rmsnorm_denominator=attention_rmsnorm_denominator,
+            output_grad=attention_input_grad,
+            eps=ctx.eps1,
+        )
+        attention_rmsnorm_input_grad += tmp
+        del tmp
+
+        residual_grad = attention_rmsnorm_input_grad
+        current_attention_out_grad = (
+            None if ctx.current_attention_out_is_none is None else attention_rmsnorm_input_grad
+        )
+
         return (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            current_attention_out_grad,
+            current_mlp_out_grad,
+            residual_grad,
+            ln_1_weight_grad,
+            ln_2_weight_grad,
+            attention_c_fc_weight_grad,
+            attention_c_proj_weight_grad,
             mlp_c_fc_weight_grad,
             mlp_c_proj_weight_grad,
             None,  # eps1
