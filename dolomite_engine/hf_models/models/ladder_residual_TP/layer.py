@@ -288,7 +288,7 @@ class _OverlappableBlock(torch.autograd.Function):
         )
 
         attention_rmsnorm_input_grad = mlp_rmsnorm_input_grad
-        current_mlp_out_grad = None if ctx.current_mlp_out_is_none is None else mlp_rmsnorm_input_grad
+        current_mlp_out_grad = None if ctx.current_mlp_out_is_none else mlp_rmsnorm_input_grad
 
         attention_input_grad, attention_c_fc_weight_grad, attention_c_proj_weight_grad = _mlp_backward(
             c_fc_input=attention_input,
@@ -310,9 +310,7 @@ class _OverlappableBlock(torch.autograd.Function):
         del tmp
 
         residual_grad = attention_rmsnorm_input_grad
-        current_attention_out_grad = (
-            None if ctx.current_attention_out_is_none is None else attention_rmsnorm_input_grad
-        )
+        current_attention_out_grad = None if ctx.current_attention_out_is_none else attention_rmsnorm_input_grad
 
         return (
             current_attention_out_grad,
