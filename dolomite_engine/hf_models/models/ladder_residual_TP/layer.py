@@ -195,6 +195,11 @@ class _OverlappableBlock(torch.autograd.Function):
         ctx.eps1 = eps1
         ctx.eps2 = eps2
 
+        if not ctx.current_mlp_out_is_none:
+            current_mlp_out = funcol.all_reduce(
+                current_mlp_out, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
+            )
+
         if ctx.current_attention_out_is_none:
             attention_rmsnorm_input = (
                 residual.wait() if isinstance(residual, funcol.AsyncCollectiveTensor) else residual
@@ -223,10 +228,6 @@ class _OverlappableBlock(torch.autograd.Function):
 
         mlp_swiglu_input, mlp_c_proj_input, mlp_c_proj_output = _mlp_forward(
             c_fc_input=mlp_input, c_fc_weight=mlp_c_fc_weight, c_proj_weight=mlp_c_proj_weight
-        )
-
-        mlp_c_proj_output = funcol.all_reduce(
-            mlp_c_proj_output, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
         )
 
         ctx.save_for_backward(
