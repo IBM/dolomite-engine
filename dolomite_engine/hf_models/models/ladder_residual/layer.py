@@ -7,8 +7,8 @@ from ..gpt_dolomite.layer import GPTDolomiteBlock
 class LadderResidualBlock(GPTDolomiteBlock):
     def forward(
         self,
-        current_attention_out: torch.Tensor,
-        current_mlp_out: torch.Tensor,
+        current_attention_out: torch.Tensor | None,
+        current_mlp_out: torch.Tensor | None,
         residual: torch.Tensor,
         past_key_values: DynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
