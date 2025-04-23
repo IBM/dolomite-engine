@@ -200,7 +200,7 @@ class _IndexWriter:
         list_ptr = []
         for length in sequence_lengths:
             list_ptr.append(curr_ptr)
-            curr_ptr += length.item() * itemsize
+            curr_ptr += (length if isinstance(length, int) else length.item()) * itemsize
         return list_ptr
 
 
