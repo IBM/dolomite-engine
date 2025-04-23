@@ -71,8 +71,8 @@ def get_arrow_files(input_path: str, data_subset: str) -> list[str]:
 
 
 def job(args: Namespace, is_blue_vela: bool = False) -> None:
-    assert not args.merge, "CCC jobs don't support merge"
-    assert args.convert, "CCC jobs are only for conversion"
+    assert not args.merge, "parallel jobs don't support merge"
+    assert args.convert, "parallel jobs are only for conversion"
 
     os.makedirs("err", exist_ok=True)
     os.makedirs("out", exist_ok=True)
