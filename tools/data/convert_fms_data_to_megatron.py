@@ -76,7 +76,7 @@ def get_arrow_files(input_path: str, data_subset: str) -> List[str]:
     return arrow_files
 
 
-def ccc(args: Namespace) -> None:
+def ccc(args: Namespace, is_blue_vela: bool = False) -> None:
     assert not args.merge, "CCC jobs don't support merge"
     assert args.convert, "CCC jobs are only for conversion"
 
@@ -92,8 +92,12 @@ def ccc(args: Namespace) -> None:
         while start_index < num_arrow_files:
             end_index = start_index + args.num_files_per_job
 
-            cmd = f"jbsub -q x86_24h -cores 1x4+0 -mem 32G -err err/{data_subset}-{start_index}-{end_index}.log -out out/{data_subset}-{start_index}-{end_index}.log python tools/convert_fms_data_to_megatron.py --input-path {args.input_path} --data-subset {data_subset} --tmp-path {args.tmp_path} --output-path {args.output_path} --tokenizer-path {args.tokenizer_path} --convert --start-index {start_index} --end-index {end_index}"
+            if is_blue_vela:
+                prefix = f"bsub -U p1345nodes -hl -M 32G -o out/{data_subset}-{start_index}-{end_index}.log -e err/{data_subset}-{start_index}-{end_index}.log"
+            else:
+                prefix = f"jbsub -q x86_24h -cores 1x4+0 -mem 32G -err err/{data_subset}-{start_index}-{end_index}.log -out out/{data_subset}-{start_index}-{end_index}.log"
 
+            cmd = f"{prefix} -err err/{data_subset}-{start_index}-{end_index}.log -out out/{data_subset}-{start_index}-{end_index}.log python tools/convert_fms_data_to_megatron.py --input-path {args.input_path} --data-subset {data_subset} --tmp-path {args.tmp_path} --output-path {args.output_path} --tokenizer-path {args.tokenizer_path} --convert --start-index {start_index} --end-index {end_index}"
             os.system(cmd)
 
             start_index = end_index
@@ -131,7 +135,7 @@ def interactive(args: Namespace) -> None:
             if args.max_file_size is None:
                 output_prefix = os.path.join(args.output_path, data_subset + output_suffix)
 
-                cmd = f"python tools/merge_datasets.py --input {os.path.join(args.tmp_path, data_subset)} --output-prefix {output_prefix}"
+                cmd = f"python tools/data/merge_data.py --input-prefixes {os.path.join(args.tmp_path, data_subset)} --output-prefix {output_prefix}"
                 os.system(cmd)
             else:
                 file_groups = get_groups_by_sizes(os.path.join(args.tmp_path, data_subset), args.max_file_size)
@@ -161,8 +165,8 @@ def interactive(args: Namespace) -> None:
 def main() -> None:
     args = get_args()
 
-    if args.ccc_job:
-        ccc(args)
+    if args.ccc_job or args.blue_vela_job:
+        ccc(args, is_blue_vela=args.blue_vela_job)
     else:
         interactive(args)
 
