@@ -2,7 +2,6 @@ import json
 import os
 import tempfile
 from argparse import ArgumentParser, Namespace
-from typing import List
 
 
 def get_args() -> Namespace:
@@ -38,7 +37,7 @@ def get_args() -> Namespace:
     return args
 
 
-def get_groups_by_sizes(path: str, max_size: int) -> List[List[str]]:
+def get_groups_by_sizes(path: str, max_size: int) -> list[list[str]]:
     fnames = filter(lambda x: x.endswith(".bin"), os.listdir(path))
     fnames = [os.path.join(path, i) for i in fnames]
 
@@ -59,7 +58,7 @@ def get_groups_by_sizes(path: str, max_size: int) -> List[List[str]]:
     return groups
 
 
-def get_arrow_files(input_path: str, data_subset: str) -> List[str]:
+def get_arrow_files(input_path: str, data_subset: str) -> list[str]:
     arrow_files = os.listdir(os.path.join(input_path, data_subset))
     arrow_files.sort()
     return arrow_files
@@ -110,10 +109,6 @@ def interactive(args: Namespace) -> None:
                 os.system(cmd)
 
         if args.merge:
-            # assert len(arrow_files) * 3 == len(
-            #     os.listdir(os.path.join(args.tmp_path, data_subset))
-            # ), "inconsistent number of files"
-
             output_suffix = (
                 "-" + args.output_suffix if args.output_suffix is not None and len(args.output_suffix) > 0 else ""
             )
