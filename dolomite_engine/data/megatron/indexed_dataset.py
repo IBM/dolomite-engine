@@ -200,27 +200,8 @@ class _IndexWriter:
         list_ptr = []
         for length in sequence_lengths:
             list_ptr.append(curr_ptr)
-            curr_ptr += length * itemsize
+            curr_ptr += length.item() * itemsize
         return list_ptr
-
-    # TODO the following code might accelerate this function
-    # def _sequence_pointers(self, sequence_lengths: List[int]) -> List[int]:
-    #     """Build the sequence pointers per the sequence lengths and dtype size
-
-    #     Args:
-    #         sequence_lengths (List[int]): The length of each sequence
-
-    #     Returns:
-    #         List[int]: The pointer to the beginning of each sequence
-    #     """
-    #     itemsize = DType.size(self.dtype)
-    #     sequence_lengths = numpy.array(sequence_lengths)
-
-    #     ptrs = sequence_lengths * itemsize
-    #     ptrs = ptrs.cumsum()
-    #     ptrs = [0] + ptrs.tolist()[:-1]
-
-    #     return ptrs
 
 
 class _IndexReader:
