@@ -1,14 +1,14 @@
 TOKENIZER_PATH=bigcode/starcoder
 INPUT_PATH=/dataset/bluepile
-TMP_PATH=/dataset/bluepile/tmp
 OUTPUT_PATH=/dataset/bluepile/megatron
+DATA_SUBSETS=commoncrawl
+NUM_FILES_PER_JOB=200
 
 python tools/data/convert_fms_data_to_megatron.py \
     --input-path $INPUT_PATH \
-    --data-subsets _tokenization2arrow \
-    --tmp-path $TMP_PATH \
     --output-path $OUTPUT_PATH \
+    --data-subsets $DATA_SUBSETS \
     --tokenizer $TOKENIZER_PATH \
     --convert \
-    --num-files-per-job 200 \
+    --num-files-per-job $NUM_FILES_PER_JOB \
     --blue-vela-job
