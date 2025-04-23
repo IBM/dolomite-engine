@@ -4,6 +4,7 @@ import json
 import multiprocessing
 import tempfile
 
+import pyarrow as pa
 import torch
 from datasets import load_dataset
 from tqdm import tqdm
@@ -15,6 +16,17 @@ from .indexed_dataset import DType, MMapIndexedDatasetBuilder
 
 if is_zstandard_available():
     from zstandard import ZstdDecompressor
+
+
+class ArrowIterator:
+    def __init__(self, filename: str) -> None:
+        self.fin = pa.ipc.open_file(filename)
+        self.num_records = self.fin.num_record_batches
+
+    def __iter__(self) -> list[int]:
+        for i in range(self.num_records):
+            doc = self.fin.get_batch(i)["tokens"].to_numpy().tolist()
+            yield doc
 
 
 class Encoder:
@@ -45,6 +57,12 @@ class Encoder:
     def encode_hf(self, sample):
         return self._encode_data(sample)
 
+    def convert_fms_arrow_to_megatron(self, sample):
+        if len(sample) > 0 and self.append_eod:
+            sample.append(self.tokenizer.eos_token_id)
+
+        return {"text": [sample]}
+
 
 def convert_file(
     tokenizer: AutoTokenizer | str,
@@ -72,6 +90,9 @@ def convert_file(
         outfile.seek(0)
 
         encoded_docs = pool.imap(encoder.encode_jsonl_zstd, outfile, chunk_size)
+    elif input_file.endswith(".arrow"):
+        assert subset is None, f"arrow doesn't support a subset"
+        encoded_docs = pool.imap(encoder.convert_fms_arrow_to_megatron, ArrowIterator(input_file), chunk_size)
     else:
         ds = load_dataset(input_file, use_auth_token=True, streaming=True, split="train", data_dir=subset)
         encoded_docs = pool.imap(encoder.encode_hf, ds, chunk_size)

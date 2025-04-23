@@ -5,7 +5,7 @@ from argparse import ArgumentParser, Namespace
 from transformers import AutoTokenizer
 
 from dolomite_engine.data.megatron.merge_data import merge_files
-from dolomite_engine.data.megatron.preprocess_data import convert_file
+from dolomite_engine.data.megatron.preprocess_data import Encoder, convert_file
 
 
 def get_args() -> Namespace:
