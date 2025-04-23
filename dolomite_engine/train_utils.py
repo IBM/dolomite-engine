@@ -109,7 +109,7 @@ def get_model_tflops(
             sequence_mixer_flops = _get_linear_flops(
                 b * s,
                 h,
-                h * (1 + 2 * block.num_key_value_heads / block.num_heads),
+                h * (1 + 2 * block.num_key_value_heads / block.num_attention_heads),
                 gradient_checkpointing=gradient_checkpointing_enabled,
             )
             # output projection FLOPs
