@@ -17,6 +17,7 @@ from .packages import (
     is_stickbreaking_available,
     is_torchao_available,
     is_triton_available,
+    is_zstandard_available,
     log_environment,
 )
 from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n

@@ -124,6 +124,8 @@ try:
 except ImportError:
     _IS_MAMBA_2_SSM_AVAILABLE = False
 
+    warn_rank_0("mamba-ssm is not installed")
+
 
 def is_mamba_2_ssm_available() -> bool:
     return _IS_MAMBA_2_SSM_AVAILABLE
@@ -156,6 +158,20 @@ except ImportError:
 
 
 def is_stickbreaking_available():
+    return _IS_STICKBREAKING_AVAILABLE
+
+
+try:
+    import zstandard
+
+    _IS_ZSTANDARD_AVAILABLE = True
+except ImportError:
+    _IS_ZSTANDARD_AVAILABLE = False
+
+    warn_rank_0("zstandard is not available")
+
+
+def is_zstandard_available():
     return _IS_STICKBREAKING_AVAILABLE
 
 
