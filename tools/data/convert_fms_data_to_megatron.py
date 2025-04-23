@@ -120,11 +120,11 @@ def interactive(args: Namespace) -> None:
 
             if args.max_file_size is None:
                 merge_files(
-                    input_prefixes=[os.path.join(args.tmp_path, data_subset)],
+                    input_prefixes=[os.path.join(args.input_path, data_subset)],
                     output_prefix=os.path.join(args.output_path, data_subset + output_suffix),
                 )
             else:
-                file_groups = get_groups_by_sizes(os.path.join(args.tmp_path, data_subset), args.max_file_size)
+                file_groups = get_groups_by_sizes(os.path.join(args.input_path, data_subset), args.max_file_size)
                 file_map = {}
 
                 for grp_id, group in enumerate(file_groups):
@@ -135,11 +135,11 @@ def interactive(args: Namespace) -> None:
 
                         for extension in [".idx", ".ndocs", ".bin"]:
                             os.system(
-                                f"ln -s {os.path.join(args.tmp_path, data_subset, prefix + extension)} {os.path.join(tmpdir, str(fid) + extension)}"
+                                f"ln -s {os.path.join(args.input_path, data_subset, prefix + extension)} {os.path.join(tmpdir, str(fid) + extension)}"
                             )
 
                     merge_files(
-                        input_prefixes=[os.path.join(args.tmp_path, data_subset)],
+                        input_prefixes=[os.path.join(args.input_path, data_subset)],
                         output_prefix=os.path.join(args.output_path, data_subset + "-" + str(grp_id) + output_suffix),
                     )
 
