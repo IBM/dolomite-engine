@@ -120,7 +120,7 @@ def interactive(args: Namespace) -> None:
             for arrow_file in arrow_files:
                 prefix = arrow_file.split(".")[0]
 
-                cmd = f"python tools/preprocess_data.py --input {os.path.join(args.input_path, data_subset, arrow_file)} --output-prefix {os.path.join(args.tmp_path, data_subset, prefix)} --tokenizer-type HuggingFaceTokenizer --tokenizer-path {args.tokenizer_path} --dataset-impl mmap --append-eod --workers {args.workers} --chunk-size 1000"
+                cmd = f"python tools/data/preprocess_data.py --input {os.path.join(args.input_path, data_subset, arrow_file)} --output-prefix {os.path.join(args.tmp_path, data_subset, prefix)} --tokenizer-type HuggingFaceTokenizer --tokenizer-path {args.tokenizer_path} --dataset-impl mmap --append-eod --workers {args.workers} --chunk-size 1000"
 
                 os.system(cmd)
 
@@ -157,7 +157,7 @@ def interactive(args: Namespace) -> None:
                                     f"ln -s {os.path.join(args.tmp_path, data_subset, prefix + extension)} {os.path.join(tmpdir, str(fid) + extension)}"
                                 )
 
-                        cmd = f"python tools/merge_datasets.py --input {tmpdir} --output-prefix {output_prefix}"
+                        cmd = f"python tools/data/merge_datasets.py --input {tmpdir} --output-prefix {output_prefix}"
                         os.system(cmd)
 
                 json.dump(file_map, open(os.path.join(args.output_path, f"files{output_suffix}.json"), "w"), indent=4)
