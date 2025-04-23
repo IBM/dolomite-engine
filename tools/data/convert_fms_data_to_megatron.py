@@ -26,6 +26,7 @@ def get_args() -> Namespace:
     group.add_argument("--merge", action="store_true", help="merge")
     group.add_argument("--max-file-size", type=int, help="max file size for merged files in GBs")
     group.add_argument("--ccc-job", action="store_true", help="submit multiple jobs on CCC")
+    group.add_argument("--blue-vela-job", action="store_true", help="submit multiple jobs on Blue Vela")
     group.add_argument("--workers", type=int, default=1, help="number of workers for tokenization")
 
     group = parser.add_argument_group("num_files")
