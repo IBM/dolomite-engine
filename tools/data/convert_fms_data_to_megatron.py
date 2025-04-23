@@ -64,6 +64,7 @@ def get_groups_by_sizes(path: str, max_size: int) -> list[list[str]]:
 
 def get_arrow_files(input_path: str, data_subset: str) -> list[str]:
     arrow_files = os.listdir(os.path.join(input_path, data_subset))
+    arrow_files = list(filter(lambda x: x.endswith(".bin"), arrow_files))
     arrow_files.sort()
     return arrow_files
 
@@ -87,7 +88,7 @@ def job(args: Namespace, is_blue_vela: bool = False) -> None:
             else:
                 prefix = f"jbsub -q x86_24h -cores 1x4+0 -mem 32G -err err/{data_subset}-{start_index}-{end_index}.log -out out/{data_subset}-{start_index}-{end_index}.log"
 
-            cmd = f"{prefix} -err err/{data_subset}-{start_index}-{end_index}.log -out out/{data_subset}-{start_index}-{end_index}.log python tools/convert_fms_data_to_megatron.py --input-path {args.input_path} --data-subset {data_subset} --tmp-path {args.tmp_path} --output-path {args.output_path} --tokenizer-path {args.tokenizer} --convert --start-index {start_index} --end-index {end_index}"
+            cmd = f"{prefix} -err err/{data_subset}-{start_index}-{end_index}.log -out out/{data_subset}-{start_index}-{end_index}.log python tools/data/convert_fms_data_to_megatron.py --input-path {args.input_path} --data-subset {data_subset} --tmp-path {args.tmp_path} --output-path {args.output_path} --tokenizer {args.tokenizer} --convert --start-index {start_index} --end-index {end_index}"
             os.system(cmd)
 
             start_index = end_index
