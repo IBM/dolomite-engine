@@ -62,6 +62,12 @@ def get_groups_by_sizes(path: str, max_size: int) -> list[list[str]]:
     return groups
 
 
+def get_arrow_files(input_path: str, data_subset: str) -> list[str]:
+    arrow_files = os.listdir(os.path.join(input_path, data_subset))
+    arrow_files.sort()
+    return arrow_files
+
+
 def job(args: Namespace, is_blue_vela: bool = False) -> None:
     assert not args.merge, "CCC jobs don't support merge"
     assert args.convert, "CCC jobs are only for conversion"
@@ -70,7 +76,7 @@ def job(args: Namespace, is_blue_vela: bool = False) -> None:
     os.makedirs("out", exist_ok=True)
 
     for data_subset in args.data_subsets:
-        num_arrow_files = len(os.listdir(os.path.join(args.input_path, data_subset)))
+        num_arrow_files = len(get_arrow_files(args.input_path, data_subset))
 
         start_index = 0
         while start_index < num_arrow_files:
@@ -95,7 +101,7 @@ def interactive(args: Namespace) -> None:
 
     for data_subset in args.data_subsets:
         if args.convert:
-            arrow_files = os.listdir(os.path.join(args.input_path, data_subset))
+            arrow_files = get_arrow_files(args.input_path, data_subset)
             arrow_files = arrow_files[args.start_index : args.end_index]
 
             os.makedirs(os.path.join(args.tmp_path, data_subset), exist_ok=True)
