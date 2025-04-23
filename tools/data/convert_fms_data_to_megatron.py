@@ -1,10 +1,10 @@
 import json
 import os
-import tempfile
 from argparse import ArgumentParser, Namespace
 
 from transformers import AutoTokenizer
 
+from dolomite_engine.data.megatron.merge_data import merge_files
 from dolomite_engine.data.megatron.preprocess_data import convert_file
 
 
@@ -62,12 +62,6 @@ def get_groups_by_sizes(path: str, max_size: int) -> list[list[str]]:
     return groups
 
 
-def get_arrow_files(input_path: str, data_subset: str) -> list[str]:
-    arrow_files = os.listdir(os.path.join(input_path, data_subset))
-    arrow_files.sort()
-    return arrow_files
-
-
 def job(args: Namespace, is_blue_vela: bool = False) -> None:
     assert not args.merge, "CCC jobs don't support merge"
     assert args.convert, "CCC jobs are only for conversion"
@@ -76,7 +70,7 @@ def job(args: Namespace, is_blue_vela: bool = False) -> None:
     os.makedirs("out", exist_ok=True)
 
     for data_subset in args.data_subsets:
-        num_arrow_files = len(get_arrow_files(args.input_path, data_subset))
+        num_arrow_files = len(os.listdir(os.path.join(args.input_path, data_subset)))
 
         start_index = 0
         while start_index < num_arrow_files:
@@ -101,7 +95,7 @@ def interactive(args: Namespace) -> None:
 
     for data_subset in args.data_subsets:
         if args.convert:
-            arrow_files = get_arrow_files(args.input_path, data_subset)
+            arrow_files = os.listdir(os.path.join(args.input_path, data_subset))
             arrow_files = arrow_files[args.start_index : args.end_index]
 
             os.makedirs(os.path.join(args.tmp_path, data_subset), exist_ok=True)
@@ -120,31 +114,29 @@ def interactive(args: Namespace) -> None:
             )
 
             if args.max_file_size is None:
-                output_prefix = os.path.join(args.output_path, data_subset + output_suffix)
-
-                cmd = f"python tools/data/merge_data.py --input-prefixes {os.path.join(args.tmp_path, data_subset)} --output-prefix {output_prefix}"
-                os.system(cmd)
+                merge_files(
+                    input_prefixes=[os.path.join(args.tmp_path, data_subset)],
+                    output_prefix=os.path.join(args.output_path, data_subset + output_suffix),
+                )
             else:
                 file_groups = get_groups_by_sizes(os.path.join(args.tmp_path, data_subset), args.max_file_size)
-
                 file_map = {}
 
                 for grp_id, group in enumerate(file_groups):
                     file_map[grp_id] = group
 
-                    output_prefix = os.path.join(args.output_path, data_subset + "-" + str(grp_id) + output_suffix)
+                    for fid, fname in enumerate(group):
+                        prefix = fname.split(".bin")[0]
 
-                    with tempfile.TemporaryDirectory() as tmpdir:
-                        for fid, fname in enumerate(group):
-                            prefix = fname.split(".bin")[0]
+                        for extension in [".idx", ".ndocs", ".bin"]:
+                            os.system(
+                                f"ln -s {os.path.join(args.tmp_path, data_subset, prefix + extension)} {os.path.join(tmpdir, str(fid) + extension)}"
+                            )
 
-                            for extension in [".idx", ".ndocs", ".bin"]:
-                                os.system(
-                                    f"ln -s {os.path.join(args.tmp_path, data_subset, prefix + extension)} {os.path.join(tmpdir, str(fid) + extension)}"
-                                )
-
-                        cmd = f"python tools/data/merge_datasets.py --input {tmpdir} --output-prefix {output_prefix}"
-                        os.system(cmd)
+                    merge_files(
+                        input_prefixes=[os.path.join(args.tmp_path, data_subset)],
+                        output_prefix=os.path.join(args.output_path, data_subset + "-" + str(grp_id) + output_suffix),
+                    )
 
                 json.dump(file_map, open(os.path.join(args.output_path, f"files{output_suffix}.json"), "w"), indent=4)
         else:
