@@ -102,7 +102,7 @@ def convert_file(
         for key in json_keys
     }
 
-    for item in tqdm(encoded_docs):
+    for item in encoded_docs:
         for key, document in item.items():
             builders[key].add_item(torch.IntTensor(document))
             builders[key].end_document()

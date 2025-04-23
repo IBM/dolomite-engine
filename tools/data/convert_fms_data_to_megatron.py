@@ -2,6 +2,7 @@ import json
 import os
 from argparse import ArgumentParser, Namespace
 
+from tqdm import tqdm
 from transformers import AutoTokenizer
 
 from dolomite_engine.data.megatron.merge_data import merge_files
@@ -105,7 +106,7 @@ def interactive(args: Namespace) -> None:
 
             os.makedirs(os.path.join(args.tmp_path, data_subset), exist_ok=True)
 
-            for arrow_file in arrow_files:
+            for arrow_file in tqdm(arrow_files):
                 convert_file(
                     tokenizer=tokenizer,
                     input_file=os.path.join(args.input_path, data_subset, arrow_file),
