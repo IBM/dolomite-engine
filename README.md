@@ -20,18 +20,18 @@ _Mayank Mishra_
 1. [Reducing Transformer Key-Value Cache Size with Cross-Layer Attention](https://arxiv.org/abs/2405.12981)  
 _William Brandon, Mayank Mishra, Aniruddha Nrusimha, Rameswar Panda, Jonathan Ragan Kelly_  
 ![image][Efficient Inference] ![image][Model Architecture]
-1. [NEFTune: Noisy Embeddings Improve Instruction Finetuning](https://arxiv.org/abs/2310.05914)  
-_Neel Jain, Ping-yeh Chiang, Yuxin Wen, John Kirchenbauer, Hong-Min Chu, Gowthami Somepalli, Brian R. Bartoldson, Bhavya Kailkhura, Avi Schwarzschild, Aniruddha Saha, Micah Goldblum, Jonas Geiping, Tom Goldstein_  
-![image][Instruction Finetuning]
-1. [Parallelizing Linear Transformers with the Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)  
-_Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, Yoon Kim_  
-![image][Model Architecture] ![image][Efficient Training] ![image][Efficient Inference]
 1. [Power scheduler: a batch size and token number agnostic learning rate scheduler](https://arxiv.org/abs/2408.13359)  
 _Yikang Shen, Matthew Stallone, Mayank Mishra, Gaoyuan Zhang, Shawn Tan, Aditya Prasad, Adriana Meza Soria, David D. Cox, Rameswar Panda_  
 ![image][Learning Rate Scheduler]
 1. [Scattered Mixture-of-Experts Implementation](https://arxiv.org/abs/2403.08245)  
 _Shawn Tan, Yikang Shen, Rameswar Panda, Aaron Courville_  
 ![image][Mixture of Experts] ![image][Efficient Training] ![image][Efficient Inference]
+1. [Stick-breaking Attention](https://arxiv.org/abs/2410.17980)  
+_Shawn Tan, Yikang Shen, Songlin Yang, Aaron Courville, Rameswar Panda_  
+![image][Model Architecture]
+
+# Discord Server
+Join the [discord server](https://discord.gg/AFDxmjH5RV) if you are interested in LLM architecture or distributed training/inference research.
 
 # Getting Started
 Run `make install` to install the requirements for this repository. You might need to install `flash-attn`.
@@ -72,8 +72,9 @@ export_to_huggingface(
 
 If you are interested in using this optimization outside this repo for some reason, you can do as follows:
 ```python
-import torch
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import GPTDolomiteForCausalLM
+from dolomite_engine.kernels import enable_kernels
 
 
 # we need unpadded lists here for avoiding any useless computations on pad tokens
@@ -84,16 +85,10 @@ labels = [[-100, -100, -100, 4, 5, 0], [-100, -100, 8, 0]]
 
 # this will throw a warning saying that the model is of gpt_bigcode class
 # ignore the warning
-model = GPTDolomiteForCausalLM.from_pretrained(
-    <model_path>,
-    attn_implementation="flash_attention_2"
-    use_padding_free_transformer=True,
-).cuda()
+model = GPTDolomiteForCausalLM.from_pretrained(<model_path>, use_padding_free_transformer=True).cuda()
 
-loss = model(
-    input_ids=input_ids,
-    labels=labels,
-).loss
+with enable_kernels([Kernel.flash_attention_2]):
+    loss = model(input_ids=input_ids, labels=labels).loss
 ```
 
 Note that padding free transformers doesn't support generation and thus for running generation on the model, you will need to load the model without padding-free transformers.
@@ -184,15 +179,7 @@ SST2Dataset
 This repository implements the dataloader from Megatron-LM for efficient pretraining. If for some reason you need to use that dataloader outside this repository, take a look at [this example](tools/megatron_dataset/megatron_dataloader.py).
 
 ## Supported optimizers
-We support all of the following optimizers. The default optimizer is `TorchAdamW`. Note that using the [Apex](https://github.com/NVIDIA/apex) optimizers will require installing the respective pip package.
-
 ```python
-# https://nvidia.github.io/apex/optimizers.html
-from apex.optimizers import FusedAdam as ApexFusedAdam
-from apex.optimizers import FusedLAMB as ApexFusedLAMB
-from apex.optimizers import FusedNovoGrad as ApexFusedNovoGrad
-from apex.optimizers import FusedSGD as ApexFusedSGD
-
 # https://pytorch.org/docs/stable/optim.html
 from torch.optim.adadelta import Adadelta as TorchAdadelta
 from torch.optim.adagrad import Adagrad as TorchAdagrad

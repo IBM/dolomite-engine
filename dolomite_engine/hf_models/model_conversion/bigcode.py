@@ -1,26 +1,25 @@
-import shutil
-
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCodeConfig, GPTBigCodeForCausalLM
 
-from ..enums import AttentionHeadType, PositionEmbeddingType
+from ...utils import SafeTensorsWeightsManager, divide_if_divisible, download_repo
+from ..modeling_utils import get_attention_head_type
 from ..models import GPTDolomiteConfig
 
 
 def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
-    shutil.copytree(pretrained_model_name_or_path, save_path)
-
-    original_config: GPTBigCodeConfig = AutoConfig.from_pretrained(save_path)
+    original_config, tokenizer, downloaded_model_path = download_repo(pretrained_model_name_or_path)
     config = _import_config_from_huggingface(original_config)
+
+    safetensors_weights_manager = SafeTensorsWeightsManager(downloaded_model_path)
+    state_dict = _import_state_dict_from_huggingface(safetensors_weights_manager, config.num_layers)
+
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     config.save_pretrained(save_path)
 
     generation_config = GenerationConfig.from_model_config(config)
     generation_config.save_pretrained(save_path)
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
+    if tokenizer is not None:
         tokenizer.save_pretrained(save_path, legacy_format=False)
-    except:
-        pass
 
 
 def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDolomiteConfig:
@@ -28,35 +27,94 @@ def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDol
 
     config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
-        n_positions=original_config.n_positions,
-        n_embd=original_config.n_embd,
-        n_layer=original_config.n_layer,
-        n_head=original_config.n_head,
-        attention_head_type="mqa" if original_config.multi_query else "mha",
+        max_position_embeddings=original_config.n_positions,
+        hidden_size=original_config.n_embd,
+        num_layers=original_config.n_layer,
         position_embedding_type="learned_absolute",
-        n_inner=original_config.n_inner,
-        activation_function=original_config.activation_function,
         normalization_function="layernorm",
         layer_norm_epsilon=original_config.layer_norm_epsilon,
         use_cache=original_config.use_cache,
-        add_bias=True,
         tie_word_embeddings=original_config.tie_word_embeddings,
         initializer_range=original_config.initializer_range,
-        attn_pdrop=original_config.attn_pdrop,
-        resid_pdrop=original_config.resid_pdrop,
         bos_token_id=original_config.bos_token_id,
         eos_token_id=original_config.eos_token_id,
         pad_token_id=original_config.pad_token_id,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": True,
+                "num_attention_heads": original_config.n_head,
+                "num_key_value_heads": 1 if original_config.multi_query else original_config.n_head,
+            }
+            for _ in range(original_config.n_layer)
+        ],
+        mlp_blocks=[
+            {
+                "mlp_type": "MLP",
+                "activation_function": original_config.activation_function,
+                "intermediate_size": original_config.n_inner,
+                "add_bias": True,
+            }
+            for _ in range(original_config.n_layer)
+        ],
     )
 
     return config
 
 
-def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
-    shutil.copytree(pretrained_model_name_or_path, save_path)
+def _import_state_dict_from_huggingface(
+    safetensors_weights_manager: SafeTensorsWeightsManager, num_layers: int
+) -> None:
+    state_dict = {key: safetensors_weights_manager.get_tensor(key) for key in safetensors_weights_manager}
 
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(save_path)
+    for layer_idx in range(num_layers):
+        # sequence_mixer.c_attn
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.attn.c_attn.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.attn.c_attn.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias"] = bias
+
+        # sequence_mixer.c_proj
+        state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.attn.c_proj.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.attn.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias"] = bias
+
+        # mlp_block.c_fc
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp.c_fc.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp.c_fc.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_fc.bias"] = bias
+
+        # mlp_block.c_proj
+        state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp.c_proj.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp_block.c_proj.bias"] = bias
+
+    return state_dict
+
+
+def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
+    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
+
+    safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
+    state_dict = _export_state_dict_to_huggingface(safetensors_weights_manager, config.num_layers)
+
+    SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
     original_config.save_pretrained(save_path)
 
     original_generation_config = GenerationConfig.from_model_config(original_config)
@@ -70,32 +128,35 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
-    assert config.activation_function == "gelu_pytorch_tanh"
     assert config.normalization_function == "layernorm"
-    assert AttentionHeadType(config.attention_head_type) in [AttentionHeadType.mha, AttentionHeadType.mqa]
-    assert PositionEmbeddingType(config.position_embedding_type) == PositionEmbeddingType.learned_absolute
+    assert config.position_embedding_type == "learned_absolute"
     assert config.m_emb is None
     assert config.m_residual is None
     assert config.m_width is None
-    assert config.attention_multiplier is None
+
+    num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
+    num_key_value_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_key_value_heads")
+    attention_head_type = get_attention_head_type(num_attention_heads, num_key_value_heads)
+
+    assert attention_head_type in ["mha", "mqa"]
+    assert config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "attention_multiplier") is None
 
     original_config = GPTBigCodeConfig(
         vocab_size=config.vocab_size,
-        n_positions=config.n_positions,
-        n_embd=config.n_embd,
-        n_layer=config.n_layer,
-        n_head=config.n_head,
-        n_inner=config.n_inner,
-        activation_function=config.activation_function,
-        resid_pdrop=config.resid_pdrop,
-        embd_pdrop=config.embd_pdrop,
-        attn_pdrop=config.attn_pdrop,
+        n_positions=config.max_position_embeddings,
+        n_embd=config.hidden_size,
+        n_layer=config.num_layers,
+        n_head=num_attention_heads,
+        n_inner=config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size"),
+        activation_function=config.check_equal_for_all_and_get_value(
+            "mlp_blocks", "activation_function", "gelu_pytorch_tanh"
+        ),
+        embedding_dropout=config.embedding_dropout,
+        attn_pdrop=config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "softmax_dropout"),
         layer_norm_epsilon=config.layer_norm_epsilon,
         initializer_range=config.initializer_range,
-        scale_attn_weights=config.scale_attn_weights,
         use_cache=config.use_cache,
-        attention_softmax_in_fp32=config.attention_softmax_in_fp32,
-        multi_query=config.multi_query,
+        multi_query=attention_head_type == "mqa",
         tie_word_embeddings=config.tie_word_embeddings,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
@@ -104,3 +165,46 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig
     )
 
     return original_config
+
+
+def _export_state_dict_to_huggingface(safetensors_weights_manager: SafeTensorsWeightsManager, num_layers: int) -> dict:
+    state_dict = {key: safetensors_weights_manager.get_tensor(key) for key in safetensors_weights_manager}
+
+    for layer_idx in range(num_layers):
+        # sequence_mixer.c_attn
+        state_dict[f"transformer.h.{layer_idx}.attn.c_attn.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_attn.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_attn.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.attn.c_attn.bias"] = bias
+
+        # sequence_mixer.c_proj
+        state_dict[f"transformer.h.{layer_idx}.attn.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.sequence_mixer.c_proj.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.sequence_mixer.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.attn.c_proj.bias"] = bias
+
+        # mlp_block.c_fc
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp_block.c_fc.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp.c_fc.bias"] = bias
+
+        # mlp_block.c_proj
+        state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.weight"] = state_dict.pop(
+            f"transformer.h.{layer_idx}.mlp_block.c_proj.weight"
+        )
+
+        bias = state_dict.pop(f"transformer.h.{layer_idx}.mlp_block.c_proj.bias", None)
+        if bias is not None:
+            state_dict[f"transformer.h.{layer_idx}.mlp.c_proj.bias"] = bias
+
+    return state_dict

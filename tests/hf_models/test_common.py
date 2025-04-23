@@ -10,15 +10,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    GPTDolomiteConfig,
-    MoEDolomiteConfig,
-    PositionEmbeddingType,
-    export_to_huggingface,
-    import_from_huggingface,
-)
-from dolomite_engine.hf_models.config import CommonConfig
+from dolomite_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
@@ -30,16 +22,16 @@ class TestCommons(TestCase):
         return [torch.device("cpu"), torch.device("cuda")]
 
     @staticmethod
-    def get_attention_head_types() -> list[AttentionHeadType]:
-        return [AttentionHeadType.mha, AttentionHeadType.mqa, AttentionHeadType.gqa]
+    def get_attention_head_types() -> list[str]:
+        return ["mha", "mqa", "gqa"]
 
     @staticmethod
     def get_attention_implementations() -> list[str]:
-        return ["eager", "sdpa", "flash_attention_2"]
+        return ["sdpa", "flash_attention_2"]
 
     @staticmethod
-    def get_position_embedding_types() -> list[PositionEmbeddingType]:
-        return [PositionEmbeddingType.learned_absolute, PositionEmbeddingType.alibi, PositionEmbeddingType.rope]
+    def get_position_embedding_types() -> list[str]:
+        return ["learned_absolute", "rope"]
 
     @staticmethod
     def get_dtypes() -> list[torch.dtype]:
@@ -66,8 +58,8 @@ class TestCommons(TestCase):
 
     @staticmethod
     def get_dense_test_config(
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         num_layers: int = 8,
         add_bias: bool = True,
         activation_function: str = "gelu_pytorch_tanh",
@@ -76,18 +68,23 @@ class TestCommons(TestCase):
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
+        num_attention_heads: int = 4,
     ) -> GPTDolomiteConfig:
+        if attention_head_type == "mha":
+            num_key_value_heads = num_attention_heads
+        elif attention_head_type == "mqa":
+            num_key_value_heads = 1
+        elif attention_head_type == "gqa":
+            num_key_value_heads = 2
+        else:
+            raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+
         return GPTDolomiteConfig(
             vocab_size=2048,
-            n_positions=1024,
-            n_embd=32,
-            n_layer=num_layers,
-            n_head=4,
-            num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
-            attention_head_type=attention_head_type.value,
-            position_embedding_type=position_embedding_type.value,
-            add_bias=add_bias,
-            activation_function=activation_function,
+            max_position_embeddings=1024,
+            hidden_size=32,
+            num_layers=num_layers,
+            position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
             bos_token_id=0,
@@ -96,46 +93,82 @@ class TestCommons(TestCase):
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            attention_multiplier=attention_multiplier,
+            sequence_mixer_blocks=[
+                {
+                    "sequence_mixer_type": "softmax_attention",
+                    "add_bias": add_bias,
+                    "num_attention_heads": num_attention_heads,
+                    "num_key_value_heads": num_key_value_heads,
+                    "attention_multiplier": attention_multiplier,
+                }
+                for _ in range(num_layers)
+            ],
+            mlp_blocks=[
+                {"mlp_type": "MLP", "activation_function": activation_function, "add_bias": add_bias}
+                for _ in range(num_layers)
+            ],
         )
 
     @staticmethod
     def get_moe_test_config(
-        attention_head_type: AttentionHeadType,
-        position_embedding_type: PositionEmbeddingType,
+        attention_head_type: str,
+        position_embedding_type: str,
         num_layers: int = 8,
         num_experts: int = 8,
         num_experts_per_tok: int = 8,
         add_bias: bool = True,
+        shared_n_inner: int | None = None,
         activation_function: str = "gelu_pytorch_tanh",
         normalization_function: str = "layernorm",
         m_emb: float = None,
         m_width: float = None,
         m_residual: float = None,
         attention_multiplier: float = None,
-    ) -> MoEDolomiteConfig:
-        return MoEDolomiteConfig(
+        num_attention_heads: int = 4,
+    ) -> GPTDolomiteConfig:
+        if attention_head_type == "mha":
+            num_key_value_heads = num_attention_heads
+        elif attention_head_type == "mqa":
+            num_key_value_heads = 1
+        elif attention_head_type == "gqa":
+            num_key_value_heads = 2
+        else:
+            raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
+
+        return GPTDolomiteConfig(
             vocab_size=2048,
-            n_positions=1024,
-            n_embd=32,
-            n_layer=num_layers,
-            n_head=4,
-            num_experts_per_tok=num_experts_per_tok,
-            num_key_value_heads=2 if attention_head_type == AttentionHeadType.gqa else None,
-            attention_head_type=attention_head_type.value,
-            position_embedding_type=position_embedding_type.value,
-            add_bias=add_bias,
-            activation_function=activation_function,
+            max_position_embeddings=1024,
+            hidden_size=32,
+            num_layers=num_layers,
+            position_embedding_type=position_embedding_type,
             normalization_function=normalization_function,
             tie_word_embeddings=False,
-            num_experts=num_experts,
             bos_token_id=0,
             eos_token_id=1,
             pad_token_id=2,
             m_emb=m_emb,
             m_width=m_width,
             m_residual=m_residual,
-            attention_multiplier=attention_multiplier,
+            sequence_mixer_blocks=[
+                {
+                    "sequence_mixer_type": "softmax_attention",
+                    "add_bias": add_bias,
+                    "num_attention_heads": num_attention_heads,
+                    "num_key_value_heads": num_key_value_heads,
+                    "attention_multiplier": attention_multiplier,
+                }
+                for _ in range(num_layers)
+            ],
+            mlp_blocks=[
+                {
+                    "mlp_type": "MoE",
+                    "num_experts": num_experts,
+                    "num_experts_per_tok": num_experts_per_tok,
+                    "activation_function": activation_function,
+                    "add_bias": add_bias,
+                }
+                for _ in range(num_layers)
+            ],
         )
 
     def get_dummy_inputs(self, device: torch.device, return_list: bool = False) -> tuple[torch.Tensor | list[int]]:
@@ -238,33 +271,17 @@ class TestCommons(TestCase):
         return False
 
     def from_config(self, config: AutoConfig, **kwargs) -> AutoModelForCausalLM:
-        model = AutoModelForCausalLM.from_config(config, **kwargs)
-
-        attention_implementation = kwargs.pop("attn_implementation", None)
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
-        moe_implementation = kwargs.pop("moe_implementation", None)
+
+        model = AutoModelForCausalLM.from_config(
+            config,
+            use_padding_free_transformer=use_padding_free_transformer,
+            torch_dtype=kwargs.pop("torch_dtype", None),
+        )
 
         if use_padding_free_transformer:
             assert model._use_padding_free_transformer
 
-        if attention_implementation == "eager":
-            assert "Attention" in str(model)
-            assert "FlashAttention2" not in str(model)
-            assert "PaddingFreeAttention" not in str(model)
-        elif attention_implementation == "sdpa":
-            assert "SDPA" in str(model)
-        elif attention_implementation == "flash_attention_2":
-            if use_padding_free_transformer:
-                assert "PaddingFreeAttention" in str(model)
-            else:
-                assert "FlashAttention2" in str(model)
-
-        if moe_implementation == "eager":
-            assert "SparseMoE" in str(model)
-        elif moe_implementation == "scattermoe":
-            assert "ScatterMoE" in str(model)
-
-        kwargs.pop("torch_dtype", None)
         assert len(kwargs) == 0
 
         return model

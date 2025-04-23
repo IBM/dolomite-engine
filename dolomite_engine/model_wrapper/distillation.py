@@ -5,8 +5,10 @@ import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 
-from ..enums import AttentionImplementation, KLDivergenceMethod, Mode, MoEImplementation
-from ..utils import log_rank_0, string_to_torch_dtype
+from ..enums import Kernel, KLDivergenceMethod, Mode
+from ..hf_models import get_autoregressive_language_modeling_loss
+from ..kernels import is_kernel_allowed
+from ..utils import ProcessGroupManager, log_rank_0, string_to_torch_dtype
 from .pretraining import ModelWrapperForPretraining
 
 
@@ -19,19 +21,17 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         dtype: torch.dtype,
         efficient_initialization: bool,
-        attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
         micro_batch_size: int,
         sequence_length: int,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         teacher_model_name: str | None,
         teacher_model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         teacher_model_dtype: torch.dtype,
         kl_divergence_method: KLDivergenceMethod,
         kl_divergence_weight: float = 1,
-        neft_alpha: float | None = None,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
@@ -47,13 +47,12 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             model_class (AutoModelForCausalLM | AutoModelForSeq2SeqLM): HF model class to use for model loading
             dtype (torch.dtype): dtype for the model
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
-            attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             micro_batch_size (int): micro batch size for pretraining
             sequence_length (int): sequence length for pretraining
-            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
@@ -74,13 +73,12 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             model_class=model_class,
             dtype=dtype,
             efficient_initialization=efficient_initialization,
-            attention_implementation=attention_implementation,
             use_padding_free_transformer=use_padding_free_transformer,
-            tensor_parallel_word_embeddings=tensor_parallel_word_embeddings,
             sequence_parallel=sequence_parallel,
             micro_batch_size=micro_batch_size,
             sequence_length=sequence_length,
-            neft_alpha=neft_alpha,
+            num_pipeline_stages=num_pipeline_stages,
+            pipeline_stage_id=pipeline_stage_id,
             trust_remote_code=trust_remote_code,
             tokenizer_name=tokenizer_name,
             additional_special_tokens=additional_special_tokens,
@@ -88,7 +86,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
             reset_position_ids=reset_position_ids,
         )
 
-        if self.tp_world_size > 1:
+        if ProcessGroupManager.is_tensor_parallel_enabled() or num_pipeline_stages > 1:
             raise NotImplementedError()
 
     def forward(self, batch: dict) -> dict:
@@ -112,10 +110,21 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         model_outputs = self.model(**batch)
         logits: torch.Tensor = model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
 
-        if self.upcast_logits_for_loss:
-            logits = logits.float()
+        assert not is_kernel_allowed(Kernel.fused_linear_cross_entropy_cute)
+        assert False, "need to add lm_loss multiplier here"
 
-        lm_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.reshape(-1))
+        lm_loss = get_autoregressive_language_modeling_loss(
+            lm_logits=logits,
+            labels=labels,
+            hidden_states=None,
+            vocab_weight=None,
+            logits_multiplier=1,
+            cu_seqlens=None,
+            use_padding_free_transformer=self.use_padding_free_transformer,
+            reduction="sum",
+            shift_logits_and_labels=False,
+            tensor_parallel_enabled=False,
+        )
 
         with torch.inference_mode():
             model_outputs = self.teacher_model(**batch)
@@ -123,8 +132,7 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
                 model_outputs[0] if isinstance(model_outputs, tuple) else model_outputs.logits
             )
 
-            if self.upcast_logits_for_loss:
-                teacher_logits = teacher_logits.float()
+            teacher_logits = teacher_logits.float()
 
         teacher_log_softmax = F.log_softmax(teacher_logits, dim=-1).view(-1, teacher_logits.size(-1))
         student_log_softmax = F.log_softmax(logits, dim=-1).view(-1, logits.size(-1))

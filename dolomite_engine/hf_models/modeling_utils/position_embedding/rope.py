@@ -22,9 +22,9 @@ class RoPE(nn.Module):
 
         self.reset_parameters()
 
-    def forward(self, seq_len: int, dtype: torch.dtype, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, seq_len: int, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
         if seq_len > self.max_seq_len_cached:
-            self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+            self._set_cos_sin_cache(seq_len=seq_len, dtype=dtype)
 
         cos = self.cos_cached[:seq_len].to(dtype)
         sin = self.sin_cached[:seq_len].to(dtype)
@@ -32,27 +32,27 @@ class RoPE(nn.Module):
         return cos, sin
 
     def reset_parameters(self) -> None:
-        self._set_cos_sin_cache(seq_len=self.max_position_embeddings, device=None, dtype=torch.float32)
+        self._set_cos_sin_cache(seq_len=self.max_position_embeddings, dtype=torch.float32)
 
     @torch.no_grad()
-    def _set_cos_sin_cache(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> None:
+    def _set_cos_sin_cache(self, seq_len: int, dtype: torch.dtype) -> None:
         self.max_seq_len_cached = seq_len
 
-        inv_freq = self._get_inv_freq(device)
-        t = torch.arange(self.max_seq_len_cached, dtype=torch.float32, device=device)
+        inv_freq = self._get_inv_freq()
+        t = torch.arange(self.max_seq_len_cached, dtype=torch.float32)
 
         freqs = torch.outer(t, inv_freq)
 
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
 
-        self.register_buffer("cos_cached", (emb.cos() * self.mscale).to(dtype), persistent=False)
-        self.register_buffer("sin_cached", (emb.sin() * self.mscale).to(dtype), persistent=False)
+        device = self.cos_cached.device if hasattr(self, "cos_cached") else None
 
-    def _get_inv_freq(self, device: torch.device) -> torch.Tensor:
-        return 1.0 / (
-            self.base ** (torch.arange(0, self.head_dim, 2, dtype=torch.float32, device=device) / self.head_dim)
-        )
+        self.register_buffer("cos_cached", (emb.cos() * self.mscale).to(device=device, dtype=dtype), persistent=False)
+        self.register_buffer("sin_cached", (emb.sin() * self.mscale).to(device=device, dtype=dtype), persistent=False)
+
+    def _get_inv_freq(self) -> torch.Tensor:
+        return 1.0 / (self.base ** (torch.arange(0, self.head_dim, 2, dtype=torch.float32) / self.head_dim))
 
 
 class YaRNScaledRoPE(RoPE):
@@ -85,7 +85,7 @@ class YaRNScaledRoPE(RoPE):
 
         self.reset_parameters()
 
-    def _get_inv_freq(self, device: torch.device) -> torch.Tensor:
+    def _get_inv_freq(self) -> torch.Tensor:
         pos_freqs = self.base ** (torch.arange(0, self.head_dim, 2).float() / self.head_dim)
         inv_freq_extrapolation = 1.0 / pos_freqs
         inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
@@ -105,7 +105,19 @@ def apply_rotary_pos_emb(
     x: torch.Tensor, cos_sin: tuple[torch.Tensor, torch.Tensor]
 ) -> tuple[torch.Tensor, torch.Tensor]:
     cos, sin = cos_sin
-    x = (x * cos) + (_rotate_half(x) * sin)
+
+    head_dim = x.size(-1)
+    rope_dim = cos.size(-1)
+
+    if head_dim == rope_dim:
+        x = (x * cos) + (_rotate_half(x) * sin)
+    elif rope_dim < head_dim:
+        x_nope, x_rope = x.split((head_dim - rope_dim, rope_dim), dim=-1)
+        x_rope = (x_rope * cos) + (_rotate_half(x_rope) * sin)
+        x = torch.cat([x_nope, x_rope], dim=-1)
+    else:
+        raise ValueError("rope_dim should be less than head_dim")
+
     return x
 
 

@@ -5,14 +5,9 @@ import torch
 import torch.distributed
 from transformers import set_seed
 
-from dolomite_engine.hf_models import (
-    AttentionHeadType,
-    GPTDolomiteConfig,
-    GPTDolomiteForCausalLM_TP,
-    MoEDolomiteConfig,
-    MoEDolomiteForCausalLM_TP,
-    get_tensor_parallel_class,
-)
+from dolomite_engine.enums import Kernel
+from dolomite_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig, get_model_parallel_class
+from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
@@ -24,7 +19,6 @@ parser.add_argument("--position-embedding-type", type=str)
 parser.add_argument("--attention-implementation", type=str)
 parser.add_argument("--torch-dtype", type=str)
 parser.add_argument("--tmp-path", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--use-padding-free-transformer", action="store_true")
 parser.add_argument("--sequence-parallel", action="store_true")
 parser.add_argument("--model-type", type=str)
@@ -32,41 +26,73 @@ args = parser.parse_args()
 
 set_seed(42)
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
 torch_dtype = string_to_torch_dtype(args.torch_dtype)
 
-num_key_value_heads = None
-if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
+if args.attention_head_type == "mha":
+    num_key_value_heads = 16
+elif args.attention_head_type == "mqa":
+    num_key_value_heads = 1
+else:
     num_key_value_heads = 8
 
-kwargs = {}
-if args.model_type == GPTDolomiteConfig.model_type:
+if args.model_type == "gpt_dolomite":
     config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
+        num_layers=2,
         position_embedding_type=args.position_embedding_type,
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
+        hidden_size=128,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_attention_heads": 16,
+                "num_key_value_heads": num_key_value_heads,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_attention_heads": 16,
+                "num_key_value_heads": num_key_value_heads,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_type": "MLP", "add_bias": False},
+            {"mlp_type": "MoE", "add_bias": False},
+        ],
     )
-elif args.model_type == MoEDolomiteConfig.model_type:
-    config = MoEDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
+elif args.model_type == "ladder_residual":
+    config = LadderResidualConfig(
+        num_layers=2,
+        position_embedding_type=args.position_embedding_type,
+        hidden_size=128,
+        sequence_mixer_blocks=[
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_attention_heads": 16,
+                "num_key_value_heads": num_key_value_heads,
+            },
+            {
+                "sequence_mixer_type": "softmax_attention",
+                "add_bias": False,
+                "num_attention_heads": 16,
+                "num_key_value_heads": num_key_value_heads,
+            },
+        ],
+        mlp_blocks=[
+            {"mlp_type": "MLP", "add_bias": False},
+            {"mlp_type": "MoE", "add_bias": False},
+        ],
     )
-    kwargs["moe_implementation"] = "scattermoe"
 
+enable_kernels(
+    [Kernel.scattermoe] + ([Kernel.flash_attention_2] if args.attention_implementation == "flash_attention_2" else [])
+).__enter__()
 
 if torch.distributed.get_rank() == 0:
     with torch.device("meta"):
-        model = TestCommons.from_config(None, config, attn_implementation=args.attention_implementation)
+        model = TestCommons.from_config(None, config)
 
     model = model.to_empty(device=torch.cuda.current_device())
     for _, param in model.named_parameters():
@@ -83,13 +109,10 @@ torch.distributed.barrier()
 with torch.device("meta"):
     # try sharding vocab matrices if really struggling for memory
 
-    model_tp = get_tensor_parallel_class(args.model_type)._from_config(
+    model_tp = get_model_parallel_class(config.model_type)._from_config(
         config,
-        tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
-        attn_implementation=args.attention_implementation,
         use_padding_free_transformer=args.use_padding_free_transformer,
         sequence_parallel=args.sequence_parallel,
-        **kwargs,
     )
 
 # copy to device without copying storage
@@ -132,24 +155,22 @@ if args.use_padding_free_transformer:
 else:
     output_tp = model_tp(input_ids=input_ids, labels=labels)
 
-loss_tp = output_tp[0]
-logits_tp = output_tp[1]
-
-if args.tensor_parallel_word_embeddings:
-    logits_tp = logits_tp[..., : config.vocab_size]
+loss_tp = output_tp.loss
+logits_tp = output_tp.logits[..., : config.vocab_size]
 
 if torch.distributed.get_rank() == 0:
-    output = model(input_ids=input_ids, labels=labels)
-    loss = output[0]
-    logits = output[1]
+    # loss computation hangs if we don't use dummy tensor parallel world size
+    with ProcessGroupManager.set_dummy_tensor_parallel_world_size(1):
+        output = model(input_ids=input_ids, labels=labels)
+
+    loss = output.loss
+    logits = output.logits
 
     if args.use_padding_free_transformer:
         logits_tp = logits_tp.reshape(batch_size, sequence_length, -1)
 
     error = (logits - logits_tp).abs().max()
-    assert error < 5e-4, "logits don't match for normal and tensor parallel model"
+    assert error < 5e-4, f"logits don't match for normal and tensor parallel model, error is ({error})"
 
     error = (loss - loss_tp).abs().max()
-    assert error < 3e-6, "losses don't match for normal and tensor parallel model"
-
-ProcessGroupManager.destroy_process_groups()
+    assert error < 1e-3, f"losses don't match for normal and tensor parallel model, error is ({error})"

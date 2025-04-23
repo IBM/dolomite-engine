@@ -2,14 +2,13 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.distributed._tensor.api import DTensor
 from torch.distributed._tensor.placement_types import Replicate, Shard
 
-from ...utils import ProcessGroupManager
+from ...dtensors import dtensor_to_tensor, tensor_to_dtensor
+from ...utils import ProcessGroupManager, divide_if_divisible
 from ..modeling_utils import ParameterizedEmbedding
-from ..utils import divide_if_divisible
 from .dtensor_module import DTensorModule
-from .TP import dtensor_to_tensor, get_module_placements, tensor_to_dtensor
+from .TP import get_module_placements
 
 
 class Embedding_TP(ParameterizedEmbedding, DTensorModule):
@@ -18,32 +17,23 @@ class Embedding_TP(ParameterizedEmbedding, DTensorModule):
         num_embeddings: int,
         embedding_dim: int,
         std: float | None = None,
-        tensor_parallel_word_embeddings: bool = False,
         use_padding_free_transformer: bool = False,
         sequence_parallel: bool = False,
     ) -> None:
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings and self.tp_world_size > 1
+
         self.use_padding_free_transformer = use_padding_free_transformer
         self.sequence_parallel = sequence_parallel
 
-        if self.tensor_parallel_word_embeddings:
-            self.vocab_start_index, self.vocab_end_index, num_embeddings_per_tp_rank = get_tensor_parallel_vocab_info(
-                num_embeddings
-            )
+        self.vocab_start_index, self.vocab_end_index, num_embeddings_per_tp_rank = get_tensor_parallel_vocab_info(
+            num_embeddings
+        )
 
-            super().__init__(num_embeddings_per_tp_rank, embedding_dim, std=std)
-
-            placement = Shard(0)
-        else:
-            super().__init__(num_embeddings, embedding_dim, std=std)
-
-            placement = Replicate()
+        super().__init__(num_embeddings_per_tp_rank, embedding_dim, std=std)
 
         self.weight = nn.Parameter(
-            DTensor.from_local(
-                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), placements=[placement]
+            tensor_to_dtensor(
+                self.weight, device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(), current_placement=Shard(0)
             )
         )
 

@@ -5,14 +5,15 @@ import torch
 import torch.distributed
 from torch.distributed._tensor.api import DTensor
 
+from dolomite_engine.dtensors import dtensor_to_tensor
+from dolomite_engine.enums import Kernel
 from dolomite_engine.hf_models import (
-    AttentionHeadType,
     GPTDolomiteConfig,
-    MoEDolomiteConfig,
     fix_unsharded_state_dict,
-    get_tensor_parallel_class,
+    get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
 )
+from dolomite_engine.kernels import enable_kernels
 from dolomite_engine.utils import ProcessGroupManager
 
 from ...test_common import TestCommons
@@ -21,58 +22,54 @@ from ...test_common import TestCommons
 parser = argparse.ArgumentParser()
 parser.add_argument("--attention-head-type", type=str)
 parser.add_argument("--activation-function", type=str)
-parser.add_argument("--model-type", type=str)
-parser.add_argument("--tensor-parallel-word-embeddings", action="store_true")
 parser.add_argument("--tmp-path", type=str)
 args = parser.parse_args()
 
 
-ProcessGroupManager(tensor_parallel_size=int(os.getenv("WORLD_SIZE")))
+ProcessGroupManager(tensor_parallel_world_size=int(os.getenv("WORLD_SIZE")))
 
-tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+is_tp_first_rank = ProcessGroupManager.is_tensor_parallel_first_rank()
 
-num_key_value_heads = None
-if AttentionHeadType(args.attention_head_type) == AttentionHeadType.gqa:
+if args.attention_head_type == "mha":
+    num_key_value_heads = 16
+elif args.attention_head_type == "mqa":
+    num_key_value_heads = 1
+else:
     num_key_value_heads = 8
 
-kwargs = {}
+config = GPTDolomiteConfig(
+    num_layers=2,
+    position_embedding_type="learned_absolute",
+    hidden_size=128,
+    sequence_mixer_blocks=[
+        {
+            "sequence_mixer_type": "softmax_attention",
+            "add_bias": False,
+            "num_attention_heads": 16,
+            "num_key_value_heads": num_key_value_heads,
+        },
+        {
+            "sequence_mixer_type": "softmax_attention",
+            "add_bias": False,
+            "num_attention_heads": 16,
+            "num_key_value_heads": num_key_value_heads,
+        },
+    ],
+    mlp_blocks=[
+        {"mlp_type": "MLP", "activation_function": args.activation_function, "add_bias": False},
+        {"mlp_type": "MoE", "activation_function": args.activation_function, "add_bias": False},
+    ],
+)
+enable_kernels([Kernel.scattermoe]).__enter__()
 
-if args.model_type == GPTDolomiteConfig.model_type:
-    config = GPTDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-        activation_function=args.activation_function,
-    )
-elif args.model_type == MoEDolomiteConfig.model_type:
-    config = MoEDolomiteConfig(
-        attention_head_type=args.attention_head_type,
-        n_layer=1,
-        position_embedding_type="learned_absolute",
-        num_key_value_heads=num_key_value_heads,
-        add_bias=False,
-        n_embd=128,
-        n_head=16,
-        activation_function=args.activation_function,
-    )
-    kwargs["moe_implementation"] = "scattermoe"
 
-
-if tp_rank == 0:
+if is_tp_first_rank:
     model = TestCommons.from_config(None, config)
     model.save_pretrained(args.tmp_path, safe_serialization=True)
 
 torch.distributed.barrier()
 
-model_tp = get_tensor_parallel_class(args.model_type).from_pretrained(
-    args.tmp_path, tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings, **kwargs
-)
-
+model_tp = get_model_parallel_class(config.model_type).from_pretrained(args.tmp_path)
 tp_state_dict = model_tp.state_dict()
 
 
@@ -87,9 +84,7 @@ def run_check(fix: bool):
             config, tp_state_dict_unsharded, ProcessGroupManager.get_tensor_parallel_world_size()
         )
     else:
-        cpu_state_dict = {
-            key: value.to_local() if isinstance(value, DTensor) else value for key, value in cpu_state_dict.items()
-        }
+        cpu_state_dict = {key: dtensor_to_tensor(value) for key, value in cpu_state_dict.items()}
         torch.save(
             cpu_state_dict, os.path.join(args.tmp_path, f"tp-{ProcessGroupManager.get_tensor_parallel_rank()}.pt")
         )
@@ -98,19 +93,17 @@ def run_check(fix: bool):
         torch.distributed.barrier()
 
         tensor_parallel_state_dicts = [
-            torch.load(os.path.join(args.tmp_path, f"tp-{i}.pt"))
+            torch.load(os.path.join(args.tmp_path, f"tp-{i}.pt"), weights_only=False)
             for i in range(ProcessGroupManager.get_tensor_parallel_world_size())
         ]
 
         tp_state_dict_unsharded = unshard_tensor_parallel_state_dicts(
-            config,
-            tensor_parallel_state_dicts=tensor_parallel_state_dicts,
-            tensor_parallel_word_embeddings=args.tensor_parallel_word_embeddings,
+            config, tensor_parallel_state_dicts=tensor_parallel_state_dicts
         )
 
     torch.distributed.barrier()
 
-    if tp_rank == 0:
+    if is_tp_first_rank:
         original_state_dict = model.state_dict()
 
         assert tp_state_dict_unsharded.keys() == original_state_dict.keys()
@@ -120,5 +113,3 @@ def run_check(fix: bool):
 
 run_check(True)
 run_check(False)
-
-ProcessGroupManager.destroy_process_groups()

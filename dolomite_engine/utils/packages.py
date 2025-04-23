@@ -6,20 +6,6 @@ from .parallel import run_rank_n
 
 
 try:
-    import apex
-
-    _IS_APEX_AVAILABLE = True
-except ImportError:
-    _IS_APEX_AVAILABLE = False
-
-    warn_rank_0("Apex is not installed")
-
-
-def is_apex_available() -> bool:
-    return _IS_APEX_AVAILABLE
-
-
-try:
     import flash_attn
 
     _IS_FLASH_ATTENTION_AVAILABLE = True
@@ -76,34 +62,6 @@ def is_colorlog_available() -> bool:
 
 
 try:
-    import transformer_engine
-
-    _IS_TRANSFORMER_ENGINE_AVAILABLE = True
-except ImportError:
-    _IS_TRANSFORMER_ENGINE_AVAILABLE = False
-
-    warn_rank_0("Nvidia transformer engine is not installed")
-
-
-def is_transformer_engine_available() -> bool:
-    return _IS_TRANSFORMER_ENGINE_AVAILABLE
-
-
-try:
-    import msamp
-
-    _IS_MS_AMP_AVAILABLE = True
-except ImportError:
-    _IS_MS_AMP_AVAILABLE = False
-
-    warn_rank_0("Microsoft AMP is not installed")
-
-
-def is_ms_amp_available() -> bool:
-    return _IS_MS_AMP_AVAILABLE
-
-
-try:
     import triton
 
     _IS_TRITON_AVAILABLE = True
@@ -115,23 +73,6 @@ except ImportError:
 
 def is_triton_available() -> bool:
     return _IS_TRITON_AVAILABLE
-
-
-try:
-    import fla
-
-    _IS_FLA_AVAILABLE = True
-except ImportError:
-    _IS_FLA_AVAILABLE = False
-
-    warn_rank_0(
-        "FlashLinearAttention (FLA) is not installed, install from "
-        "https://github.com/sustcsonglin/flash-linear-attention/"
-    )
-
-
-def is_fla_available() -> bool:
-    return _IS_FLA_AVAILABLE
 
 
 try:
@@ -149,17 +90,17 @@ def is_einops_available() -> bool:
 
 
 try:
-    import khd
+    import cute_kernels
 
-    _IS_KHD_AVAILABLE = True
+    _IS_CUTE_KERNELS_AVAILABLE = True
 except ImportError:
-    _IS_KHD_AVAILABLE = False
+    _IS_CUTE_KERNELS_AVAILABLE = False
 
-    warn_rank_0("kernel-hyperdrive is not installed, install from https://github.com/mayank31398/kernel-hyperdrive")
+    warn_rank_0("cute-kernels is not installed, install from https://github.com/mayank31398/cute-kernels")
 
 
-def is_kernel_hyperdrive_available() -> bool:
-    return _IS_KHD_AVAILABLE
+def is_cute_kernels_available() -> bool:
+    return _IS_CUTE_KERNELS_AVAILABLE
 
 
 try:
@@ -174,6 +115,48 @@ except ImportError:
 
 def is_causal_conv1d_available() -> bool:
     return _IS_CAUSAL_CONV1D_AVAILABLE
+
+
+try:
+    import mamba_ssm
+
+    _IS_MAMBA_2_SSM_AVAILABLE = True
+except ImportError:
+    _IS_MAMBA_2_SSM_AVAILABLE = False
+
+
+def is_mamba_2_ssm_available() -> bool:
+    return _IS_MAMBA_2_SSM_AVAILABLE
+
+
+try:
+    import torchao
+
+    _IS_TORCHAO_AVAILABLE = True
+except ImportError:
+    _IS_TORCHAO_AVAILABLE = False
+
+    warn_rank_0("torchao is not installed")
+
+
+def is_torchao_available() -> bool:
+    return _IS_TORCHAO_AVAILABLE
+
+
+try:
+    import stickbreaking_attention
+
+    _IS_STICKBREAKING_AVAILABLE = True
+except ImportError:
+    _IS_STICKBREAKING_AVAILABLE = False
+
+    warn_rank_0(
+        "stickbreaking-attention is not available, install from https://github.com/shawntan/stickbreaking-attention"
+    )
+
+
+def is_stickbreaking_available():
+    return _IS_STICKBREAKING_AVAILABLE
 
 
 @run_rank_n

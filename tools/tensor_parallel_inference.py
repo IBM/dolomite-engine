@@ -14,11 +14,11 @@ local_rank = torch.distributed.get_rank() % device_count_per_node
 
 torch.cuda.set_device(local_rank)
 
-ProcessGroupManager(tensor_parallel_size=8)
+ProcessGroupManager(tensor_parallel_world_size=8)
 
 model_name = "save/"
 
-model = GPTDolomiteForCausalLM_TP.from_pretrained(model_name, tensor_parallel_word_embeddings=True)
+model = GPTDolomiteForCausalLM_TP.from_pretrained(model_name)
 
 if torch.distributed.get_rank() == 0:
     print(model)
@@ -39,5 +39,3 @@ y = model.generate(**x, max_new_tokens=100)
 
 if torch.distributed.get_rank() == 0:
     print(tokenizer.batch_decode(y)[0])
-
-ProcessGroupManager.destroy_process_groups()

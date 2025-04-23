@@ -86,6 +86,8 @@ def main() -> None:
             torch.device(torch.cuda.current_device()),
             ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
             ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
+            ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
+            ProcessGroupManager.set_dummy_pipeline_parallel_world_size(1),
         ):
             model = ModelWrapperForFinetuning(
                 mode=mode,
@@ -94,12 +96,9 @@ def main() -> None:
                 model_class=args.model_args.model_class,
                 dtype=args.mixed_precision_args.dtype,
                 efficient_initialization=False,
-                attention_implementation=args.model_args.attention_implementation,
                 use_padding_free_transformer=False,
-                tensor_parallel_word_embeddings=False,
                 sequence_parallel=False,
                 random_seed=args.random_args.seed,
-                neft_alpha=None,
                 trust_remote_code=args.model_args.trust_remote_code,
                 tokenizer_name=args.tokenizer_args.tokenizer_name,
                 additional_special_tokens=args.tokenizer_args.additional_special_tokens,
@@ -125,14 +124,11 @@ def main() -> None:
             mode=mode,
             tokenizer=model.tokenizer,
             is_encoder_decoder=model.is_encoder_decoder,
-            num_virtual_tokens=args_from_checkpoint.tuning_args.get_num_virtual_tokens(),
         )
 
     model = model.to(torch.cuda.current_device())
 
     generate(args, model, datasets_list, mode)
-
-    ProcessGroupManager.destroy_process_groups()
 
 
 if __name__ == "__main__":

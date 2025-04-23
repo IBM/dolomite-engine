@@ -1,26 +1,33 @@
-import logging
-
 from ..arguments import DistillationArgs, InferenceArgs, TrainingArgs, UnshardingArgs
+from ..containers import ModelContainer
 from ..enums import Mode, TuningMethod
-from ..utils import log_rank_0, run_rank_n
+from ..kernels import enable_kernels
+from ..utils import get_pipeline_stage_ids_on_current_rank
 from .base import ModelWrapper
 from .distillation import ModelWrapperForDistillation
 from .finetuning import ModelWrapperForFinetuning
-from .peft import ModelWrapperForPEFT
 from .pretraining import ModelWrapperForPretraining
+from .utils import broadcast_tensor_parallel_input
 
 
 _MODEL_CLASS_MAPPING = {
     TuningMethod.pretraining: ModelWrapperForPretraining,
     TuningMethod.full_finetuning: ModelWrapperForFinetuning,
-    TuningMethod.lora: ModelWrapperForPEFT,
-    TuningMethod.prompt_tuning: ModelWrapperForPEFT,
     TuningMethod.distillation: ModelWrapperForDistillation,
 }
 
 
-def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode) -> ModelWrapper:
+def get_model_container(
+    args: TrainingArgs | InferenceArgs | UnshardingArgs | DistillationArgs, mode: Mode
+) -> ModelContainer:
     tuning_method = args.tuning_args.tuning_method
+    num_pipeline_stages = args.distributed_args.num_pipeline_stages
+
+    if tuning_method != TuningMethod.pretraining:
+        assert num_pipeline_stages == 1, "pipeline parallelism is only supported with pretraining"
+
+    if tuning_method not in _MODEL_CLASS_MAPPING:
+        raise ValueError(f"unexpected tuning_method ({tuning_method})")
 
     kwargs = {
         "mode": mode,
@@ -29,12 +36,9 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         "model_class": args.model_args.model_class,
         "dtype": args.mixed_precision_args.dtype,
         "efficient_initialization": args.model_args.efficient_initialization,
-        "attention_implementation": args.model_args.attention_implementation,
-        "moe_implementation": args.model_args.moe_implementation,
         "use_padding_free_transformer": args.model_args.use_padding_free_transformer,
-        "tensor_parallel_word_embeddings": args.distributed_args.tensor_parallel_word_embeddings,
         "sequence_parallel": args.distributed_args.sequence_parallel,
-        "neft_alpha": args.research_args.neft_alpha,
+        "num_pipeline_stages": num_pipeline_stages,
         "trust_remote_code": args.model_args.trust_remote_code,
         "tokenizer_name": args.tokenizer_args.tokenizer_name,
         "additional_special_tokens": args.tokenizer_args.additional_special_tokens,
@@ -54,20 +58,11 @@ def get_model(args: TrainingArgs | InferenceArgs | UnshardingArgs | Distillation
         kwargs["kl_divergence_method"] = args.teacher_args.kl_divergence_method
         kwargs["kl_divergence_weight"] = args.teacher_args.kl_divergence_weight
 
-    if tuning_method in _MODEL_CLASS_MAPPING:
-        return _MODEL_CLASS_MAPPING[tuning_method](**kwargs)
+    # well, this is needed since HF models are kernel dependent and don't allow changing kernels on the fly
+    with enable_kernels(args.kernel_args.kernels):
+        model_list = []
+        for pipeline_stage_id in get_pipeline_stage_ids_on_current_rank(num_pipeline_stages):
+            kwargs["pipeline_stage_id"] = pipeline_stage_id
+            model_list.append(_MODEL_CLASS_MAPPING[tuning_method](**kwargs))
 
-    raise ValueError(f"unexpected tuning_method ({tuning_method})")
-
-
-@run_rank_n
-def log_model(model: ModelWrapper) -> None:
-    """print model
-
-    Args:
-        model (ModelWrapper): model to print
-    """
-
-    log_rank_0(logging.INFO, "------------------------ model ------------------------")
-    log_rank_0(logging.INFO, model)
-    log_rank_0(logging.INFO, "-------------------- end of model ---------------------")
+    return ModelContainer(model_list)

@@ -29,9 +29,9 @@ class DispatchingDataLoader(ResumableDataLoader):
         collate_fn: Callable | None = None,
         pin_memory: bool = False,
         drop_last: bool = False,
-        source_broadcast_mapping: dict[int, ProcessGroup] = None,
-        broadcast_world_size: int = None,
-        static_shape_per_rank: tuple[int, int] = None,
+        source_broadcast_mapping: dict[int, ProcessGroup] | None = None,
+        broadcast_world_size: int | None = None,
+        static_shape_per_rank: tuple[int, int] | None = None,
         keys: list[str] = ["input_ids", "attention_mask", "labels"],
     ) -> None:
         self.broadcast_world_size = broadcast_world_size
@@ -105,7 +105,7 @@ class DispatchingDataLoader(ResumableDataLoader):
 
 
 def get_source_and_broadcast_group(
-    source_broadcast_mapping: dict[int, ProcessGroup]
+    source_broadcast_mapping: dict[int, ProcessGroup],
 ) -> tuple[bool, int, int, ProcessGroup]:
     global_rank = ProcessGroupManager.get_global_rank()
 

@@ -17,7 +17,9 @@ safetensors_destination_path = "checkpoint-st/"
 
 # loading the model with full precision
 # you can modify this behaviour by passing torch_dtype=<intended dtype>
-model = AutoModelForCausalLM(checkpoint_to_be_converted).to("cuda" if torch.cuda.is_available() else "cpu")
+model = AutoModelForCausalLM.from_pretrained(checkpoint_to_be_converted, torch_dtype=torch.bfloat16).to(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
 
 # save_pretrained() by default saves in safetensors format
 # does not move the tokenizer data
@@ -26,4 +28,4 @@ model.save_pretrained(safetensors_destination_path)
 # to move tokenizer
 # simply load from the source and save it to the destination path
 tokenizer = AutoTokenizer.from_pretrained(checkpoint_to_be_converted)
-tokenizer.save_pretrained(safetensors_destination_path)
+tokenizer.save_pretrained(safetensors_destination_path, legacy_format=False)

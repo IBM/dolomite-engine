@@ -9,7 +9,7 @@ class GradientCheckpointingMethod(Enum):
     block = "block"
 
 
-class LRDecaySchedule(str, Enum):
+class LRDecaySchedule(Enum):
     constant = "constant"
     cosine = "cosine"
     exponential = "exponential"
@@ -17,26 +17,7 @@ class LRDecaySchedule(str, Enum):
     power = "power"
 
 
-class AttentionImplementation(Enum):
-    """
-    Enum class for attention implementation
-    """
-
-    eager = "eager"
-    sdpa = "sdpa"
-    flash_attention_2 = "flash_attention_2"
-
-
-class MoEImplementation(Enum):
-    """
-    Enum class for MoE implementation
-    """
-
-    eager = "eager"
-    scattermoe = "scattermoe"
-
-
-class DatasetSplit(str, Enum):
+class DatasetSplit(Enum):
     """dataset split"""
 
     train = "train"
@@ -44,7 +25,7 @@ class DatasetSplit(str, Enum):
     test = "test"
 
 
-class Mode(str, Enum):
+class Mode(Enum):
     """training / inference mode"""
 
     training = "training"
@@ -53,37 +34,46 @@ class Mode(str, Enum):
     distillation = "distillation"
 
 
-class TuningMethod(str, Enum):
+class TuningMethod(Enum):
     """training method"""
 
     pretraining = "pretraining"
     full_finetuning = "full_finetuning"
-    prompt_tuning = "prompt_tuning"
-    lora = "lora"
     distillation = "distillation"
 
 
-class FP8Backend(str, Enum):
-    msamp = "msamp"
-    nvte = "nvte"
-
-
-class LossMask(str, Enum):
+class LossMask(Enum):
     """Type of loss masking method"""
 
     output_only = "output_only"
     no_mask = "no_mask"
 
 
-class KLDivergenceMethod(str, Enum):
+class KLDivergenceMethod(Enum):
     """Type of KL divergence"""
 
     forward = "forward"
     backward = "backward"
 
 
-class ExperimentsTrackerName(str, Enum):
+class ExperimentsTrackerName(Enum):
     """Experiment tracker to use"""
 
     aim = "aim"
     wandb = "wandb"
+
+
+class Kernel(Enum):
+    # cute kernels
+    continuous_count_cute = "continuous_count_cute"
+    cross_entropy_cute = "cross_entropy_cute"
+    fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"
+    rmsnorm_cute = "rmsnorm_cute"
+    rnn_cute = "rnn_cute"
+    swiglu_unchunked_cute = "swiglu_unchunked_cute"
+    # external kernels
+    flash_attention_2 = "flash_attention_2"
+    mamba2_ssm = "mamba2_ssm"
+    scattermoe = "scattermoe"
+    # custom functions
+    ladder_residual_overlapped_layer = "ladder_residual_overlapped_layer"

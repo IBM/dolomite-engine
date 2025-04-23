@@ -1,20 +1,6 @@
+from typing import Any
+
 import torch
-
-
-def divide_if_divisible(dividend: int, divisor: int, msg: str) -> int:
-    """divide if divisible else raise an error
-
-    Args:
-        dividend (int): dividend
-        divisor (int): divisor
-        msg (str): error message
-
-    Returns:
-        int: result
-    """
-
-    assert dividend % divisor == 0, msg
-    return dividend // divisor
 
 
 def convert_padding_free_lists_to_tensors(
@@ -37,7 +23,7 @@ def convert_padding_free_lists_to_tensors(
     # prepare inputs for the model
     seqlens = torch.tensor([0] + [len(x) for x in input_ids], device=device)
     cu_seqlens = seqlens.cumsum(dim=-1).to(torch.int32)
-    max_seqlen = seqlens.max().to(device)
+    max_seqlen = seqlens.max().item()
 
     if position_ids is None:
         position_ids = [list(range(len(x))) for x in input_ids]
@@ -71,3 +57,22 @@ def _flatten_and_convert_to_tensors(x: list[int], device: torch.device) -> torch
         y.extend(sequence)
 
     return torch.tensor(y, device=device)
+
+
+_IS_GENERATION_CACHE_ENABLED: bool = True
+
+
+class disable_generation_cache:
+    def __enter__(self) -> Any:
+        global _IS_GENERATION_CACHE_ENABLED
+        self.original = _IS_GENERATION_CACHE_ENABLED
+
+        _IS_GENERATION_CACHE_ENABLED = False
+
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> Any:
+        global _IS_GENERATION_CACHE_ENABLED
+        _IS_GENERATION_CACHE_ENABLED = self.original
+
+
+def is_generation_cache_enabled() -> bool:
+    return _IS_GENERATION_CACHE_ENABLED

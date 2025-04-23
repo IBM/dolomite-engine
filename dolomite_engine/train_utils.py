@@ -1,120 +1,23 @@
 import logging
-from contextlib import AbstractContextManager, nullcontext
 
 import torch
 from torch.distributed import ReduceOp
-from torch.distributed._tensor.api import DTensor
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR
-from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import AutoConfig
 
-from .data import ResumableDataLoader, get_next_batch
 from .enums import GradientCheckpointingMethod
-from .hf_models import is_custom_model
+from .hf_models import CommonConfig, is_custom_model
 from .hf_models.modeling_utils import is_glu
-from .model_wrapper import ModelWrapperForFinetuning
-from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_rank_0
-
-
-def train_step(
-    model: ModelWrapperForFinetuning,
-    optimizer: Optimizer,
-    lr_scheduler: LambdaLR,
-    train_dataloader: ResumableDataLoader,
-    gradient_accumulation_steps: int,
-    gradient_clipping: float,
-    forward_context: AbstractContextManager,
-    backward_context: AbstractContextManager,
-    sync_every_gradient_accumulation_step: bool,
-) -> MetricsTrackingDict:
-    """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
-
-    Args:
-        model (ModelWrapperForFinetuning): model
-        optimizer (Optimizer): optimizer
-        lr_scheduler (LamdaLR): learning rate scheduler
-        train_dataloader (ResumableDataLoader): training dataloader
-        gradient_accumulation_steps (int): gradient accumulation steps
-        gradient_clipping (float): gradient clipping value
-        forward_context (AbstractContextManager): a context that is used for every model forward call
-        backward_context (AbstractContextManager): a context that is used for every model backward call
-        sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
-
-    Returns:
-        MetricsTrackingDict: metrics to track
-    """
-
-    fsdp_algorithm = 2 if hasattr(model, "set_requires_gradient_sync") else 1
-
-    no_sync = nullcontext
-    if not sync_every_gradient_accumulation_step:
-        if fsdp_algorithm == 1:
-            no_sync = model.no_sync
-        else:
-            model.set_requires_gradient_sync(False)
-
-    metrics_tracker = MetricsTrackingDict({})
-    grad_norm = None
-    optimizer.zero_grad()
-
-    with no_sync():
-        for _ in range(gradient_accumulation_steps - 1):
-            batch = get_next_batch(train_dataloader)
-            with forward_context():
-                loss_micro_step_dict = model(batch)
-
-            with torch.inference_mode():
-                metrics_tracker = metrics_tracker + loss_micro_step_dict
-
-            # compute gradients
-            with backward_context():
-                loss_micro_step_dict["loss"].backward()
-
-    if fsdp_algorithm == 2:
-        model.set_requires_gradient_sync(True)
-
-    batch = get_next_batch(train_dataloader)
-    with forward_context():
-        loss_micro_step_dict = model(batch)
-
-    with torch.inference_mode():
-        metrics_tracker = metrics_tracker + loss_micro_step_dict
-
-    # compute gradients
-    with backward_context():
-        loss_micro_step_dict["loss"].backward()
-
-    if gradient_clipping is not None:
-        if fsdp_algorithm == 1:
-            grad_norm = model.clip_grad_norm_(gradient_clipping)
-        else:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
-
-    optimizer.step()
-    lr_scheduler.step()
-
-    with torch.inference_mode():
-        metrics_tracker = metrics_tracker / gradient_accumulation_steps
-
-        metrics_tracker["grad_norm"] = (
-            torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
-        )
-
-        for key in metrics_tracker:
-            if isinstance(metrics_tracker[key], DTensor):
-                metrics_tracker[key] = metrics_tracker[key].to_local()
-
-        metrics_tracker = all_reduce_metrics_tracker(metrics_tracker)
-
-    return metrics_tracker
+from .utils import ExperimentsTracker, MetricsTrackingDict, ProcessGroupManager, log_metrics
 
 
 def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsTrackingDict:
     tensor = [metrics_tracker[key] for key in metrics_tracker]
-    tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
-    tensor = tensor.cpu()
+    tensor = torch.stack(tensor)
+    # NOTE the cpu() call was to save memory but might not be needed anymore
+    # tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
+    # tensor = tensor.cpu()
     # gloo op doesn't support averaging so we do sum and divide by world size above
-    torch.distributed.all_reduce(tensor, group=ProcessGroupManager.get_data_parallel_group())
+    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_data_parallel_group())
     tensor = tensor.tolist()
 
     for i, key in enumerate(metrics_tracker):
@@ -145,7 +48,7 @@ def track_metrics(
         else:
             message += f", {context}-{key} = {metrics_tracker[key]:.4f}"
 
-    log_rank_0(logging.INFO, message)
+    log_metrics(logging.INFO, message)
 
 
 def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile:
@@ -164,32 +67,58 @@ def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile
 
 
 def get_model_tflops(
-    model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
-    config: AutoConfig,
+    config: AutoConfig | CommonConfig,
     batch_size: int,
     sequence_length: int,
     gradient_checkpointing_method: GradientCheckpointingMethod | None,
     gradient_checkpointing_args: dict,
 ) -> None:
-    if not is_custom_model(model_class, config.model_type):
+    if not is_custom_model(config.model_type):
         return 0
 
     b = batch_size
     s = sequence_length
-    h = config.n_embd
-    f = config.n_inner
-    n = config.n_head
-    k = config.num_key_value_heads
-    l = config.n_layer
+    h = config.hidden_size
+    l = config.num_layers
     v = config.vocab_size
 
-    mlp_flops = 4 * b * s * h * f
-    if is_glu(config.activation_function):
-        mlp_flops += 2 * b * s * h * f
+    forward_flops = 0
+    for layer_idx in range(config.num_layers):
+        block = config.sequence_mixer_blocks[layer_idx]
+        sequence_mixer_type = block.sequence_mixer_type
 
-    attention_flops = 4 * b * s * h * (h * (1 + k / n) + s)
+        if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
+            attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / block.num_attention_heads) + s)
+        elif sequence_mixer_type == "multihead_latent_attention":
+            attention_flops = (
+                2 * b * s * h * (h + 2 * (s + block.query_compression_size + 2 * block.key_value_compression_size))
+            )
+        elif sequence_mixer_type == "mamba2":
+            # NOTE taken from NexaAI's fork
+            # Mamba2 FLOP calculation based on its specific architecture
+            # Core components: projection, convolution, SSM operations
+            # Input projection + convolution + SSM computation + output projection
+            projection_flops = 4 * b * s * h * block.intermediate_size
+            ssm_flops = 4 * b * s * block.intermediate_size * block.state_size
 
-    forward_flops = attention_flops + mlp_flops
+            attention_flops = projection_flops + ssm_flops
+        elif sequence_mixer_type == "rnn":
+            attention_flops = 4 * b * s * h * block.state_size
+            head_dim = block.state_size / block.num_heads
+            attention_flops += b * s * block.num_heads * head_dim * (2 * head_dim + 1)
+        else:
+            raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
+
+        block = config.mlp_blocks[layer_idx]
+
+        mlp_flops = 4 * b * s * h * block.intermediate_size
+        if block.mlp_type == "MoE":
+            mlp_flops *= block.num_experts_per_tok
+
+        if is_glu(block.activation_function):
+            mlp_flops *= 1.5
+
+        forward_flops += attention_flops + mlp_flops
 
     if gradient_checkpointing_method == GradientCheckpointingMethod.block:
         num_layers_checkpointed = gradient_checkpointing_args.get("num_blocks", l)
@@ -198,7 +127,7 @@ def get_model_tflops(
     else:
         backward_flops = 2 * forward_flops
 
-    model_flops = l * (forward_flops + backward_flops)
+    model_flops = forward_flops + backward_flops
     model_flops += 6 * b * s * h * v
     model_flops /= 10**12
 

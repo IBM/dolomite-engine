@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
-from ..enums import AttentionImplementation, Mode, MoEImplementation
-from ..hf_models import get_tensor_parallel_class, is_custom_model
+from ..enums import Kernel, Mode
+from ..hf_models import get_model_parallel_class, is_custom_model
+from ..kernels import is_kernel_allowed
 from ..utils import ProcessGroupManager, SafeTensorsWeightsManager, log_rank_0, string_to_torch_dtype
 
 
@@ -20,12 +21,10 @@ class ModelWrapper(nn.Module):
         model_class: AutoModelForCausalLM | AutoModelForSeq2SeqLM,
         dtype: torch.dtype,
         efficient_initialization: bool,
-        attention_implementation: AttentionImplementation,
-        moe_implementation: MoEImplementation,
         use_padding_free_transformer: bool,
-        tensor_parallel_word_embeddings: bool,
         sequence_parallel: bool,
-        neft_alpha: float | None = None,
+        num_pipeline_stages: int,
+        pipeline_stage_id: int,
         trust_remote_code: bool = False,
         tokenizer_name: str | None = None,
         additional_special_tokens: list[str] | None = None,
@@ -39,11 +38,10 @@ class ModelWrapper(nn.Module):
             model_class (AutoModelForCausalLM | AutoModelForSeq2SeqLM): HF model class to use for model loading
             dtype (torch.dtype): dtype for the model
             efficient_initialization (bool): whether to use efficient initialization for the model initialization, saves CPU memory
-            attention_implementation (AttentionImplementation): attention implementation for the model
             use_padding_free_transformer (bool): whether to use padding free transformer
-            tensor_parallel_word_embeddings (bool): whether to use tensor parallel word embeddings
             sequence_parallel (bool): whether to use sequence parallel
-            neft_alpha (float | None, optional): alpha parameter for NEFTune. Defaults to None.
+            num_pipeline_stages (int): number of stages for the pipeline
+            pipeline_stage_id (int): current pipeline stage id
             trust_remote_code (bool, optional): whether the model has remote code in the HF bucket. Defaults to False.
             tokenizer_name (str | None, optional): path of the model on disk or HF hub. Defaults to None. If None, the `model_name` is used for tokenizer.
             additional_special_tokens (list[str] | None, optional): additional special tokens to use for expanding tokenizer. Defaults to None.
@@ -57,38 +55,33 @@ class ModelWrapper(nn.Module):
         self.model_class = model_class
         self.efficient_initialization = efficient_initialization
         self.dtype = dtype
-        self.attention_implementation = attention_implementation
-        self.moe_implementation = moe_implementation
         self.use_padding_free_transformer = use_padding_free_transformer
-        self.tensor_parallel_word_embeddings = tensor_parallel_word_embeddings
         self.sequence_parallel = sequence_parallel
         self.tokenizer_name = self.model_name if tokenizer_name is None else tokenizer_name
         self.trust_remote_code = trust_remote_code
 
-        self.tp_rank = ProcessGroupManager.get_tensor_parallel_rank()
-        self.tp_world_size = ProcessGroupManager.get_tensor_parallel_world_size()
+        self.num_pipeline_stages = num_pipeline_stages
+        self.pipeline_stage_id = pipeline_stage_id
+        self.is_first_stage = self.pipeline_stage_id == 0
+        self.is_last_stage = self.pipeline_stage_id == self.num_pipeline_stages - 1
+        self.is_pipeline_parallel_enabled = self.num_pipeline_stages > 1
+
+        use_model_parallelism = ProcessGroupManager.is_tensor_parallel_enabled() or self.is_pipeline_parallel_enabled
 
         self._setup_config()
+        self.is_custom_model = is_custom_model(self.config.model_type)
 
-        if self.tp_world_size > 1:
+        log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
+
+        if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
-            self.model_class = get_tensor_parallel_class(self.config.model_type)
+            self.model_class = get_model_parallel_class(self.config.model_type)
 
         if self.use_padding_free_transformer:
-            assert is_custom_model(
-                self.model_class, self.config.model_type
-            ), "padding free transformer is not supported with the specified model"
-
-            assert (
-                self.attention_implementation == AttentionImplementation.flash_attention_2
-            ), "padding free transformer only works with flash attention"
+            assert self.is_custom_model, "padding free transformer is not supported with the specified model"
 
         self._setup_tokenizer()
         self._setup_model()
-
-        if self.mode == Mode.training:
-            if neft_alpha is not None and neft_alpha > 0:
-                self._override_embedding_forward_with_neft_forward(neft_alpha)
 
         if additional_special_tokens is not None and len(additional_special_tokens) > 0:
             original_vocab_size = len(self.tokenizer)
@@ -110,7 +103,7 @@ class ModelWrapper(nn.Module):
             List[str]: list of generated text. input is trimmed from the generated text
         """
 
-        if self.use_padding_free_transformer or self.tp_world_size > 1:
+        if self.use_padding_free_transformer or ProcessGroupManager.is_tensor_parallel_enabled():
             raise NotImplementedError("padding free transformer and tensor parallel doesn't support generation")
 
         for i in batch:
@@ -149,11 +142,9 @@ class ModelWrapper(nn.Module):
 
         self.tie_word_embeddings = self.config.tie_word_embeddings
         self.is_encoder_decoder = self.config.is_encoder_decoder
-        self.upcast_logits_for_loss = getattr(self.config, "upcast_logits_for_loss", False)
         self.router_aux_loss_coef = getattr(self.config, "router_aux_loss_coef", None)
 
         log_rank_0(logging.INFO, self.config)
-        log_rank_0(logging.INFO, f"upcast_logits_for_loss = {self.upcast_logits_for_loss}")
 
     def _setup_tokenizer(self) -> None:
         assert self.tokenizer_name is not None, "pass a tokenizer"
@@ -161,24 +152,31 @@ class ModelWrapper(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
         self.eos_token_id = self.tokenizer.eos_token_id
 
-    def _setup_model(self) -> None:
+    def _get_model_kwargs(self) -> dict:
         if self.model_name is None:
             model_kwargs = {"config": self.config}
         else:
             model_kwargs = {"pretrained_model_name_or_path": self.model_name}
 
-        if self.attention_implementation is not None:
-            model_kwargs["attn_implementation"] = self.attention_implementation.value
-        if self.moe_implementation is not None:
-            model_kwargs["moe_implementation"] = self.moe_implementation.value
+        if not self.is_custom_model:
+            model_kwargs["attn_implementation"] = (
+                "flash_attention_2" if is_kernel_allowed(Kernel.flash_attention_2) else "sdpa"
+            )
+
         if self.use_padding_free_transformer:
             model_kwargs["use_padding_free_transformer"] = True
-        if self.tensor_parallel_word_embeddings:
-            model_kwargs["tensor_parallel_word_embeddings"] = True
         if self.sequence_parallel:
             model_kwargs["sequence_parallel"] = True
         if self.trust_remote_code:
             model_kwargs["trust_remote_code"] = True
+        if self.is_pipeline_parallel_enabled:
+            model_kwargs["num_pipeline_stages"] = self.num_pipeline_stages
+            model_kwargs["pipeline_stage_id"] = self.pipeline_stage_id
+
+        return model_kwargs
+
+    def _setup_model(self) -> None:
+        model_kwargs = self._get_model_kwargs()
 
         if self.model_name is None:
             if self.tokenizer.bos_token_id is not None:
@@ -192,7 +190,7 @@ class ModelWrapper(nn.Module):
 
         def _get_model(**extras):
             if self.model_name is None:
-                if self.tp_world_size > 1:
+                if self.is_pipeline_parallel_enabled or ProcessGroupManager.is_tensor_parallel_enabled():
                     # avoid inferring the model class so use _from_config instead of from_config
                     model = self.model_class._from_config(**model_kwargs, **extras)
                 else:
@@ -209,10 +207,14 @@ class ModelWrapper(nn.Module):
                         self.model = _get_model()
                 else:
                     assert (
-                        self.tp_world_size == 1
+                        not ProcessGroupManager.is_tensor_parallel_enabled()
                     ), "tensor parallel models don't support efficient init with model name"
 
-                    self.model = _get_model(low_cpu_mem_usage=True)
+                    if ProcessGroupManager.get_data_parallel_rank() == 0:
+                        self.model = _get_model()
+                    else:
+                        with torch.device("meta"):
+                            self.model = _get_model()
             else:
                 self.model = _get_model()
         else:
@@ -224,33 +226,20 @@ class ModelWrapper(nn.Module):
 
             self.model = _get_model(torch_dtype=torch_dtype)
 
-        num_parameters = 0
-        for param in self.model.parameters():
-            num_parameters += param.numel()
+    def calculate_num_parameters(self) -> int:
+        model_kwargs = self._get_model_kwargs()
 
-        log_rank_0(logging.INFO, f"num parameters in the model = {num_parameters:,}")
+        with torch.device("meta"):
+            if self.model_name is not None:
+                model_kwargs["config"] = AutoConfig.from_pretrained(model_kwargs.pop("pretrained_model_name_or_path"))
 
-    def _override_embedding_forward_with_neft_forward(self, neft_alpha: float) -> None:
-        if not hasattr(self.model, "get_input_embeddings"):
-            raise Exception(
-                "`get_input_embeddings` is not implemented for this model so its not possible to inject noise to input"
-                " embeddings. Please implement `get_input_embeddings` ot set `neft_alpha` to None"
-            )
+            model = self.model_class.from_config(**model_kwargs)
 
-        original_forward = self.model.get_input_embeddings().forward
+            num_parameters = 0
+            for param in model.parameters():
+                num_parameters += param.numel()
 
-        def _noisy_forward(x: torch.Tensor) -> torch.Tensor:
-            x = original_forward(x)
-
-            # to check if we are in eval mode we use self.training instead of self.model.training
-            if self.training:
-                mag_norm = neft_alpha / torch.sqrt(torch.tensor(torch.numel(x)))
-                return x + torch.zeros_like(x).uniform_(-mag_norm, mag_norm)
-
-            return x
-
-        # overrides the forward function of torch.nn.Embedding
-        self.model.get_input_embeddings().forward = _noisy_forward
+            return num_parameters
 
     def has_teacher_model(self) -> bool:
         return False

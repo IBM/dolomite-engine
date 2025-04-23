@@ -1,8 +1,10 @@
+import os
+
 from tqdm import tqdm
 
 from ..enums import ExperimentsTrackerName
 from .packages import is_aim_available, is_wandb_available
-from .parallel import run_rank_n
+from .parallel import is_tracking_rank
 from .pydantic import BaseArgs
 
 
@@ -13,14 +15,21 @@ if is_wandb_available():
     import wandb
 
 
+# to track the LSF/Slurm job in W&B per run - bobcalio
+_JOB_ID = None if int(os.getenv("JOB_ID", -1)) == -1 else int(os.getenv("JOB_ID"))
+
+
 class ProgressBar:
     """progress bar for training or validation"""
 
     def __init__(self, start: int, end: int, desc: str | None = None) -> None:
-        self.progress_bar: tqdm = run_rank_n(tqdm)(total=end, desc=desc)
+        self.is_tracking_rank = is_tracking_rank()
+        if not self.is_tracking_rank:
+            return
+
+        self.progress_bar = tqdm(total=end, desc=desc)
         self.update(start)
 
-    @run_rank_n
     def update(self, n: int = 1) -> None:
         """updates progress bar
 
@@ -28,11 +37,16 @@ class ProgressBar:
             n (int, optional): Number of steps to update the progress bar with. Defaults to 1.
         """
 
+        if not self.is_tracking_rank:
+            return
+
         self.progress_bar.update(n=n)
 
-    @run_rank_n
     def track(self, **loss_kwargs) -> None:
         """track specific metrics in progress bar"""
+
+        if not self.is_tracking_rank:
+            return
 
         # for key in loss_kwargs:
         #     loss_kwargs[key] = "{0:.5f}".format(loss_kwargs[key])
@@ -49,33 +63,43 @@ class ExperimentsTracker:
         wandb_args: BaseArgs,
         checkpoint_metadata: dict,
     ) -> None:
+        self.is_tracking_rank = is_tracking_rank()
+        if not self.is_tracking_rank:
+            return
+
         self.experiments_tracker_name = experiments_tracker_name
         self.tracking_enabled = experiments_tracker_name is not None
 
         if experiments_tracker_name == ExperimentsTrackerName.aim:
             kwargs = aim_args.to_dict() if checkpoint_metadata is None else checkpoint_metadata
-            self.run: AimRun = run_rank_n(AimRun)(**kwargs)
+            self.run = AimRun(**kwargs)
         elif experiments_tracker_name == ExperimentsTrackerName.wandb:
             kwargs = wandb_args.to_dict() if checkpoint_metadata is None else checkpoint_metadata
             resume = None if checkpoint_metadata is None else "auto"
 
-            run_rank_n(wandb.init)(resume=resume, **kwargs)
+            wandb.init(resume=resume, **kwargs)
 
             # this is for a custom step, we can't use the wandb step
             # since it doesn't allow time travel to the past
-            run_rank_n(wandb.define_metric)("iteration", hidden=True)
-            run_rank_n(wandb.define_metric)("train/*", step_metric="iteration", step_sync=True)
-            run_rank_n(wandb.define_metric)("val/*", step_metric="iteration", step_sync=True)
+            wandb.define_metric("iteration", hidden=True)
+            # track the LSF/Slurm job in W&B per run - bobcalio
+            if _JOB_ID is not None:
+                wandb.define_metric("job", step_metric="iteration", hidden=True, step_sync=True)
+
+            wandb.define_metric("train/*", step_metric="iteration", step_sync=True)
+            wandb.define_metric("val/*", step_metric="iteration", step_sync=True)
         elif experiments_tracker_name is not None:
             raise ValueError(f"unexpected experiments_tracker ({experiments_tracker_name})")
 
-    @run_rank_n
     def log_args(self, args: BaseArgs) -> None:
         """log args
 
         Args:
             args (BaseArgs): pydantic object
         """
+
+        if not self.is_tracking_rank:
+            return
 
         if self.tracking_enabled:
             args: dict = args.to_dict()
@@ -91,7 +115,6 @@ class ExperimentsTracker:
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
-    @run_rank_n
     def track(self, values: dict, step: int | None = None, context: str | None = None) -> None:
         """main tracking method
 
@@ -100,6 +123,9 @@ class ExperimentsTracker:
             step (int, optional): current step, auto-incremented if None. Defaults to None.
             context (str, optional): context for tracking. Defaults to None.
         """
+
+        if not self.is_tracking_rank:
+            return
 
         if self.tracking_enabled:
             if self.experiments_tracker_name == ExperimentsTrackerName.aim:
@@ -115,12 +141,17 @@ class ExperimentsTracker:
                 # this is for a custom step, we can't use the wandb step
                 # since it doesn't allow time travel to the past
                 values["iteration"] = step
+                # track the LSF/Slurm job in W&B per run - bobcalio
+                if _JOB_ID is not None:
+                    values["job"] = _JOB_ID
                 wandb.log(values)
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
-    @run_rank_n
     def finish(self) -> None:
+        if not self.is_tracking_rank:
+            return
+
         if self.tracking_enabled:
             if self.experiments_tracker_name == ExperimentsTrackerName.aim:
                 self.run.close()
@@ -129,8 +160,10 @@ class ExperimentsTracker:
             else:
                 raise ValueError(f"unexpected experiments_tracker ({self.experiments_tracker_name})")
 
-    @run_rank_n
     def state_dict(self) -> dict:
+        if not self.is_tracking_rank:
+            return
+
         state_dict = {}
         if self.tracking_enabled:
             if self.experiments_tracker_name == ExperimentsTrackerName.aim:
