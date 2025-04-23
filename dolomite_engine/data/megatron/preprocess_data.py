@@ -3,7 +3,6 @@
 import json
 import multiprocessing
 import tempfile
-from typing import List
 
 import torch
 from datasets import load_dataset
@@ -19,8 +18,8 @@ if is_zstandard_available():
 
 
 class Encoder:
-    def __init__(self, tokenizer: AutoTokenizer, json_keys: List[str], append_eod: bool) -> None:
-        self.tokenizer = tokenizer
+    def __init__(self, tokenizer: AutoTokenizer | str, json_keys: list[str], append_eod: bool) -> None:
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer) if isinstance(tokenizer, str) else tokenizer
         self.json_keys = json_keys
         self.append_eod = append_eod
 
@@ -48,7 +47,7 @@ class Encoder:
 
 
 def convert_file(
-    tokenizer: str | AutoTokenizer,
+    tokenizer: AutoTokenizer | str,
     input_file: str,
     output_prefix: str,
     workers: int,
@@ -57,9 +56,6 @@ def convert_file(
     json_keys: list[str] = ["text"],
     append_eos_token: bool = True,
 ) -> None:
-    if isinstance(tokenizer, str):
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer)
-
     encoder = Encoder(tokenizer, json_keys, append_eos_token)
     pool = multiprocessing.Pool(workers)
 

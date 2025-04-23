@@ -16,7 +16,7 @@ def get_args() -> Namespace:
 
     group = parser.add_argument_group("dataset")
     group.add_argument("--dataset-list", type=str, help="path to list of datasets")
-    group.add_argument("--data-subset", type=str, help="specific subset to convert")
+    group.add_argument("--data-subsets", type=str, nargs="+", help="specific subset to convert")
 
     group = parser.add_argument_group("tokenizer")
     group.add_argument("--tokenizer-path", type=str, help="tokenizer")
@@ -36,18 +36,6 @@ def get_args() -> Namespace:
 
     args = parser.parse_args()
     return args
-
-
-def get_datasets(args: Namespace) -> List[str]:
-    if args.data_subset:
-        datasets = [args.data_subset]
-    else:
-        datasets = open(args.dataset_list, "r").readlines()
-        datasets = [data_subset.strip().split()[0] for data_subset in datasets]
-
-    datasets.sort()
-
-    return datasets
 
 
 def get_groups_by_sizes(path: str, max_size: int) -> List[List[str]]:
@@ -77,16 +65,14 @@ def get_arrow_files(input_path: str, data_subset: str) -> List[str]:
     return arrow_files
 
 
-def ccc(args: Namespace, is_blue_vela: bool = False) -> None:
+def job(args: Namespace, is_blue_vela: bool = False) -> None:
     assert not args.merge, "CCC jobs don't support merge"
     assert args.convert, "CCC jobs are only for conversion"
-
-    datasets = get_datasets(args)
 
     os.makedirs("err", exist_ok=True)
     os.makedirs("out", exist_ok=True)
 
-    for data_subset in datasets:
+    for data_subset in args.data_subsets:
         num_arrow_files = len(get_arrow_files(args.input_path, data_subset))
 
         start_index = 0
@@ -108,9 +94,8 @@ def interactive(args: Namespace) -> None:
     args = get_args()
 
     os.makedirs(args.output_path, exist_ok=True)
-    datasets = get_datasets(args)
 
-    for data_subset in datasets:
+    for data_subset in args.data_subsets:
         if args.convert:
             arrow_files = get_arrow_files(args.input_path, data_subset)
             arrow_files = arrow_files[args.start_index : args.end_index]
@@ -167,7 +152,7 @@ def main() -> None:
     args = get_args()
 
     if args.ccc_job or args.blue_vela_job:
-        ccc(args, is_blue_vela=args.blue_vela_job)
+        job(args, is_blue_vela=args.blue_vela_job)
     else:
         interactive(args)
 
