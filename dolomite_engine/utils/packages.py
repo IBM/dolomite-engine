@@ -1,6 +1,8 @@
 import logging
 from importlib.metadata import distributions
 
+import torch
+
 from .logger import log_rank_0, warn_rank_0
 from .parallel import run_rank_n
 
@@ -92,7 +94,8 @@ def is_einops_available() -> bool:
 try:
     import cute_kernels
 
-    _IS_CUTE_KERNELS_AVAILABLE = True
+    # data processing doesn't need GPU and triton imports fail on CPU
+    _IS_CUTE_KERNELS_AVAILABLE = torch.cuda.is_available()
 except ImportError:
     _IS_CUTE_KERNELS_AVAILABLE = False
 
