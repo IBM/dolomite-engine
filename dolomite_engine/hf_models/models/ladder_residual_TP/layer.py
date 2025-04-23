@@ -14,11 +14,8 @@ from ..ladder_residual.layer import LadderResidualBlock
 
 if is_cute_kernels_available():
     from cute_kernels.constants import MAX_TRITON_BLOCK_SIZE
-    from cute_kernels.kernels.rmsnorm import _rmsnorm_backward_triton_kernel, _rmsnorm_forward_triton_kernel
-    from cute_kernels.kernels.swiglu_unchunked import (
-        _swiglu_unchunked_backward_triton_kernel,
-        _swiglu_unchunked_forward_triton_kernel,
-    )
+    from cute_kernels.kernels.rmsnorm import rmsnorm_backward_triton, rmsnorm_forward_triton
+    from cute_kernels.kernels.swiglu_unchunked import swiglu_unchunked_backward_triton, swiglu_unchunked_forward_triton
     from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
     from cute_kernels.utils import ensure_contiguous, get_num_elements_and_hidden_size, get_sm_count
 
@@ -32,7 +29,7 @@ def _swiglu_unchunked_forward(x: torch.Tensor) -> torch.Tensor:
     output = torch.empty(*x.size()[:-1], divide_if_divisible(H, 2), device=x.device, dtype=x.dtype)
 
     with torch.cuda.device(x.device):
-        _swiglu_unchunked_forward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
+        swiglu_unchunked_forward_triton[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
             x_ptr=x,
             output_ptr=output,
             B=B,
@@ -53,7 +50,7 @@ def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> to
     x_grad = torch.empty_like(x)
 
     with torch.cuda.device(x.device):
-        _swiglu_unchunked_backward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
+        swiglu_unchunked_backward_triton[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
             x_ptr=x,
             output_grad_ptr=output_grad,
             x_grad_ptr=x_grad,
@@ -82,7 +79,7 @@ def _rmsnorm_forward(
     rmsnorm_denominator = torch.empty(B, device=x.device, dtype=torch.float32)
 
     with torch.cuda.device(x.device):
-        _rmsnorm_forward_triton_kernel[ceil_divide(B, BLOCK_SIZE_B),](
+        rmsnorm_forward_triton[ceil_divide(B, BLOCK_SIZE_B),](
             x_ptr=x,
             has_weight=weight is not None,
             weight_ptr=weight,
@@ -119,7 +116,7 @@ def _rmsnorm_backward(
     num_programs = min(sm_count, ceil_divide(B, BLOCK_SIZE_B))
 
     with torch.cuda.device(x.device):
-        _rmsnorm_backward_triton_kernel[num_programs,](
+        rmsnorm_backward_triton[num_programs,](
             x_ptr=x,
             has_weight=weight is not None,
             weight_ptr=weight,
