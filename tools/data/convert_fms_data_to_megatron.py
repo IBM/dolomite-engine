@@ -5,7 +5,7 @@ from argparse import ArgumentParser, Namespace
 from transformers import AutoTokenizer
 
 from dolomite_engine.data.megatron.merge_data import merge_files
-from dolomite_engine.data.megatron.preprocess_data import Encoder, convert_file
+from dolomite_engine.data.megatron.preprocess_data import convert_file
 
 
 def get_args() -> Namespace:
@@ -95,8 +95,6 @@ def job(args: Namespace, is_blue_vela: bool = False) -> None:
 
 
 def interactive(args: Namespace) -> None:
-    args = get_args()
-
     os.makedirs(args.output_path, exist_ok=True)
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
