@@ -14,7 +14,6 @@ def get_args() -> Namespace:
 
     group = parser.add_argument_group("data_paths")
     group.add_argument("--input-path", type=str, help="path to input dataset")
-    group.add_argument("--tmp-path", type=str, help="temporary path for dataset")
     group.add_argument("--output-path", type=str, help="path to output dataset")
     group.add_argument("--output-suffix", type=str, help="suffix to add to the file")
 
@@ -104,13 +103,13 @@ def interactive(args: Namespace) -> None:
             arrow_files = get_arrow_files(args.input_path, data_subset)
             arrow_files = arrow_files[args.start_index : args.end_index]
 
-            os.makedirs(os.path.join(args.tmp_path, data_subset), exist_ok=True)
+            os.makedirs(os.path.join(args.output_path, data_subset), exist_ok=True)
 
             for arrow_file in tqdm(arrow_files):
                 convert_file(
                     tokenizer=tokenizer,
                     input_file=os.path.join(args.input_path, data_subset, arrow_file),
-                    output_prefix=os.path.join(args.tmp_path, data_subset, arrow_file.split(".")[0]),
+                    output_prefix=os.path.join(args.output_path, data_subset, arrow_file.split(".")[0]),
                     workers=args.workers,
                     chunk_size=1000,
                 )
