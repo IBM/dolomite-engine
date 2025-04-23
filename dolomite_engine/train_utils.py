@@ -117,7 +117,7 @@ def get_model_tflops(
                 b * s, h, h, gradient_checkpointing=gradient_checkpointing_enabled
             )
 
-            attention_forward_flops = 4 * b * (s * (s + 1) / 2) * h
+            attention_forward_flops = 2 * b * s * (s + 1) * h
             attention_backward_flops = 2.5 * attention_forward_flops
 
             sequence_mixer_flops += attention_forward_flops + attention_backward_flops
