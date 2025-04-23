@@ -27,7 +27,7 @@ def get_args() -> Namespace:
     group = parser.add_argument_group("tasks")
     group.add_argument("--convert", action="store_true", help="convert")
     group.add_argument("--merge", action="store_true", help="merge")
-    group.add_argument("--max-file-size", type=int, help="max file size for merged files in GBs")
+    group.add_argument("--max-file-size", type=int, default=None, help="max file size for merged files in GBs")
     group.add_argument("--ccc-job", action="store_true", help="submit multiple jobs on CCC")
     group.add_argument("--blue-vela-job", action="store_true", help="submit multiple jobs on Blue Vela")
     group.add_argument("--workers", type=int, default=1, help="number of workers for tokenization")
@@ -41,9 +41,13 @@ def get_args() -> Namespace:
     return args
 
 
-def get_groups_by_sizes(path: str, max_size: int) -> list[list[str]]:
+def get_groups_by_sizes(path: str, max_size: int | None = None) -> list[list[str]]:
     fnames = filter(lambda x: x.endswith(".bin"), os.listdir(path))
     fnames = [os.path.join(path, i) for i in fnames]
+    fnames = [i.split(".bin")[0] for i in fnames]
+
+    if max_size is None:
+        return [fnames]
 
     max_size *= 1024**3
     groups = []
@@ -52,7 +56,7 @@ def get_groups_by_sizes(path: str, max_size: int) -> list[list[str]]:
 
     for index, fname in enumerate(fnames):
         current_grp.append(fname)
-        current_size += os.path.getsize(fname)
+        current_size += os.path.getsize(f"{fname}.bin")
 
         if current_size > max_size or index == len(fnames) - 1:
             groups.append(current_grp)
@@ -118,28 +122,21 @@ def interactive(args: Namespace) -> None:
                 "-" + args.output_suffix if args.output_suffix is not None and len(args.output_suffix) > 0 else ""
             )
 
+            file_groups = get_groups_by_sizes(os.path.join(args.input_path, data_subset), args.max_file_size)
+
             if args.max_file_size is None:
                 merge_files(
-                    input_prefixes=[os.path.join(args.input_path, data_subset)],
+                    input_prefixes=file_groups[0],
                     output_prefix=os.path.join(args.output_path, data_subset + output_suffix),
                 )
             else:
-                file_groups = get_groups_by_sizes(os.path.join(args.input_path, data_subset), args.max_file_size)
                 file_map = {}
 
                 for grp_id, group in enumerate(file_groups):
                     file_map[grp_id] = group
 
-                    for fid, fname in enumerate(group):
-                        prefix = fname.split(".bin")[0]
-
-                        for extension in [".idx", ".ndocs", ".bin"]:
-                            os.system(
-                                f"ln -s {os.path.join(args.input_path, data_subset, prefix + extension)} {os.path.join(tmpdir, str(fid) + extension)}"
-                            )
-
                     merge_files(
-                        input_prefixes=[os.path.join(args.input_path, data_subset)],
+                        input_prefixes=group,
                         output_prefix=os.path.join(args.output_path, data_subset + "-" + str(grp_id) + output_suffix),
                     )
 
