@@ -109,9 +109,12 @@ def is_cute_kernels_available() -> bool:
 
 
 try:
-    import causal_conv1d
+    if torch.cuda.is_available():
+        import causal_conv1d
 
-    _IS_CAUSAL_CONV1D_AVAILABLE = True
+        _IS_CAUSAL_CONV1D_AVAILABLE = True
+    else:
+        _IS_CAUSAL_CONV1D_AVAILABLE = False
 except ImportError:
     _IS_CAUSAL_CONV1D_AVAILABLE = False
 
@@ -123,9 +126,12 @@ def is_causal_conv1d_available() -> bool:
 
 
 try:
-    import mamba_ssm
+    if torch.cuda.is_available():
+        import mamba_ssm
 
-    _IS_MAMBA_2_SSM_AVAILABLE = True
+        _IS_MAMBA_2_SSM_AVAILABLE = True
+    else:
+        _IS_MAMBA_2_SSM_AVAILABLE = False
 except ImportError:
     _IS_MAMBA_2_SSM_AVAILABLE = False
 
