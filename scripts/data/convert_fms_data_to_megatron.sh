@@ -1,6 +1,6 @@
 TOKENIZER_PATH=bigcode/starcoder
 INPUT_PATH=/dataset/bluepile
-OUTPUT_PATH=/dataset/bluepile/megatron
+OUTPUT_PATH=/dataset/bluepile/tmp
 DATA_SUBSETS=commoncrawl
 NUM_FILES_PER_JOB=200
 
