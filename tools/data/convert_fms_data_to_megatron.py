@@ -3,6 +3,10 @@ import os
 import tempfile
 from argparse import ArgumentParser, Namespace
 
+from transformers import AutoTokenizer
+
+from dolomite_engine.data.megatron.preprocess_data import convert_file
+
 
 def get_args() -> Namespace:
     parser = ArgumentParser()
@@ -18,7 +22,7 @@ def get_args() -> Namespace:
     group.add_argument("--data-subsets", type=str, nargs="+", help="specific subset to convert")
 
     group = parser.add_argument_group("tokenizer")
-    group.add_argument("--tokenizer-path", type=str, help="tokenizer")
+    group.add_argument("--tokenizer", type=str, help="tokenizer")
 
     group = parser.add_argument_group("tasks")
     group.add_argument("--convert", action="store_true", help="convert")
@@ -93,6 +97,7 @@ def interactive(args: Namespace) -> None:
     args = get_args()
 
     os.makedirs(args.output_path, exist_ok=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
     for data_subset in args.data_subsets:
         if args.convert:
@@ -102,13 +107,14 @@ def interactive(args: Namespace) -> None:
             os.makedirs(os.path.join(args.tmp_path, data_subset), exist_ok=True)
 
             for arrow_file in arrow_files:
-                prefix = arrow_file.split(".")[0]
-
-                cmd = f"python tools/data/preprocess_data.py --input {os.path.join(args.input_path, data_subset, arrow_file)} --output-prefix {os.path.join(args.tmp_path, data_subset, prefix)} --tokenizer-type HuggingFaceTokenizer --tokenizer-path {args.tokenizer_path} --dataset-impl mmap --append-eod --workers {args.workers} --chunk-size 1000"
-
-                os.system(cmd)
-
-        if args.merge:
+                convert_file(
+                    tokenizer=tokenizer,
+                    input_file=os.path.join(args.input_path, data_subset, arrow_file),
+                    output_prefix=os.path.join(args.tmp_path, data_subset, arrow_file.split(".")[0]),
+                    workers=args.workers,
+                    chunk_size=1000,
+                )
+        elif args.merge:
             output_suffix = (
                 "-" + args.output_suffix if args.output_suffix is not None and len(args.output_suffix) > 0 else ""
             )
@@ -141,16 +147,14 @@ def interactive(args: Namespace) -> None:
                         os.system(cmd)
 
                 json.dump(file_map, open(os.path.join(args.output_path, f"files{output_suffix}.json"), "w"), indent=4)
+        else:
+            raise ValueError("unexpected task")
 
 
-def main() -> None:
+if __name__ == "__main__":
     args = get_args()
 
     if args.ccc_job or args.blue_vela_job:
         job(args, is_blue_vela=args.blue_vela_job)
     else:
         interactive(args)
-
-
-if __name__ == "__main__":
-    main()
