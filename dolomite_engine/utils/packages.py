@@ -92,10 +92,12 @@ def is_einops_available() -> bool:
 
 
 try:
-    import cute_kernels
+    if torch.cuda.is_available():
+        import cute_kernels
 
-    # data processing doesn't need GPU and triton imports fail on CPU
-    _IS_CUTE_KERNELS_AVAILABLE = torch.cuda.is_available()
+        _IS_CUTE_KERNELS_AVAILABLE = True
+    else:
+        _IS_CUTE_KERNELS_AVAILABLE = False
 except ImportError:
     _IS_CUTE_KERNELS_AVAILABLE = False
 
