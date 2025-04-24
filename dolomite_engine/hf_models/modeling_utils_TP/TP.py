@@ -1,5 +1,4 @@
 import torch
-import torch.distributed
 from torch.distributed._tensor.placement_types import Placement, Replicate, Shard
 
 from ...utils import ProcessGroupManager, divide_if_divisible
