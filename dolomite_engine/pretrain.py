@@ -427,7 +427,7 @@ def train(
                 iteration=global_step,
                 metadata={
                     "consumed_samples": global_step * global_batch_size,
-                    "commit_id": Repo(Path(__file__).parents[0]).git.rev_parse("HEAD"),
+                    "commit_id": Repo(Path(__file__).parents[1]).git.rev_parse("HEAD"),
                 },
             )
 
