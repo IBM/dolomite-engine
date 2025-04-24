@@ -1,6 +1,8 @@
-import logging
-import time
 from contextlib import AbstractContextManager, nullcontext
+from git import Repo
+import logging
+from pathlib import Path
+import time
 
 import torch
 from torch.distributed.pipelining.schedules import _PipelineSchedule
@@ -423,7 +425,10 @@ def train(
                 train_dataloader=None,
                 experiments_tracker=experiments_tracker,
                 iteration=global_step,
-                metadata={"consumed_samples": global_step * global_batch_size},
+                metadata={
+                    "consumed_samples": global_step * global_batch_size,
+                    "commit_id" : Repo(Path(__file__).parents[0]).git.rev_parse("HEAD")
+                },
             )
 
             start_time = time.perf_counter()
