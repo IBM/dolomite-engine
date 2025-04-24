@@ -1,10 +1,10 @@
-from contextlib import AbstractContextManager, nullcontext
-from git import Repo
 import logging
-from pathlib import Path
 import time
+from contextlib import AbstractContextManager, nullcontext
+from pathlib import Path
 
 import torch
+from git import Repo
 from torch.distributed.pipelining.schedules import _PipelineSchedule
 from torch.distributed.tensor.parallel import loss_parallel
 from torch.utils.data import DataLoader
@@ -427,7 +427,7 @@ def train(
                 iteration=global_step,
                 metadata={
                     "consumed_samples": global_step * global_batch_size,
-                    "commit_id" : Repo(Path(__file__).parents[0]).git.rev_parse("HEAD")
+                    "commit_id": Repo(Path(__file__).parents[0]).git.rev_parse("HEAD"),
                 },
             )
 
