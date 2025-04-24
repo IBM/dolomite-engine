@@ -1,7 +1,6 @@
 import logging
 
 import torch
-import torch.distributed
 
 from .hf_hub import download_repo
 from .logger import log_metrics, log_rank_0, print_rank_0, print_ranks_all, set_logger
