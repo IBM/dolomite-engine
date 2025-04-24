@@ -4,7 +4,13 @@ import torch
 from torch.distributed._functional_collectives import AsyncCollectiveTensor
 
 from .enums import Kernel
+from .utils import is_cute_kernels_available
 
+
+if is_cute_kernels_available():
+    from cute_kernels.utils import get_boolean_env_variable
+
+    _ENABLE_ALL_KERNELS = get_boolean_env_variable("ENABLE_ALL_KERNELS", False)
 
 _KERNELS: set[Kernel] = set()
 
@@ -58,3 +64,7 @@ def wait_for_ACT(x: torch.Tensor, wait_in_forward: bool, wait_in_backward: bool)
         x = _ACT_BackwardWait.apply(x)
 
     return x
+
+
+if _ENABLE_ALL_KERNELS:
+    enable_all_kernels().__enter__()
