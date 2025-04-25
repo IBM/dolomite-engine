@@ -153,35 +153,23 @@ class CommonConfig(PretrainedConfig):
     def to_json_string(self, use_diff: bool = True) -> str:
         return super().to_json_string(use_diff)
 
-    def check_equal_for_all_and_get_value(self, key: str, key_block: str, expected_value: Any | None = None) -> Any:
+    def check_equal_for_all_and_get_value(
+        self, key: str, key_block: str, expected_value: Any | None = None, sequence_mixer_type: str | None = None
+    ) -> Any:
         def _get(block, key):
             return block.get(key) if isinstance(block, dict) else getattr(block, key)
 
         blocks = getattr(self, key)
+        if sequence_mixer_type is not None:
+            blocks = filter(lambda block: _get(block, "sequence_mixer_type") == sequence_mixer_type, blocks)
+            blocks = list(blocks)
+
         value = _get(blocks[0], key_block)
 
         if expected_value is not None:
             assert value == expected_value, f"{value} {expected_value}"
 
         assert all([_get(block, key_block) == value for block in blocks])
-
-        return value
-    
-    def check_equal_for_all_seq_mixer_and_get_value(self, key: str, sequence_mixer_type: str, key_block: str, expected_value = None):
-        def _get(block, key):
-            return block.get(key) if isinstance(block, dict) else getattr(block, key)
-
-        blocks = getattr(self, key)
-        seq_mixer_type_blocks = []
-        for block in blocks:
-            if _get(block, "sequence_mixer_type") == sequence_mixer_type:
-                seq_mixer_type_blocks.append(block)
-        value = _get(seq_mixer_type_blocks[0], key_block)
-
-        if expected_value is not None:
-            assert value == expected_value, f"{value} {expected_value}"
-
-        assert all([_get(block, key_block) == value for block in seq_mixer_type_blocks])
 
         return value
 

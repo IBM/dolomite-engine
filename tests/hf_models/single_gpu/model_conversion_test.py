@@ -1,6 +1,8 @@
 import torch
 from parameterized import parameterized
 
+from dolomite_engine.hf_models.config import _Mamba2Args
+
 from ..test_common import TestCommons
 
 
@@ -94,4 +96,32 @@ class ModelConversionTest(TestCommons):
             device=device,
             exact_match=False,
             compare_loss=False,
+        )
+
+    @parameterized.expand(
+        TestCommons.make_args_matrix(TestCommons.get_all_devices(), TestCommons.get_attention_head_types())
+    )
+    def test_granitemoehybrid_model_conversion(self, device: torch.device, attention_head_type: str) -> None:
+        dolomite_config = self.get_moe_test_config(
+            attention_head_type,
+            "nope",
+            add_bias=False,
+            shared_n_inner=64,
+            activation_function="swiglu",
+            normalization_function="rmsnorm",
+            m_emb=2,
+            m_width=2,
+        )
+
+        for layer in range(dolomite_config.num_layers):
+            if layer % 2 == 0:
+                dolomite_config.sequence_mixer_blocks[layer] = _Mamba2Args(intermediate_size=256)
+
+        self.model_conversion_test(
+            dolomite_config=dolomite_config,
+            model_type="granitemoehybrid",
+            device=device,
+            exact_match=False,
+            compare_loss=False,
+            logits_atol_float32=2.5e-5,
         )
