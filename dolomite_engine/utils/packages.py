@@ -1,6 +1,8 @@
 import logging
 from importlib.metadata import distributions
 
+import torch
+
 from .logger import log_rank_0, warn_rank_0
 from .parallel import run_rank_n
 
@@ -90,9 +92,12 @@ def is_einops_available() -> bool:
 
 
 try:
-    import cute_kernels
+    if torch.cuda.is_available():
+        import cute_kernels
 
-    _IS_CUTE_KERNELS_AVAILABLE = True
+        _IS_CUTE_KERNELS_AVAILABLE = True
+    else:
+        _IS_CUTE_KERNELS_AVAILABLE = False
 except ImportError:
     _IS_CUTE_KERNELS_AVAILABLE = False
 
@@ -104,9 +109,12 @@ def is_cute_kernels_available() -> bool:
 
 
 try:
-    import causal_conv1d
+    if torch.cuda.is_available():
+        import causal_conv1d
 
-    _IS_CAUSAL_CONV1D_AVAILABLE = True
+        _IS_CAUSAL_CONV1D_AVAILABLE = True
+    else:
+        _IS_CAUSAL_CONV1D_AVAILABLE = False
 except ImportError:
     _IS_CAUSAL_CONV1D_AVAILABLE = False
 
@@ -118,11 +126,16 @@ def is_causal_conv1d_available() -> bool:
 
 
 try:
-    import mamba_ssm
+    if torch.cuda.is_available():
+        import mamba_ssm
 
-    _IS_MAMBA_2_SSM_AVAILABLE = True
+        _IS_MAMBA_2_SSM_AVAILABLE = True
+    else:
+        _IS_MAMBA_2_SSM_AVAILABLE = False
 except ImportError:
     _IS_MAMBA_2_SSM_AVAILABLE = False
+
+    warn_rank_0("mamba-ssm is not installed")
 
 
 def is_mamba_2_ssm_available() -> bool:
@@ -156,6 +169,20 @@ except ImportError:
 
 
 def is_stickbreaking_available():
+    return _IS_STICKBREAKING_AVAILABLE
+
+
+try:
+    import zstandard
+
+    _IS_ZSTANDARD_AVAILABLE = True
+except ImportError:
+    _IS_ZSTANDARD_AVAILABLE = False
+
+    warn_rank_0("zstandard is not available")
+
+
+def is_zstandard_available():
     return _IS_STICKBREAKING_AVAILABLE
 
 

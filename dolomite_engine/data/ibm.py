@@ -14,7 +14,7 @@ import torch
 from torch.utils.data import IterableDataset, get_worker_info
 from transformers import AutoTokenizer
 
-from ...utils import ProcessGroupManager, log_rank_0
+from ..utils import ProcessGroupManager, log_rank_0
 
 
 @dataclass

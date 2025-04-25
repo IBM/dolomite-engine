@@ -2,7 +2,6 @@ import subprocess
 import tempfile
 
 import torch
-import torch.distributed
 from parameterized import parameterized
 
 from ...test_common import TestCommons
