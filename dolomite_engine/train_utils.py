@@ -66,6 +66,23 @@ def get_torch_profiler(torch_profiler_trace_path: str) -> torch.profiler.profile
     return torch_profiler
 
 
+def _get_linear_flops(m: int, k: int, n: int, gradient_checkpointing: bool = False) -> int:
+    forward_flops = 2 * m * k * n
+    backward_flops = 2 * forward_flops
+
+    total_flops = forward_flops + backward_flops
+    if gradient_checkpointing:
+        total_flops += forward_flops
+
+    return total_flops
+
+
+def _get_attention_flops(batch_size: int, sequence_length: int, hidden_size: int) -> int:
+    attention_forward_flops = 2 * batch_size * sequence_length * (sequence_length + 1) * hidden_size
+    attention_backward_flops = 5 * attention_forward_flops / 2
+    return attention_forward_flops + attention_backward_flops
+
+
 def get_model_tflops(
     config: AutoConfig | CommonConfig,
     batch_size: int,
@@ -79,56 +96,87 @@ def get_model_tflops(
     b = batch_size
     s = sequence_length
     h = config.hidden_size
-    l = config.num_layers
     v = config.vocab_size
 
-    forward_flops = 0
+    num_layers_checkpointed = (
+        gradient_checkpointing_args.get("num_blocks", config.num_layers)
+        if gradient_checkpointing_method == GradientCheckpointingMethod.block
+        else 0
+    )
+
+    total_flops = 0
     for layer_idx in range(config.num_layers):
         block = config.sequence_mixer_blocks[layer_idx]
         sequence_mixer_type = block.sequence_mixer_type
+        gradient_checkpointing_enabled = layer_idx < num_layers_checkpointed
 
         if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
-            attention_flops = 4 * b * s * h * (h * (1 + block.num_key_value_heads / block.num_attention_heads) + s)
-        elif sequence_mixer_type == "multihead_latent_attention":
-            attention_flops = (
-                2 * b * s * h * (h + 2 * (s + block.query_compression_size + 2 * block.key_value_compression_size))
+            # QKV projection FLOPs
+            sequence_mixer_flops = _get_linear_flops(
+                b * s,
+                h,
+                h * (1 + 2 * block.num_key_value_heads / block.num_attention_heads),
+                gradient_checkpointing=gradient_checkpointing_enabled,
             )
+            # output projection FLOPs
+            sequence_mixer_flops += _get_linear_flops(
+                b * s, h, h, gradient_checkpointing=gradient_checkpointing_enabled
+            )
+
+            sequence_mixer_flops += _get_attention_flops(b, s, h)
+        elif sequence_mixer_type == "multihead_latent_attention":
+            # QKV down and up projection FLOPs
+            sequence_mixer_flops = 2 * _get_linear_flops(
+                b * s,
+                h,
+                block.query_compression_size + 2 * block.key_value_compression_size,
+                gradient_checkpointing=gradient_checkpointing_enabled,
+            )
+            # output projection FLOPs
+            sequence_mixer_flops += _get_linear_flops(
+                b * s, h, h, gradient_checkpointing=gradient_checkpointing_enabled
+            )
+
+            sequence_mixer_flops += _get_attention_flops(b, s, h)
         elif sequence_mixer_type == "mamba2":
-            # NOTE taken from NexaAI's fork
+            # NOTE taken from NexaAI's fork (might be incorrect)
             # Mamba2 FLOP calculation based on its specific architecture
             # Core components: projection, convolution, SSM operations
             # Input projection + convolution + SSM computation + output projection
+            # TODO fix this for gradient checkpointing
             projection_flops = 4 * b * s * h * block.intermediate_size
             ssm_flops = 4 * b * s * block.intermediate_size * block.state_size
 
-            attention_flops = projection_flops + ssm_flops
+            sequence_mixer_flops = projection_flops + ssm_flops
+            sequence_mixer_flops *= 2
         elif sequence_mixer_type == "rnn":
-            attention_flops = 4 * b * s * h * block.state_size
+            # input projection FLOPs
+            sequence_mixer_flops = _get_linear_flops(b * s, h, block.state_size)
+            # output projection FLOPs
+            sequence_mixer_flops += _get_linear_flops(b * s, block.state_size, h)
+
             head_dim = block.state_size / block.num_heads
-            attention_flops += b * s * block.num_heads * head_dim * (2 * head_dim + 1)
+            sequence_mixer_flops += s * block.num_heads * (_get_linear_flops(b, head_dim, head_dim) + b * head_dim)
         else:
             raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 
+        total_flops += sequence_mixer_flops
+
         block = config.mlp_blocks[layer_idx]
 
-        mlp_flops = 4 * b * s * h * block.intermediate_size
+        # 2x for input and output linear layer
+        mlp_flops = 2 * _get_linear_flops(
+            b * s, h, block.intermediate_size, gradient_checkpointing=gradient_checkpointing_enabled
+        )
         if block.mlp_type == "MoE":
             mlp_flops *= block.num_experts_per_tok
 
         if is_glu(block.activation_function):
             mlp_flops *= 1.5
 
-        forward_flops += attention_flops + mlp_flops
+        total_flops += mlp_flops
 
-    if gradient_checkpointing_method == GradientCheckpointingMethod.block:
-        num_layers_checkpointed = gradient_checkpointing_args.get("num_blocks", l)
-        fraction_of_layers_checkpointed = num_layers_checkpointed / l
-        backward_flops = (2 + fraction_of_layers_checkpointed) * forward_flops
-    else:
-        backward_flops = 2 * forward_flops
+    total_flops += _get_linear_flops(b * s, h, v)
+    total_flops /= 10**12
 
-    model_flops = forward_flops + backward_flops
-    model_flops += 6 * b * s * h * v
-    model_flops /= 10**12
-
-    return model_flops
+    return total_flops

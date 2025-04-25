@@ -1,7 +1,6 @@
 import logging
 
 import torch
-import torch.distributed
 
 from .hf_hub import download_repo
 from .logger import log_metrics, log_rank_0, print_rank_0, print_ranks_all, set_logger
@@ -17,6 +16,7 @@ from .packages import (
     is_stickbreaking_available,
     is_torchao_available,
     is_triton_available,
+    is_zstandard_available,
     log_environment,
 )
 from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n

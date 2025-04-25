@@ -3,3 +3,4 @@ transformers
 datasets
 pydantic
 safetensors
+gitpython

@@ -52,6 +52,7 @@ class RNN(nn.Module):
             std /= math.sqrt(m_width)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
+        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
 
     def forward(self, input: torch.Tensor, input_state: torch.Tensor | None = None) -> torch.Tensor:
@@ -62,8 +63,8 @@ class RNN(nn.Module):
 
         if is_kernel_allowed(Kernel.rnn_cute):
             input = rnn_cute(
-                input=input,
-                weight=self.state_weight,
+                input=self.factor * input,
+                weight=self.factor * self.state_weight,
                 input_state=input_state,
                 gradient_clipping=self.gradient_clipping,
             )
@@ -91,6 +92,9 @@ class RNN(nn.Module):
         # input -> (B, S, N, 1, H)
         # weight -> (1, N, H, H)
         # input_state -> (B, N, H)
+
+        input = input * self.factor
+        weight = weight * self.factor
 
         for s in range(S):
             input_state = input_state.unsqueeze(-2)

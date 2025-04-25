@@ -1,7 +1,6 @@
 import logging
 
 import torch
-import torch.distributed
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 

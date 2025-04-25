@@ -2,7 +2,6 @@ import subprocess
 import tempfile
 
 import torch
-import torch.distributed
 from parameterized import parameterized
 
 from dolomite_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig

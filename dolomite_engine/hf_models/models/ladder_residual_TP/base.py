@@ -1,6 +1,9 @@
 import torch
+from torch.distributed._tensor.placement_types import Partial, Replicate
 from transformers import DynamicCache
 
+from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
+from ....utils import ProcessGroupManager
 from ...cache import HybridMambaAttentionDynamicCache
 from ...mixins import BaseModelMixin_TP, BaseModelOutputWithPast, PreTrainedModelMixin_TP
 from ...utils import is_generation_cache_enabled
@@ -69,6 +72,16 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
+
+        # all reduce using DTensor API
+        current_mlp_out = dtensor_to_tensor(
+            tensor_to_dtensor(
+                current_mlp_out,
+                device_mesh=ProcessGroupManager.get_tensor_parallel_mesh(),
+                current_placement=Partial(),
+                desired_placement=Replicate(),
+            )
+        )
 
         if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
             past_key_values.has_previous_state = True

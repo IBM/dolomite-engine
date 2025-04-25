@@ -1,5 +1,4 @@
 import torch
-import torch.distributed
 import torch.nn as nn
 from torch.distributed._tensor.placement_types import Partial, Replicate, Shard
 
