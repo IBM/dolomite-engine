@@ -1,11 +1,5 @@
 import torch
-from transformers import (
-    AutoConfig,
-    AutoTokenizer,
-    GenerationConfig,
-    GraniteMoeHybridConfig,
-    GraniteMoeHybridForCausalLM,
-)
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 
 from ...utils import SafeTensorsWeightsManager, divide_if_divisible, download_repo
 from ..modeling_utils import (
@@ -14,6 +8,14 @@ from ..modeling_utils import (
     split_query_key_value_tensor_for_attention,
 )
 from ..models import GPTDolomiteConfig
+
+
+# TODO remove try except once GraniteMoeHybrid is added into HF
+try:
+    from transformers import GraniteMoeHybridConfig, GraniteMoeHybridForCausalLM
+except:
+    GraniteMoeHybridConfig = None
+    GraniteMoeHybridForCausalLM = None
 
 
 def import_from_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
