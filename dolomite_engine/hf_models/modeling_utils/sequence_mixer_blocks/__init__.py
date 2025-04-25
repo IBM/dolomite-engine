@@ -53,6 +53,7 @@ def get_sequence_mixer(
             query_compression_size=block.query_compression_size,
             key_value_compression_size=block.key_value_compression_size,
             num_attention_heads=block.num_attention_heads,
+            head_dim=block.head_dim,
             attention_multiplier=block.attention_multiplier,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,
@@ -65,6 +66,8 @@ def get_sequence_mixer(
             causal=True,
             layer_idx=layer_idx,
             use_padding_free_transformer=use_padding_free_transformer,
+            normalization_function=block.normalization_function,
+            layer_norm_epsilon=config.layer_norm_epsilon,
         )
     elif sequence_mixer_type == "rnn":
         return RNN(
