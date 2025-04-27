@@ -1,5 +1,5 @@
 from ...config import CommonConfig
-from .mamba import Mamba2
+from .mamba2 import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
 from .softmax_attention import (
