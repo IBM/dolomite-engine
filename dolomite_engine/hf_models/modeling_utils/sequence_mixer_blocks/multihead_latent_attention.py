@@ -4,13 +4,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import DynamicCache
-from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import is_flash_attention_available
 from ..linear import ParameterizedLinear
 from ..normalization import get_normalization_function
+from .flash_attention_utils import flash_attention
 
 
 if is_flash_attention_available():
@@ -175,13 +175,13 @@ class MultiHeadLatentAttention(nn.Module):
                     causal=self.causal,
                 )
             else:
-                hidden_states = _flash_attention_forward(
-                    query_states=query,
-                    key_states=key,
-                    value_states=value,
+                hidden_states = flash_attention(
+                    query=query,
+                    key=key,
+                    value=value,
                     attention_mask=attention_mask,
                     query_length=query_length,
-                    is_causal=self.causal,
+                    causal=self.causal,
                     dropout=self.softmax_dropout_p if self.training else 0,
                     softmax_scale=self._get_softmax_scale(),
                 )
