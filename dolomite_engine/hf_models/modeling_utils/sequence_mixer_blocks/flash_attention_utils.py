@@ -48,14 +48,7 @@ def _upad_input(
         attention_mask = attention_mask[:, -query_length:]
         query, indices_q, cu_seqlens_q, max_seqlen_in_batch_q, *_ = unpad_input(query, attention_mask)
 
-    return (
-        query,
-        key,
-        value,
-        indices_q,
-        (cu_seqlens_q, cu_seqlens_k),
-        (max_seqlen_in_batch_q, max_seqlen_in_batch_k),
-    )
+    return query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k
 
 
 def flash_attention(
@@ -89,11 +82,9 @@ def flash_attention(
     else:
         batch_size = query.size(0)
 
-        query, key, value, indices_q, cu_seq_lens, max_seq_lens = _upad_input(
-            query, key, value, attention_mask, query_length
+        query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k = (
+            _upad_input(query, key, value, attention_mask, query_length)
         )
-        cu_seqlens_q, cu_seqlens_k = cu_seq_lens
-        max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
         attn_output = flash_attn_varlen_func(
             query,
