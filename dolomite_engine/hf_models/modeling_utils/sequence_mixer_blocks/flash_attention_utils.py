@@ -67,7 +67,6 @@ def flash_attention(
     if sliding_window is not None and key.size(1) > sliding_window:
         window_size = (sliding_window, sliding_window)
 
-    # Contains at least one padding token in the sequence
     if attention_mask is None:
         attn_output = flash_attn_func(
             query,
