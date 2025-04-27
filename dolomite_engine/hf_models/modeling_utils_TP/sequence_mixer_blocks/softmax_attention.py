@@ -3,11 +3,11 @@ import math
 import torch
 import torch.nn as nn
 
-from .....utils import ProcessGroupManager, divide_if_divisible
-from ....modeling_utils import Attention, get_attention_head_type
-from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
-from ...dropout import Dropout_TP
-from ...linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
+from ....utils import ProcessGroupManager, divide_if_divisible
+from ...modeling_utils import Attention, get_attention_head_type
+from ...modeling_utils.mlp_blocks.mlp import _get_std_for_linear
+from ..dropout import Dropout_TP
+from ..linear import ColumnParallelLinear, ReplicatedLinear, RowParallelLinear
 
 
 class Attention_TP(Attention):
