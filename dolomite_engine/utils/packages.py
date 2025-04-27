@@ -10,15 +10,29 @@ from .parallel import run_rank_n
 try:
     import flash_attn
 
-    _IS_FLASH_ATTENTION_AVAILABLE = True
+    _IS_FLASH_ATTENTION_2_AVAILABLE = True
 except ImportError:
-    _IS_FLASH_ATTENTION_AVAILABLE = False
+    _IS_FLASH_ATTENTION_2_AVAILABLE = False
 
-    warn_rank_0("Flash Attention is not installed")
+    warn_rank_0("Flash Attention 2 is not installed")
 
 
-def is_flash_attention_available() -> bool:
-    return _IS_FLASH_ATTENTION_AVAILABLE
+def is_flash_attention_2_available() -> bool:
+    return _IS_FLASH_ATTENTION_2_AVAILABLE
+
+
+try:
+    import flash_attn_3_cuda
+
+    _IS_FLASH_ATTENTION_3_AVAILABLE = True
+except ImportError:
+    _IS_FLASH_ATTENTION_3_AVAILABLE = False
+
+    warn_rank_0("Flash Attention 3 is not installed")
+
+
+def is_flash_attention_3_available() -> bool:
+    return _IS_FLASH_ATTENTION_3_AVAILABLE
 
 
 try:

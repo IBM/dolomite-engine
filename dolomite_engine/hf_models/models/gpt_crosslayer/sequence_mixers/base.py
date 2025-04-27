@@ -7,7 +7,7 @@ from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
-from .....utils import divide_if_divisible, is_flash_attention_available
+from .....utils import divide_if_divisible, is_flash_attention_2_available
 from ....modeling_utils import (
     ParameterizedLinear,
     apply_rotary_pos_emb,
@@ -16,7 +16,7 @@ from ....modeling_utils import (
 )
 
 
-if is_flash_attention_available():
+if is_flash_attention_2_available():
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
@@ -69,6 +69,7 @@ class CrossLayerAttention(nn.Module):
             std=initializer_range / math.sqrt(2 * num_layers),
         )
 
+        self.softmax_dropout_p = softmax_dropout
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 

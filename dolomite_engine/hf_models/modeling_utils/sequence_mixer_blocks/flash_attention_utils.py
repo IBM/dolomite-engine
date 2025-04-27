@@ -1,12 +1,18 @@
 import torch
 import torch.nn.functional as F
 
-from ....utils import is_flash_attention_available
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
+from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
 
 
-if is_flash_attention_available():
-    from flash_attn import flash_attn_func, flash_attn_varlen_func
+if is_flash_attention_2_available():
+    from flash_attn import flash_attn_func as flash_attention_2
+    from flash_attn import flash_attn_varlen_func as flash_attention_2_varlen
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
+
+if is_flash_attention_3_available():
+    from flash_attn_interface import flash_attn_func as flash_attention_3
 
 
 def _get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
@@ -68,16 +74,31 @@ def flash_attention(
         window_size = (sliding_window, sliding_window)
 
     if attention_mask is None:
-        attn_output = flash_attn_func(
-            query,
-            key,
-            value,
-            dropout,
-            softmax_scale=softmax_scale,
-            causal=causal,
-            window_size=window_size,
-            softcap=softcap,
-        )
+        if is_kernel_allowed(Kernel.flash_attention_3):
+            assert dropout == 0
+
+            attn_output = flash_attention_3(
+                q=query,
+                k=key,
+                v=value,
+                softmax_scale=softmax_scale,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+            )
+        elif is_kernel_allowed(Kernel.flash_attention_2):
+            attn_output = flash_attention_2(
+                query,
+                key,
+                value,
+                dropout,
+                softmax_scale=softmax_scale,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+            )
+        else:
+            raise ValueError("enable flash_attention_2 or flash_attention_3")
     else:
         batch_size = query.size(0)
 
@@ -85,7 +106,7 @@ def flash_attention(
             _upad_input(query, key, value, attention_mask, query_length)
         )
 
-        attn_output = flash_attn_varlen_func(
+        attn_output = flash_attention_2_varlen(
             query,
             key,
             value,
