@@ -29,38 +29,6 @@ def _upad_input(
     attention_mask: torch.Tensor,
     query_length: int,
 ):
-    """
-    Unpads query, key, and values tensors, using a single dimension for all tokens even though they belong to different batches.
-
-    This function is used instead of `flash_attn.bert_padding.unpad_input` in order to avoid the recomputation of the same intermediary
-    tensors for query, key, value tensors.
-
-    Arguments:
-        query_layer (`torch.Tensor`):
-            Query state with padding. Shape: (batch_size, query_length, num_heads, head_dim).
-        key_layer (`torch.Tensor`):
-            Key state with padding. Shape: (batch_size, kv_seq_len, num_key_value_heads, head_dim).
-        value_layer (`torch.Tensor`):
-            Value state with padding. Shape: (batch_size, kv_seq_len, num_key_value_heads, head_dim).
-        attention_mask (`torch.Tensor`):
-            Boolean or int tensor of shape (batch_size, sequence_length), 1 means valid and 0 means not valid.
-        query_length (`int`):
-            Target length.
-
-    Return:
-        query_layer (`torch.Tensor`):
-            Query state without padding. Shape: (total_target_length, num_heads, head_dim).
-        key_layer (`torch.Tensor`):
-            Key state with padding. Shape: (total_source_length, num_key_value_heads, head_dim).
-        value_layer (`torch.Tensor`):
-            Value state with padding. Shape: (total_source_length, num_key_value_heads, head_dim).
-        indices_q (`torch.Tensor`):
-            The indices of non-masked tokens from the flattened input target sequence.
-        (cu_seqlens_q, cu_seqlens_k) (`Tuple[int]`):
-            The cumulative sequence lengths for the target (query) and source (key, value), used to index into ragged (unpadded) tensors. `cu_seqlens` shape is (batch_size + 1,).
-        (max_seqlen_in_batch_q, max_seqlen_in_batch_k) (`Tuple[int]`):
-            Maximum sequence length in batch (`max_seqlen_in_batch_q` for the target sequence i.e. query, `max_seqlen_in_batch_k` for the source sequence i.e. key/value).
-    """
     indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
     batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
