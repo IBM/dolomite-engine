@@ -20,13 +20,21 @@ def flash_attention(
     sliding_window: int | None = None,
     softcap: float = 0,
 ) -> torch.Tensor:
-    use_sliding_windows = sliding_window is not None and key.size(1) > sliding_window
-    flash_kwargs = {"window_size": (sliding_window, sliding_window)} if use_sliding_windows else {}
+    window_size = (-1, -1)
+    if sliding_window is not None and key.size(1) > sliding_window:
+        window_size = (sliding_window, sliding_window)
 
     # Contains at least one padding token in the sequence
     if attention_mask is None:
         attn_output = flash_attn_func(
-            query, key, value, dropout, softmax_scale=softmax_scale, causal=causal, softcap=softcap, **flash_kwargs
+            query,
+            key,
+            value,
+            dropout,
+            softmax_scale=softmax_scale,
+            causal=causal,
+            window_size=window_size,
+            softcap=softcap,
         )
     else:
         batch_size = query.shape[0]
@@ -47,8 +55,8 @@ def flash_attention(
             dropout_p=dropout,
             softmax_scale=softmax_scale,
             causal=causal,
+            window_size=window_size,
             softcap=softcap,
-            **flash_kwargs,
         )
 
         attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
