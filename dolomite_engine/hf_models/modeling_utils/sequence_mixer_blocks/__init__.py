@@ -1,19 +1,13 @@
 from ...config import CommonConfig
-from .mamba2 import Mamba2
+from .mamba import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
 from .softmax_attention import (
     Attention,
     get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
-    interleave_query_key_value_tensor_for_gqa,
-    interleave_query_key_value_tensor_for_mha,
-    interleave_query_key_value_tensor_for_mqa,
     repeat_key_value,
     split_query_key_value_tensor_for_attention,
-    split_query_key_value_tensor_for_gqa,
-    split_query_key_value_tensor_for_mha,
-    split_query_key_value_tensor_for_mqa,
 )
 from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
