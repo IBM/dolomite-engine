@@ -12,13 +12,16 @@ class _IndexFirstAxis(torch.autograd.Function):
         assert input.dim() >= 2
 
         ctx.save_for_backward(indices)
-        ctx.first_axis_dim = input.shape[0]
-        other_shape = input.shape[1:]
-        second_dim = other_shape.numel()
+        ctx.first_axis_dim = input.size(0)
+
+        other_shape = input.size()[1:]
+        indices = indices.unsqueeze(1).expand(-1, other_shape.numel())
 
         input = input.reshape(input.size(0), -1)
+        input = input.gather(0, indices)
+        input = input.reshape(-1, *other_shape)
 
-        return torch.gather(input, 0, repeat(indices, "z -> z d", d=second_dim)).reshape(-1, *other_shape)
+        return input
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
