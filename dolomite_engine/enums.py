@@ -73,6 +73,7 @@ class Kernel(Enum):
     swiglu_unchunked_cute = "swiglu_unchunked_cute"
     # external kernels
     flash_attention_2 = "flash_attention_2"
+    flash_attention_3 = "flash_attention_3"
     mamba2_ssm = "mamba2_ssm"
     scattermoe = "scattermoe"
     # custom functions

@@ -188,9 +188,9 @@ def train(
         global_step += 1
 
         loss_step_dict = train_step_without_pipeline_parallel(
-            model=model_container[0],
-            optimizer=optimizer_container[0],
-            lr_scheduler=lr_scheduler_container[0],
+            model_container=model_container,
+            optimizer_container=optimizer_container,
+            lr_scheduler_container=lr_scheduler_container,
             train_dataloader=train_dataloader_infinite,
             gradient_clipping=gradient_clipping,
             forward_context=forward_context,

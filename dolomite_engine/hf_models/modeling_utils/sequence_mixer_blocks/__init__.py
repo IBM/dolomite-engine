@@ -1,4 +1,5 @@
 from ...config import CommonConfig
+from .flash_attention_utils import flash_attention
 from .mamba2 import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
