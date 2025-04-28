@@ -21,19 +21,21 @@ class _IndexFirstAxis(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
-        (indices,) = ctx.saved_tensors
-        assert grad_output.ndim >= 2
-        other_shape = grad_output.shape[1:]
+        assert grad_output.dim() >= 2
+
+        indices = ctx.saved_tensors[0]
+        first_axis_dim = ctx.first_axis_dim
+
+        other_shape = grad_output.size()[1:]
         grad_output = rearrange(grad_output, "b ... -> b (...)")
         grad_input = torch.zeros(
-            [ctx.first_axis_dim, grad_output.shape[1]],
-            device=grad_output.device,
-            dtype=grad_output.dtype,
+            (first_axis_dim, grad_output.size(1)), device=grad_output.device, dtype=grad_output.dtype
         )
-        # TD [2022-03-04] For some reason torch.scatter is a bit faster than indexing.
-        # grad_input[indices] = grad_output
+
         grad_input.scatter_(0, repeat(indices, "z -> z d", d=grad_output.shape[1]), grad_output)
-        return grad_input.reshape(ctx.first_axis_dim, *other_shape), None
+        grad_input = grad_input.reshape(first_axis_dim, *other_shape)
+
+        return grad_input, None
 
 
 class _IndexPutFirstAxis(torch.autograd.Function):
@@ -57,11 +59,14 @@ class _IndexPutFirstAxis(torch.autograd.Function):
         return grad_values, None, None
 
 
-def unpad_input(hidden_states, attention_mask, unused_mask=None):
-    all_masks = (attention_mask + unused_mask) if unused_mask is not None else attention_mask
-    seqlens_in_batch = all_masks.sum(dim=-1, dtype=torch.int32)
+def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    return _IndexFirstAxis.apply(input, indices)
+
+
+def unpad_input(hidden_states, attention_mask):
+    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     used_seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
-    indices = torch.nonzero(all_masks.flatten(), as_tuple=False).flatten()
+    indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
     cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
     # TD [2022-03-04] We don't want to index with a bool mask, because Pytorch will expand the
@@ -78,11 +83,7 @@ def unpad_input(hidden_states, attention_mask, unused_mask=None):
     )
 
 
-def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
-    return _IndexFirstAxis.apply(input, indices)
-
-
-def pad_input(x: torch.Tensor, indices: torch.Tensor, batch: int, sequence_length: int) -> torch.Tensor:
-    x = _IndexPutFirstAxis.apply(x, indices, batch * sequence_length)
-    x = x.view(batch, sequence_length, *x.size()[1:])
+def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_length: int) -> torch.Tensor:
+    x = _IndexPutFirstAxis.apply(x, indices, batch_size * sequence_length)
+    x = x.view(batch_size, sequence_length, *x.size()[1:])
     return x
