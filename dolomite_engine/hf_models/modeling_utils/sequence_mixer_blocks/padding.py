@@ -3,7 +3,6 @@
 
 import torch
 import torch.nn.functional as F
-from einops import repeat
 
 
 class _IndexFirstAxis(torch.autograd.Function):
