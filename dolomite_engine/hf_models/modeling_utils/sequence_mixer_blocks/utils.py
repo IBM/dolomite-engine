@@ -41,21 +41,19 @@ class _IndexFirstAxis(torch.autograd.Function):
 class _IndexPutFirstAxis(torch.autograd.Function):
     @staticmethod
     def forward(ctx, values: torch.Tensor, indices: torch.Tensor, first_axis_dim: int) -> torch.Tensor:
+        assert indices.dim() == 1
+        assert values.dim() >= 2
+
         ctx.save_for_backward(indices)
-        assert indices.ndim == 1
-        assert values.ndim >= 2
         output = torch.zeros(first_axis_dim, *values.shape[1:], device=values.device, dtype=values.dtype)
-        # TD [2022-03-04] For some reason torch.scatter is a bit faster than indexing.
         output[indices] = values
-        # output.scatter_(0, repeat(indices, 'z -> z d', d=values.shape[1]), values)
+
         return output
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
         indices = ctx.saved_tensors[0]
-        # TD [2022-03-04] For some reason torch.gather is a bit faster than indexing.
         grad_values = grad_output[indices]
-        # grad_values = torch.gather(grad_output, 0, repeat(indices, 'z -> z d', d=grad_output.shape[1]))
         return grad_values, None, None
 
 
@@ -69,18 +67,11 @@ def unpad_input(hidden_states, attention_mask):
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
     cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
-    # TD [2022-03-04] We don't want to index with a bool mask, because Pytorch will expand the
-    # bool mask, then call nonzero to get the indices, then index with those. The indices is @dim
-    # times larger than it needs to be, wasting memory. It's faster and more memory-efficient to
-    # index with integer indices. Moreover, torch's index is a bit slower than it needs to be,
-    # so we write custom forward and backward to make it a bit faster.
-    return (
-        index_first_axis(rearrange(hidden_states, "b s ... -> (b s) ..."), indices),
-        indices,
-        cu_seqlens,
-        max_seqlen_in_batch,
-        used_seqlens_in_batch,
-    )
+
+    hidden_states = hidden_states.view(-1, *hidden_states.size()[1:])
+    hidden_states = index_first_axis(hidden_states, indices)
+
+    return hidden_states, indices, cu_seqlens, max_seqlen_in_batch, used_seqlens_in_batch
 
 
 def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_length: int) -> torch.Tensor:
