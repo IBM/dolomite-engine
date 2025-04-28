@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
-from .....utils import divide_if_divisible, is_flash_attention_2_available
+from .....utils import divide_if_divisible
 from ....modeling_utils import (
     ParameterizedLinear,
     apply_rotary_pos_emb,
@@ -14,10 +14,6 @@ from ....modeling_utils import (
     get_attention_head_type,
     get_normalization_function,
 )
-
-
-if is_flash_attention_2_available():
-    from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
 class CrossLayerAttention(nn.Module):

@@ -8,14 +8,10 @@ from transformers import DynamicCache
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
-from ....utils import divide_if_divisible, is_flash_attention_2_available
+from ....utils import divide_if_divisible
 from ..linear import ParameterizedLinear
 from ..position_embedding import apply_rotary_pos_emb
 from .flash_attention_utils import flash_attention
-
-
-if is_flash_attention_2_available():
-    from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 
 def _interleave_query_key_value_tensor_for_mha(
