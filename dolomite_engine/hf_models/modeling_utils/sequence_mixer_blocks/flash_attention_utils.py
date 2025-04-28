@@ -13,6 +13,7 @@ if is_flash_attention_2_available():
 
 if is_flash_attention_3_available():
     from flash_attn_interface import flash_attn_func as flash_attention_3
+    from flash_attn_interface import flash_attn_varlen_func as flash_attention_3_varlen
 
 
 def _get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
@@ -86,7 +87,7 @@ def flash_attention(
 
     if use_padding_free_transformer:
         if use_flash_attention_3:
-            attn_output = flash_attn_varlen_func(
+            attn_output = flash_attention_3_varlen(
                 query,
                 key,
                 value,
@@ -99,7 +100,7 @@ def flash_attention(
                 causal=causal,
             )
         else:
-            attn_output = flash_attn_varlen_func(
+            attn_output = flash_attention_2_varlen(
                 query,
                 key,
                 value,
@@ -144,7 +145,7 @@ def flash_attention(
             )
 
             if is_kernel_allowed(Kernel.flash_attention_3):
-                attn_output = flash_attention_2_varlen(
+                attn_output = flash_attention_3_varlen(
                     q=query,
                     k=key,
                     v=value,
