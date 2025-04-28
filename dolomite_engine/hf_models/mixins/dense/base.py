@@ -466,7 +466,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         dtype: torch.dtype,
         device: torch.device,
     ) -> torch.Tensor:
-        if not is_kernel_allowed(Kernel.flash_attention_2):
+        if not (is_kernel_allowed(Kernel.flash_attention_2) or is_kernel_allowed(Kernel.flash_attention_3)):
             # we use the causal/non-causal argument of SDPA for attention in this case
             if attention_mask is not None:
                 attention_mask = self._prepare_causal_attention_mask(

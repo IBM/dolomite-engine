@@ -78,7 +78,7 @@ class GPTCrossLayerBlock(nn.Module):
             if past_key_values is not None:
                 key, value = past_key_values.update(key, value, layer_idx=self.layer_idx)
 
-            if is_kernel_allowed(Kernel.flash_attention_2):
+            if is_kernel_allowed(Kernel.flash_attention_3) or is_kernel_allowed(Kernel.flash_attention_2):
                 if not self._use_padding_free_transformer:
                     if self.attention_head_type == "mqa":
                         key = key.squeeze(1).unsqueeze(2)

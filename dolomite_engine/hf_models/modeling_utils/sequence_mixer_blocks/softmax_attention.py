@@ -5,17 +5,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import DynamicCache
-from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
-from ....utils import divide_if_divisible, is_flash_attention_available
+from ....utils import divide_if_divisible
 from ..linear import ParameterizedLinear
 from ..position_embedding import apply_rotary_pos_emb
-
-
-if is_flash_attention_available():
-    from flash_attn.flash_attn_interface import flash_attn_varlen_func
+from .flash_attention_utils import flash_attention
 
 
 def _interleave_query_key_value_tensor_for_mha(
@@ -366,8 +362,11 @@ class Attention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
+        use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
+
         if self.use_padding_free_transformer:
-            assert is_kernel_allowed(Kernel.flash_attention_2)
+            assert use_flash_attention_2 or use_flash_attention_3
             assert past_key_values is None
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
@@ -379,8 +378,9 @@ class Attention(nn.Module):
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
 
-        if is_kernel_allowed(Kernel.flash_attention_2):
+        if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
+                query_length = None
                 output_shape = (-1, self.hidden_size)
             else:
                 # TODO avoid this extra transpose
@@ -399,30 +399,19 @@ class Attention(nn.Module):
             key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
             value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
-            if self.use_padding_free_transformer:
-                hidden_states = flash_attn_varlen_func(
-                    query,
-                    key,
-                    value,
-                    cu_seqlens_q=cu_seqlens,
-                    cu_seqlens_k=cu_seqlens,
-                    max_seqlen_q=max_seqlen,
-                    max_seqlen_k=max_seqlen,
-                    dropout_p=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                    causal=self.causal,
-                )
-            else:
-                hidden_states = _flash_attention_forward(
-                    query_states=query,
-                    key_states=key,
-                    value_states=value,
-                    attention_mask=attention_mask,
-                    query_length=query_length,
-                    is_causal=self.causal,
-                    dropout=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                )
+            hidden_states = flash_attention(
+                query=query,
+                key=key,
+                value=value,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                attention_mask=attention_mask,
+                use_padding_free_transformer=self.use_padding_free_transformer,
+                query_length=query_length,
+                causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
             del query, key, value
 
