@@ -146,6 +146,8 @@ def flash_attention(
             )
 
             if use_flash_attention_3:
+                assert dropout == 0
+
                 attn_output = flash_attention_3_varlen(
                     q=query,
                     k=key,
@@ -154,7 +156,6 @@ def flash_attention(
                     cu_seqlens_k=cu_seqlens_k,
                     max_seqlen_q=max_seqlen_in_batch_q,
                     max_seqlen_k=max_seqlen_in_batch_k,
-                    dropout_p=dropout,
                     softmax_scale=softmax_scale,
                     causal=causal,
                     window_size=window_size,
