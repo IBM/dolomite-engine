@@ -76,6 +76,9 @@ def flash_attention(
     use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
     use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
 
+    if use_flash_attention_3:
+        assert dropout == 0
+
     assert use_flash_attention_3 or use_flash_attention_2, "enable flash_attention_2 or flash_attention_3"
 
     if use_padding_free_transformer:
@@ -87,8 +90,6 @@ def flash_attention(
 
     if use_padding_free_transformer:
         if use_flash_attention_3:
-            assert dropout == 0
-
             attn_output = flash_attention_3_varlen(
                 query,
                 key,
@@ -116,8 +117,6 @@ def flash_attention(
     else:
         if attention_mask is None:
             if use_flash_attention_3:
-                assert dropout == 0
-
                 attn_output, _ = flash_attention_3(
                     q=query,
                     k=key,
@@ -146,8 +145,6 @@ def flash_attention(
             )
 
             if use_flash_attention_3:
-                assert dropout == 0
-
                 attn_output = flash_attention_3_varlen(
                     q=query,
                     k=key,
