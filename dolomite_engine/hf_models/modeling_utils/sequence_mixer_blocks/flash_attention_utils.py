@@ -94,9 +94,9 @@ def flash_attention(
                 cu_seqlens_k=cu_seqlens,
                 max_seqlen_q=max_seqlen,
                 max_seqlen_k=max_seqlen,
-                dropout_p=self.softmax_dropout_p if self.training else 0,
-                softmax_scale=self._get_softmax_scale(),
-                causal=self.causal,
+                dropout_p=dropout,
+                softmax_scale=softmax_scale,
+                causal=causal,
             )
         else:
             attn_output = flash_attn_varlen_func(
@@ -107,9 +107,9 @@ def flash_attention(
                 cu_seqlens_k=cu_seqlens,
                 max_seqlen_q=max_seqlen,
                 max_seqlen_k=max_seqlen,
-                dropout_p=self.softmax_dropout_p if self.training else 0,
-                softmax_scale=self._get_softmax_scale(),
-                causal=self.causal,
+                dropout_p=dropout,
+                softmax_scale=softmax_scale,
+                causal=causal,
             )
     else:
         if attention_mask is None:
