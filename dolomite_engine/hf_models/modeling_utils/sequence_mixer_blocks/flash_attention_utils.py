@@ -91,9 +91,9 @@ def flash_attention(
     if use_padding_free_transformer:
         if use_flash_attention_3:
             attn_output, _ = flash_attention_3_varlen(
-                query,
-                key,
-                value,
+                q=query,
+                k=key,
+                v=value,
                 cu_seqlens_q=cu_seqlens,
                 cu_seqlens_k=cu_seqlens,
                 max_seqlen_q=max_seqlen,
@@ -103,9 +103,9 @@ def flash_attention(
             )
         else:
             attn_output = flash_attention_2_varlen(
-                query,
-                key,
-                value,
+                q=query,
+                k=key,
+                v=value,
                 cu_seqlens_q=cu_seqlens,
                 cu_seqlens_k=cu_seqlens,
                 max_seqlen_q=max_seqlen,
@@ -128,10 +128,10 @@ def flash_attention(
                 )
             else:
                 attn_output = flash_attention_2(
-                    query,
-                    key,
-                    value,
-                    dropout,
+                    q=query,
+                    k=key,
+                    v=value,
+                    dropout_p=dropout,
                     softmax_scale=softmax_scale,
                     causal=causal,
                     window_size=window_size,
