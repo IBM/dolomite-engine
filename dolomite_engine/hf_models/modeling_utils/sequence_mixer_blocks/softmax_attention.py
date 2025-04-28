@@ -379,7 +379,7 @@ class Attention(nn.Module):
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
 
-        if is_kernel_allowed(Kernel.flash_attention_2):
+        if is_kernel_allowed(Kernel.flash_attention_3) or is_kernel_allowed(Kernel.flash_attention_2):
             if self.use_padding_free_transformer:
                 output_shape = (-1, self.hidden_size)
             else:
