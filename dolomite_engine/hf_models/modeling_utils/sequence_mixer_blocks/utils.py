@@ -61,7 +61,7 @@ def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor
     return _IndexFirstAxis.apply(input, indices)
 
 
-def unpad_input(hidden_states, attention_mask):
+def unpad_input(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     used_seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
