@@ -82,7 +82,7 @@ def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor
     return _IndexFirstAxis.apply(input, indices)
 
 
-def pad_input(hidden_states, indices, batch, seqlen):
-    output = _IndexPutFirstAxis.apply(hidden_states, indices, batch * seqlen)
-    output = output.view(batch, seqlen, *output.size()[1:])
-    return output
+def pad_input(x: torch.Tensor, indices: torch.Tensor, batch: int, sequence_length: int) -> torch.Tensor:
+    x = _IndexPutFirstAxis.apply(x, indices, batch * sequence_length)
+    x = x.view(batch, sequence_length, *x.size()[1:])
+    return x
