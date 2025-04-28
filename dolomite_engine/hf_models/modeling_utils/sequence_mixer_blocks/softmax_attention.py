@@ -402,46 +402,19 @@ class Attention(nn.Module):
             key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
             value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
-            if self.use_padding_free_transformer:
-                if use_flash_attention_3:
-                    hidden_states = flash_attn_varlen_func(
-                        query,
-                        key,
-                        value,
-                        cu_seqlens_q=cu_seqlens,
-                        cu_seqlens_k=cu_seqlens,
-                        max_seqlen_q=max_seqlen,
-                        max_seqlen_k=max_seqlen,
-                        dropout_p=self.softmax_dropout_p if self.training else 0,
-                        softmax_scale=self._get_softmax_scale(),
-                        causal=self.causal,
-                    )
-                elif use_flash_attention_2:
-                    hidden_states = flash_attn_varlen_func(
-                        query,
-                        key,
-                        value,
-                        cu_seqlens_q=cu_seqlens,
-                        cu_seqlens_k=cu_seqlens,
-                        max_seqlen_q=max_seqlen,
-                        max_seqlen_k=max_seqlen,
-                        dropout_p=self.softmax_dropout_p if self.training else 0,
-                        softmax_scale=self._get_softmax_scale(),
-                        causal=self.causal,
-                    )
-                else:
-                    raise ValueError
-            else:
-                hidden_states = flash_attention(
-                    query=query,
-                    key=key,
-                    value=value,
-                    attention_mask=attention_mask,
-                    query_length=query_length,
-                    causal=self.causal,
-                    dropout=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                )
+            hidden_states = flash_attention(
+                query=query,
+                key=key,
+                value=value,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                attention_mask=attention_mask,
+                use_padding_free_transformer=self.use_padding_free_transformer,
+                query_length=query_length,
+                causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
             del query, key, value
 

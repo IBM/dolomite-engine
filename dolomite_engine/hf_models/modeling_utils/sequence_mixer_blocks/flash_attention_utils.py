@@ -62,6 +62,9 @@ def flash_attention(
     key: torch.Tensor,
     value: torch.Tensor,
     attention_mask: torch.Tensor | None,
+    cu_seqlens: torch.Tensor | None,
+    max_seqlen: torch.Tensor | None,
+    use_padding_free_transformer: bool,
     query_length: int,
     causal: bool,
     dropout: float = 0,
@@ -69,76 +72,108 @@ def flash_attention(
     sliding_window: int | None = None,
     softcap: float = 0,
 ) -> torch.Tensor:
+    use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
+    use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
+
+    assert use_flash_attention_2 or use_flash_attention_3, "enable flash_attention_2 or flash_attention_3"
+
+    if use_padding_free_transformer:
+        assert use_flash_attention_2 or use_flash_attention_3
+
     window_size = (-1, -1)
     if sliding_window is not None and key.size(1) > sliding_window:
         window_size = (sliding_window, sliding_window)
 
-    if attention_mask is None:
-        if is_kernel_allowed(Kernel.flash_attention_3):
-            assert dropout == 0
-
-            attn_output, _ = flash_attention_3(
-                q=query,
-                k=key,
-                v=value,
-                softmax_scale=softmax_scale,
-                causal=causal,
-                window_size=window_size,
-                softcap=softcap,
-            )
-        elif is_kernel_allowed(Kernel.flash_attention_2):
-            attn_output = flash_attention_2(
+    if use_padding_free_transformer:
+        if use_flash_attention_3:
+            attn_output = flash_attn_varlen_func(
                 query,
                 key,
                 value,
-                dropout,
-                softmax_scale=softmax_scale,
-                causal=causal,
-                window_size=window_size,
-                softcap=softcap,
+                cu_seqlens_q=cu_seqlens,
+                cu_seqlens_k=cu_seqlens,
+                max_seqlen_q=max_seqlen,
+                max_seqlen_k=max_seqlen,
+                dropout_p=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+                causal=self.causal,
             )
         else:
-            raise ValueError("enable flash_attention_2 or flash_attention_3")
+            attn_output = flash_attn_varlen_func(
+                query,
+                key,
+                value,
+                cu_seqlens_q=cu_seqlens,
+                cu_seqlens_k=cu_seqlens,
+                max_seqlen_q=max_seqlen,
+                max_seqlen_k=max_seqlen,
+                dropout_p=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+                causal=self.causal,
+            )
     else:
-        batch_size = query.size(0)
+        if attention_mask is None:
+            if is_kernel_allowed(Kernel.flash_attention_3):
+                assert dropout == 0
 
-        query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k = (
-            _upad_input(query, key, value, attention_mask, query_length)
-        )
-
-        if is_kernel_allowed(Kernel.flash_attention_3):
-            attn_output = flash_attention_2_varlen(
-                q=query,
-                k=key,
-                v=value,
-                cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k,
-                max_seqlen_q=max_seqlen_in_batch_q,
-                max_seqlen_k=max_seqlen_in_batch_k,
-                dropout_p=dropout,
-                softmax_scale=softmax_scale,
-                causal=causal,
-                window_size=window_size,
-                softcap=softcap,
-            )
-        elif is_kernel_allowed(Kernel.flash_attention_2):
-            attn_output = flash_attention_2_varlen(
-                q=query,
-                k=key,
-                v=value,
-                cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k,
-                max_seqlen_q=max_seqlen_in_batch_q,
-                max_seqlen_k=max_seqlen_in_batch_k,
-                dropout_p=dropout,
-                softmax_scale=softmax_scale,
-                causal=causal,
-                window_size=window_size,
-                softcap=softcap,
-            )
+                attn_output, _ = flash_attention_3(
+                    q=query,
+                    k=key,
+                    v=value,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                    window_size=window_size,
+                    softcap=softcap,
+                )
+            else:
+                attn_output = flash_attention_2(
+                    query,
+                    key,
+                    value,
+                    dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                    window_size=window_size,
+                    softcap=softcap,
+                )
         else:
-            raise ValueError("enable flash_attention_2 or flash_attention_3")
+            batch_size = query.size(0)
 
-        attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
+            query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k = (
+                _upad_input(query, key, value, attention_mask, query_length)
+            )
+
+            if is_kernel_allowed(Kernel.flash_attention_3):
+                attn_output = flash_attention_2_varlen(
+                    q=query,
+                    k=key,
+                    v=value,
+                    cu_seqlens_q=cu_seqlens_q,
+                    cu_seqlens_k=cu_seqlens_k,
+                    max_seqlen_q=max_seqlen_in_batch_q,
+                    max_seqlen_k=max_seqlen_in_batch_k,
+                    dropout_p=dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                    window_size=window_size,
+                    softcap=softcap,
+                )
+            else:
+                attn_output = flash_attention_2_varlen(
+                    q=query,
+                    k=key,
+                    v=value,
+                    cu_seqlens_q=cu_seqlens_q,
+                    cu_seqlens_k=cu_seqlens_k,
+                    max_seqlen_q=max_seqlen_in_batch_q,
+                    max_seqlen_k=max_seqlen_in_batch_k,
+                    dropout_p=dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                    window_size=window_size,
+                    softcap=softcap,
+                )
+
+            attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
 
     return attn_output
