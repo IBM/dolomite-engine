@@ -36,10 +36,12 @@ def train_step_without_pipeline_parallel(
     optimizer_container: OptimizerContainer,
     lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: ResumableDataLoader,
+    tuning_method: TuningMethod,
     gradient_clipping: float,
     forward_context: AbstractContextManager,
     backward_context: AbstractContextManager,
     sync_every_gradient_accumulation_step: bool,
+    lm_loss_multiplier: float,
 ) -> MetricsTrackingDict:
     """runs backpropagation and applies the gradient if at the edge of gradient accumulation boundary
 
@@ -48,11 +50,11 @@ def train_step_without_pipeline_parallel(
         optimizer_container (OptimizerContainer): container of optimizers
         lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (ResumableDataLoader): training dataloader
-        gradient_accumulation_steps (int): gradient accumulation steps
         gradient_clipping (float): gradient clipping value
         forward_context (AbstractContextManager): a context that is used for every model forward call
         backward_context (AbstractContextManager): a context that is used for every model backward call
         sync_every_gradient_accumulation_step (bool): whether to sync on every gradient accumulation step
+        lm_loss_multiplier (float): lm loss multiplier
 
     Returns:
         MetricsTrackingDict: metrics to track
@@ -75,18 +77,27 @@ def train_step_without_pipeline_parallel(
 
     gradient_accumulation_steps = StepTracker.get_gradient_accumulation_steps()
 
-    # note the effect of gradient accumulation division is already in the lm_loss_multiplier
-    batches = [get_next_batch(train_dataloader) for _ in range(gradient_accumulation_steps)]
-    lm_loss_multiplier = 1 / sum([(batch["labels"] != -100).sum() for batch in batches])
+    if tuning_method == TuningMethod.full_finetuning:
+        # note the effect of gradient accumulation division is already in the lm_loss_multiplier
+        batches = [get_next_batch(train_dataloader) for _ in range(gradient_accumulation_steps)]
+        lm_loss_multiplier = 1 / sum([(batch["labels"] != -100).sum() for batch in batches])
 
     with no_sync():
-        for batch in batches[:-1]:
+        for step in range(gradient_accumulation_steps - 1):
+            batch = (
+                batches[step] if tuning_method == TuningMethod.full_finetuning else get_next_batch(train_dataloader)
+            )
+
             with forward_context():
                 loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
             # compute gradients
             with backward_context():
-                loss_micro_step_dict["loss"].backward()
+                loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"]
+                if tuning_method != TuningMethod.full_finetuning:
+                    loss_micro_step_scaled = loss_micro_step_scaled / gradient_accumulation_steps
+
+                loss_micro_step_scaled.backward()
 
             with torch.inference_mode():
                 metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -94,13 +105,18 @@ def train_step_without_pipeline_parallel(
     if fsdp_algorithm == 2:
         model.set_requires_gradient_sync(True)
 
-    batch = batches[-1]
+    batch = batches[-1] if tuning_method == TuningMethod.full_finetuning else get_next_batch(train_dataloader)
+
     with forward_context():
         loss_micro_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
 
     # compute gradients
     with backward_context():
-        loss_micro_step_dict["loss"].backward()
+        loss_micro_step_scaled: torch.Tensor = loss_micro_step_dict["loss"]
+        if tuning_method != TuningMethod.full_finetuning:
+            loss_micro_step_scaled = loss_micro_step_scaled / gradient_accumulation_steps
+
+        loss_micro_step_scaled.backward()
 
     with torch.inference_mode():
         metrics_tracker = metrics_tracker + loss_micro_step_dict
@@ -121,6 +137,9 @@ def train_step_without_pipeline_parallel(
         FP8Manager.precompute_float8_dynamic_scale_for_fsdp([model])
 
     with torch.inference_mode():
+        if tuning_method != TuningMethod.full_finetuning:
+            metrics_tracker = metrics_tracker / gradient_accumulation_steps
+
         metrics_tracker["grad_norm"] = (
             torch.tensor(0, device=torch.cuda.current_device()) if grad_norm is None else grad_norm
         )
