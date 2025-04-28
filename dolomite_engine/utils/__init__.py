@@ -10,7 +10,6 @@ from .mixed_precision import normalize_dtype_string, string_to_torch_dtype, torc
 from .packages import (
     is_causal_conv1d_available,
     is_cute_kernels_available,
-    is_einops_available,
     is_flash_attention_2_available,
     is_flash_attention_3_available,
     is_mamba_2_ssm_available,

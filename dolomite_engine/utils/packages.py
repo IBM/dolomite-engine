@@ -92,20 +92,6 @@ def is_triton_available() -> bool:
 
 
 try:
-    import einops
-
-    _IS_EINOPS_AVAILABLE = True
-except ImportError:
-    _IS_EINOPS_AVAILABLE = False
-
-    warn_rank_0("einops is not installed")
-
-
-def is_einops_available() -> bool:
-    return _IS_EINOPS_AVAILABLE
-
-
-try:
     if torch.cuda.is_available():
         import cute_kernels
 
