@@ -90,7 +90,7 @@ def flash_attention(
 
     if use_padding_free_transformer:
         if use_flash_attention_3:
-            attn_output = flash_attention_3_varlen(
+            attn_output, _ = flash_attention_3_varlen(
                 query,
                 key,
                 value,
@@ -145,7 +145,7 @@ def flash_attention(
             )
 
             if use_flash_attention_3:
-                attn_output = flash_attention_3_varlen(
+                attn_output, _ = flash_attention_3_varlen(
                     q=query,
                     k=key,
                     v=value,
