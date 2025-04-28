@@ -138,6 +138,7 @@ class MultiHeadLatentAttention(nn.Module):
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
+                query_length = None
                 total_q = query.shape[0]
 
                 query = query.view(total_q, self.num_heads, -1)
