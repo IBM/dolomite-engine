@@ -159,6 +159,7 @@ class ModelWrapper(nn.Module):
             model_kwargs = {"pretrained_model_name_or_path": self.model_name}
 
         if not self.is_custom_model:
+            assert not is_kernel_allowed(Kernel.flash_attention_3)
             model_kwargs["attn_implementation"] = (
                 "flash_attention_2" if is_kernel_allowed(Kernel.flash_attention_2) else "sdpa"
             )

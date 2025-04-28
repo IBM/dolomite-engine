@@ -3,7 +3,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
 from .....enums import Kernel
 from .....kernels import is_kernel_allowed
@@ -11,6 +10,7 @@ from .....utils import divide_if_divisible, is_flash_attention_2_available
 from ....modeling_utils import (
     ParameterizedLinear,
     apply_rotary_pos_emb,
+    flash_attention,
     get_attention_head_type,
     get_normalization_function,
 )
@@ -92,7 +92,7 @@ class CrossLayerAttention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        if is_kernel_allowed(Kernel.flash_attention_2):
+        if is_kernel_allowed(Kernel.flash_attention_2) or is_kernel_allowed(Kernel.flash_attention_3):
             if self.use_padding_free_transformer:
                 total_q = hidden_states.shape[0]
 
@@ -102,17 +102,18 @@ class CrossLayerAttention(nn.Module):
                 if self.position_embedding_type == "rope":
                     query = apply_rotary_pos_emb(query, rope_cos_sin)
 
-                hidden_states = flash_attn_varlen_func(
-                    query,
-                    key,
-                    value,
-                    cu_seqlens_q=cu_seqlens,
-                    cu_seqlens_k=cu_seqlens,
-                    max_seqlen_q=max_seqlen,
-                    max_seqlen_k=max_seqlen,
-                    dropout_p=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
+                hidden_states = flash_attention(
+                    query=query,
+                    key=key,
+                    value=value,
+                    attention_mask=attention_mask,
+                    cu_seqlens=cu_seqlens,
+                    max_seqlen=max_seqlen,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
+                    query_length=None,
                     causal=self.causal,
+                    dropout=self.softmax_dropout_p if self.training else 0,
+                    softmax_scale=self._get_softmax_scale(),
                 )
 
                 del query, key, value
@@ -132,13 +133,16 @@ class CrossLayerAttention(nn.Module):
 
                 batch_size, query_length = query.shape[:2]
 
-                hidden_states = _flash_attention_forward(
-                    query_states=query,
-                    key_states=key,
-                    value_states=value,
+                hidden_states = flash_attention(
+                    query=query,
+                    key=key,
+                    value=value,
                     attention_mask=attention_mask,
+                    cu_seqlens=cu_seqlens,
+                    max_seqlen=max_seqlen,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     query_length=query_length,
-                    is_causal=self.causal,
+                    causal=self.causal,
                     dropout=self.softmax_dropout_p if self.training else 0,
                     softmax_scale=self._get_softmax_scale(),
                 )

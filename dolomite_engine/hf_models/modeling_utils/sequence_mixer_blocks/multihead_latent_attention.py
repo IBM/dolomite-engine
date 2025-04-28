@@ -113,8 +113,11 @@ class MultiHeadLatentAttention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
+        use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
+
         if self.use_padding_free_transformer:
-            assert is_kernel_allowed(Kernel.flash_attention_2)
+            assert use_flash_attention_2 or use_flash_attention_3
             assert past_key_values is None
 
         query = self.query_down_projection(hidden_states)
@@ -138,7 +141,7 @@ class MultiHeadLatentAttention(nn.Module):
             key = self.key_up_projection(key)
             value = self.value_up_projection(value)
 
-        if is_kernel_allowed(Kernel.flash_attention_2):
+        if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
                 total_q = query.shape[0]
 
@@ -161,30 +164,19 @@ class MultiHeadLatentAttention(nn.Module):
             key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
             value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
-            if self.use_padding_free_transformer:
-                hidden_states = flash_attn_varlen_func(
-                    query,
-                    key,
-                    value,
-                    cu_seqlens_q=cu_seqlens,
-                    cu_seqlens_k=cu_seqlens,
-                    max_seqlen_q=max_seqlen,
-                    max_seqlen_k=max_seqlen,
-                    dropout_p=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                    causal=self.causal,
-                )
-            else:
-                hidden_states = flash_attention(
-                    query=query,
-                    key=key,
-                    value=value,
-                    attention_mask=attention_mask,
-                    query_length=query_length,
-                    causal=self.causal,
-                    dropout=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                )
+            hidden_states = flash_attention(
+                query=query,
+                key=key,
+                value=value,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                attention_mask=attention_mask,
+                use_padding_free_transformer=self.use_padding_free_transformer,
+                query_length=query_length,
+                causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
             del query, key, value
 
