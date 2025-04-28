@@ -6,9 +6,9 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 
 
-class IndexFirstAxis(torch.autograd.Function):
+class _IndexFirstAxis(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, indices):
+    def forward(ctx, input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
         ctx.save_for_backward(indices)
         assert input.ndim >= 2
         ctx.first_axis_dim, other_shape = input.shape[0], input.shape[1:]
@@ -20,7 +20,7 @@ class IndexFirstAxis(torch.autograd.Function):
         ).reshape(-1, *other_shape)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
         (indices,) = ctx.saved_tensors
         assert grad_output.ndim >= 2
         other_shape = grad_output.shape[1:]
@@ -36,9 +36,9 @@ class IndexFirstAxis(torch.autograd.Function):
         return grad_input.reshape(ctx.first_axis_dim, *other_shape), None
 
 
-class IndexPutFirstAxis(torch.autograd.Function):
+class _IndexPutFirstAxis(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, values, indices, first_axis_dim):
+    def forward(ctx, values: torch.Tensor, indices: torch.Tensor, first_axis_dim: int) -> torch.Tensor:
         ctx.save_for_backward(indices)
         assert indices.ndim == 1
         assert values.ndim >= 2
@@ -49,8 +49,8 @@ class IndexPutFirstAxis(torch.autograd.Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output):
-        (indices,) = ctx.saved_tensors
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
+        indices = ctx.saved_tensors[0]
         # TD [2022-03-04] For some reason torch.gather is a bit faster than indexing.
         grad_values = grad_output[indices]
         # grad_values = torch.gather(grad_output, 0, repeat(indices, 'z -> z d', d=grad_output.shape[1]))
@@ -78,12 +78,12 @@ def unpad_input(hidden_states, attention_mask, unused_mask=None):
     )
 
 
-def index_first_axis(input, indices):
-    return IndexFirstAxis.apply(input, indices)
+def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    return _IndexFirstAxis.apply(input, indices)
 
 
 def pad_input(hidden_states, indices, batch, seqlen):
     # output = torch.zeros((batch * seqlen), dim, device=hidden_states.device, dtype=hidden_states.dtype)
     # output[indices] = hidden_states
-    output = IndexPutFirstAxis.apply(hidden_states, indices, batch * seqlen)
+    output = _IndexPutFirstAxis.apply(hidden_states, indices, batch * seqlen)
     return rearrange(output, "(b s) ... -> b s ...", b=batch)
