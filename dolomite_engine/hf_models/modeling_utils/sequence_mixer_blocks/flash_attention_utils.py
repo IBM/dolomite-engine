@@ -107,9 +107,9 @@ def flash_attention(
         )
 
         attn_output = flash_attention_2_varlen(
-            query,
-            key,
-            value,
+            q=query,
+            k=key,
+            v=value,
             cu_seqlens_q=cu_seqlens_q,
             cu_seqlens_k=cu_seqlens_k,
             max_seqlen_q=max_seqlen_in_batch_q,
