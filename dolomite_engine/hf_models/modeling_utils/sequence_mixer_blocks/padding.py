@@ -36,7 +36,9 @@ class _IndexFirstAxis(torch.autograd.Function):
             (first_axis_dim, grad_output.size(1)), device=grad_output.device, dtype=grad_output.dtype
         )
 
-        grad_input.scatter_(0, repeat(indices, "z -> z d", d=grad_output.shape[1]), grad_output)
+        indices = indices.unsqueeze(1).expand(-1, grad_output.size(1))
+
+        grad_input.scatter_(0, indices, grad_output)
         grad_input = grad_input.reshape(first_axis_dim, *other_shape)
 
         return grad_input, None
@@ -49,7 +51,7 @@ class _IndexPutFirstAxis(torch.autograd.Function):
         assert values.dim() >= 2
 
         ctx.save_for_backward(indices)
-        output = torch.zeros(first_axis_dim, *values.shape[1:], device=values.device, dtype=values.dtype)
+        output = torch.zeros(first_axis_dim, *values.size()[1:], device=values.device, dtype=values.dtype)
         output[indices] = values
 
         return output
