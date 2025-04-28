@@ -77,7 +77,7 @@ def flash_attention(
         if is_kernel_allowed(Kernel.flash_attention_3):
             assert dropout == 0
 
-            attn_output = flash_attention_3(
+            attn_output, _ = flash_attention_3(
                 q=query,
                 k=key,
                 v=value,
