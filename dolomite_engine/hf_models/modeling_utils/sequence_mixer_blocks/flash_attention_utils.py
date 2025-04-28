@@ -4,12 +4,12 @@ import torch.nn.functional as F
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
+from .utils import index_first_axis, pad_input, unpad_input
 
 
 if is_flash_attention_2_available():
     from flash_attn import flash_attn_func as flash_attention_2
     from flash_attn import flash_attn_varlen_func as flash_attention_2_varlen
-    from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
 
 if is_flash_attention_3_available():
     from flash_attn_interface import flash_attn_func as flash_attention_3
