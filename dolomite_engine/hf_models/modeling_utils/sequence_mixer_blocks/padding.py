@@ -3,21 +3,22 @@
 
 import torch
 import torch.nn.functional as F
-from einops import rearrange, repeat
+from einops import repeat
 
 
 class _IndexFirstAxis(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+        assert input.dim() >= 2
+
         ctx.save_for_backward(indices)
-        assert input.ndim >= 2
-        ctx.first_axis_dim, other_shape = input.shape[0], input.shape[1:]
+        ctx.first_axis_dim = input.shape[0]
+        other_shape = input.shape[1:]
         second_dim = other_shape.numel()
-        # TD [2022-03-04] For some reason torch.gather is a bit faster than indexing.
-        # return input[indices]
-        return torch.gather(
-            rearrange(input, "b ... -> b (...)"), 0, repeat(indices, "z -> z d", d=second_dim)
-        ).reshape(-1, *other_shape)
+
+        input = input.reshape(input.size(0), -1)
+
+        return torch.gather(input, 0, repeat(indices, "z -> z d", d=second_dim)).reshape(-1, *other_shape)
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:

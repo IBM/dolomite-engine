@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
-from .utils import index_first_axis, pad_input, unpad_input
+from .padding import index_first_axis, pad_input, unpad_input
 
 
 if is_flash_attention_2_available():
