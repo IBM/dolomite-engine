@@ -384,6 +384,7 @@ class Attention(nn.Module):
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
+                query_length = None
                 output_shape = (-1, self.hidden_size)
             else:
                 # TODO avoid this extra transpose
