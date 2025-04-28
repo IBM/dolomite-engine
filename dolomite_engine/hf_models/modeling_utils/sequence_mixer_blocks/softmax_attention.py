@@ -379,7 +379,10 @@ class Attention(nn.Module):
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
 
-        if is_kernel_allowed(Kernel.flash_attention_3) or is_kernel_allowed(Kernel.flash_attention_2):
+        use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
+        use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
+
+        if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
                 output_shape = (-1, self.hidden_size)
             else:
@@ -400,18 +403,34 @@ class Attention(nn.Module):
             value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
             if self.use_padding_free_transformer:
-                hidden_states = flash_attn_varlen_func(
-                    query,
-                    key,
-                    value,
-                    cu_seqlens_q=cu_seqlens,
-                    cu_seqlens_k=cu_seqlens,
-                    max_seqlen_q=max_seqlen,
-                    max_seqlen_k=max_seqlen,
-                    dropout_p=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                    causal=self.causal,
-                )
+                if use_flash_attention_3:
+                    hidden_states = flash_attn_varlen_func(
+                        query,
+                        key,
+                        value,
+                        cu_seqlens_q=cu_seqlens,
+                        cu_seqlens_k=cu_seqlens,
+                        max_seqlen_q=max_seqlen,
+                        max_seqlen_k=max_seqlen,
+                        dropout_p=self.softmax_dropout_p if self.training else 0,
+                        softmax_scale=self._get_softmax_scale(),
+                        causal=self.causal,
+                    )
+                elif use_flash_attention_2:
+                    hidden_states = flash_attn_varlen_func(
+                        query,
+                        key,
+                        value,
+                        cu_seqlens_q=cu_seqlens,
+                        cu_seqlens_k=cu_seqlens,
+                        max_seqlen_q=max_seqlen,
+                        max_seqlen_k=max_seqlen,
+                        dropout_p=self.softmax_dropout_p if self.training else 0,
+                        softmax_scale=self._get_softmax_scale(),
+                        causal=self.causal,
+                    )
+                else:
+                    raise ValueError
             else:
                 hidden_states = flash_attention(
                     query=query,
