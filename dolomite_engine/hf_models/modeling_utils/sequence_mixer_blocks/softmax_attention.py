@@ -366,8 +366,11 @@ class Attention(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
+        use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
+
         if self.use_padding_free_transformer:
-            assert is_kernel_allowed(Kernel.flash_attention_2)
+            assert use_flash_attention_2 or use_flash_attention_3
             assert past_key_values is None
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
@@ -378,9 +381,6 @@ class Attention(nn.Module):
 
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, self.layer_idx)
-
-        use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
-        use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
