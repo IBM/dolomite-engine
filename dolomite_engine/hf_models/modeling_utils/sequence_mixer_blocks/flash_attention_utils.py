@@ -76,10 +76,10 @@ def flash_attention(
     use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
     use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
 
-    assert use_flash_attention_2 or use_flash_attention_3, "enable flash_attention_2 or flash_attention_3"
+    assert use_flash_attention_3 or use_flash_attention_2, "enable flash_attention_2 or flash_attention_3"
 
     if use_padding_free_transformer:
-        assert use_flash_attention_2 or use_flash_attention_3
+        assert use_flash_attention_3 or use_flash_attention_2
 
     window_size = (-1, -1)
     if sliding_window is not None and key.size(1) > sliding_window:
@@ -87,6 +87,8 @@ def flash_attention(
 
     if use_padding_free_transformer:
         if use_flash_attention_3:
+            assert dropout == 0
+
             attn_output = flash_attention_3_varlen(
                 query,
                 key,
@@ -95,7 +97,6 @@ def flash_attention(
                 cu_seqlens_k=cu_seqlens,
                 max_seqlen_q=max_seqlen,
                 max_seqlen_k=max_seqlen,
-                dropout_p=dropout,
                 softmax_scale=softmax_scale,
                 causal=causal,
             )
@@ -114,7 +115,7 @@ def flash_attention(
             )
     else:
         if attention_mask is None:
-            if is_kernel_allowed(Kernel.flash_attention_3):
+            if use_flash_attention_3:
                 assert dropout == 0
 
                 attn_output, _ = flash_attention_3(
@@ -144,7 +145,7 @@ def flash_attention(
                 _upad_input(query, key, value, attention_mask, query_length)
             )
 
-            if is_kernel_allowed(Kernel.flash_attention_3):
+            if use_flash_attention_3:
                 attn_output = flash_attention_3_varlen(
                     q=query,
                     k=key,
