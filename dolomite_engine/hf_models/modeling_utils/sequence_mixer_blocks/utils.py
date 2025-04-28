@@ -27,7 +27,7 @@ class _IndexFirstAxis(torch.autograd.Function):
         first_axis_dim = ctx.first_axis_dim
 
         other_shape = grad_output.size()[1:]
-        grad_output = rearrange(grad_output, "b ... -> b (...)")
+        grad_output = grad_output.view(grad_output.size(0), -1)
         grad_input = torch.zeros(
             (first_axis_dim, grad_output.size(1)), device=grad_output.device, dtype=grad_output.dtype
         )
