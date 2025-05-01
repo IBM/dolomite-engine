@@ -19,7 +19,7 @@ from .packages import (
     is_zstandard_available,
     log_environment,
 )
-from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n
+from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n, create_context_parallel_ctx, get_cp_context
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
 from .step_tracker import StepTracker
@@ -34,6 +34,7 @@ def init_distributed(
     data_parallel_size: int,
     data_parallel_replication_world_size: int,
     data_parallel_sharding_world_size: int,
+    context_parallel_world_size: int,
     zero_stage: int,
     timeout_minutes: int = None,
     use_async_tensor_parallel: bool = False,
@@ -57,6 +58,7 @@ def init_distributed(
         data_parallel_size=data_parallel_size,
         data_parallel_replication_world_size=data_parallel_replication_world_size,
         data_parallel_sharding_world_size=data_parallel_sharding_world_size,
+        context_parallel_world_size=context_parallel_world_size,
         zero_stage=zero_stage,
         timeout_minutes=timeout_minutes,
         use_async_tensor_parallel=use_async_tensor_parallel,
@@ -66,6 +68,7 @@ def init_distributed(
     log_rank_0(logging.INFO, f"total GPUs = {process_group_manager.get_world_size()}")
     log_rank_0(logging.INFO, f"tensor parallel size = {process_group_manager.get_tensor_parallel_world_size()}")
     log_rank_0(logging.INFO, f"data parallel size = {process_group_manager.get_data_parallel_world_size()}")
+    log_rank_0(logging.INFO, f"context parallel size = {context_parallel_world_size}")
 
 
 def setup_tf32(use_tf32: bool = True) -> None:

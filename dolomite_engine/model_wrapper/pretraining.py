@@ -118,9 +118,9 @@ class ModelWrapperForPretraining(ModelWrapper):
         else:
             assert aux_loss_from_pipeline_parallel == 0
 
-        batch = self._prepare_model_inputs(batch)
-        labels = batch.pop("labels")
-        output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
+        input_ids, labels = batch
+
+        output = self.model(input_ids=input_ids, return_dict=True)
 
         if self.is_pipeline_parallel_enabled:
             # aux_loss is returned as a 0 dimensional tensor
