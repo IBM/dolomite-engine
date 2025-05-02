@@ -8,9 +8,9 @@ from collections import OrderedDict
 import numpy
 import torch
 
+from ..megatron.utils import Split
 from .blended_megatron_dataset_config import BlendedMegatronDatasetConfig
 from .indexed_dataset import MMapIndexedDataset
-from .utils import Split
 
 
 class MegatronDataset(ABC, torch.utils.data.Dataset):

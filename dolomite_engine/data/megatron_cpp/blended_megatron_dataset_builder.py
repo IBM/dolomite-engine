@@ -10,11 +10,11 @@ import torch.distributed
 from transformers import AutoTokenizer
 
 from ...utils import ProcessGroupManager
+from ..megatron.utils import Split, normalize
 from .blended_dataset import BlendedDataset
 from .blended_megatron_dataset_config import BlendedMegatronDatasetConfig
 from .indexed_dataset import MMapIndexedDataset
 from .megatron_dataset import MegatronDataset
-from .utils import Split, normalize
 
 
 DistributedDataset = Union[BlendedDataset, MegatronDataset, MMapIndexedDataset]

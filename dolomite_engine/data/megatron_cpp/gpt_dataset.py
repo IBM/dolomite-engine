@@ -8,10 +8,10 @@ import numpy
 from transformers import AutoTokenizer
 
 from ...utils import log_rank_0
+from ..megatron.utils import Split, build_sample_idx
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .indexed_dataset import MMapIndexedDataset
 from .megatron_dataset import MegatronDataset
-from .utils import Split, build_sample_idx
 
 
 FIM_PREFIX = "<fim_prefix>"

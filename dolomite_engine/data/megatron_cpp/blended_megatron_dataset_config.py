@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, field
 
 from ...utils import ProcessGroupManager, log_rank_0
-from .utils import Split, normalize
+from ..megatron.utils import Split, normalize
 
 
 @dataclass

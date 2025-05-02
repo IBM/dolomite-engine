@@ -11,9 +11,9 @@ import numpy
 import torch
 
 from ...utils import log_rank_0
+from ..megatron.utils import build_blending_indices, normalize
 from .blended_megatron_dataset_config import BlendedMegatronDatasetConfig
 from .megatron_dataset import MegatronDataset
-from .utils import build_blending_indices, normalize
 
 
 _VERBOSE = False
