@@ -8,6 +8,7 @@ from .mlp import _MLPArgs, _MoEArgs
 from .sequence_mixer import (
     _Mamba2Args,
     _MultiHeadLatentAttentionArgs,
+    _PathArgs,
     _RNNArgs,
     _SoftmaxAttentionArgs,
     _StickbreakingAttentionArgs,
@@ -183,6 +184,7 @@ class CommonConfig(PretrainedConfig):
             | _MultiHeadLatentAttentionArgs
             | _RNNArgs
             | _StickbreakingAttentionArgs
+            | _PathArgs
         ] = []
         for i in range(self.num_layers):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
@@ -231,6 +233,13 @@ class CommonConfig(PretrainedConfig):
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 sequence_mixer_class = _RNNArgs
+            elif sequence_mixer_type == "path":
+                sequence_mixer_kwargs = {}
+
+                for key in ["num_attention_heads", "num_key_value_heads"]:
+                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
+
+                sequence_mixer_class = _PathArgs
             elif sequence_mixer_type == "multihead_latent_attention":
                 sequence_mixer_kwargs = {}
 
