@@ -418,8 +418,11 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
 
 
 def is_tracking_rank() -> bool:
+
+    ## TODO verify cp local rank for logging
     return (
         ProcessGroupManager.get_data_parallel_rank() == 0
+        and ProcessGroupManager.get_mesh()["cp"].get_local_rank() == 0
         and ProcessGroupManager.is_tensor_parallel_first_rank()
         and ProcessGroupManager.get_pipeline_parallel_rank()
         == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
