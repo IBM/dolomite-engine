@@ -12,7 +12,7 @@ from .blended_megatron_dataset_builder import BlendedMegatronDatasetBuilder
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .gpt_dataset import GPTDataset
 from .sampler import MegatronBatchSampler
-from .utils import Split, compile_helpers
+from .utils import Split
 
 
 def get_megatron_cpp_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenizer, consumed_samples: int) -> None:
@@ -29,8 +29,6 @@ def get_megatron_cpp_gpt_dataloaders(args: TrainingArgs, tokenizer: AutoTokenize
     gradient_accumulation_steps = args.training_parameters.gradient_accumulation_steps
     num_pipeline_stages = args.distributed_args.num_pipeline_stages
     sequence_length = class_args.get("sequence_length")
-
-    compile_helpers()
 
     log_rank_0(logging.INFO, "> building train, validation, and test datasets for GPT ...")
 
