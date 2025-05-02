@@ -11,7 +11,7 @@ from ..dataloader import DispatchingDataLoader, ResumableDataLoader, get_source_
 from .blended_megatron_dataset_builder import BlendedMegatronDatasetBuilder
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .gpt_dataset import GPTDataset
-from .sampler import MegatronBatchSampler
+from ..megatron import MegatronBatchSampler
 from .utils import Split
 
 
