@@ -206,7 +206,15 @@ class PaTHAttention(nn.Module):
                 w = rearrange(w, "... (h d) -> ... h d", d=self.head_dim)
                 w = l2_norm(w)
                 o, k_cache = parallel_path_attention(
-                    q=q, k=k, v=v, w=w, beta=beta, g=g, scale=self.attention_multiplier, cu_seqlens=cu_seqlens, use_cache=use_cache
+                    q=q,
+                    k=k,
+                    v=v,
+                    w=w,
+                    beta=beta,
+                    g=g,
+                    scale=self.attention_multiplier,
+                    cu_seqlens=cu_seqlens,
+                    use_cache=use_cache,
                 )
                 if use_cache:
                     k_cache = pad_input(k_cache.squeeze(0), indices_q, batch_size, q_len)

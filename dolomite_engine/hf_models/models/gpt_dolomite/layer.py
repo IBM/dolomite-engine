@@ -74,7 +74,12 @@ class GPTDolomiteBlock(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        if self.sequence_mixer_type in ["softmax_attention", "stickbreaking_attention", "multihead_latent_attention", "path"]:
+        if self.sequence_mixer_type in [
+            "softmax_attention",
+            "stickbreaking_attention",
+            "multihead_latent_attention",
+            "path",
+        ]:
             hidden_states = self.sequence_mixer(
                 hidden_states,
                 past_key_values=past_key_values,
