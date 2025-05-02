@@ -236,7 +236,7 @@ class CommonConfig(PretrainedConfig):
             elif sequence_mixer_type == "path":
                 sequence_mixer_kwargs = {}
 
-                for key in ["num_attention_heads", "num_key_value_heads"]:
+                for key in ["num_attention_heads", "num_key_value_heads", "attention_multiplier"]:
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 sequence_mixer_class = _PathArgs
