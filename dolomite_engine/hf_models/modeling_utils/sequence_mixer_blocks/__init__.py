@@ -83,6 +83,7 @@ def get_sequence_mixer(
             hidden_size=config.hidden_size,
             num_heads=block.num_attention_heads,
             num_kv_heads=block.num_key_value_heads,
+            attention_multiplier=block.attention_multiplier,
             use_forget_gate=False,
             use_qk_norm=False,
             use_w_shortconv=True,

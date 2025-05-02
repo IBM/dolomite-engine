@@ -24,6 +24,7 @@ class PaTHAttention(nn.Module):
         hidden_size: int,
         num_heads: int,
         num_kv_heads: int | None,
+        attention_multiplier: float,
         use_forget_gate: bool,
         use_qk_norm: bool,
         use_w_shortconv: bool,
@@ -45,6 +46,7 @@ class PaTHAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
 
         self.layer_idx = layer_idx
+        self.attention_multiplier = attention_multiplier
 
         std = initializer_range
         if init_method == "mup":
@@ -72,7 +74,7 @@ class PaTHAttention(nn.Module):
             self.maybe_k_norm = nn.Identity()
 
         if use_w_shortconv:
-            self.w_conv1d = ShortConvolution(self.kv_dim, 3, std=std)
+            self.w_conv1d = ShortConvolution(self.kv_dim, 3)
         self.use_w_shortconv = use_w_shortconv
         self.bt_proj = ParameterizedLinear(self.hidden_size, self.num_kv_heads, bias=True, std=std)
         self.use_forget_gate = use_forget_gate
@@ -179,7 +181,7 @@ class PaTHAttention(nn.Module):
                 v = rearrange(v, "... (h d) -> ... h d", d=self.head_dim)
                 assert max_seqlen_q == 1, "only support q_len == 1 for decoding"
                 o = attn_decoding_one_step(
-                    q, k, v, g, cu_seqlens=cu_seqlens, do_gate_scale=True
+                    q, k, v, g, scale=self.attention_multiplier, cu_seqlens=cu_seqlens, do_gate_scale=True
                 )  # reduced to fox's decoding
             # Prefilling
             else:
@@ -204,7 +206,7 @@ class PaTHAttention(nn.Module):
                 w = rearrange(w, "... (h d) -> ... h d", d=self.head_dim)
                 w = l2_norm(w)
                 o, k_cache = parallel_path_attention(
-                    q=q, k=k, v=v, w=w, beta=beta, g=g, cu_seqlens=cu_seqlens, use_cache=use_cache
+                    q=q, k=k, v=v, w=w, beta=beta, g=g, scale=self.attention_multiplier, cu_seqlens=cu_seqlens, use_cache=use_cache
                 )
                 if use_cache:
                     k_cache = pad_input(k_cache.squeeze(0), indices_q, batch_size, q_len)
