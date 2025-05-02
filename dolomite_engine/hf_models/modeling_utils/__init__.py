@@ -16,6 +16,7 @@ from .sequence_mixer_blocks import (
     RNN,
     Attention,
     Mamba2,
+    PaTHAttention,
     flash_attention,
     get_attention_head_type,
     get_sequence_mixer,
