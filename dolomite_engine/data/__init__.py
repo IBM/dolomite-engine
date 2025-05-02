@@ -15,7 +15,6 @@ from .huggingface import HuggingFaceDataset
 from .ibm import get_ibm_dataloaders
 from .instruction_tuning import AlpacaDataset, DollyDataset, SlimOrcaDataset
 from .megatron import get_megatron_gpt_dataloaders
-from .megatron_cpp import get_megatron_cpp_gpt_dataloaders
 from .sampler import BlendedDistributedSampler
 from .sst2 import SST2Dataset
 from .utils import collate_fn, custom_iterator, get_next_batch
@@ -136,8 +135,6 @@ def get_pretraining_dataloaders(
 ) -> tuple[ResumableDataLoader]:
     if args.datasets[0].class_name == "MegatronDataset":
         dataloaders = get_megatron_gpt_dataloaders(args, tokenizer, consumed_samples=consumed_samples)
-    elif args.datasets[0].class_name == "MegatronCPPDataset":
-        dataloaders = get_megatron_cpp_gpt_dataloaders(args, tokenizer, consumed_samples=consumed_samples)
     elif args.datasets[0].class_name == "IBMDataset":
         dataloaders = get_ibm_dataloaders(args, tokenizer)
 
