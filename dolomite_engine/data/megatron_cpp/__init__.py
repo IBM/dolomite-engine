@@ -8,10 +8,10 @@ from ...arguments import TrainingArgs
 from ...defaults import INPUT_FORMAT, OUTPUT_FORMAT
 from ...utils import ProcessGroupManager, log_rank_0
 from ..dataloader import DispatchingDataLoader, ResumableDataLoader, get_source_and_broadcast_group
+from ..megatron import MegatronBatchSampler
 from .blended_megatron_dataset_builder import BlendedMegatronDatasetBuilder
 from .blended_megatron_dataset_config import GPTDatasetConfig
 from .gpt_dataset import GPTDataset
-from ..megatron import MegatronBatchSampler
 from .utils import Split
 
 
