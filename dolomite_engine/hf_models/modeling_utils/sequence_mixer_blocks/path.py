@@ -58,7 +58,7 @@ class PaTHAttention(nn.Module):
         # We use low-rank parameterization for the w_proj to reduce parameters in MHA settings.
         if self.num_heads == self.num_kv_heads:
             self.w_proj = nn.Sequential(
-                ParameterizedLinear(self.hidden_size, 32, bias=False),
+                ParameterizedLinear(self.hidden_size, 32, bias=False, std=std),
                 ParameterizedLinear(32, self.kv_dim, bias=False, std=std),
             )
         # In MQA/GQA settings, key/value heads are shared, so we use a standard linear projection
@@ -75,6 +75,7 @@ class PaTHAttention(nn.Module):
 
         if use_w_shortconv:
             self.w_conv1d = ShortConvolution(self.kv_dim, 3)
+            nn.init.normal_(self.w_conv1d.weight, std=std)
         self.use_w_shortconv = use_w_shortconv
         self.bt_proj = ParameterizedLinear(self.hidden_size, self.num_kv_heads, bias=True, std=std)
         self.use_forget_gate = use_forget_gate
