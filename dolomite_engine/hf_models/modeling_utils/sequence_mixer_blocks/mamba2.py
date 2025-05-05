@@ -292,7 +292,7 @@ class Mamba2(nn.Module):
 
             # State calculation
             ssm_state = ssm_state * dA + dBx
-            cache_params.update(ssm_state=ssm_state, layer_idx=self.layer_idx)
+            cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
             # Subsequent output
             # [bsz, n_groups * state_size] -> [bsz, num_heads, state_size]
@@ -396,7 +396,7 @@ class Mamba2(nn.Module):
 
             # Init cache
             if ssm_state is not None and cache_params is not None:
-                cache_params.update(ssm_state=ssm_state, layer_idx=self.layer_idx)
+                cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
         scan_output = self.norm(y, gate)
 
@@ -440,6 +440,7 @@ class Mamba2(nn.Module):
                 self.conv1d.bias,
                 self.activation_string,
             )
+            cache_params.update(conv_state=conv_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
             hidden_states, B, C = torch.split(
                 hidden_states_B_C,
@@ -555,8 +556,8 @@ class Mamba2(nn.Module):
                 )
 
                 # Init cache
-                if ssm_state is not None and cache_params is not None:
-                    cache_params.update(ssm_state=ssm_state, layer_idx=self.layer_idx)
+                if cache_params is not None:
+                    cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
                 scan_output = scan_output.view(batch_size, seq_len, -1)
                 # Multiply "gate" branch and apply extra normalization layer
