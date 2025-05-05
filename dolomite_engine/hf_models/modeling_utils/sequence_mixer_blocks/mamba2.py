@@ -395,7 +395,7 @@ class Mamba2(nn.Module):
             y = y.reshape(batch_size, seq_len, -1)
 
             # Init cache
-            if ssm_state is not None and cache_params is not None:
+            if cache_params is not None:
                 cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
         scan_output = self.norm(y, gate)
