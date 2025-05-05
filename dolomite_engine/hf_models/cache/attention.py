@@ -56,38 +56,6 @@ class SoftmaxAttentionCache:
                 self.key_cache[idx] = self.key_cache[idx][..., :max_length, :]
                 self.value_cache[idx] = self.value_cache[idx][..., :max_length, :]
 
-    def batch_split(self, full_batch_size: int, split_size: int) -> list["DynamicCache"]:
-        out = []
-        for i in range(0, full_batch_size, split_size):
-            current_split = DynamicCache()
-            current_split._seen_tokens = self._seen_tokens
-            current_split.key_cache = [tensor[i : i + split_size] for tensor in self.key_cache]
-            current_split.value_cache = [tensor[i : i + split_size] for tensor in self.value_cache]
-            out.append(current_split)
-        return out
-
-    @classmethod
-    def from_batch_splits(cls, splits: list["DynamicCache"]) -> "DynamicCache":
-        cache = cls()
-        for idx in range(len(splits[0])):
-            key_cache = [current.key_cache[idx] for current in splits if current.key_cache[idx].numel()]
-            value_cache = [current.value_cache[idx] for current in splits if current.value_cache[idx].numel()]
-            if key_cache != []:
-                layer_keys = torch.cat(key_cache, dim=0)
-                layer_values = torch.cat(value_cache, dim=0)
-                cache.update(layer_keys, layer_values, idx)
-        return cache
-
-    def batch_repeat_interleave(self, repeats: int):
-        for layer_idx in range(len(self)):
-            self.key_cache[layer_idx] = self.key_cache[layer_idx].repeat_interleave(repeats, dim=0)
-            self.value_cache[layer_idx] = self.value_cache[layer_idx].repeat_interleave(repeats, dim=0)
-
-    def batch_select_indices(self, indices: torch.Tensor):
-        for layer_idx in range(len(self)):
-            self.key_cache[layer_idx] = self.key_cache[layer_idx][indices, ...]
-            self.value_cache[layer_idx] = self.value_cache[layer_idx][indices, ...]
-
 
 class DynamicCache(Cache):
     def __init__(self) -> None:
