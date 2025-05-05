@@ -4,8 +4,8 @@ from transformers.models.jamba.modeling_jamba import (
     HybridMambaAttentionDynamicCache as _HybridMambaAttentionDynamicCache,
 )
 
-from ..utils import divide_if_divisible
-from .config import CommonConfig
+from ...utils import divide_if_divisible
+from ..config import CommonConfig
 
 
 class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
