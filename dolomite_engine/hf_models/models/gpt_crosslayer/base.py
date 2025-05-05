@@ -1,6 +1,6 @@
 import torch
 
-from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache
 from ...mixins import BaseModelMixin, BaseModelOutputWithPast, PreTrainedModelMixin
 from .config import GPTCrossLayerConfig
 from .layer import GPTCrossLayerBlock
@@ -64,9 +64,6 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
 
         del key, value
         hidden_states = self.ln_f(hidden_states)

@@ -3,7 +3,7 @@ from torch.distributed._tensor.placement_types import Partial, Replicate
 
 from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager
-from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache
 from ...mixins import BaseModelMixin_TP, BaseModelOutputWithPast, PreTrainedModelMixin_TP
 from ...utils import is_generation_cache_enabled
 from ..ladder_residual import LadderResidualConfig
@@ -83,9 +83,6 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
                 desired_placement=Replicate(),
             )
         )
-
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
 
         hidden_states = hidden_states + current_attention_out + current_mlp_out
         hidden_states = self.ln_f(hidden_states)

@@ -4,7 +4,7 @@ from transformers import PreTrainedModel
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
-from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache
 from ...config import CommonConfig
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
@@ -133,7 +133,7 @@ class BaseModelMixin(PreTrainedModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: GenerationCache | HybridMambaAttentionDynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -172,7 +172,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if is_generation_cache_enabled():
             past_key_values = (
-                self._get_empty_cache(input_ids) if use_cache and past_key_values is None else past_key_values
+                GenerationCache(self.config) if use_cache and past_key_values is None else past_key_values
             )
 
         mamba_mask = None
@@ -193,9 +193,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
 
         hidden_states = self.ln_f(hidden_states)
 
@@ -487,7 +484,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         return attention_mask
 
     def _get_mamba_mask(
-        self, attention_mask: torch.Tensor | None, past_key_values: HybridMambaAttentionDynamicCache
+        self, attention_mask: torch.Tensor | None, past_key_values: GenerationCache
     ) -> torch.Tensor | None:
         mamba_mask = attention_mask
         if (
@@ -498,16 +495,3 @@ class BaseModelMixin(PreTrainedModelMixin):
             mamba_mask = None
 
         return mamba_mask
-
-    def _get_empty_cache(self, input_ids: torch.Tensor) -> GenerationCache | HybridMambaAttentionDynamicCache:
-        if self._has_mamba2:
-            past_key_values = HybridMambaAttentionDynamicCache(
-                config=self.config,
-                batch_size=input_ids.size(0),
-                dtype=self.wte.weight.dtype,
-                device=self.wte.weight.device,
-            )
-        else:
-            past_key_values = GenerationCache(self.config)
-
-        return past_key_values

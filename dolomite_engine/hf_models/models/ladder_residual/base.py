@@ -1,6 +1,6 @@
 import torch
 
-from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache
 from ...mixins import BaseModelMixin, BaseModelOutputWithPast, PreTrainedModelMixin
 from ...utils import is_generation_cache_enabled
 from .config import LadderResidualConfig
@@ -64,9 +64,6 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
 
         hidden_states = hidden_states + current_attention_out + current_mlp_out
         hidden_states = self.ln_f(hidden_states)

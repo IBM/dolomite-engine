@@ -15,14 +15,19 @@ class _Mamba2Cache(_SoftmaxAttentionCache):
 
     def update(
         self,
-        conv_state: torch.Tensor,
-        ssm_state: torch.Tensor,
-        num_tokens_added: int = 1,
+        conv_state: torch.Tensor | None = None,
+        ssm_state: torch.Tensor | None = None,
+        num_tokens_added: int = 0,
         sequence_length_dimension: int = -2,
     ) -> tuple[torch.Tensor]:
         self.seen_tokens += num_tokens_added
-        self.conv_cache = conv_state
-        self.ssm_cache = ssm_state
+
+        if conv_state is not None:
+            self.conv_cache = conv_state
+
+        if ssm_state is not None:
+            self.ssm_cache = ssm_state
+
         return self.conv_cache, self.ssm_cache
 
     def reorder_cache(self, beam_idx: torch.Tensor) -> None:
