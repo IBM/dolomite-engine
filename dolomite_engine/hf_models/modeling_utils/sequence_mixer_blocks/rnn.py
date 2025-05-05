@@ -55,7 +55,13 @@ class RNN(nn.Module):
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
 
-    def forward(self, input: torch.Tensor, past_key_values: DynamicCache | None = None) -> torch.Tensor:
+    def forward(
+        self,
+        input: torch.Tensor,
+        past_key_values: DynamicCache | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         batch_size, sequence_length, _ = input.size()
 
         input = self.input_projection(input)
@@ -65,15 +71,19 @@ class RNN(nn.Module):
             input = rnn_cute(
                 input=self.factor * input,
                 weight=self.factor * self.state_weight,
-                input_state=input_state,
+                input_state=past_key_values[self.layer_idx],
                 gradient_clipping=self.gradient_clipping,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
             )
         else:
             input = rnn_torch(
                 input=input,
                 weight=self.state_weight,
-                input_state=input_state,
+                input_state=past_key_values[self.layer_idx],
                 gradient_clipping=self.gradient_clipping,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
             )
 
         input = input.view(batch_size, sequence_length, -1)
