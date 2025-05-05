@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
@@ -11,7 +10,7 @@ from ..linear import ParameterizedLinear
 
 
 if is_cute_kernels_available():
-    from cute_kernels import rnn_cute
+    from cute_kernels import rnn_cute, rnn_torch
 
 
 class RNN(nn.Module):
@@ -69,48 +68,17 @@ class RNN(nn.Module):
                 gradient_clipping=self.gradient_clipping,
             )
         else:
-            input = self._torch_forward(input, input_state)
+            input = rnn_torch(
+                input=input,
+                weight=self.state_weight,
+                input_state=input_state,
+                gradient_clipping=self.gradient_clipping,
+            )
 
         input = input.view(batch_size, sequence_length, -1)
         input = self.output_projection(input)
 
         return input
-
-    def _torch_forward(self, input: torch.Tensor, input_state: torch.Tensor | None = None) -> torch.Tensor:
-        if self.gradient_clipping is not None:
-            raise NotImplementedError("rnn_torch doesn't support gradient_clipping")
-
-        B, S, N, H = input.size()
-        output = torch.empty_like(input)
-
-        if input_state is None:
-            input_state = torch.zeros(B, N, H, device=input.device, dtype=input.dtype)
-
-        weight = self.state_weight.unsqueeze(0)
-        input = input.unsqueeze(-2)
-
-        # input -> (B, S, N, 1, H)
-        # weight -> (1, N, H, H)
-        # input_state -> (B, N, H)
-
-        input = input * self.factor
-        weight = weight * self.factor
-
-        for s in range(S):
-            input_state = input_state.unsqueeze(-2)
-
-            # (B, N, 1, H) @ (1, N, H, H) + (B, N, 1, H)
-            input_state = input_state @ weight + input[:, s, ...]
-
-            input_state = input_state.float()
-            input_state = F.tanh(input_state)
-            input_state = input_state.type_as(input)
-
-            input_state = input_state.squeeze(-2)
-
-            output[:, s, ...] = input_state
-
-        return output
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
