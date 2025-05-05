@@ -96,7 +96,7 @@ class RNN(nn.Module):
         input = input.view(batch_size, sequence_length, -1)
 
         if cache_params is not None:
-            cache_params.update(cache=input[:, -1, :], num_tokens_added=sequence_length, layer_idx=self.layer_idx)
+            cache_params.update(state=input[:, -1, :], num_tokens_added=sequence_length, layer_idx=self.layer_idx)
 
         input = self.output_projection(input)
 
