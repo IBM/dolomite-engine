@@ -29,15 +29,8 @@ class SoftmaxAttentionCache:
 
         return self.key_cache, self.value_cache
 
-    def get_seq_length(self, layer_idx: int | None = 0) -> int:
-        # TODO: deprecate this function in favor of `cache_position`
-        is_empty_layer = (
-            len(self.key_cache) == 0  # no cache in any layer
-            or len(self.key_cache) <= layer_idx  # skipped `layer_idx` and hasn't run a layer with cache after it
-            or not self.key_cache[layer_idx].numel()  # the layer has no cache
-        )
-        layer_seq_length = self.key_cache[layer_idx].shape[-2] if not is_empty_layer else 0
-        return layer_seq_length
+    def get_seq_length(self, sequence_length_dimension: int = -2) -> int:
+        return self.key_cache.shape[sequence_length_dimension] if self.key_cache.numel() else 0
 
     def get_max_cache_shape(self) -> None:
         return None
