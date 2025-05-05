@@ -6,14 +6,20 @@ from transformers.models.jamba.modeling_jamba import (
 
 from ...utils import divide_if_divisible
 from ..config import CommonConfig
-from .attention import SoftmaxAttentionCache
+from .softmax_attention import _SoftmaxAttentionCache
+
+
+_CACHE_CLASSES = {"softmax_attention": _SoftmaxAttentionCache, "multihead_latent_attention": _SoftmaxAttentionCache}
 
 
 class GenerationCache(Cache):
     def __init__(self, config: CommonConfig) -> None:
         super().__init__()
         self._seen_tokens = 0
-        self.cache: list[SoftmaxAttentionCache] = [SoftmaxAttentionCache() for _ in range(config.num_layers)]
+        self.cache: list[_SoftmaxAttentionCache] = [
+            _CACHE_CLASSES[config.sequence_mixer_blocks[i].sequence_mixer_type](config, i)
+            for i in range(config.num_layers)
+        ]
 
     def __getitem__(self, layer_idx: int) -> tuple[torch.Tensor]:
         return self.cache[layer_idx].get_cache()

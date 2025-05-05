@@ -1,8 +1,10 @@
 import torch
 
+from ..config import CommonConfig
 
-class SoftmaxAttentionCache:
-    def __init__(self) -> None:
+
+class _SoftmaxAttentionCache:
+    def __init__(self, config: CommonConfig, layer_idx: int) -> None:
         self.seen_tokens = 0
         self.key_cache: torch.Tensor | None = None
         self.value_cache: torch.Tensor | None = None
