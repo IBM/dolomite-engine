@@ -6,7 +6,7 @@ import torch.nn as nn
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
-from ...cache import DynamicCache
+from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
 
 
@@ -58,7 +58,7 @@ class RNN(nn.Module):
     def forward(
         self,
         input: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
