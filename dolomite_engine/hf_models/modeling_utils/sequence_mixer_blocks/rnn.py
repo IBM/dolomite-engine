@@ -71,10 +71,13 @@ class RNN(nn.Module):
 
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
+        input = input * self.factor
+        weight = self.state_weight * self.factor
+
         if is_kernel_allowed(Kernel.rnn_cute):
             input = rnn_cute(
-                input=self.factor * input,
-                weight=self.factor * self.state_weight,
+                input=input,
+                weight=weight,
                 input_state=input_state,
                 gradient_clipping=self.gradient_clipping,
                 cu_seqlens=cu_seqlens,
@@ -83,7 +86,7 @@ class RNN(nn.Module):
         else:
             input = rnn_torch(
                 input=input,
-                weight=self.state_weight,
+                weight=weight,
                 input_state=input_state,
                 gradient_clipping=self.gradient_clipping,
                 cu_seqlens=cu_seqlens,
