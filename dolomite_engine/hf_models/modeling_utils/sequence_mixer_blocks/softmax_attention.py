@@ -429,6 +429,7 @@ class Attention(nn.Module):
                 dropout_p=self.softmax_dropout_p if self.training else 0,
                 is_causal=self.causal if attention_mask is None else False,
                 scale=self._get_softmax_scale(),
+                enable_gqa=True,
             )
 
             del query, key, value
