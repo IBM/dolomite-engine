@@ -10,16 +10,13 @@ from .attention import SoftmaxAttentionCache
 
 
 class GenerationCache(Cache):
-    def __init__(self) -> None:
+    def __init__(self, config: CommonConfig) -> None:
         super().__init__()
         self._seen_tokens = 0
-        self.cache: list[SoftmaxAttentionCache] = []
+        self.cache: list[SoftmaxAttentionCache] = [SoftmaxAttentionCache() for _ in range(config.num_layers)]
 
     def __getitem__(self, layer_idx: int) -> tuple[torch.Tensor]:
-        if layer_idx < len(self):
-            return self.cache[layer_idx].get_cache()
-
-        raise KeyError(f"Cache only has {len(self)} layers, attempted to access layer with index {layer_idx}")
+        return self.cache[layer_idx].get_cache()
 
     def __iter__(self):
         for layer_idx in range(len(self)):
