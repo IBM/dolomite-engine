@@ -7,6 +7,7 @@ from .softmax_attention import _SoftmaxAttentionCache
 
 class _Mamba2Cache(_SoftmaxAttentionCache):
     def __init__(self, config: CommonConfig, layer_idx: int, **kwargs) -> None:
+        self.seen_tokens = 0
         self.conv_cache = _RNNCache(config, layer_idx, **kwargs)
         self.ssm_cache = _RNNCache(config, layer_idx, **kwargs)
 
