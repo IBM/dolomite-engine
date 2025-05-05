@@ -6,10 +6,12 @@ from transformers.models.jamba.modeling_jamba import (
 
 from ...utils import divide_if_divisible
 from ..config import CommonConfig
+from .mamba2 import _Mamba2Cache
 from .softmax_attention import _SoftmaxAttentionCache
 
 
 _CACHE_CLASSES = {
+    "mamba2": _Mamba2Cache,
     "multihead_latent_attention": _SoftmaxAttentionCache,
     "softmax_attention": _SoftmaxAttentionCache,
     "stickbreaking_attention": _SoftmaxAttentionCache,
@@ -17,11 +19,12 @@ _CACHE_CLASSES = {
 
 
 class GenerationCache(Cache):
-    def __init__(self, config: CommonConfig) -> None:
+    def __init__(self, config: CommonConfig, **kwargs) -> None:
         super().__init__()
+
         self._seen_tokens = 0
         self.cache: list[_SoftmaxAttentionCache] = [
-            _CACHE_CLASSES[config.sequence_mixer_blocks[i].sequence_mixer_type](config, i)
+            _CACHE_CLASSES[config.sequence_mixer_blocks[i].sequence_mixer_type](config, i, **kwargs)
             for i in range(config.num_layers)
         ]
 

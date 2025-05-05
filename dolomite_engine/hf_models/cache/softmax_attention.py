@@ -4,7 +4,7 @@ from ..config import CommonConfig
 
 
 class _SoftmaxAttentionCache:
-    def __init__(self, config: CommonConfig, layer_idx: int) -> None:
+    def __init__(self, config: CommonConfig, layer_idx: int, **kwargs) -> None:
         self.seen_tokens = 0
         self.key_cache: torch.Tensor | None = None
         self.value_cache: torch.Tensor | None = None

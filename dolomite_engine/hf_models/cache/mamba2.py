@@ -5,7 +5,7 @@ from .softmax_attention import _SoftmaxAttentionCache
 
 
 class _Mamba2Cache(_SoftmaxAttentionCache):
-    def __init__(self, config: CommonConfig, layer_idx: int) -> None:
+    def __init__(self, config: CommonConfig, layer_idx: int, **kwargs) -> None:
         self.seen_tokens = 0
         self.conv_cache: torch.Tensor | None = None
         self.ssm_cache: torch.Tensor | None = None
