@@ -89,7 +89,7 @@ class GPTDolomiteBlock(nn.Module):
             )
         elif self.sequence_mixer_type == "rnn":
             hidden_states = self.sequence_mixer(
-                hidden_states, past_key_values=past_key_values, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
+                hidden_states, cache_params=past_key_values, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
             )
         else:
             raise ValueError(f"unexpected sequence_mixer_type ({self.sequence_mixer_type})")

@@ -21,12 +21,13 @@ class RNN(nn.Module):
         state_size: int,
         output_size: int,
         num_heads: int,
+        add_bias: bool,
+        gradient_clipping: float | None,
+        initializer_range: float,
         m_width: float,
+        init_method: str,
         num_layers: int,
-        add_bias: bool = True,
-        initializer_range: float = 1,
-        init_method: str = "normal",
-        gradient_clipping: float | None = None,
+        layer_idx: int,
     ) -> None:
         super().__init__()
 
@@ -35,6 +36,7 @@ class RNN(nn.Module):
         self.output_size = output_size
         self.num_heads = num_heads
         self.gradient_clipping = gradient_clipping
+        self.layer_idx = layer_idx
 
         self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
@@ -58,7 +60,7 @@ class RNN(nn.Module):
     def forward(
         self,
         input: torch.Tensor,
-        past_key_values: GenerationCache | None = None,
+        cache_params: GenerationCache | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -67,11 +69,13 @@ class RNN(nn.Module):
         input = self.input_projection(input)
         input = input.view(batch_size, sequence_length, self.num_heads, -1)
 
+        input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
+
         if is_kernel_allowed(Kernel.rnn_cute):
             input = rnn_cute(
                 input=self.factor * input,
                 weight=self.factor * self.state_weight,
-                input_state=past_key_values[self.layer_idx],
+                input_state=input_state,
                 gradient_clipping=self.gradient_clipping,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
@@ -80,13 +84,17 @@ class RNN(nn.Module):
             input = rnn_torch(
                 input=input,
                 weight=self.state_weight,
-                input_state=past_key_values[self.layer_idx],
+                input_state=input_state,
                 gradient_clipping=self.gradient_clipping,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
 
         input = input.view(batch_size, sequence_length, -1)
+
+        if cache_params is not None:
+            cache_params.update(cache=input[:, -1, :], num_tokens_added=sequence_length, layer_idx=self.layer_idx)
+
         input = self.output_projection(input)
 
         return input
