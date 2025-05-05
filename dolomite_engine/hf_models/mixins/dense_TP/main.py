@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import torch
 from torch.distributed._tensor.placement_types import Replicate, Shard
-from transformers import DynamicCache
 
 from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
+from ...cache import GenerationCache
 from ...config import CommonConfig
 from ...loss import (
     add_aux_loss,
@@ -54,7 +54,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | list[list[int]] | None = None,
         position_ids: torch.Tensor | list[list[int]] | None = None,
