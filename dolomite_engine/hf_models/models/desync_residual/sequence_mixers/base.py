@@ -170,11 +170,11 @@ class DesyncResidualAttention(Attention):
         self,
         hidden_states: torch.Tensor,
         residual: torch.Tensor,
-        past_key_values: GenerationCache = None,
-        attention_mask: torch.Tensor = None,
-        rope_cos_sin: torch.Tensor = None,
-        cu_seqlens: torch.Tensor = None,
-        max_seqlen: torch.Tensor = None,
+        past_key_values: GenerationCache | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rope_cos_sin: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # ==========================================================================================
         # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)
