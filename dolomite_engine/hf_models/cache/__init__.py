@@ -9,7 +9,11 @@ from ..config import CommonConfig
 from .softmax_attention import _SoftmaxAttentionCache
 
 
-_CACHE_CLASSES = {"softmax_attention": _SoftmaxAttentionCache, "multihead_latent_attention": _SoftmaxAttentionCache}
+_CACHE_CLASSES = {
+    "multihead_latent_attention": _SoftmaxAttentionCache,
+    "softmax_attention": _SoftmaxAttentionCache,
+    "stickbreaking_attention": _SoftmaxAttentionCache,
+}
 
 
 class GenerationCache(Cache):
