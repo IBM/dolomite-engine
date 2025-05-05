@@ -1,5 +1,3 @@
-from typing import Any
-
 import torch
 from transformers import Cache
 
@@ -13,24 +11,18 @@ class DynamicCache(Cache):
 
     def __getitem__(self, layer_idx: int) -> list[tuple[torch.Tensor]]:
         if layer_idx < len(self):
-            return (self.key_cache[layer_idx], self.value_cache[layer_idx])
-        else:
-            raise KeyError(f"Cache only has {len(self)} layers, attempted to access layer with index {layer_idx}")
+            return self.key_cache[layer_idx], self.value_cache[layer_idx]
+
+        raise KeyError(f"Cache only has {len(self)} layers, attempted to access layer with index {layer_idx}")
 
     def __iter__(self):
         for layer_idx in range(len(self)):
-            yield (self.key_cache[layer_idx], self.value_cache[layer_idx])
+            yield self.key_cache[layer_idx], self.value_cache[layer_idx]
 
     def __len__(self):
         return len(self.key_cache)
 
-    def update(
-        self,
-        key_states: torch.Tensor,
-        value_states: torch.Tensor,
-        layer_idx: int,
-        cache_kwargs: dict[str, Any] | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def update(self, key_states: torch.Tensor, value_states: torch.Tensor, layer_idx: int) -> tuple[torch.Tensor]:
         # Update the number of seen tokens
         if layer_idx == 0:
             self._seen_tokens += key_states.shape[-2]
