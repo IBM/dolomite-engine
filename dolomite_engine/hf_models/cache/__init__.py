@@ -29,22 +29,6 @@ class GenerationCache(Cache):
         return self.seen_tokens
 
     def update(self, layer_idx: int, **kwargs) -> tuple[torch.Tensor]:
-        if len(self.key_cache) <= layer_idx:
-            # There may be skipped layers, fill them with empty lists
-            for _ in range(len(self.key_cache), layer_idx):
-                self.key_cache.append(torch.tensor([]))
-                self.value_cache.append(torch.tensor([]))
-            self.key_cache.append(key_states)
-            self.value_cache.append(value_states)
-        elif not self.key_cache[
-            layer_idx
-        ].numel():  # prefers not t.numel() to len(t) == 0 to export the model  # fills previously skipped layers; checking for tensor causes errors
-            self.key_cache[layer_idx] = key_states
-            self.value_cache[layer_idx] = value_states
-        else:
-            self.key_cache[layer_idx] = torch.cat([self.key_cache[layer_idx], key_states], dim=-2)
-            self.value_cache[layer_idx] = torch.cat([self.value_cache[layer_idx], value_states], dim=-2)
-
         return self.cache[layer_idx].update(**kwargs)
 
     def get_seq_length(self, layer_idx: int | None = 0) -> int:
