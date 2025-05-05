@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
-from transformers import DynamicCache
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible
+from ...cache import GenerationCache
 from ...modeling_utils import (
     apply_rotary_pos_emb,
     get_attention_head_type,
@@ -63,7 +63,7 @@ class GPTCrossLayerBlock(nn.Module):
         hidden_states: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,

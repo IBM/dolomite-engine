@@ -4,9 +4,9 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import DynamicCache
 
 from .....utils import divide_if_divisible
+from ....cache import GenerationCache
 from ....modeling_utils import Attention, apply_rotary_pos_emb, repeat_key_value
 from ....modeling_utils.mlp_blocks.mlp import _get_std_for_linear
 from ..linear import DesyncResidualLinear
@@ -170,7 +170,7 @@ class DesyncResidualAttention(Attention):
         self,
         hidden_states: torch.Tensor,
         residual: torch.Tensor,
-        past_key_values: DynamicCache = None,
+        past_key_values: GenerationCache = None,
         attention_mask: torch.Tensor = None,
         rope_cos_sin: torch.Tensor = None,
         cu_seqlens: torch.Tensor = None,

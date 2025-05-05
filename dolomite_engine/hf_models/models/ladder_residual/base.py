@@ -1,7 +1,6 @@
 import torch
-from transformers import DynamicCache
 
-from ...cache import HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
 from ...mixins import BaseModelMixin, BaseModelOutputWithPast, PreTrainedModelMixin
 from ...utils import is_generation_cache_enabled
 from .config import LadderResidualConfig
@@ -18,7 +17,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -50,7 +49,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         current_mlp_out = None
 
         if is_generation_cache_enabled():
-            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+            past_key_values = GenerationCache() if use_cache and past_key_values is None else past_key_values
 
         for block in self.h:
             current_attention_out, current_mlp_out, hidden_states = block(

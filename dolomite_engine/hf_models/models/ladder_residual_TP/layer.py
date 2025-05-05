@@ -1,12 +1,12 @@
 import torch
 import torch.distributed._functional_collectives as funcol
 import torch.nn.functional as F
-from transformers import DynamicCache
 
 from ....dtensors import dtensor_to_tensor
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, is_cute_kernels_available
+from ...cache import GenerationCache
 from ...modeling_utils_TP import get_mlp_block_TP
 from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
@@ -348,7 +348,7 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         current_attention_out: torch.Tensor,
         current_mlp_out: torch.Tensor,
         residual: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,

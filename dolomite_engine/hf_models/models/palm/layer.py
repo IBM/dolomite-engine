@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from transformers import DynamicCache
 
+from ...cache import GenerationCache
 from ...modeling_utils import get_mlp_block, get_normalization_function, get_sequence_mixer
 from .config import PaLMConfig
 
@@ -23,7 +23,7 @@ class PaLMBlock(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,

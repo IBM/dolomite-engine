@@ -3,10 +3,10 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import DynamicCache
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
+from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
 from ..normalization import get_normalization_function
 from .flash_attention_utils import flash_attention
@@ -102,7 +102,7 @@ class MultiHeadLatentAttention(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,

@@ -1,10 +1,9 @@
 import torch
 from torch.distributed._tensor.placement_types import Partial, Replicate
-from transformers import DynamicCache
 
 from ....dtensors import dtensor_to_tensor, tensor_to_dtensor
 from ....utils import ProcessGroupManager
-from ...cache import HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
 from ...mixins import BaseModelMixin_TP, BaseModelOutputWithPast, PreTrainedModelMixin_TP
 from ...utils import is_generation_cache_enabled
 from ..ladder_residual import LadderResidualConfig
@@ -27,7 +26,7 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -59,7 +58,7 @@ class LadderResidualModel_TP(LadderResidualPreTrainedModel_TP, BaseModelMixin_TP
         current_mlp_out = None
 
         if is_generation_cache_enabled():
-            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+            past_key_values = GenerationCache() if use_cache and past_key_values is None else past_key_values
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             current_attention_out, current_mlp_out, hidden_states = self.h[str(layer_idx)](

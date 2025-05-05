@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
-from transformers import DynamicCache, PreTrainedModel
+from transformers import PreTrainedModel
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
-from ....utils import divide_if_divisible
-from ...cache import HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache, HybridMambaAttentionDynamicCache
 from ...config import CommonConfig
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
@@ -134,7 +133,7 @@ class BaseModelMixin(PreTrainedModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | HybridMambaAttentionDynamicCache | None = None,
+        past_key_values: GenerationCache | HybridMambaAttentionDynamicCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -303,7 +302,7 @@ class BaseModelMixin(PreTrainedModelMixin):
     def _prepare_a_bunch_of_stuff(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -500,7 +499,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         return mamba_mask
 
-    def _get_empty_cache(self, input_ids: torch.Tensor) -> DynamicCache | HybridMambaAttentionDynamicCache:
+    def _get_empty_cache(self, input_ids: torch.Tensor) -> GenerationCache | HybridMambaAttentionDynamicCache:
         if self._has_mamba2:
             past_key_values = HybridMambaAttentionDynamicCache(
                 config=self.config,
@@ -509,6 +508,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 device=self.wte.weight.device,
             )
         else:
-            past_key_values = DynamicCache()
+            past_key_values = GenerationCache()
 
         return past_key_values
