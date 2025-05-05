@@ -6,6 +6,7 @@ import torch.nn as nn
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
+from ...cache import DynamicCache
 from ..linear import ParameterizedLinear
 
 
@@ -54,7 +55,7 @@ class RNN(nn.Module):
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
 
-    def forward(self, input: torch.Tensor, input_state: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(self, input: torch.Tensor, past_key_values: DynamicCache | None = None) -> torch.Tensor:
         batch_size, sequence_length, _ = input.size()
 
         input = self.input_projection(input)

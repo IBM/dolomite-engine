@@ -26,7 +26,7 @@ class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
         for i in range(config.num_layers):
             block = config.sequence_mixer_blocks[i]
 
-            if block.sequence_mixer_type == "mamba2":
+            if block.sequence_mixer_type in ["mamba2", "rnn"]:
                 self.conv_states += [
                     torch.zeros(
                         batch_size,
