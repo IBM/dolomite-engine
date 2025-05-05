@@ -1,19 +1,20 @@
 import torch
 
 from ..config import CommonConfig
+from .softmax_attention import _SoftmaxAttentionCache
 
 
-class _SoftmaxAttentionCache:
+class _Mamba2Cache(_SoftmaxAttentionCache):
     def __init__(self, config: CommonConfig, layer_idx: int) -> None:
         self.seen_tokens = 0
-        self.key_cache: torch.Tensor | None = None
-        self.value_cache: torch.Tensor | None = None
+        self.conv_cache: torch.Tensor | None = None
+        self.ssm_cache: torch.Tensor | None = None
 
     def get_cache(self) -> tuple[torch.Tensor | None]:
-        return self.key_cache, self.value_cache
+        return self.conv_cache, self.ssm_cache
 
     def update(
-        self, key_states: torch.Tensor, value_states: torch.Tensor | None = None, sequence_length_dimension: int = -2
+        self, conv_state: torch.Tensor, ssm_state: torch.Tensor, sequence_length_dimension: int = -2
     ) -> tuple[torch.Tensor]:
         self.seen_tokens += key_states.size(sequence_length_dimension)
 
@@ -28,13 +29,7 @@ class _SoftmaxAttentionCache:
             else:
                 self.value_cache = torch.cat([self.value_cache, value_states], dim=sequence_length_dimension)
 
-        return self.key_cache, self.value_cache
-
-    def get_seq_length(self) -> int:
-        return self.seen_tokens
-
-    def get_max_cache_shape(self) -> None:
-        return None
+        return self.conv_cache, self.ssm_cache
 
     def reorder_cache(self, beam_idx: torch.Tensor) -> None:
         self.key_cache = self.key_cache.index_select(0, beam_idx.to(self.key_cache.device))
