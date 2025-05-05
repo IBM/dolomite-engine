@@ -14,11 +14,7 @@ class _Mamba2Cache(_SoftmaxAttentionCache):
         return self.conv_cache, self.ssm_cache
 
     def update(
-        self,
-        conv_state: torch.Tensor | None = None,
-        ssm_state: torch.Tensor | None = None,
-        num_tokens_added: int = 0,
-        sequence_length_dimension: int = -2,
+        self, conv_state: torch.Tensor | None = None, ssm_state: torch.Tensor | None = None, num_tokens_added: int = 0
     ) -> tuple[torch.Tensor]:
         self.seen_tokens += num_tokens_added
 
