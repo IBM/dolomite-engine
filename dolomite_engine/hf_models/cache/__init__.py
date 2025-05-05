@@ -41,6 +41,10 @@ class GenerationCache(Cache):
     def get_seq_length(self, layer_idx: int | None = 0) -> int:
         return self.cache[layer_idx].get_seq_length()
 
+    def reorder_cache(self, beam_idx: torch.Tensor) -> None:
+        for cache in self.cache:
+            cache.reorder_cache(beam_idx)
+
 
 class HybridMambaAttentionDynamicCache(_HybridMambaAttentionDynamicCache):
     def __init__(

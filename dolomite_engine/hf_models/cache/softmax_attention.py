@@ -35,3 +35,7 @@ class _SoftmaxAttentionCache:
 
     def get_max_cache_shape(self) -> None:
         return None
+
+    def reorder_cache(self, beam_idx: torch.Tensor) -> None:
+        self.key_cache = self.key_cache.index_select(0, beam_idx.to(self.key_cache.device))
+        self.value_cache = self.value_cache.index_select(0, beam_idx.to(self.value_cache.device))
