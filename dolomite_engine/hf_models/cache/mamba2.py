@@ -14,23 +14,17 @@ class _Mamba2Cache(_SoftmaxAttentionCache):
         return self.conv_cache, self.ssm_cache
 
     def update(
-        self, conv_state: torch.Tensor, ssm_state: torch.Tensor, sequence_length_dimension: int = -2
+        self,
+        conv_state: torch.Tensor,
+        ssm_state: torch.Tensor,
+        num_tokens_added: int = 1,
+        sequence_length_dimension: int = -2,
     ) -> tuple[torch.Tensor]:
-        self.seen_tokens += key_states.size(sequence_length_dimension)
-
-        if self.key_cache is None:
-            self.key_cache = key_states
-        else:
-            self.key_cache = torch.cat([self.key_cache, key_states], dim=sequence_length_dimension)
-
-        if value_states is not None:
-            if self.value_cache is None:
-                self.value_cache = value_states
-            else:
-                self.value_cache = torch.cat([self.value_cache, value_states], dim=sequence_length_dimension)
-
+        self.seen_tokens += num_tokens_added
+        self.conv_cache = conv_state
+        self.ssm_cache = ssm_state
         return self.conv_cache, self.ssm_cache
 
     def reorder_cache(self, beam_idx: torch.Tensor) -> None:
-        self.key_cache = self.key_cache.index_select(0, beam_idx.to(self.key_cache.device))
-        self.value_cache = self.value_cache.index_select(0, beam_idx.to(self.value_cache.device))
+        self.conv_cache = self.conv_cache.index_select(0, beam_idx.to(self.conv_cache.device))
+        self.ssm_cache = self.ssm_cache.index_select(0, beam_idx.to(self.ssm_cache.device))
