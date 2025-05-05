@@ -508,6 +508,6 @@ class BaseModelMixin(PreTrainedModelMixin):
                 device=self.wte.weight.device,
             )
         else:
-            past_key_values = GenerationCache()
+            past_key_values = GenerationCache(self.config)
 
         return past_key_values

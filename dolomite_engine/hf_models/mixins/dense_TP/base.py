@@ -145,7 +145,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         if is_generation_cache_enabled():
-            past_key_values = GenerationCache() if use_cache and past_key_values is None else past_key_values
+            past_key_values = (
+                GenerationCache(self.config) if use_cache and past_key_values is None else past_key_values
+            )
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             hidden_states = self.h[str(layer_idx)](

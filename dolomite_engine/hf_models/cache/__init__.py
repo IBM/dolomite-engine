@@ -25,7 +25,7 @@ class GenerationCache(Cache):
     def __len__(self):
         return self.seen_tokens
 
-    def update(self, layer_idx: int, **kwargs) -> tuple[torch.Tensor]:
+    def update(self, *, layer_idx: int, **kwargs) -> tuple[torch.Tensor]:
         return self.cache[layer_idx].update(**kwargs)
 
     def get_seq_length(self, layer_idx: int | None = 0) -> int:

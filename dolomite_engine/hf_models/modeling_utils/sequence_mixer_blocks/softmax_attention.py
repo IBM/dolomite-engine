@@ -376,7 +376,7 @@ class Attention(nn.Module):
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
         if past_key_values is not None:
-            key, value = past_key_values.update(key, value, self.layer_idx)
+            key, value = past_key_values.update(key_states=key, value_states=value, layer_idx=self.layer_idx)
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:

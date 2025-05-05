@@ -76,7 +76,7 @@ class GPTCrossLayerBlock(nn.Module):
                 key = apply_rotary_pos_emb(key, rope_cos_sin)
 
             if past_key_values is not None:
-                key, value = past_key_values.update(key, value, layer_idx=self.layer_idx)
+                key, value = past_key_values.update(key_states=key, value_states=value, layer_idx=self.layer_idx)
 
             if is_kernel_allowed(Kernel.flash_attention_3) or is_kernel_allowed(Kernel.flash_attention_2):
                 if not self._use_padding_free_transformer:
