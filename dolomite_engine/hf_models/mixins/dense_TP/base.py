@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
-from transformers import DynamicCache
 
 from ....utils import ProcessGroupManager, divide_if_divisible
-from ...cache import HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache
 from ...config import CommonConfig
 from ...modeling_utils import RoPE, YaRNScaledRoPE
 from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_function_TP
@@ -93,7 +92,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
@@ -146,7 +145,9 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             rope_cos_sin = self._get_rope_cos_sin(key_length, position_ids, dtype=hidden_states.dtype)
 
         if is_generation_cache_enabled():
-            past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+            past_key_values = (
+                GenerationCache(self.config) if use_cache and past_key_values is None else past_key_values
+            )
 
         for layer_idx in range(self.layer_start_id, self.layer_end_id):
             hidden_states = self.h[str(layer_idx)](
@@ -157,9 +158,6 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
 
         if self.is_last_stage:
             hidden_states = self.ln_f(hidden_states)
