@@ -65,7 +65,6 @@ class RNN(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        print(attention_mask)
         batch_size, sequence_length, _ = input.size()
 
         input = self.input_projection(input)
