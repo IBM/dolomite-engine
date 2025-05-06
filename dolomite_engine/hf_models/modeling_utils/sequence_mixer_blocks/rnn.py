@@ -115,7 +115,7 @@ class RNN(nn.Module):
                 input=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
             )
 
-        input = input.view(*input.size()[:-1], -1)
+        input = input.view(*input.size()[:-2], -1)
         input = self.output_projection(input)
 
         return input
