@@ -11,7 +11,7 @@ from ..linear import ParameterizedLinear
 
 
 if is_cute_kernels_available():
-    from cute_kernels import rnn_cute, rnn_torch
+    from cute_kernels import pack_sequence_cute, pack_sequence_torch, rnn_cute, rnn_torch
 
 
 class RNN(nn.Module):
@@ -28,6 +28,7 @@ class RNN(nn.Module):
         init_method: str,
         num_layers: int,
         layer_idx: int,
+        use_padding_free_transformer: bool,
     ) -> None:
         super().__init__()
 
@@ -37,6 +38,7 @@ class RNN(nn.Module):
         self.num_heads = num_heads
         self.gradient_clipping = gradient_clipping
         self.layer_idx = layer_idx
+        self.use_padding_free_transformer = use_padding_free_transformer
 
         self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
@@ -65,10 +67,22 @@ class RNN(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        batch_size, sequence_length, _ = input.size()
+        if self.use_padding_free_transformer:
+            assert cache_params is None
+            assert attention_mask is None
+        else:
+            assert cu_seqlens is None
+            assert max_seqlen is None
+
+            if attention_mask is not None:
+                # TODO prepare cu_seqlens
+                if is_kernel_allowed(Kernel.pack_sequence_cute):
+                    input = pack_sequence_cute(x=input, cu_seqlens=cu_seqlens)
+                else:
+                    input = pack_sequence_torch(x=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
-        input = input.view(batch_size, sequence_length, self.num_heads, -1)
+        input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
 
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
@@ -95,9 +109,9 @@ class RNN(nn.Module):
             )
 
         if cache_params is not None:
-            cache_params.update(state=input[:, -1, ...], num_tokens_added=sequence_length, layer_idx=self.layer_idx)
+            cache_params.update(state=input[:, -1, ...], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
-        input = input.view(batch_size, sequence_length, -1)
+        input = input.view(*input.size()[:-1], -1)
         input = self.output_projection(input)
 
         return input

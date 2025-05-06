@@ -77,6 +77,7 @@ def get_sequence_mixer(
             init_method=config.init_method,
             num_layers=config.num_layers,
             layer_idx=layer_idx,
+            use_padding_free_transformer=use_padding_free_transformer,
         )
     else:
         sequence_mixer_kwargs = dict(
