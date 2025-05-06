@@ -48,7 +48,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 config.vocab_size,
                 self.embed_dim,
                 std=self.initializer_range,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
 
@@ -57,7 +57,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 if config.embedding_dropout == 0
                 else Dropout_TP(
                     config.embedding_dropout,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
             )
@@ -66,7 +66,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             {
                 str(i): self.layer_class(
                     config,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
                 )
@@ -79,7 +79,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 config.normalization_function,
                 self.embed_dim,
                 eps=config.layer_norm_epsilon,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
 
@@ -127,7 +127,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             hidden_states = input_ids
             past_length = 0
 
-            if self._use_padding_free_transformer:
+            if self.use_padding_free_transformer:
                 key_length = max_seqlen
                 # query length will change if past_key_values is not None
                 query_length = key_length - past_length
@@ -173,7 +173,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     max_position_embeddings,
                     self.embed_dim,
                     std=self.initializer_range,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
         elif self.position_embedding_type == "rope":

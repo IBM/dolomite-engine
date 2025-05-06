@@ -133,7 +133,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 hidden_states=None,
                 vocab_weight=None,
                 cu_seqlens=cu_seqlens,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 reduction=reduction,
                 shift_logits_and_labels=True,
                 tensor_parallel_enabled=False,
