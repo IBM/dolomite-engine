@@ -79,6 +79,7 @@ class RNN(nn.Module):
 
             if attention_mask is not None:
                 cu_seqlens = compute_cu_seqlens_from_attention_mask(attention_mask)
+                max_seqlen = cu_seqlens.max()
                 input = pack_sequence(input=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
