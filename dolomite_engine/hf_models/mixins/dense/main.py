@@ -1,9 +1,10 @@
 import torch
 import torch.nn.functional as F
-from transformers import DynamicCache, GenerationMixin
+from transformers import GenerationMixin
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
+from ...cache import GenerationCache
 from ...config import CommonConfig
 from ...loss import clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss, is_aux_loss_zero
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
@@ -50,7 +51,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | list[list[int]] | None = None,
         position_ids: torch.Tensor | list[list[int]] | None = None,
