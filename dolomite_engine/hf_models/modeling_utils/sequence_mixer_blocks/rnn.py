@@ -8,7 +8,7 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
-from .padding import pack_sequence, unpack_sequence
+from .padding import compute_cu_seqlens_from_attention_mask, pack_sequence, unpack_sequence
 
 
 if is_cute_kernels_available():
@@ -78,6 +78,7 @@ class RNN(nn.Module):
             batch_size, sequence_length = input.size()[:2]
 
             if attention_mask is not None:
+                cu_seqlens = compute_cu_seqlens_from_attention_mask(attention_mask)
                 input = pack_sequence(input=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)

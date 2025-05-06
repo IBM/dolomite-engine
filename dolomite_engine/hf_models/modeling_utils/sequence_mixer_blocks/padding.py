@@ -93,6 +93,12 @@ def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_
     return x
 
 
+def compute_cu_seqlens_from_attention_mask(attention_mask: torch.Tensor) -> torch.Tensor:
+    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
+    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
+    return cu_seqlens
+
+
 def pack_sequence(input: torch.Tensor, cu_seqlens: torch.Tensor) -> torch.Tensor:
     if is_kernel_allowed(Kernel.pack_sequence_cute):
         input = pack_sequence_cute(x=input, cu_seqlens=cu_seqlens)
