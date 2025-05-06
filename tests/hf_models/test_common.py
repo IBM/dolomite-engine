@@ -293,7 +293,7 @@ class TestCommons(TestCase):
         )
 
         if use_padding_free_transformer:
-            assert model._use_padding_free_transformer
+            assert model.use_padding_free_transformer
 
         assert len(kwargs) == 0
 
