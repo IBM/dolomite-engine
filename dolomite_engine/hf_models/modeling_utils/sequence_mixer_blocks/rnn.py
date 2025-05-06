@@ -8,10 +8,11 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
+from .padding import pack_sequence, unpack_sequence
 
 
 if is_cute_kernels_available():
-    from cute_kernels import pack_sequence_cute, pack_sequence_torch, rnn_cute, rnn_torch
+    from cute_kernels import rnn_cute, rnn_torch
 
 
 class RNN(nn.Module):
@@ -74,12 +75,10 @@ class RNN(nn.Module):
             assert cu_seqlens is None
             assert max_seqlen is None
 
+            batch_size, sequence_length = input.size()[:2]
+
             if attention_mask is not None:
-                # TODO prepare cu_seqlens
-                if is_kernel_allowed(Kernel.pack_sequence_cute):
-                    input = pack_sequence_cute(x=input, cu_seqlens=cu_seqlens)
-                else:
-                    input = pack_sequence_torch(x=input, cu_seqlens=cu_seqlens)
+                input = pack_sequence(input=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
@@ -110,6 +109,11 @@ class RNN(nn.Module):
 
         if cache_params is not None:
             cache_params.update(state=input[:, -1, ...], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
+
+        if not self.use_padding_free_transformer and attention_mask is not None:
+            input = unpack_sequence(
+                input=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
+            )
 
         input = input.view(*input.size()[:-1], -1)
         input = self.output_projection(input)

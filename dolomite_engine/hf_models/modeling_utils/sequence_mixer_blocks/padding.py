@@ -4,6 +4,14 @@
 import torch
 import torch.nn.functional as F
 
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
+from ....utils import is_cute_kernels_available
+
+
+if is_cute_kernels_available():
+    from cute_kernels import pack_sequence_cute, pack_sequence_torch, unpack_sequence_cute, unpack_sequence_torch
+
 
 class _IndexFirstAxis(torch.autograd.Function):
     @staticmethod
@@ -83,3 +91,21 @@ def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_
     x = _IndexPutFirstAxis.apply(x, indices, batch_size * sequence_length)
     x = x.view(batch_size, sequence_length, *x.size()[1:])
     return x
+
+
+def pack_sequence(input: torch.Tensor, cu_seqlens: torch.Tensor) -> torch.Tensor:
+    if is_kernel_allowed(Kernel.pack_sequence_cute):
+        input = pack_sequence_cute(x=input, cu_seqlens=cu_seqlens)
+    else:
+        input = pack_sequence_torch(x=input, cu_seqlens=cu_seqlens)
+
+    return input
+
+
+def unpack_sequence(input: torch.Tensor, cu_seqlens: torch.Tensor, desired_shape: tuple[int]) -> torch.Tensor:
+    if is_kernel_allowed(Kernel.pack_sequence_cute):
+        input = unpack_sequence_cute(x=input, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
+    else:
+        input = unpack_sequence_torch(x=input, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
+
+    return input
