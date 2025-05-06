@@ -9,9 +9,13 @@ from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_fun
 from ...utils import is_generation_cache_enabled
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 from ..modeling_outputs import BaseModelOutputWithPast
+from .layer import Block_TP
 
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
+    layer_class = Block_TP
+    _no_split_modules = ["Block_TP"]
+
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
 

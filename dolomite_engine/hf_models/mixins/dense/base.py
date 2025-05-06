@@ -9,6 +9,7 @@ from ...config import CommonConfig
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 from ..modeling_outputs import BaseModelOutputWithPast
+from .layer import Block
 
 
 class PreTrainedModelMixin(PreTrainedModel):
@@ -18,10 +19,10 @@ class PreTrainedModelMixin(PreTrainedModel):
     """
 
     config_class = None
-    layer_class = None
+    layer_class = Block
     base_model_prefix = "transformer"
     causal = True
-    _no_split_modules = None
+    _no_split_modules = ["Block"]
     _skip_keys_device_placement = "past_key_values"
 
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
