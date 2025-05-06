@@ -3,12 +3,14 @@ from transformers import Cache
 
 from ..config import CommonConfig
 from .mamba2 import _Mamba2Cache
+from .rnn import _RNNCache
 from .softmax_attention import _SoftmaxAttentionCache
 
 
 _CACHE_CLASSES = {
     "mamba2": _Mamba2Cache,
     "multihead_latent_attention": _SoftmaxAttentionCache,
+    "rnn": _RNNCache,
     "softmax_attention": _SoftmaxAttentionCache,
     "stickbreaking_attention": _SoftmaxAttentionCache,
 }

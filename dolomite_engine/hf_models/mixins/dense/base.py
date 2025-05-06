@@ -180,7 +180,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         mamba_mask_computed = False
 
         for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
-            is_mamba_layer = sequence_mixer_type == "mamba2"
+            is_mamba_layer = sequence_mixer_type in ["mamba2", "rnn"]
 
             if is_mamba_layer and not mamba_mask_computed:
                 mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
