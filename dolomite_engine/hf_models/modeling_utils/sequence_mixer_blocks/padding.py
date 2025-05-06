@@ -83,3 +83,41 @@ def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_
     x = _IndexPutFirstAxis.apply(x, indices, batch_size * sequence_length)
     x = x.view(batch_size, sequence_length, *x.size()[1:])
     return x
+
+
+def _upad_input(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor,
+    query_length: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, tuple[torch.Tensor], tuple[torch.Tensor]]:
+    seqlens = attention_mask.sum(dim=-1, dtype=torch.int32)
+    indices_k = attention_mask.flatten().nonzero(as_tuple=False).flatten()
+    # NOTE this syncs with CPU
+    max_seqlen_k = seqlens.max().item()
+    cu_seqlens_k = F.pad(torch.cumsum(seqlens, dim=0, dtype=torch.int32), (1, 0))
+
+    batch_size, key_value_length, num_key_value_heads, head_dim = key.size()
+
+    key = index_first_axis(key.reshape(batch_size * key_value_length, num_key_value_heads, head_dim), indices_k)
+    value = index_first_axis(value.reshape(batch_size * key_value_length, num_key_value_heads, head_dim), indices_k)
+
+    if query_length == key_value_length:
+        query = query.reshape(batch_size * key_value_length, -1, head_dim)
+        query = index_first_axis(query, indices_k)
+        cu_seqlens_q = cu_seqlens_k
+        max_seqlen_q = max_seqlen_k
+        indices_q = indices_k
+    elif query_length == 1:
+        max_seqlen_q = 1
+        # NOTE this is a memcpy which sucks
+        cu_seqlens_q = torch.arange(batch_size + 1, dtype=torch.int32, device=query.device)
+        indices_q = cu_seqlens_q[:-1]
+        query = query.squeeze(1)
+    else:
+        # The -q_len: slice assumes left padding.
+        attention_mask = attention_mask[:, -query_length:]
+        query, indices_q, cu_seqlens_q, max_seqlen_q, *_ = unpad_input(query, attention_mask)
+
+    return query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k

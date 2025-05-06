@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
-from .padding import index_first_axis, pad_input, unpad_input
+from .padding import _upad_input, pad_input
 
 
 if is_flash_attention_2_available():
@@ -14,48 +14,6 @@ if is_flash_attention_2_available():
 if is_flash_attention_3_available():
     from flash_attn_interface import flash_attn_func as flash_attention_3
     from flash_attn_interface import flash_attn_varlen_func as flash_attention_3_varlen
-
-
-def _get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
-    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
-    indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    # NOTE this syncs with CPU
-    max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
-    return indices, cu_seqlens, max_seqlen_in_batch
-
-
-def _upad_input(
-    query: torch.Tensor,
-    key: torch.Tensor,
-    value: torch.Tensor,
-    attention_mask: torch.Tensor,
-    query_length: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, tuple[torch.Tensor], tuple[torch.Tensor]]:
-    indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
-    batch_size, kv_seq_len, num_key_value_heads, head_dim = key.size()
-
-    key = index_first_axis(key.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k)
-    value = index_first_axis(value.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k)
-
-    if query_length == kv_seq_len:
-        query = index_first_axis(query.reshape(batch_size * kv_seq_len, -1, head_dim), indices_k)
-        cu_seqlens_q = cu_seqlens_k
-        max_seqlen_in_batch_q = max_seqlen_in_batch_k
-        indices_q = indices_k
-    elif query_length == 1:
-        max_seqlen_in_batch_q = 1
-        cu_seqlens_q = torch.arange(
-            batch_size + 1, dtype=torch.int32, device=query.device
-        )  # There is a memcpy here, that is very bad.
-        indices_q = cu_seqlens_q[:-1]
-        query = query.squeeze(1)
-    else:
-        # The -q_len: slice assumes left padding.
-        attention_mask = attention_mask[:, -query_length:]
-        query, indices_q, cu_seqlens_q, max_seqlen_in_batch_q, *_ = unpad_input(query, attention_mask)
-
-    return query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k
 
 
 def flash_attention(
