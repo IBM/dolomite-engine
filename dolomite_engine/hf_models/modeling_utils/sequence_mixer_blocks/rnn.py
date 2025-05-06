@@ -108,13 +108,13 @@ class RNN(nn.Module):
                 max_seqlen=max_seqlen,
             )
 
-        if cache_params is not None:
-            cache_params.update(state=input[:, -1, ...], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
-
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
                 input=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
             )
+
+        if cache_params is not None:
+            cache_params.update(state=input[:, -1, ...], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
         input = self.output_projection(input)
