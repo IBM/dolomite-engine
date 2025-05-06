@@ -1,10 +1,10 @@
 import torch
 
 from ...cache import GenerationCache
-from ..gpt_dolomite.layer import GPTDolomiteBlock
+from ...mixins import Block
 
 
-class LadderResidualBlock(GPTDolomiteBlock):
+class LadderResidualBlock(Block):
     def forward(
         self,
         current_attention_out: torch.Tensor | None,

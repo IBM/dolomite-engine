@@ -9,6 +9,7 @@ from ...config import CommonConfig
 from ...modeling_utils import ParameterizedEmbedding, RoPE, YaRNScaledRoPE, get_normalization_function
 from ...utils import convert_padding_free_lists_to_tensors, is_generation_cache_enabled
 from ..modeling_outputs import BaseModelOutputWithPast
+from .layer import Block
 
 
 class PreTrainedModelMixin(PreTrainedModel):
@@ -18,10 +19,10 @@ class PreTrainedModelMixin(PreTrainedModel):
     """
 
     config_class = None
-    layer_class = None
+    layer_class = Block
     base_model_prefix = "transformer"
     causal = True
-    _no_split_modules = None
+    _no_split_modules = ["Block"]
     _skip_keys_device_placement = "past_key_values"
 
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
@@ -29,7 +30,7 @@ class PreTrainedModelMixin(PreTrainedModel):
 
         assert self.config_class is not None
 
-        self._use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
+        self.use_padding_free_transformer = kwargs.get("use_padding_free_transformer", False)
         self._tied_word_embeddings = config.tie_word_embeddings
 
         self._has_mamba2 = any([block.sequence_mixer_type == "mamba2" for block in self.config.sequence_mixer_blocks])
@@ -51,7 +52,7 @@ class PreTrainedModelMixin(PreTrainedModel):
         attention_mask: torch.Tensor | None,
         use_cache: bool,
     ) -> tuple[torch.Tensor]:
-        if self._use_padding_free_transformer:
+        if self.use_padding_free_transformer:
             if isinstance(input_ids, list) or isinstance(inputs_embeds, list):
                 # this is managed internally
                 error_message = (
@@ -108,7 +109,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         )
         self.h = nn.ModuleList(
             [
-                self.layer_class(config, use_padding_free_transformer=self._use_padding_free_transformer, layer_idx=i)
+                self.layer_class(config, use_padding_free_transformer=self.use_padding_free_transformer, layer_idx=i)
                 for i in range(config.num_layers)
             ]
         )
@@ -321,7 +322,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         tuple[torch.Tensor],
     ]:
         if use_cache is None:
-            use_cache = False if self._use_padding_free_transformer else self.config.use_cache
+            use_cache = False if self.use_padding_free_transformer else self.config.use_cache
 
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
@@ -329,7 +330,7 @@ class BaseModelMixin(PreTrainedModelMixin):
             input_shape = input_ids.size()
 
             # special handling for padding free transformer with list inputs
-            if self._use_padding_free_transformer:
+            if self.use_padding_free_transformer:
                 # for flash attention, there is no padding and we do packing
                 # so, input_ids is of shape (s1 + s2 + ... + sb)
                 batch_size = cu_seqlens.shape[0] - 1
@@ -347,7 +348,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         device = input_ids.device if input_ids is not None else inputs_embeds.device
 
-        if self._use_padding_free_transformer:
+        if self.use_padding_free_transformer:
             assert position_ids is not None, (
                 "GPTDolomiteModel needs position_ids from outside when using flash attention with List[List[int]] "
                 "inputs"
@@ -370,7 +371,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         past_length = None
         query_length = None
         key_length = None
-        if self._use_padding_free_transformer:
+        if self.use_padding_free_transformer:
             key_length = max_seqlen.item() if isinstance(max_seqlen, torch.Tensor) else max_seqlen
         else:
             past_length = 0 if past_key_values is None else past_key_values.get_seq_length()
