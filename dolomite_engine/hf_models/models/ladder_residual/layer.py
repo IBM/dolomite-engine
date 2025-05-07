@@ -1,16 +1,16 @@
 import torch
-from transformers import DynamicCache
 
-from ..gpt_dolomite.layer import GPTDolomiteBlock
+from ...cache import GenerationCache
+from ...mixins import Block
 
 
-class LadderResidualBlock(GPTDolomiteBlock):
+class LadderResidualBlock(Block):
     def forward(
         self,
         current_attention_out: torch.Tensor | None,
         current_mlp_out: torch.Tensor | None,
         residual: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,

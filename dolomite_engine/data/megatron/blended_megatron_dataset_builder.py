@@ -56,19 +56,6 @@ class BlendedMegatronDatasetBuilder(object):
             List[Optional[Union[BlendedDataset, MegatronDataset]]]: A list of either
             MegatronDataset or BlendedDataset (or None) per split
         """
-        return self._build_blended_dataset_splits()
-
-    def _build_blended_dataset_splits(
-        self,
-    ) -> List[Optional[Union[BlendedDataset, MegatronDataset]]]:
-        """Build all dataset splits according to the provided blend(s)
-
-        See the BlendedMegatronDatasetBuilder.build alias for more information.
-
-        Returns:
-            List[Optional[Union[BlendedDataset, MegatronDataset]]]: A list of either
-            MegatronDataset or BlendedDataset (or None) per split
-        """
 
         if getattr(self.config, "blend"):
             blend = getattr(self.config, "blend")
