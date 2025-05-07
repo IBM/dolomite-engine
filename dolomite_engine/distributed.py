@@ -111,11 +111,11 @@ def wrap_model_container_for_distributed_training(
     communication_dtype = None if communication_dtype is None else string_to_torch_dtype(communication_dtype)
 
     assert stage in [0, 2, 3]
-    if ProcessGroupManager.get_context_parallel_world_size() > 1:
+    if ProcessGroupManager.is_context_parallel_enabled():
         dp_mesh = ProcessGroupManager.get_data_parallel_context_parallel_mesh()
     else:
         dp_mesh = ProcessGroupManager.get_data_parallel_mesh()
-    
+
     block_classes = [
         get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
     ]

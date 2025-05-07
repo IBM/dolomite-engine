@@ -17,7 +17,11 @@ def all_reduce_metrics_tracker(metrics_tracker: MetricsTrackingDict) -> MetricsT
     # tensor = torch.stack(tensor) / ProcessGroupManager.get_data_parallel_world_size()
     # tensor = tensor.cpu()
     # gloo op doesn't support averaging so we do sum and divide by world size above
-    torch.distributed.all_reduce(tensor, op=ReduceOp.AVG, group=ProcessGroupManager.get_mesh()["ddp", "fsdp", "cp"]._flatten(mesh_dim_name="dp_cp").get_group())
+    torch.distributed.all_reduce(
+        tensor,
+        op=ReduceOp.AVG,
+        group=ProcessGroupManager.get_mesh()["ddp", "fsdp", "cp"]._flatten(mesh_dim_name="dp_cp").get_group(),
+    )
     tensor = tensor.tolist()
 
     for i, key in enumerate(metrics_tracker):
