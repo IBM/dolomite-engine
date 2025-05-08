@@ -140,7 +140,6 @@ class MultiHeadLatentAttention(nn.Module):
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
-                query_length = None
                 total_q = query.shape[0]
 
                 query = query.view(total_q, self.num_heads, -1)
@@ -170,7 +169,6 @@ class MultiHeadLatentAttention(nn.Module):
                 max_seqlen=max_seqlen,
                 attention_mask=attention_mask,
                 use_padding_free_transformer=self.use_padding_free_transformer,
-                query_length=query_length,
                 causal=self.causal,
                 dropout=self.softmax_dropout_p if self.training else 0,
                 softmax_scale=self._get_softmax_scale(),

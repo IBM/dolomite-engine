@@ -55,7 +55,6 @@ def flash_attention(
     cu_seqlens: torch.Tensor | None,
     max_seqlen: torch.Tensor | None,
     use_padding_free_transformer: bool,
-    query_length: int,
     causal: bool,
     dropout: float = 0,
     softmax_scale: float | None = None,
