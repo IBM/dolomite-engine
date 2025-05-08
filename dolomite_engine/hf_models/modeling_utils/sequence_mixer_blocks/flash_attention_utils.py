@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
@@ -9,7 +8,6 @@ from .padding import (
     compute_cu_seqlens_and_max_seqlen_from_attention_mask,
     index_first_axis,
     pad_input,
-    unpad_input,
 )
 
 
@@ -50,7 +48,12 @@ def _upad_input(
     else:
         # The -q_len: slice assumes left padding.
         attention_mask = attention_mask[:, -query_length:]
-        query, indices_q, cu_seqlens_q, max_seqlen_in_batch_q = unpad_input(query, attention_mask)
+
+        indices_q, cu_seqlens_q, max_seqlen_in_batch_q = _get_unpad_data(attention_mask)
+        max_seqlen_in_batch_q = max_seqlen_in_batch_q.item()
+
+        query = query.view(-1, *query.size()[1:])
+        query = index_first_axis(query, indices_q)
 
     return query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k
 

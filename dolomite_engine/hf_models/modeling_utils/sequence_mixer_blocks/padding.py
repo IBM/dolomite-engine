@@ -106,7 +106,7 @@ def compute_cu_seqlens_and_max_seqlen_from_attention_mask(
 
 
 def pack_sequence(
-    input: torch.Tensor | list[torch.Tensor], cu_seqlens: torch.Tensor
+    inputs: torch.Tensor | list[torch.Tensor], cu_seqlens: torch.Tensor
 ) -> torch.Tensor | list[torch.Tensor]:
     if is_kernel_allowed(Kernel.pack_sequence_cute):
         inputs = pack_sequence_cute(inputs=inputs, cu_seqlens=cu_seqlens)
