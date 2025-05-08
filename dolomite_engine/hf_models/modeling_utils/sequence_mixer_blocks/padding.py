@@ -100,19 +100,23 @@ def compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask: torch.
     return cu_seqlens, max_seqlen
 
 
-def pack_sequence(input: torch.Tensor, cu_seqlens: torch.Tensor) -> torch.Tensor:
+def pack_sequence(
+    input: torch.Tensor | list[torch.Tensor], cu_seqlens: torch.Tensor
+) -> torch.Tensor | list[torch.Tensor]:
     if is_kernel_allowed(Kernel.pack_sequence_cute):
-        input = pack_sequence_cute(x=input, cu_seqlens=cu_seqlens)
+        inputs = pack_sequence_cute(inputs=inputs, cu_seqlens=cu_seqlens)
     else:
-        input = pack_sequence_torch(x=input, cu_seqlens=cu_seqlens)
+        inputs = pack_sequence_torch(inputs=inputs, cu_seqlens=cu_seqlens)
 
-    return input
+    return inputs
 
 
-def unpack_sequence(input: torch.Tensor, cu_seqlens: torch.Tensor, desired_shape: tuple[int]) -> torch.Tensor:
+def unpack_sequence(
+    inputs: torch.Tensor | list[torch.Tensor], cu_seqlens: torch.Tensor, desired_shape: tuple[int]
+) -> torch.Tensor | list[torch.Tensor]:
     if is_kernel_allowed(Kernel.pack_sequence_cute):
-        input = unpack_sequence_cute(x=input, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
+        inputs = unpack_sequence_cute(inputs=inputs, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
     else:
-        input = unpack_sequence_torch(x=input, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
+        inputs = unpack_sequence_torch(inputs=inputs, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
 
-    return input
+    return inputs
