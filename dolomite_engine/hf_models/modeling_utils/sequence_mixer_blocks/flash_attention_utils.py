@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
-from .padding import index_first_axis, pad_input, unpad_input
+from .padding import compute_cu_seqlens_and_max_seqlen_from_attention_mask, index_first_axis, pad_input, unpad_input
 
 
 if is_flash_attention_2_available():
@@ -17,12 +17,9 @@ if is_flash_attention_3_available():
 
 
 def _get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
-    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
+    cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    # NOTE this syncs with CPU
-    max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
-    return indices, cu_seqlens, max_seqlen_in_batch
+    return indices, cu_seqlens, max_seqlen
 
 
 def _upad_input(
