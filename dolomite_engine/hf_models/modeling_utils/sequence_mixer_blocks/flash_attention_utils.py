@@ -21,7 +21,7 @@ def _upad_input(
     value: torch.Tensor,
     attention_mask: torch.Tensor,
     query_length: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, tuple[torch.Tensor], tuple[torch.Tensor]]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     cu_seqlens_k, max_seqlen_k = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
     batch_size, kv_seq_len = key.size()[:2]
 
