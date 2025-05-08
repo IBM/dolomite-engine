@@ -74,11 +74,15 @@ def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor
     return _IndexFirstAxis.apply(input, indices)
 
 
-def unpad_input(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+def _get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
-    max_seqlen = max_seqlen.item()
-
     indices = attention_mask.flatten().nonzero(as_tuple=False).flatten()
+    return indices, cu_seqlens, max_seqlen
+
+
+def unpad_input(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    indices, cu_seqlens, max_seqlen = _get_unpad_data(attention_mask)
+    max_seqlen = max_seqlen.item()
 
     hidden_states = hidden_states.view(-1, *hidden_states.size()[1:])
     hidden_states = index_first_axis(hidden_states, indices)

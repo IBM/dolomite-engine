@@ -4,7 +4,13 @@ import torch.nn.functional as F
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
-from .padding import compute_cu_seqlens_and_max_seqlen_from_attention_mask, index_first_axis, pad_input, unpad_input
+from .padding import (
+    _get_unpad_data,
+    compute_cu_seqlens_and_max_seqlen_from_attention_mask,
+    index_first_axis,
+    pad_input,
+    unpad_input,
+)
 
 
 if is_flash_attention_2_available():
@@ -14,12 +20,6 @@ if is_flash_attention_2_available():
 if is_flash_attention_3_available():
     from flash_attn_interface import flash_attn_func as flash_attention_3
     from flash_attn_interface import flash_attn_varlen_func as flash_attention_3_varlen
-
-
-def _get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
-    cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
-    indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    return indices, cu_seqlens, max_seqlen
 
 
 def _upad_input(
