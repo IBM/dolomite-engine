@@ -1,6 +1,3 @@
-# the following code is copied from https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/bert_padding.py
-# Adapted from https://github.com/mlcommons/training_results_v1.1/blob/main/NVIDIA/benchmarks/bert/implementations/pytorch/padding.py
-
 import torch
 import torch.nn.functional as F
 
