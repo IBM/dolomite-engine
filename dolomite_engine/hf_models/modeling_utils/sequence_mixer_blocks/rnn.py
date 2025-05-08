@@ -79,7 +79,7 @@ class RNN(nn.Module):
 
             if attention_mask is not None:
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
-                input = pack_sequence(input=input, cu_seqlens=cu_seqlens)
+                input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
@@ -110,7 +110,7 @@ class RNN(nn.Module):
 
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
-                input=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
+                inputs=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
             )
 
         if cache_params is not None:
