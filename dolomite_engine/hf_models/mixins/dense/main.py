@@ -48,6 +48,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         if not self._tied_word_embeddings:
             self.lm_head = new_embeddings
 
+    @torch.compile(fullgraph=True)
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
