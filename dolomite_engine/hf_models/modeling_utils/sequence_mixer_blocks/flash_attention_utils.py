@@ -3,7 +3,7 @@ import torch
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
-from .padding import _get_unpad_data, index_first_axis, unpack_sequence
+from .padding import get_unpad_data, index_first_axis, unpack_sequence
 
 
 if is_flash_attention_2_available():
@@ -22,7 +22,7 @@ def _upad_input(
     attention_mask: torch.Tensor,
     query_length: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, tuple[torch.Tensor], tuple[torch.Tensor]]:
-    indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
+    indices_k, cu_seqlens_k, max_seqlen_in_batch_k = get_unpad_data(attention_mask)
     batch_size, kv_seq_len, num_key_value_heads, head_dim = key.size()
 
     key = index_first_axis(key.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k)
@@ -44,7 +44,7 @@ def _upad_input(
         # The -q_len: slice assumes left padding.
         attention_mask = attention_mask[:, -query_length:]
 
-        indices_q, cu_seqlens_q, max_seqlen_in_batch_q = _get_unpad_data(attention_mask)
+        indices_q, cu_seqlens_q, max_seqlen_in_batch_q = get_unpad_data(attention_mask)
         max_seqlen_in_batch_q = max_seqlen_in_batch_q.item()
 
         query = query.view(-1, *query.size()[1:])
