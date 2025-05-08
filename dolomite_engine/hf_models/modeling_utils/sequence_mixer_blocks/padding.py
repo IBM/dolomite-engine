@@ -13,54 +13,6 @@ if is_cute_kernels_available():
     from cute_kernels import pack_sequence_cute, pack_sequence_torch, unpack_sequence_cute, unpack_sequence_torch
 
 
-class _IndexFirstAxis(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
-        assert input.dim() >= 2
-
-        ctx.save_for_backward(indices)
-        ctx.first_axis_dim = input.size(0)
-
-        other_shape = input.size()[1:]
-        indices = indices.unsqueeze(1).expand(-1, other_shape.numel())
-
-        input = input.reshape(input.size(0), -1)
-        input = input.gather(0, indices)
-        input = input.reshape(-1, *other_shape)
-
-        return input
-
-    @staticmethod
-    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
-        assert grad_output.dim() >= 2
-
-        indices = ctx.saved_tensors[0]
-        first_axis_dim = ctx.first_axis_dim
-
-        other_shape = grad_output.size()[1:]
-        grad_output = grad_output.view(grad_output.size(0), -1)
-        grad_input = torch.zeros(
-            (first_axis_dim, grad_output.size(1)), device=grad_output.device, dtype=grad_output.dtype
-        )
-
-        indices = indices.unsqueeze(1).expand(-1, grad_output.size(1))
-
-        grad_input.scatter_(0, indices, grad_output)
-        grad_input = grad_input.reshape(first_axis_dim, *other_shape)
-
-        return grad_input, None
-
-
-def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
-    return _IndexFirstAxis.apply(input, indices)
-
-
-def get_unpad_data(attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
-    indices = attention_mask.flatten().nonzero(as_tuple=False).flatten()
-    return indices, cu_seqlens, max_seqlen
-
-
 def compute_cu_seqlens_and_max_seqlen_from_attention_mask(
     attention_mask: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
