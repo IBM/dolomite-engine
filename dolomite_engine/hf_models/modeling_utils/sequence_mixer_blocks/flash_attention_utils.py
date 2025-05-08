@@ -15,7 +15,7 @@ if is_flash_attention_3_available():
     from flash_attn_interface import flash_attn_varlen_func as flash_attention_3_varlen
 
 
-def _upad_input(
+def unpad_input(
     query: torch.Tensor,
     key: torch.Tensor,
     value: torch.Tensor,
@@ -128,7 +128,7 @@ def flash_attention(
         else:
             batch_size, query_length, num_heads, head_dim = query.size()
 
-            query, key, value, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k = _upad_input(
+            query, key, value, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k = unpad_input(
                 query, key, value, attention_mask, query_length
             )
 
