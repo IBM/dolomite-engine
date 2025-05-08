@@ -14,7 +14,7 @@ if is_cute_kernels_available():
 else:
     _ENABLE_ALL_KERNELS = False
 
-_KERNELS: set[Kernel] = set()
+_KERNELS: list[Kernel] = []
 
 
 def is_kernel_allowed(kernel: Kernel) -> bool:
@@ -23,8 +23,8 @@ def is_kernel_allowed(kernel: Kernel) -> bool:
 
 @contextmanager
 def enable_kernels(kernels: set[Kernel] | list[Kernel]):
-    if not isinstance(kernels, set):
-        kernels = set(kernels)
+    if not isinstance(kernels, list):
+        kernels = list(kernels)
 
     global _KERNELS
 
