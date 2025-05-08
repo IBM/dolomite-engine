@@ -51,25 +51,6 @@ class _IndexFirstAxis(torch.autograd.Function):
         return grad_input, None
 
 
-class _IndexPutFirstAxis(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, values: torch.Tensor, indices: torch.Tensor, first_axis_dim: int) -> torch.Tensor:
-        assert indices.dim() == 1
-        assert values.dim() >= 2
-
-        ctx.save_for_backward(indices)
-        output = torch.zeros(first_axis_dim, *values.size()[1:], device=values.device, dtype=values.dtype)
-        output[indices] = values
-
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor | None]:
-        indices = ctx.saved_tensors[0]
-        grad_values = grad_output[indices]
-        return grad_values, None, None
-
-
 def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
     return _IndexFirstAxis.apply(input, indices)
 
@@ -88,12 +69,6 @@ def unpad_input(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> to
     hidden_states = index_first_axis(hidden_states, indices)
 
     return hidden_states, indices, cu_seqlens, max_seqlen
-
-
-def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_length: int) -> torch.Tensor:
-    x = _IndexPutFirstAxis.apply(x, indices, batch_size * sequence_length)
-    x = x.view(batch_size, sequence_length, *x.size()[1:])
-    return x
 
 
 def compute_cu_seqlens_and_max_seqlen_from_attention_mask(

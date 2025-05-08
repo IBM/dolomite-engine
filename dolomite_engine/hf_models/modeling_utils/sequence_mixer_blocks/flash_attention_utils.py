@@ -3,12 +3,7 @@ import torch
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import is_flash_attention_2_available, is_flash_attention_3_available
-from .padding import (
-    _get_unpad_data,
-    compute_cu_seqlens_and_max_seqlen_from_attention_mask,
-    index_first_axis,
-    pad_input,
-)
+from .padding import _get_unpad_data, index_first_axis, unpack_sequence
 
 
 if is_flash_attention_2_available():
@@ -138,7 +133,8 @@ def flash_attention(
                     softcap=softcap,
                 )
         else:
-            batch_size = query.size(0)
+            batch_size, query_length, num_heads, head_dim = query.size()
+            _, key_value_length, _, _ = key.size()
 
             query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k = (
                 _upad_input(query, key, value, attention_mask, query_length)
@@ -174,6 +170,10 @@ def flash_attention(
                     softcap=softcap,
                 )
 
-            attn_output = pad_input(attn_output, indices_q, batch_size, query_length)
+            attn_output = unpack_sequence(
+                inputs=attn_output,
+                cu_seqlens=cu_seqlens_q,
+                desired_shape=(batch_size, query_length, num_heads, head_dim),
+            )
 
     return attn_output
