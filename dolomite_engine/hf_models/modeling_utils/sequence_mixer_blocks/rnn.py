@@ -8,7 +8,7 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
-from .padding import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
+from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
 
 if is_cute_kernels_available():
@@ -66,7 +66,7 @@ class RNN(nn.Module):
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.use_padding_free_transformer:
             assert cache_params is None
@@ -79,7 +79,7 @@ class RNN(nn.Module):
 
             if attention_mask is not None:
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
-                input = pack_sequence(input=input, cu_seqlens=cu_seqlens)
+                input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
@@ -110,7 +110,7 @@ class RNN(nn.Module):
 
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
-                input=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
+                inputs=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
             )
 
         if cache_params is not None:

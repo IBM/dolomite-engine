@@ -106,7 +106,7 @@ class MultiHeadLatentAttention(nn.Module):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
         use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
@@ -128,7 +128,9 @@ class MultiHeadLatentAttention(nn.Module):
             raise NotImplementedError()
         else:
             if past_key_values is not None:
-                key, value = past_key_values.update(key.unsqueeze(1), value.unsqueeze(1), self.layer_idx)
+                key, value = past_key_values.update(
+                    key_states=key.unsqueeze(1), value_states=value.unsqueeze(1), layer_idx=self.layer_idx
+                )
                 key = key.squeeze(1)
                 value = value.squeeze(1)
 
@@ -138,7 +140,6 @@ class MultiHeadLatentAttention(nn.Module):
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
-                query_length = None
                 total_q = query.shape[0]
 
                 query = query.view(total_q, self.num_heads, -1)
@@ -168,7 +169,6 @@ class MultiHeadLatentAttention(nn.Module):
                 max_seqlen=max_seqlen,
                 attention_mask=attention_mask,
                 use_padding_free_transformer=self.use_padding_free_transformer,
-                query_length=query_length,
                 causal=self.causal,
                 dropout=self.softmax_dropout_p if self.training else 0,
                 softmax_scale=self._get_softmax_scale(),

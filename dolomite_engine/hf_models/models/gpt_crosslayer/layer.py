@@ -67,7 +67,7 @@ class GPTCrossLayerBlock(nn.Module):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.kv_proj is not None:
             key, value = self.kv_proj(hidden_states)

@@ -24,7 +24,7 @@ class LadderResidualModel(LadderResidualPreTrainedModel, BaseModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> BaseModelOutputWithPast:
         (
             use_cache,

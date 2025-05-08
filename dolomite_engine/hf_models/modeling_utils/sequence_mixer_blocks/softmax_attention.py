@@ -360,7 +360,7 @@ class Attention(nn.Module):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
         use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
@@ -380,7 +380,6 @@ class Attention(nn.Module):
 
         if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
-                query_length = None
                 output_shape = (-1, self.hidden_size)
             else:
                 # TODO avoid this extra transpose
@@ -407,7 +406,6 @@ class Attention(nn.Module):
                 max_seqlen=max_seqlen,
                 attention_mask=attention_mask,
                 use_padding_free_transformer=self.use_padding_free_transformer,
-                query_length=query_length,
                 causal=self.causal,
                 dropout=self.softmax_dropout_p if self.training else 0,
                 softmax_scale=self._get_softmax_scale(),
