@@ -93,10 +93,10 @@ def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_
     return x
 
 
-def compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask: torch.Tensor) -> tuple[torch.Tensor]:
+def compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask: torch.Tensor) -> tuple[torch.Tensor, int]:
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
-    max_seqlen = seqlens_in_batch.max()
+    max_seqlen = seqlens_in_batch.max().item()
     return cu_seqlens, max_seqlen
 
 

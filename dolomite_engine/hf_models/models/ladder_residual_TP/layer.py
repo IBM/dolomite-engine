@@ -352,7 +352,7 @@ class LadderResidualBlock_TP(Block_TP):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> tuple[torch.Tensor]:
         if is_kernel_allowed(Kernel.ladder_residual_overlapped_layer):
             assert self.m_residual in [None, 1]

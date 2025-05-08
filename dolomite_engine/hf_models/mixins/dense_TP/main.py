@@ -64,7 +64,7 @@ class CausalLMModelMixin_TP(PreTrainedModelMixin_TP, CausalLMModelMixin):
         return_dict: bool = True,
         output_parallel_lm_logits: bool = False,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         reduction: str = "mean",
         pipeline_parallel_input: PipelineParallelInput | None = None,
     ) -> CausalLMOutputWithPast | PipelineParallelOutput:

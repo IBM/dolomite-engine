@@ -86,7 +86,7 @@ class CrossLayerAttention(nn.Module):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if is_kernel_allowed(Kernel.flash_attention_2) or is_kernel_allowed(Kernel.flash_attention_3):
             if self.use_padding_free_transformer:
