@@ -8,7 +8,7 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
-from .padding import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
+from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
 
 if is_cute_kernels_available():
