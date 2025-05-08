@@ -29,19 +29,20 @@ def _upad_input(
         query, key, value = pack_sequence(inputs=(query, key, value), cu_seqlens=cu_seqlens_k)
         cu_seqlens_q = cu_seqlens_k
         max_seqlen_q = max_seqlen_k
-    elif query_length == 1:
-        # There is a memcpy here, that is very bad.
-        cu_seqlens_q = torch.arange(batch_size + 1, dtype=torch.int32, device=query.device)
-        query = query.squeeze(1)
-        key, value = pack_sequence(inputs=(key, value), cu_seqlens=cu_seqlens_k)
-        max_seqlen_q = 1
     else:
-        # The -q_len: slice assumes left padding.
-        attention_mask = attention_mask[:, -query_length:]
-        cu_seqlens_q, max_seqlen_q = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
+        key, value = pack_sequence(inputs=(key, value), cu_seqlens=cu_seqlens_k)
 
-        query = pack_sequence(inputs=query, cu_seqlens=cu_seqlens_q)
-        max_seqlen_q = max_seqlen_q.item()
+        if query_length == 1:
+            # There is a memcpy here, that is very bad.
+            cu_seqlens_q = torch.arange(batch_size + 1, dtype=torch.int32, device=query.device)
+            query = query.squeeze(1)
+            key, value = pack_sequence(inputs=(key, value), cu_seqlens=cu_seqlens_k)
+            max_seqlen_q = 1
+        else:
+            # The -q_len: slice assumes left padding.
+            attention_mask = attention_mask[:, -query_length:]
+            cu_seqlens_q, max_seqlen_q = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
+            query = pack_sequence(inputs=query, cu_seqlens=cu_seqlens_q)
 
     return query, key, value, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k
 
