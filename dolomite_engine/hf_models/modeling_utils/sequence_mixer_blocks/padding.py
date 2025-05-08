@@ -75,16 +75,15 @@ def index_first_axis(input: torch.Tensor, indices: torch.Tensor) -> torch.Tensor
 
 
 def unpad_input(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
-    used_seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
-    indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
+    cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
+    max_seqlen = max_seqlen.item()
+
+    indices = attention_mask.flatten().nonzero(as_tuple=False).flatten()
 
     hidden_states = hidden_states.view(-1, *hidden_states.size()[1:])
     hidden_states = index_first_axis(hidden_states, indices)
 
-    return hidden_states, indices, cu_seqlens, max_seqlen_in_batch, used_seqlens_in_batch
+    return hidden_states, indices, cu_seqlens, max_seqlen
 
 
 def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_length: int) -> torch.Tensor:
@@ -93,10 +92,12 @@ def pad_input(x: torch.Tensor, indices: torch.Tensor, batch_size: int, sequence_
     return x
 
 
-def compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask: torch.Tensor) -> tuple[torch.Tensor]:
-    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
-    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
-    max_seqlen = seqlens_in_batch.max()
+def compute_cu_seqlens_and_max_seqlen_from_attention_mask(
+    attention_mask: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    seqlens = attention_mask.sum(dim=-1, dtype=torch.int32)
+    cu_seqlens = F.pad(torch.cumsum(seqlens, dim=0, dtype=torch.int32), (1, 0))
+    max_seqlen = seqlens.max()
     return cu_seqlens, max_seqlen
 
 

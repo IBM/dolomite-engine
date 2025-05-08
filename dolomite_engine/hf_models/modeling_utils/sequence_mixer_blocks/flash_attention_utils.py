@@ -53,7 +53,7 @@ def _upad_input(
     else:
         # The -q_len: slice assumes left padding.
         attention_mask = attention_mask[:, -query_length:]
-        query, indices_q, cu_seqlens_q, max_seqlen_in_batch_q, *_ = unpad_input(query, attention_mask)
+        query, indices_q, cu_seqlens_q, max_seqlen_in_batch_q = unpad_input(query, attention_mask)
 
     return query, key, value, indices_q, cu_seqlens_q, cu_seqlens_k, max_seqlen_in_batch_q, max_seqlen_in_batch_k
 
