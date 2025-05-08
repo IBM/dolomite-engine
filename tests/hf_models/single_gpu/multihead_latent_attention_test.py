@@ -122,6 +122,7 @@ class MultiHeadLatentAttentionTest(TestCommons):
                     "num_attention_heads": 4,
                     "query_compression_size": 12,
                     "key_value_compression_size": 8,
+                    "head_dim": 8,
                 }
                 for _ in range(num_layers)
             ],

@@ -1,4 +1,5 @@
 from ...config import CommonConfig
+from .flash_attention_utils import flash_attention
 from .mamba2 import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
@@ -6,14 +7,8 @@ from .softmax_attention import (
     Attention,
     get_attention_head_type,
     interleave_query_key_value_tensor_for_attention,
-    interleave_query_key_value_tensor_for_gqa,
-    interleave_query_key_value_tensor_for_mha,
-    interleave_query_key_value_tensor_for_mqa,
     repeat_key_value,
     split_query_key_value_tensor_for_attention,
-    split_query_key_value_tensor_for_gqa,
-    split_query_key_value_tensor_for_mha,
-    split_query_key_value_tensor_for_mqa,
 )
 from .stickbreaking_attention import PaddingFreeSBAttention, SBAttention
 
@@ -53,6 +48,7 @@ def get_sequence_mixer(
             query_compression_size=block.query_compression_size,
             key_value_compression_size=block.key_value_compression_size,
             num_attention_heads=block.num_attention_heads,
+            head_dim=block.head_dim,
             attention_multiplier=block.attention_multiplier,
             position_embedding_type=config.position_embedding_type,
             add_bias=block.add_bias,
@@ -65,6 +61,8 @@ def get_sequence_mixer(
             causal=True,
             layer_idx=layer_idx,
             use_padding_free_transformer=use_padding_free_transformer,
+            normalization_function=block.normalization_function,
+            layer_norm_epsilon=config.layer_norm_epsilon,
         )
     elif sequence_mixer_type == "rnn":
         return RNN(
@@ -72,12 +70,14 @@ def get_sequence_mixer(
             state_size=block.state_size,
             output_size=config.hidden_size,
             num_heads=block.num_heads,
-            m_width=config.m_width,
-            num_layers=config.num_layers,
             add_bias=block.add_bias,
-            initializer_range=config.initializer_range,
-            init_method=config.init_method,
             gradient_clipping=block.gradient_clipping,
+            initializer_range=config.initializer_range,
+            m_width=config.m_width,
+            init_method=config.init_method,
+            num_layers=config.num_layers,
+            layer_idx=layer_idx,
+            use_padding_free_transformer=use_padding_free_transformer,
         )
     else:
         sequence_mixer_kwargs = dict(

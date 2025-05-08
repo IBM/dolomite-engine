@@ -4,28 +4,186 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import DynamicCache
-from transformers.modeling_flash_attention_utils import _flash_attention_forward
 
-from .....enums import Kernel
-from .....kernels import is_kernel_allowed, wait_for_ACT
-from .....utils import divide_if_divisible, is_flash_attention_available
-from ...linear import ParameterizedLinear
-from ...position_embedding import apply_rotary_pos_emb
-from .utils import (
-    get_attention_head_type,
-    interleave_query_key_value_tensor_for_gqa,
-    interleave_query_key_value_tensor_for_mha,
-    interleave_query_key_value_tensor_for_mqa,
-    repeat_key_value,
-    split_query_key_value_tensor_for_gqa,
-    split_query_key_value_tensor_for_mha,
-    split_query_key_value_tensor_for_mqa,
-)
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed, wait_for_ACT
+from ....utils import divide_if_divisible
+from ...cache import GenerationCache
+from ..linear import ParameterizedLinear
+from ..position_embedding import apply_rotary_pos_emb
+from .flash_attention_utils import flash_attention
 
 
-if is_flash_attention_available():
-    from flash_attn.flash_attn_interface import flash_attn_varlen_func
+def _interleave_query_key_value_tensor_for_mha(
+    query_weight: torch.Tensor,
+    key_weight: torch.Tensor,
+    value_weight: torch.Tensor,
+    num_heads: int,
+    head_dim: int,
+) -> torch.Tensor:
+    interleaved = []
+    for i in range(num_heads):
+        start_index = i * head_dim
+        end_index = start_index + head_dim
+
+        interleaved.append(query_weight[start_index:end_index])
+        interleaved.append(key_weight[start_index:end_index])
+        interleaved.append(value_weight[start_index:end_index])
+
+    return torch.cat(interleaved)
+
+
+def _split_query_key_value_tensor_for_mha(
+    query_key_value_weight: torch.Tensor, num_heads: int
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    original_shape = query_key_value_weight.shape
+
+    query_key_value_weight = query_key_value_weight.view(num_heads, -1)
+
+    query_weight, key_weight, value_weight = query_key_value_weight.chunk(3, -1)
+
+    query_weight = query_weight.reshape(-1, *original_shape[1:])
+    key_weight = key_weight.reshape(-1, *original_shape[1:])
+    value_weight = value_weight.reshape(-1, *original_shape[1:])
+
+    return query_weight, key_weight, value_weight
+
+
+def _interleave_query_key_value_tensor_for_gqa(
+    query_weight: torch.Tensor,
+    key_weight: torch.Tensor,
+    value_weight: torch.Tensor,
+    num_heads: int,
+    num_key_value_heads: int,
+    head_dim: int,
+) -> torch.Tensor:
+    query_heads_per_group = num_heads // num_key_value_heads
+
+    interleaved = []
+    for i in range(num_key_value_heads):
+        start_index = i * query_heads_per_group * head_dim
+        end_index = start_index + query_heads_per_group * head_dim
+        interleaved.append(query_weight[start_index:end_index])
+
+        start_index = i * head_dim
+        end_index = start_index + head_dim
+        interleaved.append(key_weight[start_index:end_index])
+        interleaved.append(value_weight[start_index:end_index])
+
+    return torch.cat(interleaved)
+
+
+def _split_query_key_value_tensor_for_gqa(
+    query_key_value_weight: torch.Tensor, num_heads: int, num_key_value_heads: int, head_dim: int
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    query_heads_per_group = num_heads // num_key_value_heads
+    original_shape = query_key_value_weight.shape
+
+    query_key_value_weight = query_key_value_weight.view(num_key_value_heads, (query_heads_per_group + 2), -1)
+
+    query_weight, key_weight, value_weight = query_key_value_weight.split((query_heads_per_group, 1, 1), 1)
+
+    query_weight = query_weight.reshape(-1, *original_shape[1:])
+    key_weight = key_weight.reshape(-1, *original_shape[1:])
+    value_weight = value_weight.reshape(-1, *original_shape[1:])
+
+    return query_weight, key_weight, value_weight
+
+
+def _interleave_query_key_value_tensor_for_mqa(
+    query_weight: torch.Tensor,
+    key_weight: torch.Tensor,
+    value_weight: torch.Tensor,
+) -> torch.Tensor:
+    # [:] for converting slice to tensor
+    return torch.cat([query_weight[:], key_weight[:], value_weight[:]])
+
+
+def _split_query_key_value_tensor_for_mqa(
+    query_key_value_weight: torch.Tensor, num_heads: int, head_dim: int
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    return query_key_value_weight.split((num_heads * head_dim, head_dim, head_dim))
+
+
+_INTERLEAVE_FUNCTIONS = {
+    "mha": _interleave_query_key_value_tensor_for_mha,
+    "mqa": _interleave_query_key_value_tensor_for_mqa,
+    "gqa": _interleave_query_key_value_tensor_for_gqa,
+}
+
+
+_SPLIT_FUNCTIONS = {
+    "mha": _split_query_key_value_tensor_for_mha,
+    "mqa": _split_query_key_value_tensor_for_mqa,
+    "gqa": _split_query_key_value_tensor_for_gqa,
+}
+
+
+def interleave_query_key_value_tensor_for_attention(
+    query_weight: torch.Tensor,
+    key_weight: torch.Tensor,
+    value_weight: torch.Tensor,
+    num_heads: int,
+    num_key_value_heads: int,
+    head_dim: int,
+    attention_head_type: str,
+) -> torch.Tensor:
+    if attention_head_type in _INTERLEAVE_FUNCTIONS:
+        interleave_function = _INTERLEAVE_FUNCTIONS[attention_head_type]
+        interleave_function_parameters = inspect.signature(interleave_function).parameters.keys()
+
+        parameters_to_pass = {}
+        this_function_parameters = locals()
+        for parameter in interleave_function_parameters:
+            parameters_to_pass[parameter] = this_function_parameters[parameter]
+
+        query_key_value_weight = interleave_function(**parameters_to_pass)
+
+        return query_key_value_weight
+
+    raise ValueError(f"unexpected `attention_head_type` {attention_head_type}")
+
+
+def split_query_key_value_tensor_for_attention(
+    query_key_value_weight: torch.Tensor,
+    num_heads: int,
+    num_key_value_heads: int,
+    head_dim: int,
+    attention_head_type: str,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if attention_head_type in _SPLIT_FUNCTIONS:
+        split_function = _SPLIT_FUNCTIONS[attention_head_type]
+        split_function_parameters = inspect.signature(split_function).parameters.keys()
+
+        parameters_to_pass = {}
+        this_function_parameters = locals()
+        for parameter in split_function_parameters:
+            parameters_to_pass[parameter] = this_function_parameters[parameter]
+
+        return split_function(**parameters_to_pass)
+
+    raise ValueError(f"unexpected `attention_head_type` {attention_head_type}")
+
+
+def repeat_key_value(x: torch.Tensor, num_heads: int, num_key_value_heads: int) -> torch.Tensor:
+    num_groups = num_heads // num_key_value_heads
+
+    if num_groups == 1:
+        return x
+
+    if num_key_value_heads == 1:
+        return x.expand(-1, num_heads, -1, -1)
+
+    return x.repeat_interleave(num_groups, dim=1)
+
+
+def get_attention_head_type(num_attention_heads: int, num_key_value_heads: int) -> str:
+    if num_attention_heads == num_key_value_heads:
+        return "mha"
+    elif num_key_value_heads == 1:
+        return "mqa"
+    else:
+        return "gqa"
 
 
 class Attention(nn.Module):
@@ -198,14 +356,17 @@ class Attention(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        use_flash_attention_2 = is_kernel_allowed(Kernel.flash_attention_2)
+        use_flash_attention_3 = is_kernel_allowed(Kernel.flash_attention_3)
+
         if self.use_padding_free_transformer:
-            assert is_kernel_allowed(Kernel.flash_attention_2)
+            assert use_flash_attention_2 or use_flash_attention_3
             assert past_key_values is None
 
         query, key, value = self._prepare_qkv_for_forward(hidden_states)
@@ -215,10 +376,11 @@ class Attention(nn.Module):
             key = apply_rotary_pos_emb(key, rope_cos_sin)
 
         if past_key_values is not None:
-            key, value = past_key_values.update(key, value, self.layer_idx)
+            key, value = past_key_values.update(key_states=key, value_states=value, layer_idx=self.layer_idx)
 
-        if is_kernel_allowed(Kernel.flash_attention_2):
+        if use_flash_attention_2 or use_flash_attention_3:
             if self.use_padding_free_transformer:
+                query_length = None
                 output_shape = (-1, self.hidden_size)
             else:
                 # TODO avoid this extra transpose
@@ -237,30 +399,19 @@ class Attention(nn.Module):
             key = wait_for_ACT(key, wait_in_forward=True, wait_in_backward=False)
             value = wait_for_ACT(value, wait_in_forward=True, wait_in_backward=False)
 
-            if self.use_padding_free_transformer:
-                hidden_states = flash_attn_varlen_func(
-                    query,
-                    key,
-                    value,
-                    cu_seqlens_q=cu_seqlens,
-                    cu_seqlens_k=cu_seqlens,
-                    max_seqlen_q=max_seqlen,
-                    max_seqlen_k=max_seqlen,
-                    dropout_p=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                    causal=self.causal,
-                )
-            else:
-                hidden_states = _flash_attention_forward(
-                    query_states=query,
-                    key_states=key,
-                    value_states=value,
-                    attention_mask=attention_mask,
-                    query_length=query_length,
-                    is_causal=self.causal,
-                    dropout=self.softmax_dropout_p if self.training else 0,
-                    softmax_scale=self._get_softmax_scale(),
-                )
+            hidden_states = flash_attention(
+                query=query,
+                key=key,
+                value=value,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                attention_mask=attention_mask,
+                use_padding_free_transformer=self.use_padding_free_transformer,
+                query_length=query_length,
+                causal=self.causal,
+                dropout=self.softmax_dropout_p if self.training else 0,
+                softmax_scale=self._get_softmax_scale(),
+            )
 
             del query, key, value
 
@@ -278,6 +429,7 @@ class Attention(nn.Module):
                 dropout_p=self.softmax_dropout_p if self.training else 0,
                 is_causal=self.causal if attention_mask is None else False,
                 scale=self._get_softmax_scale(),
+                enable_gqa=True,
             )
 
             del query, key, value
@@ -298,63 +450,3 @@ class Attention(nn.Module):
             softmax_scale = self.attention_multiplier
 
         return softmax_scale
-
-
-_INTERLEAVE_FUNCTIONS = {
-    "mha": interleave_query_key_value_tensor_for_mha,
-    "mqa": interleave_query_key_value_tensor_for_mqa,
-    "gqa": interleave_query_key_value_tensor_for_gqa,
-}
-
-
-_SPLIT_FUNCTIONS = {
-    "mha": split_query_key_value_tensor_for_mha,
-    "mqa": split_query_key_value_tensor_for_mqa,
-    "gqa": split_query_key_value_tensor_for_gqa,
-}
-
-
-def interleave_query_key_value_tensor_for_attention(
-    query_weight: torch.Tensor,
-    key_weight: torch.Tensor,
-    value_weight: torch.Tensor,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: str,
-) -> torch.Tensor:
-    if attention_head_type in _INTERLEAVE_FUNCTIONS:
-        interleave_function = _INTERLEAVE_FUNCTIONS[attention_head_type]
-        interleave_function_parameters = inspect.signature(interleave_function).parameters.keys()
-
-        parameters_to_pass = {}
-        this_function_parameters = locals()
-        for parameter in interleave_function_parameters:
-            parameters_to_pass[parameter] = this_function_parameters[parameter]
-
-        query_key_value_weight = interleave_function(**parameters_to_pass)
-
-        return query_key_value_weight
-
-    raise ValueError(f"unexpected `attention_head_type` {attention_head_type}")
-
-
-def split_query_key_value_tensor_for_attention(
-    query_key_value_weight: torch.Tensor,
-    num_heads: int,
-    num_key_value_heads: int,
-    head_dim: int,
-    attention_head_type: str,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    if attention_head_type in _SPLIT_FUNCTIONS:
-        split_function = _SPLIT_FUNCTIONS[attention_head_type]
-        split_function_parameters = inspect.signature(split_function).parameters.keys()
-
-        parameters_to_pass = {}
-        this_function_parameters = locals()
-        for parameter in split_function_parameters:
-            parameters_to_pass[parameter] = this_function_parameters[parameter]
-
-        return split_function(**parameters_to_pass)
-
-    raise ValueError(f"unexpected `attention_head_type` {attention_head_type}")

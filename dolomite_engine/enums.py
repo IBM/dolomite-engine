@@ -68,11 +68,14 @@ class Kernel(Enum):
     continuous_count_cute = "continuous_count_cute"
     cross_entropy_cute = "cross_entropy_cute"
     fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"
+    pack_sequence_cute = "pack_sequence_cute"
     rmsnorm_cute = "rmsnorm_cute"
     rnn_cute = "rnn_cute"
     swiglu_unchunked_cute = "swiglu_unchunked_cute"
+    unpack_sequence_cute = "unpack_sequence_cute"
     # external kernels
     flash_attention_2 = "flash_attention_2"
+    flash_attention_3 = "flash_attention_3"
     mamba2_ssm = "mamba2_ssm"
     scattermoe = "scattermoe"
     # custom functions

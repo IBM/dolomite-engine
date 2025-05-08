@@ -166,6 +166,7 @@ class TestCommons(TestCase):
                     "num_experts_per_tok": num_experts_per_tok,
                     "activation_function": activation_function,
                     "add_bias": add_bias,
+                    "shared_intermediate_size": None if shared_n_inner is None else shared_n_inner,
                 }
                 for _ in range(num_layers)
             ],
@@ -191,6 +192,18 @@ class TestCommons(TestCase):
         device: torch.device,
         exact_match: bool = True,
         compare_loss: bool = True,
+        logits_rtol_float32: float = 0,
+        logits_atol_float32: float = 3e-7,
+        logits_rtol_float16: float = 0,
+        logits_atol_float16: float = 3e-7,
+        logits_rtol_bfloat16: float = 0,
+        logits_atol_bfloat16: float = 3e-7,
+        loss_rtol_float32: float = 0,
+        loss_atol_float32: float = 1e-5,
+        loss_rtol_float16: float = 0,
+        loss_atol_float16: float = 1e-5,
+        loss_rtol_bfloat16: float = 0,
+        loss_atol_bfloat16: float = 1e-5,
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
@@ -232,12 +245,12 @@ class TestCommons(TestCase):
             dolomite_logits,
             hf_logits,
             exact_match,
-            rtol_float32=0,
-            atol_float32=3e-7,
-            rtol_float16=0,
-            atol_float16=3e-7,
-            rtol_bfloat16=0,
-            atol_bfloat16=3e-7,
+            rtol_float32=logits_rtol_float32,
+            atol_float32=logits_atol_float32,
+            rtol_float16=logits_rtol_float16,
+            atol_float16=logits_atol_float16,
+            rtol_bfloat16=logits_rtol_bfloat16,
+            atol_bfloat16=logits_atol_bfloat16,
         )
 
         if compare_loss:
@@ -245,12 +258,12 @@ class TestCommons(TestCase):
                 dolomite_loss,
                 hf_loss,
                 exact_match,
-                rtol_float32=0,
-                atol_float32=1e-5,
-                rtol_float16=0,
-                atol_float16=1e-5,
-                rtol_bfloat16=0,
-                atol_bfloat16=1e-5,
+                rtol_float32=loss_rtol_float32,
+                atol_float32=loss_atol_float32,
+                rtol_float16=loss_rtol_float16,
+                atol_float16=loss_atol_float16,
+                rtol_bfloat16=loss_rtol_bfloat16,
+                atol_bfloat16=loss_atol_bfloat16,
             )
 
     @staticmethod
@@ -280,7 +293,7 @@ class TestCommons(TestCase):
         )
 
         if use_padding_free_transformer:
-            assert model._use_padding_free_transformer
+            assert model.use_padding_free_transformer
 
         assert len(kwargs) == 0
 

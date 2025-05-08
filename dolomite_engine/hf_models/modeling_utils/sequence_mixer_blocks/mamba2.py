@@ -2,17 +2,17 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from .....enums import Kernel
-from .....kernels import is_kernel_allowed
-from .....utils import divide_if_divisible, is_causal_conv1d_available, is_mamba_2_ssm_available
-from ....cache import HybridMambaAttentionDynamicCache
-from ...activations import get_activation_function
-from ...convolution import ParameterizedConv1d
-from ...linear import ParameterizedLinear
-from ...mlp_blocks.mlp import _get_std_for_linear
-from ...normalization import get_normalization_function
-from .utils import _apply_mask_to_padding_states, _pad_tensor_by_size, _reshape_into_chunks, _segment_sum
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
+from ....utils import divide_if_divisible, is_causal_conv1d_available, is_mamba_2_ssm_available
+from ...cache import GenerationCache
+from ..activations import get_activation_function
+from ..convolution import ParameterizedConv1d
+from ..linear import ParameterizedLinear
+from ..mlp_blocks.mlp import _get_std_for_linear
+from ..normalization import get_normalization_function
 
 
 if is_mamba_2_ssm_available():
@@ -21,6 +21,70 @@ if is_mamba_2_ssm_available():
 
 if is_causal_conv1d_available():
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
+
+
+def _pad_tensor_by_size(input_tensor: torch.Tensor, pad_size: int) -> torch.Tensor:
+    """
+    Padding x tensor with `pad_size` on the seq_len dim (dim=1)
+
+    Assumes that we only have tensors of either size 4 or 3
+    """
+    pad_shape = (0, 0, 0, 0, 0, pad_size, 0, 0) if len(input_tensor.shape) == 4 else (0, 0, 0, pad_size, 0, 0)
+
+    return torch.nn.functional.pad(input_tensor, pad_shape, mode="constant", value=0)
+
+
+def _reshape_into_chunks(input_tensor: torch.Tensor, pad_size: int, chunk_size: int) -> torch.Tensor:
+    """
+    Padding input_tensor with `pad_size` on the seq_len dim (dim=1) and
+    simultaneously splitting it into chunk sequences.
+
+    Assumes that we only have tensors of either size 4 or 3
+    """
+    # [bsz, seq_len, ...] -> [bsz, seq_len multiple of chunk_size, ...]
+    input_tensor = _pad_tensor_by_size(input_tensor, pad_size)
+
+    if len(input_tensor.shape) == 3:
+        # [bsz, seq_len multiple of chunk_size, num_heads] -> [bsz, -1, chunk_size, num_heads]
+        input_tensor = input_tensor.reshape(input_tensor.shape[0], -1, chunk_size, input_tensor.shape[2])
+    else:
+        # [bsz, seq_len multiple of chunk_size, num_heads, head_dim or state_size] -> [bsz, -1, chunk_size, num_heads, head_dim or state_size]
+        input_tensor = input_tensor.reshape(
+            input_tensor.shape[0], -1, chunk_size, input_tensor.shape[2], input_tensor.shape[3]
+        )
+
+    return input_tensor
+
+
+def _segment_sum(input_tensor: torch.Tensor) -> torch.Tensor:
+    """
+    More stable segment sum calculation. Uses cumulative sums and masking instead of direct subtractions.
+    """
+    chunk_size = input_tensor.size(-1)
+    # 1. expand input tensor to have an additional dimension and repeat along that dimension
+    # [..., chunk_size] -> [..., chunk_size, chunk_size]
+    input_tensor = input_tensor[..., None].expand(*input_tensor.size(), chunk_size)
+    # 2. create a lower triangular mask with the diagonal set to 0 to 0 out elements above diag
+    mask = torch.tril(torch.ones(chunk_size, chunk_size, device=input_tensor.device, dtype=torch.bool), diagonal=-1)
+    input_tensor = input_tensor.masked_fill(~mask, 0)
+    # 3. compute actual cumsum
+    tensor_segsum = torch.cumsum(input_tensor, dim=-2)
+
+    # 4. apply mask to keep only the lower triangular part of the cumulative sum result (incl diagonal this time)
+    mask = torch.tril(torch.ones(chunk_size, chunk_size, device=input_tensor.device, dtype=torch.bool), diagonal=0)
+    tensor_segsum = tensor_segsum.masked_fill(~mask, -torch.inf)
+    return tensor_segsum
+
+
+def _apply_mask_to_padding_states(hidden_states: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
+    """
+    Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
+    """
+    if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
+        dtype = hidden_states.dtype
+        hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
+
+    return hidden_states
 
 
 class Mamba2(nn.Module):
@@ -114,7 +178,7 @@ class Mamba2(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        cache_params: HybridMambaAttentionDynamicCache | None = None,
+        cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if is_kernel_allowed(Kernel.mamba2_ssm):
@@ -127,7 +191,7 @@ class Mamba2(nn.Module):
     def _torch_forward(
         self,
         hidden_states: torch.Tensor,
-        cache_params: HybridMambaAttentionDynamicCache | None = None,
+        cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         dtype = hidden_states.dtype
@@ -145,39 +209,42 @@ class Mamba2(nn.Module):
             [self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
         )
 
+        conv_state, ssm_state = (None, None) if cache_params is None else cache_params.get_cache(self.layer_idx)
         use_precomputed_states = (
-            cache_params is not None
-            and cache_params.has_previous_state
-            and seq_len == 1
-            and cache_params.conv_states[self.layer_idx].shape[0]
-            == cache_params.ssm_states[self.layer_idx].shape[0]
-            == batch_size
+            cache_params is not None and seq_len == 1 and conv_state is not None and ssm_state is not None
         )
 
         # 2. Convolution sequence transformation
         if use_precomputed_states:
-            cache_params.conv_states[self.layer_idx] = cache_params.conv_states[self.layer_idx].roll(
-                shifts=-1, dims=-1
-            )
-            cache_params.conv_states[self.layer_idx][:, :, -1] = hidden_states_B_C[:, 0, :].to(
-                cache_params.conv_states[self.layer_idx].device
-            )
+            conv_state = conv_state.roll(shifts=-1, dims=-1)
+            conv_state[:, :, -1] = hidden_states_B_C[:, 0, :].to(conv_state.device)
+            cache_params.update(conv_state=conv_state, layer_idx=self.layer_idx)
 
             # We need to guarantee that anything regarding the cache is on the same device
-            conv_states = cache_params.conv_states[self.layer_idx].to(device=self.conv1d.weight.device)
+            conv_state = conv_state.to(device=self.conv1d.weight.device)
 
-            hidden_states_B_C = torch.sum(conv_states * self.conv1d.weight.squeeze(1), dim=-1)
+            hidden_states_B_C = torch.sum(conv_state * self.conv1d.weight.squeeze(1), dim=-1)
             if self.use_conv_bias:
                 hidden_states_B_C = hidden_states_B_C + self.conv1d.bias
             hidden_states_B_C = self.activation(hidden_states_B_C)
         else:
             # Init cache
             if cache_params is not None:
+                if ssm_state is None:
+                    ssm_state = torch.zeros(
+                        batch_size,
+                        self.num_heads,
+                        divide_if_divisible(self.intermediate_size, self.num_heads, ""),
+                        self.ssm_state_size,
+                        device=projected_states.device,
+                        dtype=dtype,
+                    )
+
                 hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
-                conv_states = nn.functional.pad(
+                conv_state = F.pad(
                     hidden_states_B_C_transposed, (self.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0)
                 )
-                cache_params.conv_states[self.layer_idx].copy_(conv_states)
+                cache_params.update(conv_state=conv_state, ssm_state=ssm_state, layer_idx=self.layer_idx)
 
             hidden_states_B_C = self.activation(
                 self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2)
@@ -194,7 +261,7 @@ class Mamba2(nn.Module):
         A = -torch.exp(self.A_log.float())  # [num_heads]
         if use_precomputed_states:
             # We need to guarantee that anything regarding the cache is on the same device
-            cache_device = cache_params.ssm_states[self.layer_idx].device
+            cache_device = ssm_state.device
 
             # Note: there is no need to pad parameter matrices here, as there is just one new token
             # for batched generation
@@ -224,7 +291,8 @@ class Mamba2(nn.Module):
             dBx = (dB * hidden_states[..., None]).to(device=cache_device)
 
             # State calculation
-            cache_params.ssm_states[self.layer_idx].copy_(cache_params.ssm_states[self.layer_idx] * dA + dBx)
+            ssm_state = ssm_state * dA + dBx
+            cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
             # Subsequent output
             # [bsz, n_groups * state_size] -> [bsz, num_heads, state_size]
@@ -233,11 +301,9 @@ class Mamba2(nn.Module):
             C = C.reshape(batch_size, -1, C.shape[-1])
             # [bsz, num_heads, head_dim]
 
-            ssm_states = cache_params.ssm_states[self.layer_idx].to(
-                device=C.device, dtype=C.dtype
-            )  # Shape: [b, h, d, n]
+            ssm_state = ssm_state.to(device=C.device, dtype=C.dtype)  # Shape: [b, h, d, n]
             # Reshape ssm_states to merge the first two dimensions
-            ssm_states_reshaped = ssm_states.view(
+            ssm_states_reshaped = ssm_state.view(
                 batch_size * self.num_heads, self.head_dim, self.ssm_state_size
             )  # Shape: [b*h, d, n]
             C_reshaped = C.view(batch_size * self.num_heads, self.ssm_state_size, 1)  # Shape: [b*h, n, 1]
@@ -301,7 +367,7 @@ class Mamba2(nn.Module):
             # 3. Compute the inter-chunk SSM recurrence; produces correct SSM states at chunk boundaries
             # (middle term of factorization of off-diag blocks; A terms)
             if use_precomputed_states:
-                previous_states = cache_params.ssm_states[self.layer_idx][:, None, ...].to(device=states.device)
+                previous_states = cache_params.get_cache(self.layer_idx)[1][:, None, ...].to(device=states.device)
             else:
                 previous_states = torch.zeros_like(states[:, :1])
             states = torch.cat([previous_states, states], dim=1)
@@ -329,9 +395,8 @@ class Mamba2(nn.Module):
             y = y.reshape(batch_size, seq_len, -1)
 
             # Init cache
-            if ssm_state is not None and cache_params is not None:
-                cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
-                cache_params.has_previous_state = True
+            if cache_params is not None:
+                cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
         scan_output = self.norm(y, gate)
 
@@ -345,7 +410,7 @@ class Mamba2(nn.Module):
     def _cuda_forward(
         self,
         hidden_states: torch.Tensor,
-        cache_params: HybridMambaAttentionDynamicCache | None = None,
+        cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # 1. Gated MLP's linear projection
@@ -356,13 +421,9 @@ class Mamba2(nn.Module):
         batch_size, seq_len, _ = hidden_states.shape
         groups_time_state_size = self.n_groups * self.ssm_state_size
 
+        conv_state, ssm_state = (None, None) if cache_params is None else cache_params.get_cache(self.layer_idx)
         use_precomputed_states = (
-            cache_params is not None
-            and cache_params.has_previous_state
-            and seq_len == 1
-            and cache_params.conv_states[self.layer_idx].shape[0]
-            == cache_params.ssm_states[self.layer_idx].shape[0]
-            == batch_size
+            cache_params is not None and seq_len == 1 and conv_state is not None and ssm_state is not None
         )
 
         # getting projected states from cache if it exists
@@ -374,11 +435,12 @@ class Mamba2(nn.Module):
             # 2. Convolution sequence transformation
             hidden_states_B_C = causal_conv1d_update(
                 hidden_states_B_C,
-                cache_params.conv_states[self.layer_idx],
+                conv_state,
                 self.conv1d.weight.squeeze(1),
                 self.conv1d.bias,
                 self.activation_string,
             )
+            cache_params.update(conv_state=conv_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
             hidden_states, B, C = torch.split(
                 hidden_states_B_C,
@@ -396,7 +458,7 @@ class Mamba2(nn.Module):
             C = C.view(batch_size, self.n_groups, C.shape[1] // self.n_groups)
             hidden_states_reshaped = hidden_states.view(batch_size, self.num_heads, self.head_dim)
             hidden_states = selective_state_update(
-                cache_params.ssm_states[self.layer_idx],
+                ssm_state,
                 hidden_states_reshaped,
                 dt,
                 A,
@@ -451,11 +513,11 @@ class Mamba2(nn.Module):
                     # If we just take xBC[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
                     # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
                     hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
-                    conv_states = nn.functional.pad(
+                    conv_state = F.pad(
                         hidden_states_B_C_transposed,
                         (self.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0),
                     )
-                    cache_params.conv_states[self.layer_idx].copy_(conv_states)
+                    cache_params.update(conv_state=conv_state, layer_idx=self.layer_idx)
 
                 if self.activation_string not in ["silu", "swish"]:
                     hidden_states_B_C = self.activation(
@@ -494,8 +556,8 @@ class Mamba2(nn.Module):
                 )
 
                 # Init cache
-                if ssm_state is not None and cache_params is not None:
-                    cache_params.ssm_states[self.layer_idx].copy_(ssm_state)
+                if cache_params is not None:
+                    cache_params.update(ssm_state=ssm_state, num_tokens_added=seq_len, layer_idx=self.layer_idx)
 
                 scan_output = scan_output.view(batch_size, seq_len, -1)
                 # Multiply "gate" branch and apply extra normalization layer
