@@ -14,7 +14,7 @@ class LadderResidualBlock(Block):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> tuple[torch.Tensor]:
         if current_attention_out is not None:
             residual = residual + current_attention_out

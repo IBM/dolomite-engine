@@ -66,7 +66,7 @@ class RNN(nn.Module):
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.use_padding_free_transformer:
             assert cache_params is None

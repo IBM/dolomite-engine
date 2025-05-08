@@ -174,7 +174,7 @@ class DesyncResidualAttention(Attention):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         # ==========================================================================================
         # hidden_states -> (1, batch_size, query_length, num_heads * head_dim)

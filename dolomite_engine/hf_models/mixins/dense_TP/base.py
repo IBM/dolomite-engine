@@ -103,7 +103,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> BaseModelOutputWithPast:
         if self.is_first_stage:
             (
