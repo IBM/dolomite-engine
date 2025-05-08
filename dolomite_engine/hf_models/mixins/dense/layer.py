@@ -25,6 +25,7 @@ class Block(nn.Module):
             config, use_padding_free_transformer=use_padding_free_transformer, layer_idx=layer_idx
         )
 
+    @torch.compile(fullgraph=True)
     def forward(
         self,
         hidden_states: torch.Tensor,
