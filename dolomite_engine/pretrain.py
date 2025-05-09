@@ -414,7 +414,15 @@ def train(
             metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
-            evaluate(val_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
+            evaluate(
+                val_dataloaders,
+                model_container,
+                global_step,
+                experiments_tracker,
+                eval_steps,
+                group_names,
+                lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+            )
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
             save_checkpoint(
@@ -435,7 +443,15 @@ def train(
             steps_since_start_time = 0
 
     if eval_during_training:
-        evaluate(test_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
+        evaluate(
+            test_dataloaders,
+            model_container,
+            global_step,
+            experiments_tracker,
+            eval_steps,
+            group_names,
+            lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+        )
 
     ensure_last_checkpoint_is_saved()
 
@@ -451,6 +467,7 @@ def evaluate(
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
     group_names: list[str],
+    lm_loss_multiplier: float,
 ) -> float:
     """main validation loop for the program
 
@@ -461,6 +478,7 @@ def evaluate(
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
         group_names (list[str]): names of the datasets in validation/test group
+        lm_loss_multiplier (float): lm loss multiplier
 
     Returns:
         MetricsTrackingDict: metrics tracker
@@ -494,7 +512,7 @@ def evaluate(
 
         for _ in range(eval_steps):
             batch = get_next_batch(val_dataloader)
-            loss_step_dict = model(batch)
+            loss_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
             metrics_tracker = metrics_tracker + loss_step_dict
 
         metrics_tracker = metrics_tracker / eval_steps
