@@ -611,7 +611,19 @@ def main(mode: Mode = Mode.training) -> None:
     experiments_tracker.log_args(args)
 
     # main training loop
-    with disable_generation_cache(), enable_kernels(args.kernel_args.kernels):
+    with (
+        disable_generation_cache(),
+        enable_kernels(args.kernel_args.kernels),
+        torch._dynamo.compiled_autograd._enable(torch.compile(backend="inductor", fullgraph=True)),
+        torch._dynamo.config.patch(
+            compiled_autograd=True,
+            compiled_autograd_kwargs_override={
+                "fullgraph": True,
+            },
+            inline_inbuilt_nn_modules=True,
+            skip_fsdp_hooks=False,
+        ),
+    ):
         train(
             args,
             model_container=model_container,
