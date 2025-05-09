@@ -318,7 +318,15 @@ def train(
 
     if eval_during_training:
         eval_steps = args.datasets[0].class_args.get("eval_steps")
-        evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
+        evaluate(
+            val_dataloaders,
+            model_container,
+            starting_iteration,
+            experiments_tracker,
+            eval_steps,
+            group_names,
+            lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+        )
 
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
