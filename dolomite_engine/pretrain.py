@@ -316,6 +316,11 @@ def train(
 
     model_container.train()
 
+    micro_batch_size = args.training_parameters.micro_batch_size
+    sequence_length = args.datasets[0].class_args.get("sequence_length")
+    global_batch_size = StepTracker.get_global_batch_size()
+    tokens_per_batch = global_batch_size * sequence_length
+
     if eval_during_training:
         eval_steps = args.datasets[0].class_args.get("eval_steps")
         evaluate(
@@ -327,11 +332,6 @@ def train(
             group_names,
             lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
         )
-
-    micro_batch_size = args.training_parameters.micro_batch_size
-    sequence_length = args.datasets[0].class_args.get("sequence_length")
-    global_batch_size = StepTracker.get_global_batch_size()
-    tokens_per_batch = global_batch_size * sequence_length
 
     is_pipeline_parallel_enabled = args.distributed_args.num_pipeline_stages > 1
     if not is_pipeline_parallel_enabled:
