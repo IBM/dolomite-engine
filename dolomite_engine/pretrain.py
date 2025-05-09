@@ -245,6 +245,7 @@ def track_val_metrics(
     experiments_tracker: ExperimentsTracker,
     metrics_tracker: MetricsTrackingDict,
     group_name: str | None = None,
+    context: str = "val",
 ) -> None:
     """tracks metrics like validation loss
 
@@ -253,9 +254,8 @@ def track_val_metrics(
         experiments_tracker (ExperimentsTracker): experiments tracker
         metrics_tracker (MetricsTrackingDict): metrics tracker
         group_name (str | None): group name for the validation / test set
+        context (str): context
     """
-
-    context = "val"
 
     message = f"step = {global_step}"
     if group_name is not None:
@@ -318,14 +318,23 @@ def train(
 
     model_container.train()
 
-    if eval_during_training:
-        eval_steps = args.datasets[0].class_args.get("eval_steps")
-        evaluate(val_dataloaders, model_container, starting_iteration, experiments_tracker, eval_steps, group_names)
-
     micro_batch_size = args.training_parameters.micro_batch_size
     sequence_length = args.datasets[0].class_args.get("sequence_length")
     global_batch_size = StepTracker.get_global_batch_size()
     tokens_per_batch = global_batch_size * sequence_length
+
+    if eval_during_training:
+        eval_steps = args.datasets[0].class_args.get("eval_steps")
+        evaluate(
+            val_dataloaders,
+            model_container,
+            starting_iteration,
+            experiments_tracker,
+            eval_steps,
+            group_names,
+            lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+            context="val",
+        )
 
     is_pipeline_parallel_enabled = args.distributed_args.num_pipeline_stages > 1
     if not is_pipeline_parallel_enabled:
@@ -414,7 +423,16 @@ def train(
             metrics_tracker = MetricsTrackingDict({})
 
         if eval_during_training and (global_step % eval_interval == 0 or global_step == num_training_steps):
-            evaluate(val_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
+            evaluate(
+                val_dataloaders,
+                model_container,
+                global_step,
+                experiments_tracker,
+                eval_steps,
+                group_names,
+                lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+                context="val",
+            )
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
             save_checkpoint(
@@ -435,7 +453,16 @@ def train(
             steps_since_start_time = 0
 
     if eval_during_training:
-        evaluate(test_dataloaders, model_container, global_step, experiments_tracker, eval_steps, group_names)
+        evaluate(
+            test_dataloaders,
+            model_container,
+            global_step,
+            experiments_tracker,
+            eval_steps,
+            group_names,
+            lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+            context="test",
+        )
 
     ensure_last_checkpoint_is_saved()
 
@@ -451,6 +478,8 @@ def evaluate(
     experiments_tracker: ExperimentsTracker,
     eval_steps: int,
     group_names: list[str],
+    lm_loss_multiplier: float,
+    context: str,
 ) -> float:
     """main validation loop for the program
 
@@ -461,6 +490,8 @@ def evaluate(
         experiments_tracker (ExperimentsTracker): metrics tracker
         eval_steps (int): number of steps to run eval for
         group_names (list[str]): names of the datasets in validation/test group
+        lm_loss_multiplier (float): lm loss multiplier
+        context (str): context
 
     Returns:
         MetricsTrackingDict: metrics tracker
@@ -494,7 +525,7 @@ def evaluate(
 
         for _ in range(eval_steps):
             batch = get_next_batch(val_dataloader)
-            loss_step_dict = model(batch)
+            loss_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
             metrics_tracker = metrics_tracker + loss_step_dict
 
         metrics_tracker = metrics_tracker / eval_steps
@@ -509,6 +540,7 @@ def evaluate(
             experiments_tracker=experiments_tracker,
             metrics_tracker=metrics_tracker,
             group_name=group_name,
+            context=context,
         )
 
     model.train()
