@@ -8,14 +8,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from fla.layers.utils import pad_input, unpad_input
-from fla.models.utils import Cache
-from fla.modules import RMSNorm, ShortConvolution
-from fla.modules.l2norm import l2_norm
-from fla.ops.attn.decoding import attn_decoding_one_step
-from fla.ops.path_attn.parallel import parallel_path_attention
 
+from ....utils import is_flash_linear_attention_available
 from ...modeling_utils import ParameterizedLinear
+
+
+if is_flash_linear_attention_available():
+    from fla.layers.utils import pad_input, unpad_input
+    from fla.models.utils import Cache
+    from fla.modules import RMSNorm, ShortConvolution
+    from fla.modules.l2norm import l2_norm
+    from fla.ops.attn.decoding import attn_decoding_one_step
+    from fla.ops.path_attn.parallel import parallel_path_attention
 
 
 class PaTHAttention(nn.Module):
@@ -51,10 +55,12 @@ class PaTHAttention(nn.Module):
         std = initializer_range
         if init_method == "mup":
             std /= math.sqrt(m_width)
+        # NOTE same as softmax
         self.q_proj = ParameterizedLinear(self.hidden_size, self.hidden_size, bias=False, std=std)
         self.k_proj = ParameterizedLinear(self.hidden_size, self.kv_dim, bias=False, std=std)
         self.v_proj = ParameterizedLinear(self.hidden_size, self.kv_dim, bias=False, std=std)
 
+        # NOTE this needs mup init and mup LR
         # We use low-rank parameterization for the w_proj to reduce parameters in MHA settings.
         if self.num_heads == self.num_kv_heads:
             self.w_proj = nn.Sequential(
@@ -66,6 +72,7 @@ class PaTHAttention(nn.Module):
         else:
             self.w_proj = ParameterizedLinear(self.hidden_size, self.kv_dim, bias=False, std=std)
 
+        # NOTE no weight decay (standard LR)
         if use_qk_norm:
             self.maybe_q_norm = RMSNorm(self.hidden_size)
             self.maybe_k_norm = RMSNorm(self.kv_dim)
@@ -73,9 +80,12 @@ class PaTHAttention(nn.Module):
             self.maybe_q_norm = nn.Identity()
             self.maybe_k_norm = nn.Identity()
 
+        # NOTE LR to mup and using PT kaiming (its default)
         if use_w_shortconv:
             self.w_conv1d = ShortConvolution(self.kv_dim, 3)
-            nn.init.normal_(self.w_conv1d.weight, std=std)
+
+        # NOTE mup LR for bt_proj and g_proj
+        # NOTE remove weight decay from bias for both bt_proj and g_proj and set to standard LR
         self.use_w_shortconv = use_w_shortconv
         self.bt_proj = ParameterizedLinear(self.hidden_size, self.num_kv_heads, bias=True, std=std)
         self.use_forget_gate = use_forget_gate

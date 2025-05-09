@@ -169,7 +169,19 @@ except ImportError:
 
 
 def is_stickbreaking_available():
-    return _IS_STICKBREAKING_AVAILABLE
+    return _IS_FLASH_LINEAR_ATTENTION_AVAILABLE
+
+
+try:
+    import fla
+
+    _IS_FLASH_LINEAR_ATTENTION_AVAILABLE = True
+except ImportError:
+    _IS_FLASH_LINEAR_ATTENTION_AVAILABLE = False
+
+
+def is_flash_linear_attention_available():
+    return _IS_FLASH_LINEAR_ATTENTION_AVAILABLE
 
 
 try:
