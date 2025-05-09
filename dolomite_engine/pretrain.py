@@ -284,7 +284,6 @@ def train(
     lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: DataLoader,
     val_dataloaders: list[DataLoader],
-    test_dataloaders: list[DataLoader],
     experiments_tracker: ExperimentsTracker,
     starting_iteration: int = 0,
 ) -> None:
@@ -298,7 +297,6 @@ def train(
         lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (DataLoader): training dataloader
         val_dataloaders (list[DataLoader]): validation dataloaders
-        test_dataloaders (list[DataLoader]): test dataloaders
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
@@ -441,17 +439,6 @@ def train(
 
             start_time = time.perf_counter()
             steps_since_start_time = 0
-
-    if eval_during_training:
-        evaluate(
-            test_dataloaders,
-            model_container,
-            global_step,
-            experiments_tracker,
-            eval_steps,
-            group_names,
-            lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
-        )
 
     ensure_last_checkpoint_is_saved()
 
@@ -615,7 +602,7 @@ def main(mode: Mode = Mode.training) -> None:
         if not args.load_args.load_dataloader_state and metadata is not None:
             metadata["consumed_samples"] = 0
 
-    train_dataloader, val_dataloaders, test_dataloaders = get_pretraining_dataloaders(
+    train_dataloader, val_dataloaders, _ = get_pretraining_dataloaders(
         args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
@@ -638,7 +625,6 @@ def main(mode: Mode = Mode.training) -> None:
             lr_scheduler_container=lr_scheduler_container,
             train_dataloader=train_dataloader,
             val_dataloaders=val_dataloaders,
-            test_dataloaders=test_dataloaders,
             experiments_tracker=experiments_tracker,
             starting_iteration=starting_iteration,
         )
