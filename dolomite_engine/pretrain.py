@@ -245,6 +245,7 @@ def track_val_metrics(
     experiments_tracker: ExperimentsTracker,
     metrics_tracker: MetricsTrackingDict,
     group_name: str | None = None,
+    context: str = "val",
 ) -> None:
     """tracks metrics like validation loss
 
@@ -253,9 +254,8 @@ def track_val_metrics(
         experiments_tracker (ExperimentsTracker): experiments tracker
         metrics_tracker (MetricsTrackingDict): metrics tracker
         group_name (str | None): group name for the validation / test set
+        context (str): context
     """
-
-    context = "val"
 
     message = f"step = {global_step}"
     if group_name is not None:
@@ -284,6 +284,7 @@ def train(
     lr_scheduler_container: LRSchedulerContainer,
     train_dataloader: DataLoader,
     val_dataloaders: list[DataLoader],
+    test_dataloaders: list[DataLoader],
     experiments_tracker: ExperimentsTracker,
     starting_iteration: int = 0,
 ) -> None:
@@ -297,6 +298,7 @@ def train(
         lr_scheduler_container (LRSchedulerContainer): container of learning rate schedulers
         train_dataloader (DataLoader): training dataloader
         val_dataloaders (list[DataLoader]): validation dataloaders
+        test_dataloaders (list[DataLoader]): test dataloaders
         experiments_tracker (ExperimentsTracker): metrics tracker
         starting_iteration (int): starting iteration
     """
@@ -331,6 +333,7 @@ def train(
             eval_steps,
             group_names,
             lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+            context="val",
         )
 
     is_pipeline_parallel_enabled = args.distributed_args.num_pipeline_stages > 1
@@ -428,6 +431,7 @@ def train(
                 eval_steps,
                 group_names,
                 lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+                context="val",
             )
 
         if global_step % save_interval == 0 or global_step == num_training_steps:
@@ -448,6 +452,18 @@ def train(
             start_time = time.perf_counter()
             steps_since_start_time = 0
 
+    if eval_during_training:
+        evaluate(
+            test_dataloaders,
+            model_container,
+            global_step,
+            experiments_tracker,
+            eval_steps,
+            group_names,
+            lm_loss_multiplier=1 / (micro_batch_size * sequence_length),
+            context="test",
+        )
+
     ensure_last_checkpoint_is_saved()
 
     if torch_profiler is not None:
@@ -463,6 +479,7 @@ def evaluate(
     eval_steps: int,
     group_names: list[str],
     lm_loss_multiplier: float,
+    context: str,
 ) -> float:
     """main validation loop for the program
 
@@ -474,6 +491,7 @@ def evaluate(
         eval_steps (int): number of steps to run eval for
         group_names (list[str]): names of the datasets in validation/test group
         lm_loss_multiplier (float): lm loss multiplier
+        context (str): context
 
     Returns:
         MetricsTrackingDict: metrics tracker
@@ -522,6 +540,7 @@ def evaluate(
             experiments_tracker=experiments_tracker,
             metrics_tracker=metrics_tracker,
             group_name=group_name,
+            context=context,
         )
 
     model.train()
@@ -610,7 +629,7 @@ def main(mode: Mode = Mode.training) -> None:
         if not args.load_args.load_dataloader_state and metadata is not None:
             metadata["consumed_samples"] = 0
 
-    train_dataloader, val_dataloaders, _ = get_pretraining_dataloaders(
+    train_dataloader, val_dataloaders, test_dataloaders = get_pretraining_dataloaders(
         args, model_container[0].tokenizer, 0 if metadata is None else metadata["consumed_samples"]
     )
 
@@ -633,6 +652,7 @@ def main(mode: Mode = Mode.training) -> None:
             lr_scheduler_container=lr_scheduler_container,
             train_dataloader=train_dataloader,
             val_dataloaders=val_dataloaders,
+            test_dataloaders=test_dataloaders,
             experiments_tracker=experiments_tracker,
             starting_iteration=starting_iteration,
         )
