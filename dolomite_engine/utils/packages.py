@@ -169,7 +169,7 @@ except ImportError:
 
 
 def is_stickbreaking_available():
-    return _IS_FLASH_LINEAR_ATTENTION_AVAILABLE
+    return _IS_STICKBREAKING_AVAILABLE
 
 
 try:
