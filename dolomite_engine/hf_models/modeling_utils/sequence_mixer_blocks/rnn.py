@@ -24,7 +24,9 @@ class RNN(nn.Module):
         num_heads: int,
         add_bias: bool,
         gradient_clipping: float | None,
+        activation_function: str,
         initializer_range: float,
+        relu_negative_slope: float | None,
         m_width: float,
         init_method: str,
         num_layers: int,
@@ -40,6 +42,8 @@ class RNN(nn.Module):
         self.gradient_clipping = gradient_clipping
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
+        self.activation_function = activation_function
+        self.relu_negative_slope = relu_negative_slope
 
         self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
@@ -97,6 +101,8 @@ class RNN(nn.Module):
                 gradient_clipping=self.gradient_clipping,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
+                activation_function=self.activation_function,
+                relu_negative_slope=self.relu_negative_slope,
             )
         else:
             input = rnn_torch(
@@ -106,6 +112,8 @@ class RNN(nn.Module):
                 gradient_clipping=self.gradient_clipping,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
+                activation_function=self.activation_function,
+                relu_negative_slope=self.relu_negative_slope,
             )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
