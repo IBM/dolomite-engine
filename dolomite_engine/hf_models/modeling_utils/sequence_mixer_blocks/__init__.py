@@ -72,6 +72,8 @@ def get_sequence_mixer(
             num_heads=block.num_heads,
             add_bias=block.add_bias,
             gradient_clipping=block.gradient_clipping,
+            activation_function=block.activation_function,
+            relu_negative_slope=block.relu_negative_slope,
             initializer_range=config.initializer_range,
             m_width=config.m_width,
             init_method=config.init_method,
