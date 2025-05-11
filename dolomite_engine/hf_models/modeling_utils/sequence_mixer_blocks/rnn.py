@@ -73,7 +73,6 @@ class RNN(nn.Module):
         max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.use_padding_free_transformer:
-            assert cache_params is None
             assert attention_mask is None
         else:
             assert cu_seqlens is None
