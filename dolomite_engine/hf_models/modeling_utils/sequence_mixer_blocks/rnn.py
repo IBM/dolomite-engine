@@ -93,28 +93,16 @@ class RNN(nn.Module):
         input = input * self.factor
         weight = self.state_weight * self.factor
 
-        if is_kernel_allowed(Kernel.rnn_cute):
-            input = rnn_cute(
-                input=input,
-                weight=weight,
-                input_state=input_state,
-                gradient_clipping=self.gradient_clipping,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-                activation_function=self.activation_function,
-                relu_negative_slope=self.relu_negative_slope,
-            )
-        else:
-            input = rnn_torch(
-                input=input,
-                weight=weight,
-                input_state=input_state,
-                gradient_clipping=self.gradient_clipping,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-                activation_function=self.activation_function,
-                relu_negative_slope=self.relu_negative_slope,
-            )
+        input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
+            input=input,
+            weight=weight,
+            input_state=input_state,
+            gradient_clipping=self.gradient_clipping,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+            activation_function=self.activation_function,
+            relu_negative_slope=self.relu_negative_slope,
+        )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
