@@ -6,6 +6,7 @@ from transformers import PretrainedConfig
 from ...utils import BaseArgs, divide_if_divisible
 from .mlp import _MLPArgs, _MoEArgs
 from .sequence_mixer import (
+    _GRUArgs,
     _Mamba2Args,
     _MultiHeadLatentAttentionArgs,
     _RNNArgs,
@@ -224,6 +225,13 @@ class CommonConfig(PretrainedConfig):
                     _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
 
                 sequence_mixer_class = _Mamba2Args
+            elif sequence_mixer_type == "gru":
+                sequence_mixer_kwargs = {}
+
+                for key in ["state_size", "num_heads", "add_bias", "gradient_clipping"]:
+                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
+
+                sequence_mixer_class = _GRUArgs
             elif sequence_mixer_type == "rnn":
                 sequence_mixer_kwargs = {}
 
