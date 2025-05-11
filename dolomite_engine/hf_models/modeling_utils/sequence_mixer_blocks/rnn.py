@@ -73,6 +73,7 @@ class RNN(nn.Module):
         max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.use_padding_free_transformer:
+            assert cache_params is None
             assert attention_mask is None
         else:
             assert cu_seqlens is None
@@ -109,12 +110,7 @@ class RNN(nn.Module):
             )
 
         if cache_params is not None:
-            if cu_seqlens is None:
-                input_state = input[:, -1]
-            else:
-                input_state = input[cu_seqlens[1:] - 1]
-
-            input_state = input_state.view(input.size(0), -1)
+            input_state = input[:, -1].view(input.size(0), -1)
             cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
