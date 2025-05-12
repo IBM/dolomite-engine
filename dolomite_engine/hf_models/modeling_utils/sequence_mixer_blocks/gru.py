@@ -13,7 +13,7 @@ from .rnn import RNN
 
 
 if is_cute_kernels_available():
-    from cute_kernels import rnn_cute, rnn_torch
+    from cute_kernels import gru_cute, gru_torch
 
 
 class GRU(nn.Module):
@@ -96,7 +96,7 @@ class GRU(nn.Module):
 
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
-        input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
+        input = (gru_cute if is_kernel_allowed(Kernel.rnn_cute) else gru_torch)(
             input=input,
             weight=weight,
             input_state=input_state,
