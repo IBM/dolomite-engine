@@ -96,7 +96,7 @@ class GRU(nn.Module):
 
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
-        input = (gru_cute if is_kernel_allowed(Kernel.rnn_cute) else gru_torch)(
+        input = (gru_cute if is_kernel_allowed(Kernel.gru_cute) else gru_torch)(
             input=input,
             weight=weight,
             forget_input=forget_input,

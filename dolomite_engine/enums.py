@@ -68,6 +68,7 @@ class Kernel(Enum):
     continuous_count_cute = "continuous_count_cute"
     cross_entropy_cute = "cross_entropy_cute"
     fused_linear_cross_entropy_cute = "fused_linear_cross_entropy_cute"
+    gru_cute = "gru_cute"
     pack_sequence_cute = "pack_sequence_cute"
     rmsnorm_cute = "rmsnorm_cute"
     rnn_cute = "rnn_cute"
