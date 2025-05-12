@@ -99,12 +99,14 @@ class GRU(nn.Module):
         input = (gru_cute if is_kernel_allowed(Kernel.rnn_cute) else gru_torch)(
             input=input,
             weight=weight,
+            forget_input=forget_input,
+            forget_weight=forget_weight,
+            reset_input=reset_input,
+            reset_weight=reset_weight,
             input_state=input_state,
             gradient_clipping=self.gradient_clipping,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            activation_function=self.activation_function,
-            relu_negative_slope=self.relu_negative_slope,
         )
 
         if not self.use_padding_free_transformer and attention_mask is not None:

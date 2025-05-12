@@ -1,5 +1,6 @@
 from ...config import CommonConfig
 from .flash_attention_utils import flash_attention
+from .gru import GRU
 from .mamba2 import Mamba2
 from .multihead_latent_attention import MultiHeadLatentAttention
 from .rnn import RNN
@@ -22,7 +23,22 @@ def get_sequence_mixer(
     block = config.sequence_mixer_blocks[layer_idx]
     sequence_mixer_type = block.sequence_mixer_type
 
-    if sequence_mixer_type == "mamba2":
+    if sequence_mixer_type == "gru":
+        return GRU(
+            input_size=config.hidden_size,
+            state_size=block.state_size,
+            output_size=config.hidden_size,
+            num_heads=block.num_heads,
+            add_bias=block.add_bias,
+            gradient_clipping=block.gradient_clipping,
+            initializer_range=config.initializer_range,
+            m_width=config.m_width,
+            init_method=config.init_method,
+            num_layers=config.num_layers,
+            layer_idx=layer_idx,
+            use_padding_free_transformer=use_padding_free_transformer,
+        )
+    elif sequence_mixer_type == "mamba2":
         return Mamba2(
             hidden_size=config.hidden_size,
             ssm_state_size=block.state_size,
