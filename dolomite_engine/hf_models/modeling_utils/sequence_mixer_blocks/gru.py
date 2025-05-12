@@ -128,4 +128,5 @@ class GRU(nn.Module):
         nn.init.normal_(self.weight, std=self.state_weight_std)
 
     def extra_repr(self) -> str:
-        return f"gradient_clipping = {self.gradient_clipping}, {str(self.weight)}"
+        output = f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.weight.shape)}"
+        return output
