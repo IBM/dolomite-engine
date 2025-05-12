@@ -58,6 +58,9 @@ _NAKED_DISALLOWED_ARGS = [
 ]
 
 
+_MLP_CONFIG_CLASSES = {"MLP": _MLPArgs, "MoE": _MoEArgs}
+
+
 class CommonConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
 
@@ -281,25 +284,9 @@ class CommonConfig(PretrainedConfig):
         mlp_blocks: list[_MLPArgs | _MoEArgs] = []
         for i in range(self.num_layers):
             mlp_block = deepcopy(self.mlp_blocks[i])
+            mlp_block["intermediate_size"] = mlp_block.pop("intermediate_size", 4 * self.hidden_size)
+
             mlp_type = mlp_block.pop("mlp_type", "MLP")
-
-            mlp_kwargs = {"intermediate_size": mlp_block.pop("intermediate_size", 4 * self.hidden_size)}
-
-            for key in ["activation_function", "dropout", "add_bias"]:
-                _update_with_key_value(mlp_block, mlp_kwargs, key)
-
-            if mlp_type == "MLP":
-                mlp_class = _MLPArgs
-            elif mlp_type == "MoE":
-                for key in ["shared_intermediate_size", "num_experts", "num_experts_per_tok"]:
-                    _update_with_key_value(mlp_block, mlp_kwargs, key)
-
-                mlp_class = _MoEArgs
-            else:
-                raise ValueError(f"unexpected mlp_type ({mlp_type})")
-
-            assert len(mlp_block) == 0, f"leftover keys in the mlp_block ({mlp_block}) at position {i}"
-
-            mlp_blocks.append(mlp_class(**mlp_kwargs))
+            mlp_blocks.append(_MLP_CONFIG_CLASSES[mlp_type](**mlp_block))
 
         self.mlp_blocks = mlp_blocks
