@@ -57,6 +57,14 @@ _NAKED_DISALLOWED_ARGS = [
     "num_attention_heads",
 ]
 
+_SEQUENCE_MIXER_CONFIG_CLASSES = {
+    "gru": _GRUArgs,
+    "mamba2": _Mamba2Args,
+    "multihead_latent_attention": _MultiHeadLatentAttentionArgs,
+    "rnn": _RNNArgs,
+    "stickbreaking_attention": _StickbreakingAttentionArgs,
+    "softmax_attention": _SoftmaxAttentionArgs,
+}
 
 _MLP_CONFIG_CLASSES = {"MLP": _MLPArgs, "MoE": _MoEArgs}
 
@@ -192,88 +200,12 @@ class CommonConfig(PretrainedConfig):
             sequence_mixer_block = deepcopy(self.sequence_mixer_blocks[i])
             sequence_mixer_type = sequence_mixer_block.pop("sequence_mixer_type", "softmax_attention")
 
-            if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
-                sequence_mixer_kwargs = {}
+            if sequence_mixer_type == "mamba2":
+                sequence_mixer_block["intermediate_size"] = sequence_mixer_block.pop(
+                    "intermediate_size", 2 * self.hidden_size
+                )
 
-                for key in [
-                    "softmax_dropout",
-                    "dropout",
-                    "add_bias",
-                    "attention_multiplier",
-                    "num_attention_heads",
-                    "num_key_value_heads",
-                ]:
-                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
-
-                if sequence_mixer_type == "softmax_attention":
-                    sequence_mixer_class = _SoftmaxAttentionArgs
-                elif sequence_mixer_type == "stickbreaking_attention":
-                    sequence_mixer_class = _StickbreakingAttentionArgs
-            elif sequence_mixer_type == "mamba2":
-                sequence_mixer_kwargs = {
-                    "intermediate_size": sequence_mixer_block.pop("intermediate_size", 2 * self.hidden_size),
-                }
-
-                for key in [
-                    "state_size",
-                    "num_heads",
-                    "conv_kernel_size",
-                    "time_step_limit",
-                    "add_bias",
-                    "use_conv_bias",
-                    "activation_function",
-                    "num_groups",
-                    "chunk_size",
-                ]:
-                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
-
-                sequence_mixer_class = _Mamba2Args
-            elif sequence_mixer_type == "gru":
-                sequence_mixer_kwargs = {}
-
-                for key in ["state_size", "num_heads", "add_bias", "gradient_clipping"]:
-                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
-
-                sequence_mixer_class = _GRUArgs
-            elif sequence_mixer_type == "rnn":
-                sequence_mixer_kwargs = {}
-
-                for key in [
-                    "state_size",
-                    "num_heads",
-                    "add_bias",
-                    "gradient_clipping",
-                    "activation_function",
-                    "relu_negative_slope",
-                ]:
-                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
-
-                sequence_mixer_class = _RNNArgs
-            elif sequence_mixer_type == "multihead_latent_attention":
-                sequence_mixer_kwargs = {}
-
-                for key in [
-                    "softmax_dropout",
-                    "dropout",
-                    "add_bias",
-                    "num_attention_heads",
-                    "attention_multiplier",
-                    "query_compression_size",
-                    "key_value_compression_size",
-                    "num_attention_heads",
-                    "head_dim",
-                ]:
-                    _update_with_key_value(sequence_mixer_block, sequence_mixer_kwargs, key)
-
-                sequence_mixer_class = _MultiHeadLatentAttentionArgs
-            else:
-                raise ValueError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
-
-            assert (
-                len(sequence_mixer_block) == 0
-            ), f"leftover keys in the sequence_mixer_block ({sequence_mixer_block}) at position {i}"
-
-            sequence_mixer_blocks.append(sequence_mixer_class(**sequence_mixer_kwargs))
+            sequence_mixer_blocks.append(_SEQUENCE_MIXER_CONFIG_CLASSES[sequence_mixer_type](**sequence_mixer_block))
 
         self.sequence_mixer_blocks = sequence_mixer_blocks
 
