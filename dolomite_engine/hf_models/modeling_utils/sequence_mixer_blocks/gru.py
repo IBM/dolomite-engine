@@ -126,3 +126,6 @@ class GRU(nn.Module):
     @torch.no_grad()
     def reset_parameters(self) -> None:
         nn.init.normal_(self.weight, std=self.state_weight_std)
+
+    def extra_repr(self) -> str:
+        return f"gradient_clipping = {self.gradient_clipping}, {str(self.weight)}"
