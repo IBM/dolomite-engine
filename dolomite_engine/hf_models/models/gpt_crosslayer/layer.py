@@ -32,7 +32,7 @@ class GPTCrossLayerBlock(nn.Module):
         self.head_dim = divide_if_divisible(hidden_size, self.num_heads, "")
         self.num_key_value_heads = config.sequence_mixer_blocks[layer_idx].num_key_value_heads
 
-        self._use_padding_free_transformer = use_padding_free_transformer
+        self.use_padding_free_transformer = use_padding_free_transformer
 
         self.kv_proj = None
         if config.sharing_pattern[layer_idx] == layer_idx:
@@ -67,7 +67,7 @@ class GPTCrossLayerBlock(nn.Module):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.kv_proj is not None:
             key, value = self.kv_proj(hidden_states)
@@ -79,7 +79,7 @@ class GPTCrossLayerBlock(nn.Module):
                 key, value = past_key_values.update(key_states=key, value_states=value, layer_idx=self.layer_idx)
 
             if is_kernel_allowed(Kernel.flash_attention_3) or is_kernel_allowed(Kernel.flash_attention_2):
-                if not self._use_padding_free_transformer:
+                if not self.use_padding_free_transformer:
                     if self.attention_head_type == "mqa":
                         key = key.squeeze(1).unsqueeze(2)
                         value = value.squeeze(1).unsqueeze(2)

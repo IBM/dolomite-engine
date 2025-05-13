@@ -60,7 +60,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         use_cache: bool | None = None,
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         reduction: str = "mean",
     ) -> CausalLMOutputWithPast:
         assert return_dict
@@ -133,7 +133,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 hidden_states=None,
                 vocab_weight=None,
                 cu_seqlens=cu_seqlens,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 reduction=reduction,
                 shift_logits_and_labels=True,
                 tensor_parallel_enabled=False,

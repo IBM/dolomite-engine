@@ -9,13 +9,14 @@ from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ..linear import ParameterizedLinear
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
+from .rnn import RNN
 
 
 if is_cute_kernels_available():
-    from cute_kernels import rnn_cute, rnn_torch
+    from cute_kernels import gru_cute, gru_torch
 
 
-class RNN(nn.Module):
+class GRU(nn.Module):
     def __init__(
         self,
         input_size: int,
@@ -24,8 +25,6 @@ class RNN(nn.Module):
         num_heads: int,
         add_bias: bool,
         gradient_clipping: float | None,
-        activation_function: str,
-        relu_negative_slope: float | None,
         initializer_range: float,
         m_width: float,
         init_method: str,
@@ -42,8 +41,6 @@ class RNN(nn.Module):
         self.gradient_clipping = gradient_clipping
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
-        self.activation_function = activation_function
-        self.relu_negative_slope = relu_negative_slope
 
         self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
@@ -53,8 +50,8 @@ class RNN(nn.Module):
             std /= math.sqrt(m_width)
         self.state_weight_std = std
 
-        self.input_projection = ParameterizedLinear(self.input_size, self.state_size, bias=add_bias, std=std)
-        self.state_weight = nn.Parameter(torch.empty(self.num_heads, self.state_head_dim, self.state_head_dim))
+        self.input_projection = ParameterizedLinear(self.input_size, 3 * self.state_size, bias=add_bias, std=std)
+        self.weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
@@ -86,22 +83,30 @@ class RNN(nn.Module):
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
-        input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
+
+        input = input * self.factor
+        weight = self.weight * self.factor
+
+        input, forget_input, reset_input = input.chunk(3, dim=-1)
+        weight, forget_weight, reset_weight = weight.chunk(3, dim=0)
+
+        input, forget_input, reset_input = [
+            i.view(*input.size()[:-1], self.num_heads, self.state_head_dim) for i in (input, forget_input, reset_input)
+        ]
 
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
-        input = input * self.factor
-        weight = self.state_weight * self.factor
-
-        input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
+        input = (gru_cute if is_kernel_allowed(Kernel.gru_cute) else gru_torch)(
             input=input,
             weight=weight,
+            forget_input=forget_input,
+            forget_weight=forget_weight,
+            reset_input=reset_input,
+            reset_weight=reset_weight,
             input_state=input_state,
             gradient_clipping=self.gradient_clipping,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            activation_function=self.activation_function,
-            relu_negative_slope=self.relu_negative_slope,
         )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
@@ -120,7 +125,7 @@ class RNN(nn.Module):
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
-        nn.init.normal_(self.state_weight, std=self.state_weight_std)
+        nn.init.normal_(self.weight, std=self.state_weight_std)
 
     def extra_repr(self) -> str:
-        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.state_weight.shape)}"
+        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.weight.shape)}"

@@ -9,9 +9,13 @@ from ...modeling_utils_TP import Dropout_TP, Embedding_TP, get_normalization_fun
 from ...utils import is_generation_cache_enabled
 from ..dense import BaseModelMixin, PreTrainedModelMixin
 from ..modeling_outputs import BaseModelOutputWithPast
+from .layer import Block_TP
 
 
 class PreTrainedModelMixin_TP(PreTrainedModelMixin):
+    layer_class = Block_TP
+    _no_split_modules = ["Block_TP"]
+
     def __init__(self, config: CommonConfig, *args, **kwargs) -> None:
         self.sequence_parallel = kwargs.get("sequence_parallel", False)
 
@@ -48,7 +52,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 config.vocab_size,
                 self.embed_dim,
                 std=self.initializer_range,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
 
@@ -57,7 +61,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 if config.embedding_dropout == 0
                 else Dropout_TP(
                     config.embedding_dropout,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
             )
@@ -66,7 +70,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             {
                 str(i): self.layer_class(
                     config,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     layer_idx=i,
                     sequence_parallel=self.sequence_parallel,
                 )
@@ -79,7 +83,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                 config.normalization_function,
                 self.embed_dim,
                 eps=config.layer_norm_epsilon,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 sequence_parallel=self.sequence_parallel,
             )
 
@@ -99,7 +103,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> BaseModelOutputWithPast:
         if self.is_first_stage:
             (
@@ -127,7 +131,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
             hidden_states = input_ids
             past_length = 0
 
-            if self._use_padding_free_transformer:
+            if self.use_padding_free_transformer:
                 key_length = max_seqlen
                 # query length will change if past_key_values is not None
                 query_length = key_length - past_length
@@ -173,7 +177,7 @@ class BaseModelMixin_TP(PreTrainedModelMixin_TP, BaseModelMixin):
                     max_position_embeddings,
                     self.embed_dim,
                     std=self.initializer_range,
-                    use_padding_free_transformer=self._use_padding_free_transformer,
+                    use_padding_free_transformer=self.use_padding_free_transformer,
                     sequence_parallel=self.sequence_parallel,
                 )
         elif self.position_embedding_type == "rope":
