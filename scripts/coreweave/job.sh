@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=gb200
-#SBATCH --nodes=2
+#SBATCH --nodes=54
 #SBATCH --job-name=test
 #SBATCH --ntasks-per-node=1  #<--must be 1 for torchrun / override for others like mpi
 #SBATCH --gpus-per-node=4
@@ -8,8 +8,9 @@
 #SBATCH --error="err.log" 
 #SBATCH --wait-all-nodes=1
 #SBATCH --mem=0
+#SBATCH --segment=18 # 9 18 <-- currently commented out and experimenting how it impacts 256 node job
+
 ####SBATCH --exclusive <-- currently commented out and experimenting how it impacts 256 node job
-###SBATCH --segment=16 # 9 18 <-- currently commented out and experimenting how it impacts 256 node job
 
 #run this command on slurm login node: 
 # sbatch -N 16 /mnt/home/bobcalio/ai-coreweave/dolomite_engine/scripts/cw-gb200/pretrain-120b.sbatch <config>
