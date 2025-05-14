@@ -19,7 +19,7 @@ from .packages import (
     is_zstandard_available,
     log_environment,
 )
-from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n
+from .parallel import ProcessGroupManager, get_pipeline_stage_ids_on_current_rank, run_rank_n,all_to_all
 from .pydantic import BaseArgs
 from .safetensors import SafeTensorsWeightsManager
 from .step_tracker import StepTracker
