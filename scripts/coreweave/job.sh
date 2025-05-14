@@ -42,7 +42,7 @@ echo $config
 
 PYXIS_DEFAULTS=( '--no-container-mount-home' '--no-container-remap-root' '' )
 
-container_name="ete-dolomite" #ete-dolomite.050525
+container_name="cute-kernels"
 container_image="/mnt/vast/squash/${container_name}.sqsh"
 container_mounts="/mnt:/mnt"
 
@@ -134,5 +134,5 @@ echo $DISTRIBUTED_ARGS
 # # Optional: install package before running
 # # srun ${SRUN_ARGS} pip install -e ../cute-kernels/
 
-command="pip install -e ../cute-kernels/ && torchrun $DISTRIBUTED_ARGS -m dolomite_engine.pretrain --config $config"
+command="torchrun $DISTRIBUTED_ARGS -m dolomite_engine.pretrain --config $config"
 srun ${SRUN_ARGS} bash -c "$command"
