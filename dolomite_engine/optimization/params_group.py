@@ -10,7 +10,7 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
 )
-from ..hf_models.modeling_utils import MLP, RNN, Attention, Mamba2, MoE
+from ..hf_models.modeling_utils import MLP, RNN, Attention, Mamba2, MoE,ParameterizedExperts
 from ..model_wrapper import ModelWrapper
 from ..utils import BaseArgs, log_rank_0
 
@@ -106,6 +106,55 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
     return params_group_list
 
 
+
+def get_muon_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> dict:
+    if model.has_teacher_model():
+        log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
+        # this is the student model
+        model = model.model
+
+
+    muon_params = []
+    adamw_params = []
+
+    # collect parameters with mup learning rate
+    for module_name, module in model.named_modules():
+        if isinstance(module, (Attention, MLP, MoE, RNN)):
+            for param_name, param in module.named_parameters():
+                # we don't add bias or norms to mup group
+                if not (param_name.endswith("bias") or "norm" in param_name):
+                    # add name of module to name of subparam
+                    param._mup_scale = model.config.m_width
+        elif isinstance(module, Mamba2):
+            for param_name, param in module.named_parameters():
+                if param_name in ["A_log", "D"] or not (param_name.endswith("bias") or "norm" in param_name):
+                    param._mup_scale = model.config.m_width
+
+
+    for name, module in model.named_modules():
+        if isinstance(module, ParameterizedExperts):
+            for _, param in module.named_parameters():
+                param._is_expert_weight = True  # Set the flag for expert weights
+                muon_params.append(param)
+
+
+
+    # Handle other parameters 
+    for name, p in model.named_parameters():
+        if getattr(p, "_is_expert_weight", False):
+            continue
+        
+        if p.ndim >= 2 and "wte" not in name and "lm_head" not in name:
+            if not hasattr(p, "_is_expert_weight"):  
+                setattr(p, "_is_expert_weight", False)  # Mark it explicitly as non-expert weight
+            muon_params.append(p)
+        else:
+            adamw_params.append(p)
+
+    return {"muon_params" : muon_params , "adamw_params":adamw_params}
+
+
+
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
     assert isinstance(
         model.model,
@@ -191,6 +240,7 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
 _PARAM_GROUPS = {
     None: get_normal_group_with_names,
     ParamsGroupMethod.mup: get_mup_group_with_names,
+    ParamsGroupMethod.muon : get_muon_group_with_names,
 }
 
 
