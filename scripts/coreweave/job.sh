@@ -1,34 +1,31 @@
 #!/bin/bash
 #SBATCH --partition=gb200
-#SBATCH --nodes=54
-#SBATCH --job-name=test
+#SBATCH --nodes=16
+#SBATCH --job-name=dolomite-job
 #SBATCH --ntasks-per-node=1  #<--must be 1 for torchrun / override for others like mpi
 #SBATCH --gpus-per-node=4
-#SBATCH --output="out.log" 
-#SBATCH --error="err.log" 
 #SBATCH --wait-all-nodes=1
 #SBATCH --mem=0
-#SBATCH --segment=18 # 9 18 <-- currently commented out and experimenting how it impacts 256 node job
+#SBATCH --segment=16 # 9 18 <-- currently commented out and experimenting how it impacts 256 node job
 
 ####SBATCH --exclusive <-- currently commented out and experimenting how it impacts 256 node job
 
 #run this command on slurm login node: 
 # sbatch -N 16 /mnt/home/bobcalio/ai-coreweave/dolomite_engine/scripts/cw-gb200/pretrain-120b.sbatch <config>
 
-. .bashrc
+. $HOME/.bashrc
 export HF_HOME="$HOME/.cache/huggingface/"
-proj_dir="/mnt/vast/proj/dev-pre-train" #sets the place to write all logs 
+proj_dir="/mnt/vast/proj/checkpoints/$USER" #sets the place to write all logs 
 min_bw=$( echo "140" | bc -l)
-sleep="300s"
 
-export WANDB_BASE_URL=https://wandbai.draco.res.ibm.com
-export WANDB_ENTITY=ete-dcgm-monitor
-export WANDB_PROJECT=cw-gb200-test
-#export WANDB_NAME=120b-moe-test
+# export WANDB_BASE_URL=https://api.wandb.ai
+# export WANDB_PROJECT=SUT
+# export WANDB_ENTITY=ete-dcgm-monitor
+# export WANDB_NAME=120b-moe-test
 export WANDB_DISABLE_CODE=1
 export WANDB_DISABLE_GIT=1
 export WANDB__SERVICE_WAIT=300
-export WANDB_RUN_ID=120b-256 #"${JOB_ID}" #wb-no-metrics
+# export WANDB_RUN_ID=120b-256 #"${JOB_ID}" #wb-no-metrics
 #move this down export WANDB_DIR=$WANDB_LOGS_PATH
 #echo "WANDB_RUN_ID ${WANDB_RUN_ID}"
 #export WANDB_MODE=offline #leverage wnadb for run stats, but do not upload to the cloud 
@@ -36,9 +33,10 @@ export WANDB_RUN_ID=120b-256 #"${JOB_ID}" #wb-no-metrics
 : "${PREFLIGHT_TEST:=0}"
 : "${CLEANUP_TEMP_DIR:=0}"
 
-config="/mnt/vast/proj/checkpoints/mayank/dolomite-engine/configs/7b.yml"
-# config=${1}
+config=$(realpath ${1})
 echo $config
+filename=$(basename $config)
+expname=${filename%.*}
 
 PYXIS_DEFAULTS=( '--no-container-mount-home' '--no-container-remap-root' '' )
 
@@ -98,16 +96,18 @@ export TRITON_CACHE_DIR="${TRITON_HOME}/cache"
 echo "Using nodes: $SLURM_JOB_NODELIST"
 #save hostlist for replay / debug if needed 
 echo $SLURM_JOB_NODELIST > $run_dir/hostfile-${SLURM_JOB_ID}.txt
+mkdir -p $PWD/logs/
 #setup some srun args 
 SRUN_ARGS=" --kill-on-bad-exit=1  \
 --container-image=${container_image}  \
 --container-mounts=${container_mounts}  \
 --no-container-remap-root \
---container-workdir=/mnt/vast/proj/checkpoints/mayank/dolomite-engine \
---output=out.log \
---error=err.log
+--container-workdir=$PWD \
+--output=$PWD/logs/$expname.log \
+--error=$PWD/logs/err-$expname.log
 "
 
+# --container-workdir=/mnt/vast/proj/checkpoints/mayank/dolomite-engine \
 echo $SRUN_ARGS
 
 ##############################################
@@ -119,13 +119,14 @@ echo $SRUN_ARGS
 
 #this next line just warms up the container on every node 
 
-export DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
-                         --node_rank $NODE_RANK \
-                         --nnodes=$SLURM_JOB_NUM_NODES \
-                         --rdzv_id=$SLURM_JOB_ID \
-                         --rdzv_backend=c10d \
-                         --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
-                         "
+export DISTRIBUTED_ARGS="\
+--nproc_per_node $GPUS_PER_NODE \
+--node_rank $NODE_RANK \
+--nnodes=$SLURM_JOB_NUM_NODES \
+--rdzv_id=$SLURM_JOB_ID \
+--rdzv_backend=c10d \
+--rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
+"
 echo $DISTRIBUTED_ARGS
 
 # # srun ${SRUN_ARGS} pip install -e ../cute-kernels/
