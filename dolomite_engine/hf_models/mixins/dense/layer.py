@@ -1,15 +1,13 @@
 import torch
 import torch.nn as nn
-from transformers import DynamicCache
 
+from ...cache import GenerationCache
+from ...config import CommonConfig
 from ...modeling_utils import get_mlp_block, get_normalization_function, get_sequence_mixer
-from .config import GPTDolomiteConfig
 
 
-class GPTDolomiteBlock(nn.Module):
-    def __init__(
-        self, config: GPTDolomiteConfig, use_padding_free_transformer: bool, layer_idx: int | None = None
-    ) -> None:
+class Block(nn.Module):
+    def __init__(self, config: CommonConfig, use_padding_free_transformer: bool, layer_idx: int | None = None) -> None:
         super().__init__()
 
         hidden_size = config.hidden_size
@@ -30,11 +28,11 @@ class GPTDolomiteBlock(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
@@ -68,11 +66,11 @@ class GPTDolomiteBlock(nn.Module):
     def _sequence_mixer_forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.sequence_mixer_type in ["softmax_attention", "stickbreaking_attention", "multihead_latent_attention"]:
             hidden_states = self.sequence_mixer(
@@ -87,8 +85,14 @@ class GPTDolomiteBlock(nn.Module):
             hidden_states = self.sequence_mixer(
                 hidden_states, cache_params=past_key_values, attention_mask=attention_mask
             )
-        elif self.sequence_mixer_type == "rnn":
-            hidden_states = self.sequence_mixer(hidden_states)
+        elif self.sequence_mixer_type in ["gru", "rnn"]:
+            hidden_states = self.sequence_mixer(
+                hidden_states,
+                cache_params=past_key_values,
+                attention_mask=attention_mask,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+            )
         else:
             raise ValueError(f"unexpected sequence_mixer_type ({self.sequence_mixer_type})")
 

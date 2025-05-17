@@ -142,14 +142,13 @@ if args.use_padding_free_transformer:
     cu_seqlens = torch.arange(
         0, input_ids.numel() + 1, sequence_length, dtype=torch.int32, device=torch.cuda.current_device()
     )
-    max_seqlen = torch.tensor(sequence_length, device=torch.cuda.current_device())
     position_ids = torch.arange(0, sequence_length, 1, device=torch.cuda.current_device()).repeat(batch_size)
 
     output_tp = model_tp(
         input_ids=input_ids.view(-1),
         labels=labels.view(-1),
         cu_seqlens=cu_seqlens,
-        max_seqlen=max_seqlen,
+        max_seqlen=sequence_length,
         position_ids=position_ids,
     )
 else:

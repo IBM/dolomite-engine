@@ -3,9 +3,9 @@ import math
 import torch
 import torch.nn
 import torch.nn.functional as F
-from transformers import DynamicCache
 
 from ....utils import is_stickbreaking_available
+from ...cache import GenerationCache
 from .softmax_attention import Attention
 
 
@@ -78,11 +78,11 @@ class SBAttention(Attention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
         # assert past_key_values is None
@@ -145,11 +145,11 @@ class PaddingFreeSBAttention(SBAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
         assert past_key_values is None

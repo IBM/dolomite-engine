@@ -86,7 +86,7 @@ class CrossLayerAttention(nn.Module):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if is_kernel_allowed(Kernel.flash_attention_2) or is_kernel_allowed(Kernel.flash_attention_3):
             if self.use_padding_free_transformer:
@@ -106,7 +106,6 @@ class CrossLayerAttention(nn.Module):
                     cu_seqlens=cu_seqlens,
                     max_seqlen=max_seqlen,
                     use_padding_free_transformer=self.use_padding_free_transformer,
-                    query_length=None,
                     causal=self.causal,
                     dropout=self.softmax_dropout_p if self.training else 0,
                     softmax_scale=self._get_softmax_scale(),
@@ -127,8 +126,6 @@ class CrossLayerAttention(nn.Module):
                     query = apply_rotary_pos_emb(query, rope_cos_sin)
                     query = query.transpose(1, 2)
 
-                batch_size, query_length = query.shape[:2]
-
                 hidden_states = flash_attention(
                     query=query,
                     key=key,
@@ -137,7 +134,6 @@ class CrossLayerAttention(nn.Module):
                     cu_seqlens=cu_seqlens,
                     max_seqlen=max_seqlen,
                     use_padding_free_transformer=self.use_padding_free_transformer,
-                    query_length=query_length,
                     causal=self.causal,
                     dropout=self.softmax_dropout_p if self.training else 0,
                     softmax_scale=self._get_softmax_scale(),
@@ -164,6 +160,7 @@ class CrossLayerAttention(nn.Module):
                 dropout_p=self.softmax_dropout_p if self.training else 0,
                 is_causal=self.causal if attention_mask is None else False,
                 scale=self._get_softmax_scale(),
+                enable_gqa=True,
             )
 
             del query, key, value

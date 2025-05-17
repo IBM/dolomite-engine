@@ -1,9 +1,10 @@
 import torch
 import torch.nn.functional as F
-from transformers import DynamicCache, GenerationMixin
+from transformers import GenerationMixin
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
+from ...cache import GenerationCache
 from ...config import CommonConfig
 from ...loss import clear_aux_loss, get_autoregressive_language_modeling_loss, get_aux_loss, is_aux_loss_zero
 from ...modeling_utils import ParameterizedEmbedding, ParameterizedLinear
@@ -50,7 +51,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
     def forward(
         self,
         input_ids: torch.Tensor | list[list[int]] | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | list[list[int]] | None = None,
         position_ids: torch.Tensor | list[list[int]] | None = None,
@@ -59,7 +60,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         use_cache: bool | None = None,
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         reduction: str = "mean",
     ) -> CausalLMOutputWithPast:
         assert return_dict
@@ -132,7 +133,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
                 hidden_states=None,
                 vocab_weight=None,
                 cu_seqlens=cu_seqlens,
-                use_padding_free_transformer=self._use_padding_free_transformer,
+                use_padding_free_transformer=self.use_padding_free_transformer,
                 reduction=reduction,
                 shift_logits_and_labels=True,
                 tensor_parallel_enabled=False,

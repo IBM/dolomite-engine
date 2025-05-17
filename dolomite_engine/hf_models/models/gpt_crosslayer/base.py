@@ -1,7 +1,6 @@
 import torch
-from transformers import DynamicCache
 
-from ...cache import HybridMambaAttentionDynamicCache
+from ...cache import GenerationCache
 from ...mixins import BaseModelMixin, BaseModelOutputWithPast, PreTrainedModelMixin
 from .config import GPTCrossLayerConfig
 from .layer import GPTCrossLayerBlock
@@ -21,14 +20,14 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
     def forward(
         self,
         input_ids: torch.Tensor | None = None,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> BaseModelOutputWithPast:
         (
             use_cache,
@@ -49,7 +48,7 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
             max_seqlen=max_seqlen,
         )
 
-        past_key_values = DynamicCache() if use_cache and past_key_values is None else past_key_values
+        past_key_values = GenerationCache(self.config) if use_cache and past_key_values is None else past_key_values
 
         key = None
         value = None
@@ -65,9 +64,6 @@ class GPTCrossLayerModel(GPTCrossLayerPreTrainedModel, BaseModelMixin):
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
             )
-
-        if past_key_values is not None and isinstance(past_key_values, HybridMambaAttentionDynamicCache):
-            past_key_values.has_previous_state = True
 
         del key, value
         hidden_states = self.ln_f(hidden_states)

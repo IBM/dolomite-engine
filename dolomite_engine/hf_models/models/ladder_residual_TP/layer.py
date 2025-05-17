@@ -1,14 +1,14 @@
 import torch
 import torch.distributed._functional_collectives as funcol
 import torch.nn.functional as F
-from transformers import DynamicCache
 
 from ....dtensors import dtensor_to_tensor
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, is_cute_kernels_available
+from ...cache import GenerationCache
+from ...mixins import Block_TP
 from ...modeling_utils_TP import get_mlp_block_TP
-from ..gpt_dolomite_TP.layer import GPTDolomiteBlock_TP
 from ..ladder_residual.layer import LadderResidualBlock
 
 
@@ -332,7 +332,7 @@ if is_cute_kernels_available():
             )
 
 
-class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
+class LadderResidualBlock_TP(Block_TP):
     def __init__(self, config, use_padding_free_transformer, layer_idx=None, sequence_parallel=False):
         super().__init__(config, use_padding_free_transformer, layer_idx, sequence_parallel)
 
@@ -348,11 +348,11 @@ class LadderResidualBlock_TP(GPTDolomiteBlock_TP):
         current_attention_out: torch.Tensor,
         current_mlp_out: torch.Tensor,
         residual: torch.Tensor,
-        past_key_values: DynamicCache | None = None,
+        past_key_values: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> tuple[torch.Tensor]:
         if is_kernel_allowed(Kernel.ladder_residual_overlapped_layer):
             assert self.m_residual in [None, 1]

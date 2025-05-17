@@ -218,7 +218,7 @@ class GPTCrossLayerAttentionTest(TestCommons):
 
         use_padding_free_transformer = kwargs.pop("use_padding_free_transformer", False)
         if use_padding_free_transformer:
-            assert model._use_padding_free_transformer
+            assert model.use_padding_free_transformer
 
         assert len(kwargs) == 0
 
