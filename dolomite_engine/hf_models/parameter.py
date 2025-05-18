@@ -13,3 +13,11 @@ def mark_parameter_as_mup_learning_rate(parameter: nn.Parameter | None) -> nn.Pa
         parameter._has_mup_learning_rate = True
 
     return parameter
+
+
+def is_parameter_with_no_weight_decay(parameter: nn.Parameter | None) -> bool:
+    return getattr(parameter, "_no_weight_decay", False)
+
+
+def is_parameter_with_mup_learning_rate(parameter: nn.Parameter | None) -> bool:
+    return getattr(parameter, "_has_mup_learning_rate", False)

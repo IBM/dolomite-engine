@@ -9,6 +9,8 @@ from ..hf_models import (
     GPTDolomiteForCausalLM_TP,
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
+    is_parameter_with_mup_learning_rate,
+    is_parameter_with_no_weight_decay,
 )
 from ..hf_models.modeling_utils import RNN, Attention, Mamba2, MoE
 from ..model_wrapper import ModelWrapper
@@ -62,7 +64,7 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
     no_weight_decay_params = {}
 
     for name, parameter in model.named_parameters():
-        if getattr(parameter, "_no_weight_decay", False):
+        if is_parameter_with_no_weight_decay(parameter):
             no_weight_decay_params[name] = parameter
         else:
             normal_params[name] = parameter
@@ -96,9 +98,9 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
     mup_params = {}
 
     for name, parameter in model.named_parameters():
-        if getattr(parameter, "_has_mup_learning_rate", False):
+        if is_parameter_with_mup_learning_rate(parameter):
             mup_params[name] = parameter
-        elif getattr(parameter, "_no_weight_decay", False):
+        elif is_parameter_with_no_weight_decay(parameter):
             no_weight_decay_params[name] = parameter
         else:
             normal_params[name] = parameter

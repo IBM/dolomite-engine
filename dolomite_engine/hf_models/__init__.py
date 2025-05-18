@@ -24,6 +24,12 @@ from .models import (
     PaLMModel,
     convert_gpt_dolomite_to_gpt_crosslayer,
 )
+from .parameter import (
+    is_parameter_with_mup_learning_rate,
+    is_parameter_with_no_weight_decay,
+    mark_parameter_as_mup_learning_rate,
+    mark_parameter_as_no_weight_decay,
+)
 from .register_hf import get_model_parallel_class, is_custom_model, register_model_classes
 from .unshard import fix_unsharded_state_dict, unshard_tensor_parallel_state_dicts
 from .utils import convert_padding_free_lists_to_tensors, disable_generation_cache
