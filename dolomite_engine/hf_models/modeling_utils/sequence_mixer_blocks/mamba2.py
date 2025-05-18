@@ -8,6 +8,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_causal_conv1d_available, is_mamba_2_ssm_available
 from ...cache import GenerationCache
+from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function
 from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
@@ -173,6 +174,16 @@ class Mamba2(nn.Module):
         self.out_proj = ParameterizedLinear(
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
+
+        mark_parameter_as_no_weight_decay(self.dt_bias)
+        mark_parameter_as_no_weight_decay(self.A_log)
+        mark_parameter_as_no_weight_decay(self.D)
+
+        mark_parameter_as_mup_learning_rate(self.A_log)
+        mark_parameter_as_mup_learning_rate(self.D)
+        mark_parameter_as_mup_learning_rate(self.conv1d.weight)
+        mark_parameter_as_mup_learning_rate(self.in_proj.weight)
+        mark_parameter_as_mup_learning_rate(self.out_proj.weight)
 
     @torch._dynamo.disable
     def forward(

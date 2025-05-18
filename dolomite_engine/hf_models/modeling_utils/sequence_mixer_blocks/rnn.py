@@ -7,6 +7,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
+from ...parameter import mark_parameter_as_mup_learning_rate
 from ..linear import ParameterizedLinear
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
@@ -63,6 +64,10 @@ class RNN(nn.Module):
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
+
+        mark_parameter_as_mup_learning_rate(self.input_projection.weight)
+        mark_parameter_as_mup_learning_rate(self.state_weight)
+        mark_parameter_as_mup_learning_rate(self.output_projection.weight)
 
     def forward(
         self,
