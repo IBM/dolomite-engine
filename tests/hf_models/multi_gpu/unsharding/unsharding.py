@@ -5,16 +5,16 @@ import torch
 import torch.distributed
 from torch.distributed._tensor.api import DTensor
 
-from dolomite_engine.dtensors import dtensor_to_tensor
-from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import (
+from lm_engine.dtensors import dtensor_to_tensor
+from lm_engine.enums import Kernel
+from lm_engine.hf_models import (
     GPTDolomiteConfig,
     fix_unsharded_state_dict,
     get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
 )
-from dolomite_engine.kernels import enable_kernels
-from dolomite_engine.utils import ProcessGroupManager
+from lm_engine.kernels import enable_kernels
+from lm_engine.utils import ProcessGroupManager
 
 from ...test_common import TestCommons
 

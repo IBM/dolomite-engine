@@ -4,8 +4,8 @@ import tempfile
 import torch
 from parameterized import parameterized
 
-from dolomite_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig
-from dolomite_engine.utils import torch_dtype_to_string
+from lm_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig
+from lm_engine.utils import torch_dtype_to_string
 
 from ...test_common import TestCommons
 

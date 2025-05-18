@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoModelForCausalLM
 
-from dolomite_engine.hf_models import GPTDolomiteConfig
+from lm_engine.hf_models import GPTDolomiteConfig
 
 
 config = GPTDolomiteConfig(

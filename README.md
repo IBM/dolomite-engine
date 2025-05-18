@@ -50,9 +50,9 @@ Please note that this repository doesn't support Tensor Parallel or Pipeline Par
 This repository works with all HuggingFace models (text-to-text only for the moment) out-of-the-box. The checkpoints have to be in safetensors format, if not you can check `tools/pt_to_safetensors.py`. If your model_type is `gpt_megatron` just change it to `gpt_dolomite`.
 
 > [!TIP]
-> You might be able to enjoy additional memory and computation savings when finetuning your models using the [padding free transformers optimization](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This optimization is currently only supported for decoder models and requires converting your model (say LLama-3 for example) to a [custom class](dolomite_engine/hf_models/models/gpt_dolomite/) implemented in this repo. This is completely optional and not required for finetuning. The conversion can be achieved as follows:
+> You might be able to enjoy additional memory and computation savings when finetuning your models using the [padding free transformers optimization](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This optimization is currently only supported for decoder models and requires converting your model (say LLama-3 for example) to a [custom class](lm_engine/hf_models/models/gpt_dolomite/) implemented in this repo. This is completely optional and not required for finetuning. The conversion can be achieved as follows:
 ```python
-from dolomite_engine.hf_models import import_from_huggingface
+from lm_engine.hf_models import import_from_huggingface
 
 import_from_huggingface(
     pretrained_model_name_or_path="ibm-granite/granite-3b-code-base",
@@ -61,7 +61,7 @@ import_from_huggingface(
 ```
 Once done training, you can convert the model back to the HF class as:
 ```python
-from dolomite_engine.hf_models import export_to_huggingface
+from lm_engine.hf_models import export_to_huggingface
 
 export_to_huggingface(
     pretrained_model_name_or_path="trained_checkpoint",
@@ -72,9 +72,9 @@ export_to_huggingface(
 
 If you are interested in using this optimization outside this repo for some reason, you can do as follows:
 ```python
-from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import GPTDolomiteForCausalLM
-from dolomite_engine.kernels import enable_kernels
+from lm_engine.enums import Kernel
+from lm_engine.hf_models import GPTDolomiteForCausalLM
+from lm_engine.kernels import enable_kernels
 
 
 # we need unpadded lists here for avoiding any useless computations on pad tokens
@@ -198,7 +198,7 @@ from torch.optim.sgd import SGD as TorchSGD
 # Citation
 If you find this repository useful, please consider citing it in your research:
 ```bibtex
-@software{Mishra_Dolomite_Engine_A_2024,
+@software{Mishra_lm_engine_A_2024,
     author = {Mishra, Mayank},
     month = jun,
     title = {{Dolomite Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},

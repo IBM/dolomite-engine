@@ -1,7 +1,7 @@
 import torch
 from parameterized import parameterized
 
-from dolomite_engine.hf_models.config import _Mamba2Args
+from lm_engine.hf_models.config import _Mamba2Args
 
 from ..test_common import TestCommons
 

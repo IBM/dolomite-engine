@@ -3,9 +3,9 @@ from parameterized import parameterized
 from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM, set_seed
 
-from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import convert_gpt_dolomite_to_gpt_crosslayer
-from dolomite_engine.kernels import enable_kernels
+from lm_engine.enums import Kernel
+from lm_engine.hf_models import convert_gpt_dolomite_to_gpt_crosslayer
+from lm_engine.kernels import enable_kernels
 
 from ..test_common import TestCommons
 

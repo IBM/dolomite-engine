@@ -2,8 +2,8 @@ import torch
 import torch.distributed
 from transformers import AutoTokenizer
 
-from dolomite_engine.hf_models import GPTDolomiteForCausalLM_TP
-from dolomite_engine.utils import ProcessGroupManager
+from lm_engine.hf_models import GPTDolomiteForCausalLM_TP
+from lm_engine.utils import ProcessGroupManager
 
 
 # initialize distributed

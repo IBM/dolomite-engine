@@ -1,4 +1,4 @@
-from dolomite_engine.data.megatron.indexed_dataset import (
+from lm_engine.data.megatron.indexed_dataset import (
     MMapIndexedDataset,
     MMapIndexedDatasetBuilder,
     get_bin_path,

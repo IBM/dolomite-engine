@@ -4,10 +4,10 @@ import os
 import torch
 from parameterized import parameterized
 
-from dolomite_engine.enums import Mode, ParamsGroupMethod
-from dolomite_engine.model_wrapper import get_model_container
-from dolomite_engine.optimization.params_group import get_param_groups_list
-from dolomite_engine.utils import ProcessGroupManager
+from lm_engine.enums import Mode, ParamsGroupMethod
+from lm_engine.model_wrapper import get_model_container
+from lm_engine.optimization.params_group import get_param_groups_list
+from lm_engine.utils import ProcessGroupManager
 
 from ..test_commons import TestCommons
 
