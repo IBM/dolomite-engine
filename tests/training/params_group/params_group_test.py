@@ -28,8 +28,6 @@ class ParamsGroupTest(TestCommons):
 
         params_groups = get_param_groups_list(model_container, args.optimizer_args.class_args, params_group_method)[0]
 
-        # json.dump(params_groups.get_param_names(), open("a.json", "w"), indent=4)
-
         expected_group = json.load(
             open(os.path.join(os.path.dirname(__file__), "groups", expected_groups_filename), "r")
         )

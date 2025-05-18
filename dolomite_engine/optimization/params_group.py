@@ -139,30 +139,21 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
-    if optimizer_class_args.get("weight_decay") == 0:
-        no_weight_decay_params.update(normal_params)
-        normal_params = {}
-
-    params_group_list = _ParamsGroupsList()
-
-    if len(normal_params) > 0:
-        params_group_list.add_params_group(_ParamsGroup(name="normal", parameter_name_map=normal_params))
-    if len(no_weight_decay_params) > 0:
-        params_group_list.add_params_group(
+    params_group_list = _ParamsGroupsList(
+        params_groups=[
+            _ParamsGroup(name="normal", parameter_name_map=normal_params),
             _ParamsGroup(
                 name="no_weight_decay",
                 parameter_name_map=no_weight_decay_params,
                 params_group_kwargs={"weight_decay": 0},
-            )
-        )
-    if len(mup_params) > 0:
-        params_group_list.add_params_group(
+            ),
             _ParamsGroup(
                 name="mup",
                 parameter_name_map=mup_params,
                 params_group_kwargs={"lr": optimizer_class_args["lr"] / model.config.m_width},
-            )
-        )
+            ),
+        ]
+    )
 
     return params_group_list
 
