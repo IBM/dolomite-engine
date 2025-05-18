@@ -9,7 +9,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, is_cute_kernels_available
 from ...loss import add_aux_loss
-from ...parameter import mark_parameter_as_no_weight_decay
+from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 from .mlp import _get_std_for_linear
@@ -195,6 +195,14 @@ class MoE(nn.Module):
         self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
             torch.cuda.current_device()
         ) >= (9, 0)
+
+        mark_parameter_as_mup_learning_rate(self.gate.weight)
+        mark_parameter_as_mup_learning_rate(self.c_fc.weight)
+        mark_parameter_as_mup_learning_rate(self.c_proj.weight)
+
+        if shared_intermediate_size is not None:
+            mark_parameter_as_mup_learning_rate(self.c_fc_shared.weight)
+            mark_parameter_as_mup_learning_rate(self.c_proj_shared.weight)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:

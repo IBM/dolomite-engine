@@ -10,7 +10,7 @@ from ..hf_models import (
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
 )
-from ..hf_models.modeling_utils import MLP, RNN, Attention, Mamba2, MoE
+from ..hf_models.modeling_utils import RNN, Attention, Mamba2, MoE
 from ..model_wrapper import ModelWrapper
 from ..utils import BaseArgs, log_rank_0
 
@@ -52,7 +52,7 @@ class _ParamsGroupsList(BaseArgs):
         return {group.name: group.get_param_names() for group in self.params_groups}
 
 
-def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
+def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> _ParamsGroupsList:
     if model.has_teacher_model():
         log_rank_0(logging.WARN, "found a teacher model in the ModelWrapper")
         # this is the student model
@@ -66,10 +66,6 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
             no_weight_decay_params[name] = parameter
         else:
             normal_params[name] = parameter
-
-    assert len(normal_params) + len(no_weight_decay_params) == len(
-        list(model.parameters())
-    ), "params in groups don't sum up to total parameters"
 
     params_group_list = _ParamsGroupsList(
         params_groups=[
@@ -86,16 +82,6 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
 
 
 def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) -> list[_ParamsGroup]:
-    assert isinstance(
-        model.model,
-        (
-            GPTDolomiteForCausalLM,
-            GPTDolomiteForCausalLM_TP,
-            LadderResidualForCausalLM,
-            LadderResidualForCausalLM_TP,
-        ),
-    ), "mup is not supported with this model architecture"
-
     assert (
         model.config.init_method == "mup"
     ), "both init method for model and params group method for optimizer should be set to mup"
@@ -109,35 +95,13 @@ def get_mup_group_with_names(model: ModelWrapper, optimizer_class_args: dict) ->
     no_weight_decay_params = {}
     mup_params = {}
 
-    # collect parameters with mup learning rate
-    for module_name, module in model.named_modules():
-        if isinstance(module, (Attention, MLP, MoE, RNN)):
-            for param_name, param in module.named_parameters():
-                # we don't add bias or norms to mup group
-                if not (param_name.endswith("bias") or "norm" in param_name):
-                    # add name of module to name of subparam
-                    mup_params[f"{module_name}.{param_name}"] = param
-        elif isinstance(module, Mamba2):
-            for param_name, param in module.named_parameters():
-                if param_name in ["A_log", "D"] or not (param_name.endswith("bias") or "norm" in param_name):
-                    mup_params[f"{module_name}.{param_name}"] = param
-        elif isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
-            for param_name, param in module.named_parameters():
-                no_weight_decay_params[f"{module_name}.{param_name}"] = param
-
-    # remove biases from weight decay
-    for param_name, param in model.named_parameters():
-        if param_name not in no_weight_decay_params and param_name.endswith("bias"):
-            no_weight_decay_params[param_name] = param
-
-    # collect parameters without mup learning rate
-    for param_name, param in model.named_parameters():
-        if param_name not in mup_params and param_name not in no_weight_decay_params:
-            normal_params[param_name] = param
-
-    assert len(normal_params) + len(no_weight_decay_params) + len(mup_params) == len(
-        list(model.parameters())
-    ), "params in groups don't sum up to total parameters"
+    for name, parameter in model.named_parameters():
+        if getattr(parameter, "_has_mup_learning_rate", False):
+            mup_params[name] = parameter
+        elif getattr(parameter, "_no_weight_decay", False):
+            no_weight_decay_params[name] = parameter
+        else:
+            normal_params[name] = parameter
 
     params_group_list = _ParamsGroupsList(
         params_groups=[

@@ -8,7 +8,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_causal_conv1d_available, is_mamba_2_ssm_available
 from ...cache import GenerationCache
-from ...parameter import mark_parameter_as_no_weight_decay
+from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function
 from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
@@ -162,18 +162,28 @@ class Mamba2(nn.Module):
         # time step projection (discretization)
         # instantiate once and copy inv_dt in init_weights of PretrainedModel
         # Initialize log dt bias
-        self.dt_bias = mark_parameter_as_no_weight_decay(nn.Parameter(torch.ones(self.num_heads)))
+        self.dt_bias = nn.Parameter(torch.ones(self.num_heads))
 
         # S4D real initialization. These are not discretized!
         # The core is to load them, compute the discrete states, then write the updated state. Keeps the memory bounded
         A = torch.arange(1, self.num_heads + 1)
-        self.A_log = mark_parameter_as_no_weight_decay(nn.Parameter(torch.log(A)))
+        self.A_log = nn.Parameter(torch.log(A))
         self.norm = get_normalization_function("silu_gated_rmsnorm", self.intermediate_size, eps=layer_norm_epsilon)
-        self.D = mark_parameter_as_no_weight_decay(nn.Parameter(torch.ones(self.num_heads)))
+        self.D = nn.Parameter(torch.ones(self.num_heads))
 
         self.out_proj = ParameterizedLinear(
             self.intermediate_size, self.hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
+
+        mark_parameter_as_no_weight_decay(self.dt_bias)
+        mark_parameter_as_no_weight_decay(self.A_log)
+        mark_parameter_as_no_weight_decay(self.D)
+
+        mark_parameter_as_mup_learning_rate(self.A_log)
+        mark_parameter_as_mup_learning_rate(self.D)
+        mark_parameter_as_mup_learning_rate(self.conv1d.weight)
+        mark_parameter_as_mup_learning_rate(self.in_proj.weight)
+        mark_parameter_as_mup_learning_rate(self.out_proj.weight)
 
     @torch._dynamo.disable
     def forward(
