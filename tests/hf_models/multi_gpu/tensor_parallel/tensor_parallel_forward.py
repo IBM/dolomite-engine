@@ -5,10 +5,10 @@ import torch
 import torch.distributed
 from transformers import set_seed
 
-from dolomite_engine.enums import Kernel
-from dolomite_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig, get_model_parallel_class
-from dolomite_engine.kernels import enable_kernels
-from dolomite_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
+from lm_engine.enums import Kernel
+from lm_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig, get_model_parallel_class
+from lm_engine.kernels import enable_kernels
+from lm_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
 from ...test_common import TestCommons
 

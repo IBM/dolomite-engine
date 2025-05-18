@@ -9,8 +9,8 @@ import torch
 from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
-from dolomite_engine import SafeTensorsWeightsManager
-from dolomite_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
+from lm_engine import SafeTensorsWeightsManager
+from lm_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
 
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False

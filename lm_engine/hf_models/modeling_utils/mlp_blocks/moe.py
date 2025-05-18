@@ -20,7 +20,7 @@ if is_cute_kernels_available():
 
 
 # TODO add support for combileable bincount in PyTorch directly
-@torch.library.custom_op("dolomite_engine::bincount", mutates_args={})
+@torch.library.custom_op("lm_engine::bincount", mutates_args={})
 def bincount(x: torch.Tensor, minlength: int) -> torch.Tensor:
     return x.bincount(minlength=minlength).to(torch.uint32)
 
