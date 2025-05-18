@@ -1,7 +1,7 @@
-<h1 align="center" style="font-size: 50px;">Dolomite Engine</h1>
+<h1 align="center" style="font-size: 50px;">LM Engine</h1>
 
 <p align="center">
-  <img src="assets/dolomite.jpeg" width="300px" height="300px">
+  <img src="assets/lm-engine.jpeg" width="300px" height="300px">
 </p>
 
 <!-- Topic -->
@@ -56,7 +56,7 @@ from lm_engine.hf_models import import_from_huggingface
 
 import_from_huggingface(
     pretrained_model_name_or_path="ibm-granite/granite-3b-code-base",
-    save_path="dolomite_compatible_model"
+    save_path="lm_engine_compatible_model"
 )
 ```
 Once done training, you can convert the model back to the HF class as:
@@ -110,7 +110,7 @@ sh scripts/pretrain.sh configs/pretraining-examples/pretrain-1.yml
 sh scripts/generate.sh configs/sst2/inference.yml
 ```
 
-3. [Unshard the checkpoint](scripts/unshard.sh): This is used to unshard the model to a safetensors checkpoint since dolomite-engine saves a sharded model during training
+3. [Unshard the checkpoint](scripts/unshard.sh): This is used to unshard the model to a safetensors checkpoint since lm-engine saves a sharded model during training
 ```shell
 sh scripts/unshard.sh configs/sst2/unshard.yml
 ```
@@ -201,8 +201,8 @@ If you find this repository useful, please consider citing it in your research:
 @software{Mishra_lm_engine_A_2024,
     author = {Mishra, Mayank},
     month = jun,
-    title = {{Dolomite Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},
-    url = {https://github.com/ibm/dolomite-engine},
+    title = {{LM Engine: A Hyper-Optimized Library for Pretraining and Finetuning}},
+    url = {https://github.com/ibm/lm-engine},
     year = {2024}
 }
 ```
