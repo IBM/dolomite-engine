@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from ...enums import Kernel
 from ...kernels import is_kernel_allowed
 from ...utils import is_cute_kernels_available
+from ..parameter import mark_parameter_as_no_weight_decay
 
 
 if is_cute_kernels_available():
@@ -50,5 +51,8 @@ def get_normalization_function(
         normalization = _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape, eps=eps)
     else:
         raise ValueError(f"unexpected `normalization_function` {normalization_function}")
+
+    for parameter in normalization.parameters():
+        mark_parameter_as_no_weight_decay(parameter)
 
     return normalization

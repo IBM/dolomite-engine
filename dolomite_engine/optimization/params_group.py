@@ -61,16 +61,9 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
     normal_params = {}
     no_weight_decay_params = {}
 
-    # remove layernorm and rmsnorm parameters from weight decay
-    for module_name, module in model.named_modules():
-        if isinstance(module, (nn.LayerNorm, nn.RMSNorm)) or module.__class__.__name__.lower().endswith("norm"):
-            for param_name, param in module.named_parameters():
-                no_weight_decay_params[f"{module_name}.{param_name}"] = param
-        elif isinstance(module, Mamba2):
-            for param_name, param in module.named_parameters():
-                # we don't add bias or norms to mup group
-                if param_name.endswith("A_log") or param_name.endswith("D"):
-                    no_weight_decay_params[f"{module_name}.{param_name}"] = param
+    for name, parameter in model.named_parameters():
+        if hasattr(parameter, "_no_weight_decay"):
+            no_weight_decay_params[name] = parameter
 
     # remove biases from weight decay
     for param_name, param in model.named_parameters():
