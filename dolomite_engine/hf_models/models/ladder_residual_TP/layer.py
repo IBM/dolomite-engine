@@ -15,12 +15,12 @@ from ..ladder_residual.layer import LadderResidualBlock
 if is_cute_kernels_available():
     from cute_kernels.constants import MAX_TRITON_BLOCK_SIZE
     from cute_kernels.kernels.rmsnorm import rmsnorm_backward_triton, rmsnorm_forward_triton
-    from cute_kernels.kernels.swiglu_unchunked import swiglu_unchunked_backward_triton, swiglu_unchunked_forward_triton
+    from cute_kernels.kernels.swiglu import swiglu_backward_triton, swiglu_forward_triton
     from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
     from cute_kernels.utils import ensure_contiguous, get_num_elements_and_hidden_size, get_sm_count
 
     @ensure_contiguous
-    def _swiglu_unchunked_forward(x: torch.Tensor) -> torch.Tensor:
+    def _swiglu_packed_forward(x: torch.Tensor) -> torch.Tensor:
         B, H = get_num_elements_and_hidden_size(x)
         BLOCK_SIZE_B = 64
         BLOCK_SIZE_H = 64
@@ -28,7 +28,7 @@ if is_cute_kernels_available():
         output = torch.empty(*x.size()[:-1], divide_if_divisible(H, 2), device=x.device, dtype=x.dtype)
 
         with torch.cuda.device(x.device):
-            swiglu_unchunked_forward_triton[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
+            swiglu_forward_triton[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
                 x_ptr=x,
                 output_ptr=output,
                 B=B,
@@ -40,7 +40,7 @@ if is_cute_kernels_available():
         return output
 
     @ensure_contiguous
-    def _swiglu_unchunked_backward(x: torch.Tensor, output_grad: torch.Tensor) -> torch.Tensor:
+    def _swiglu_packed_backward(x: torch.Tensor, output_grad: torch.Tensor) -> torch.Tensor:
         B, H = get_num_elements_and_hidden_size(x)
         BLOCK_SIZE_B = 64
         BLOCK_SIZE_H = 64
@@ -48,7 +48,7 @@ if is_cute_kernels_available():
         x_grad = torch.empty_like(x)
 
         with torch.cuda.device(x.device):
-            swiglu_unchunked_backward_triton[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
+            swiglu_backward_triton[ceil_divide(B, BLOCK_SIZE_B), ceil_divide(H, BLOCK_SIZE_H)](
                 x_ptr=x,
                 output_grad_ptr=output_grad,
                 x_grad_ptr=x_grad,
@@ -137,7 +137,7 @@ if is_cute_kernels_available():
         c_fc_input: torch.Tensor, c_fc_weight: torch.Tensor, c_proj_weight: torch.Tensor
     ) -> tuple[torch.Tensor]:
         swiglu_input = F.linear(c_fc_input, c_fc_weight)
-        c_proj_input = _swiglu_unchunked_forward(swiglu_input)
+        c_proj_input = _swiglu_packed_forward(swiglu_input)
         c_proj_output = F.linear(c_proj_input, c_proj_weight)
         return swiglu_input, c_proj_input, c_proj_output
 
@@ -150,7 +150,7 @@ if is_cute_kernels_available():
         output_grad: torch.Tensor,
     ) -> tuple[torch.Tensor]:
         c_proj_input_grad = F.linear(output_grad, c_proj_weight.T)
-        c_fc_output_grad = _swiglu_unchunked_backward(swiglu_input, c_proj_input_grad)
+        c_fc_output_grad = _swiglu_packed_backward(swiglu_input, c_proj_input_grad)
         c_fc_input_grad = F.linear(c_fc_output_grad, c_fc_weight.T)
         c_fc_input_grad = funcol.all_reduce(
             c_fc_input_grad, reduceOp="sum", group=ProcessGroupManager.get_tensor_parallel_mesh()
