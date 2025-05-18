@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from ..parameter import mark_parameter_as_no_weight_decay
+
 
 class ParameterizedLinear(nn.Linear):
     def __init__(
@@ -14,6 +16,8 @@ class ParameterizedLinear(nn.Linear):
     ) -> None:
         self.std = std
         super().__init__(in_features, out_features, bias, device, dtype)
+
+        mark_parameter_as_no_weight_decay(self.bias)
 
     @torch.no_grad()
     def reset_parameters(self) -> None:

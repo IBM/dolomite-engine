@@ -62,39 +62,25 @@ def get_normal_group_with_names(model: ModelWrapper, optimizer_class_args: dict)
     no_weight_decay_params = {}
 
     for name, parameter in model.named_parameters():
-        if hasattr(parameter, "_no_weight_decay"):
+        if getattr(parameter, "_no_weight_decay", False):
             no_weight_decay_params[name] = parameter
-
-    # remove biases from weight decay
-    for param_name, param in model.named_parameters():
-        if param_name not in no_weight_decay_params and param_name.endswith("bias"):
-            no_weight_decay_params[param_name] = param
-
-    # these parameters have weight decay
-    for param_name, param in model.named_parameters():
-        if param_name not in no_weight_decay_params:
-            normal_params[param_name] = param
+        else:
+            normal_params[name] = parameter
 
     assert len(normal_params) + len(no_weight_decay_params) == len(
         list(model.parameters())
     ), "params in groups don't sum up to total parameters"
 
-    if optimizer_class_args.get("weight_decay") == 0:
-        no_weight_decay_params.update(normal_params)
-        normal_params = {}
-
-    params_group_list = _ParamsGroupsList()
-
-    if len(normal_params) > 0:
-        params_group_list.add_params_group(_ParamsGroup(name="normal", parameter_name_map=normal_params))
-    if len(no_weight_decay_params) > 0:
-        params_group_list.add_params_group(
+    params_group_list = _ParamsGroupsList(
+        params_groups=[
+            _ParamsGroup(name="normal", parameter_name_map=normal_params),
             _ParamsGroup(
                 name="no_weight_decay",
                 parameter_name_map=no_weight_decay_params,
                 params_group_kwargs={"weight_decay": 0},
-            )
-        )
+            ),
+        ]
+    )
 
     return params_group_list
 

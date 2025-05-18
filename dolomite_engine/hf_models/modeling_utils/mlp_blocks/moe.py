@@ -9,6 +9,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, is_cute_kernels_available
 from ...loss import add_aux_loss
+from ...parameter import mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 from .mlp import _get_std_for_linear
@@ -63,6 +64,8 @@ class ParameterizedExperts(nn.Module):
         self.num_experts = num_experts
         self.in_features = in_features
         self.out_features = out_features
+
+        mark_parameter_as_no_weight_decay(self.bias)
 
         self.reset_parameters()
 
