@@ -65,9 +65,9 @@ class ParameterizedExperts(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        mark_parameter_as_no_weight_decay(self.bias)
-
         self.reset_parameters()
+
+        mark_parameter_as_no_weight_decay(self.bias)
 
     def forward(
         self,
