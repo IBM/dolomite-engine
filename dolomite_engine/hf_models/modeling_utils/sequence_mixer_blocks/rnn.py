@@ -45,8 +45,6 @@ class RNN(nn.Module):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.activation_function = activation_function
         self.relu_negative_slope = relu_negative_slope
-
-        self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
 
         std = initializer_range
