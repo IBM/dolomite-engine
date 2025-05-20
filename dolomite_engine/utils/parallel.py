@@ -354,6 +354,23 @@ class ProcessGroupManager:
 
         _DATA_PARALLEL_WORLD_SIZE = original_world_size
 
+     #NOTE: For Expert Parallel Setup: Update the below later for defining size of EP 
+    @staticmethod
+    def get_expert_parallel_mesh() -> DeviceMesh:
+        return ProcessGroupManager.get_expert_parallel_mesh()
+    
+    @staticmethod
+    def get_expert_parallel_group() -> ProcessGroup:    
+        return ProcessGroupManager.get_data_parallel_group()
+    
+    @staticmethod
+    def get_expert_parallel_world_size() -> int:
+        return ProcessGroupManager.get_data_parallel_world_size()
+    
+    @staticmethod
+    def get_expert_parallel_rank() -> int:
+        return ProcessGroupManager.get_data_parallel_rank()
+
     def __str__(self) -> str:
         return str(self.get_mesh())
 
@@ -421,3 +438,61 @@ def get_pipeline_stage_ids_on_current_rank(num_pipeline_stages: int) -> int:
     )
 
     return tuple(pp_rank + i * pp_world_size for i in range(num_pipeline_stages_per_rank))
+
+
+
+
+
+# https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/tensor_parallel/mappings.py
+class _AllToAll(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, group, input, output_split_sizes, input_split_sizes):
+        """Forward function."""
+        ctx.group = group
+        ctx.output_split_sizes = output_split_sizes
+        ctx.input_split_sizes = input_split_sizes
+
+        world_size = group.size()
+        # Bypass the function if we are using only 1 GPU.
+        if world_size == 1:
+            return input
+
+        input = input.contiguous() # Note: Check this if needed ?
+        if output_split_sizes is None:
+            # Equal split (all2all)
+            output = torch.empty_like(input)
+        else:
+            # Unequal split (all2all-v)
+            output = input.new_empty(
+                size=[sum(output_split_sizes)] + list(input.size()[1:]),
+                dtype=input.dtype,
+                device=input.dtype,
+            )
+        torch.distributed.all_to_all_single(
+            output,
+            input,
+            output_split_sizes=output_split_sizes,
+            input_split_sizes=input_split_sizes,
+            group=group,
+        )
+        return output
+
+    @staticmethod
+    def backward(ctx, *grad_output):
+        """Backward function."""
+        return (
+            None,
+            _AllToAll.apply(ctx.group, *grad_output, ctx.input_split_sizes, ctx.output_split_sizes),
+            None,
+            None,
+        )
+
+
+def all_to_all(input, output_split_sizes, input_split_sizes, group):
+    return _AllToAll.apply(
+        input= input,
+        output_split_sizes=output_split_sizes,
+        input_split_sizes=input_split_sizes,
+        group=group,
+    )
+

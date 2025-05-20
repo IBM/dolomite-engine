@@ -121,6 +121,12 @@ def wrap_model_container_for_distributed_training(
         get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
     ]
 
+    if args.distributed_args.use_ep :
+        # Don't do FSDP on MoE Module : 
+        exclude_fsdp_module = get_module_class_from_name(model_container[0], "MoE")
+    else:
+        exclude_fsdp_module = None 
+
     if args.distributed_args.gradient_checkpointing_method is not None:
         assert len(block_names) == 1
 
@@ -168,6 +174,10 @@ def wrap_model_container_for_distributed_training(
                 old_state_dict = model.state_dict()
 
             for module in model.modules():
+                if exclude_fsdp_module and isinstance(module,exclude_fsdp_module):
+                    log_rank_0(logging.INFO,"Expert Parallel: Skipping FSDP of MoE Module")
+                    continue
+
                 if isinstance(module, tuple(block_classes)):
                     fully_shard(
                         module,

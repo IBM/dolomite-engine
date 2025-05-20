@@ -189,6 +189,17 @@ class MoE_TP(MoE, DTensorModule):
 
         self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
 
+        self.ep_mesh = ProcessGroupManager.get_expert_parallel_mesh()
+        self.ep_world_size = ProcessGroupManager.get_expert_parallel_world_size()
+        self.ep_rank = ProcessGroupManager.get_expert_parallel_rank()
+
+        assert self.num_experts % self.ep_world_size == 0 , "num experts must be divisible by EP size"
+
+        self.num_local_experts = self.num_experts // self.ep_world_size
+        # self.global_expert_offset = self.ep_rank * self.num_local_experts
+
+
+
         self.gate = ReplicatedLinear_TP(
             in_features=self.hidden_size,
             out_features=num_experts,
@@ -197,7 +208,7 @@ class MoE_TP(MoE, DTensorModule):
         )
 
         self.c_fc = ColumnParallelExperts(
-            num_experts=num_experts,
+            num_experts=self.num_local_experts,
             in_features=self.hidden_size,
             out_features=2 * self.intermediate_size if is_glu(activation_function) else self.intermediate_size,
             add_bias=add_bias,
@@ -218,7 +229,7 @@ class MoE_TP(MoE, DTensorModule):
         std /= math.sqrt(2 * num_layers)
 
         self.c_proj = RowParallelExperts(
-            num_experts=num_experts,
+            num_experts=self.num_local_experts,
             in_features=self.intermediate_size,
             out_features=self.hidden_size,
             add_bias=add_bias,
@@ -271,6 +282,7 @@ class MoE_TP(MoE, DTensorModule):
             hidden_states, device_mesh=self.tp_mesh, desired_placement=Replicate(), grad_placement=Partial()
         )
 
+        #Note: Till this point EP doesn't come in picture as we need the full router weights
         moe_output = self._compute_experts(hidden_states, router_weights, selected_experts)
 
         if self.shared_intermediate_size is None:

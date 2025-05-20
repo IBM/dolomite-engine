@@ -11,7 +11,7 @@ from torch.distributed._functional_collectives import all_reduce
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
-from ....utils import ProcessGroupManager, is_cute_kernels_available
+from ....utils import ProcessGroupManager, is_cute_kernels_available,all_to_all
 from ...loss import add_aux_loss
 from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function, is_glu
@@ -194,6 +194,17 @@ class MoE(nn.Module):
                 std=std,
             )
 
+        self.ep_mesh = ProcessGroupManager.get_expert_parallel_mesh()
+        self.ep_world_size = ProcessGroupManager.get_expert_parallel_world_size()
+        self.ep_rank = ProcessGroupManager.get_expert_parallel_rank()
+
+        assert self.num_experts % self.ep_world_size == 0 , "num experts must be divisible by EP size"
+
+        self.num_local_experts = self.num_experts // self.ep_world_size
+        self.expert_p = (
+            self.ep_world_size > 1 if self.ep_mesh is not None else False
+        )
+
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
 
         self.is_hopper_or_newer_gpu = torch.cuda.is_available() and torch.cuda.get_device_capability(
@@ -255,39 +266,184 @@ class MoE(nn.Module):
 
         return router_logits, router_weights, selected_experts
 
+    def _communicate(self, hidden_states: torch.Tensor,  selected_experts: torch.Tensor
+    ) :
+
+        with torch.no_grad():
+            batch_index, sorted_expert_ids,sorted_scattered_idx, num_tokens_per_expert = self._compute_expert_assignment_ep(selected_experts)
+            # can create offset of num_tokens_per_expert here if we want to later use kernel for scatter 
+
+
+            #Now we need to collect num_tokens_per_expert from different devices for local experts
+            device_tokens_per_expert = torch.empty_like(num_tokens_per_expert)
+            torch.distributed.all_to_all_single(
+                device_tokens_per_expert,
+                num_tokens_per_expert,
+                group= ProcessGroupManager.get_expert_parallel_group(),
+            )# This will give us num_tokens from all processes which will be used by the current process's local experts
+        
+        # Create the hidden_states based on batch_index ( This will group tokens based on experts)
+        hidden_states = hidden_states[batch_index] # (tota_q,H) -> (total_q*top_k, H)
+
+
+        with torch.no_grad():
+            # Prepare for token communication 
+
+            num_tokens_per_expert = num_tokens_per_expert.view(self.ep_world_size,self.num_local_experts)
+            device_tokens_per_expert = device_tokens_per_expert.view(self.ep_world_size,self.num_local_experts)
+
+            counts_send = num_tokens_per_expert.cpu().sum(dim=-1).tolist() 
+            counts_recv = device_tokens_per_expert.cpu().sum(dim=-1).tolist()
+            
+        # Now we have all data we need to do token all2all to gather all the tokens for current process's local experts
+        new_h  = all_to_all(
+            input=hidden_states,
+            output_split_sizes=counts_recv,
+            input_split_sizes=counts_send,
+            group=ProcessGroupManager.get_expert_parallel_group(),
+        )# new_h -> (sum(counts_recv), Hid_dim)
+
+
+        # Need to group tokens based on experts again 
+        with torch.no_grad():
+            exp_indices_  = torch.remainder(
+                torch.arange(self.num_local_experts * self.ep_world_size,
+                dtype = torch.int32,
+                device = batch_index.device
+                ), 
+                self.num_local_experts
+            ) 
+
+            #Note: if error encounter check CPU/GPU implementation with float allowed or not?
+            replicate_indices = torch.repeat_interleave(
+                        exp_indices_, 
+                        repeats=device_tokens_per_expert.flatten(),  # Repeat each index according to count
+                    )
+            
+            sorted_exp_ids_dev, sorted_exp_ind_dev = torch.sort(replicate_indices,stable=True) # Note: Stable sort ? 
+
+
+        outs=  (
+            new_h,
+            sorted_exp_ids_dev,
+            sorted_exp_ind_dev,
+            counts_send,
+            counts_recv,
+        )
+
+        return outs + (sorted_expert_ids,sorted_scattered_idx)
+
+    def communicate_ep_fwd(self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
+    ) -> torch.Tensor:
+        # Every input here to this fn is replicated across devices in TP Device mesh 
+        # This fn does 3 steps : 1) Prepare stuff For communication and Permute (1 A2A Call)
+        # 2) Token Permutation : EP(1 A2A Call)
+        # 3) Unpermute and Scatter Back (1 A2A Call)
+
+        # Step 1 and 2 Here
+        (hidden_states,sorted_expert_ids,sorted_scattered_idxs,*_comm_prods) =  self._communicate(hidden_states,selected_experts)
+
+
+        with torch.no_grad():
+            # isn;t this is Equal to # of device tokens after cross comm we calculated  ? 
+            expert_offsets = compute_bincount(
+                x=sorted_expert_ids,
+                size=self.num_experts,
+                use_continuous_count=self.is_hopper_or_newer_gpu
+                and is_kernel_allowed(Kernel.continuous_count_cute),
+            ).cumsum(-1)
+
+        hidden_states = self.c_fc(
+            hidden_states,
+            min(self.top_k,self.num_local_experts), # -> min(top_k,local_experts) because local_experts may become less thank top_k
+            sorted_expert_ids,
+            sorted_scattered_idxs,
+            expert_offsets,
+            grouped_out=True,
+        )
+        hidden_states = self.act(hidden_states)
+        hidden_states = self.c_proj(
+            hidden_states,
+            1,
+            sorted_expert_ids,
+            sorted_scattered_idxs,
+            expert_offsets,
+            grouped_in=True,
+            gates=None if self.expert_p else router_weights, # final scattering is handled in all to all call
+        )
+        hidden_states = self.dropout(hidden_states)
+
+        # Step 3
+        hidden_states = self._scatter_back(
+            hidden_states,
+            router_weights,
+            _comm_prods,
+        )        
+
+        return hidden_states
+
+    def _scatter_back(
+        self,hidden_states : torch.Tensor, router_weights: torch.Tensor, comm_prods
+    ) -> torch.Tensor:
+
+        (count_send, count_recv, sorted_exp_ids,sorted_scatt_ids) = comm_prods
+
+        # Unpermute the tokens by reverse send and recv counts
+
+        new_h= all_to_all(
+            input=hidden_states,
+            output_split_sizes=count_send,
+            input_split_sizes=count_recv,
+            group= ProcessGroupManager.get_expert_parallel_group(),
+        ) # new_h - > (sum(count_send), Hid_dim)
+
+        #create empty o/p tensor 
+        out_tok = sorted_exp_ids.shape[0] // self.top_k  # (total_q) 
+        out = torch.empty((out_tok, new_h.shape[1]),dtype = new_h.dtype, device = new_h.device)
+
+        if router_weights is not None : 
+            new_h = new_h * router_weights.unsqueeze(1)
+
+        out.scatter_add_(0,sorted_scatt_ids.unsqueeze(1).expand(-1,new_h.shape[1]),new_h)
+
+        return out
+
     def _compute_experts(
-        self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
+        self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor,ep_configs: dict
     ) -> torch.Tensor:
         if is_kernel_allowed(Kernel.scattermoe):
-            with torch.no_grad():
-                sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
+            if self.expert_p:
+                hidden_states = self.communicate_ep_fwd(hidden_states,router_weights,selected_experts)
+            else:
+                with torch.no_grad():
+                    sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
-                expert_offsets = compute_bincount(
-                    x=sorted_expert_idxs,
-                    size=self.num_experts,
-                    use_continuous_count=self.is_hopper_or_newer_gpu
-                    and is_kernel_allowed(Kernel.continuous_count_cute),
-                ).cumsum(-1)
+                    expert_offsets = compute_bincount(
+                        x=sorted_expert_idxs,
+                        size=self.num_experts,
+                        use_continuous_count=self.is_hopper_or_newer_gpu
+                        and is_kernel_allowed(Kernel.continuous_count_cute),
+                    ).cumsum(-1)
 
-            hidden_states = self.c_fc(
-                hidden_states,
-                self.top_k,
-                sorted_expert_idxs,
-                sorted_scattered_idxs,
-                expert_offsets,
-                grouped_out=True,
-            )
-            hidden_states = self.act(hidden_states)
-            hidden_states = self.c_proj(
-                hidden_states,
-                1,
-                sorted_expert_idxs,
-                sorted_scattered_idxs,
-                expert_offsets,
-                grouped_in=True,
-                gates=router_weights,
-            )
-            hidden_states = self.dropout(hidden_states)
+                hidden_states = self.c_fc(
+                    hidden_states,
+                    self.top_k,
+                    sorted_expert_idxs,
+                    sorted_scattered_idxs,
+                    expert_offsets,
+                    grouped_out=True,
+                )
+                hidden_states = self.act(hidden_states)
+                hidden_states = self.c_proj(
+                    hidden_states,
+                    1,
+                    sorted_expert_idxs,
+                    sorted_scattered_idxs,
+                    expert_offsets,
+                    grouped_in=True,
+                    gates=router_weights,
+                )
+                hidden_states = self.dropout(hidden_states)
         else:
             total_q = hidden_states.shape[0]
 
@@ -312,6 +468,24 @@ class MoE(nn.Module):
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj_shared(hidden_states)
         return hidden_states
+
+
+    def _compute_expert_assignment_ep(
+        self, selected_experts: torch.Tensor
+    ) -> tuple[torch.Tensor]:
+        selected_experts = selected_experts.flatten() # (tota_q * top_k)
+
+        num_tokens_per_expert = compute_bincount(
+            x=selected_experts,
+            size=self.num_experts,
+            use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
+        )
+
+        # sort and group input tokens according to expert assignment
+        sorted_expert_ids, index_sorted_experts = selected_experts.sort(0,stable=True)  # [num_tokens * top_k] #Note : Sorted in Pytorch Stable ?
+        batch_index = index_sorted_experts // self.top_k  # [num_tokens * top_k]
+
+        return batch_index, sorted_expert_ids, index_sorted_experts,num_tokens_per_expert
 
     def _compute_expert_assignment(
         self, router_weights: torch.Tensor, selected_experts: torch.Tensor

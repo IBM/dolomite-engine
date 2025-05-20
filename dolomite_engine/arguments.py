@@ -285,6 +285,8 @@ class DistributedArgs(BaseArgs):
     pipeline_parallel_schedule: str | None = None
     # whether to use async-TP
     use_async_tensor_parallel: bool = False
+    # whether to use Expert Parallel
+    use_ep: bool = False 
 
     def model_post_init(self, __context: Any) -> None:
         # communication dtype
