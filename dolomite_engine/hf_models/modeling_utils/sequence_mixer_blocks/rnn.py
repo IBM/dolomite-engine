@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import math
 
 import torch
@@ -7,6 +11,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
+from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..linear import ParameterizedLinear
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
@@ -44,8 +49,6 @@ class RNN(nn.Module):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.activation_function = activation_function
         self.relu_negative_slope = relu_negative_slope
-
-        self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
 
         std = initializer_range
@@ -63,6 +66,12 @@ class RNN(nn.Module):
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
+
+        mark_parameter_as_mup_learning_rate(self.input_projection.weight)
+        mark_parameter_as_mup_learning_rate(self.state_weight)
+        mark_parameter_as_mup_learning_rate(self.output_projection.weight)
+
+        mark_parameter_as_no_weight_decay(self.state_weight)
 
     def forward(
         self,

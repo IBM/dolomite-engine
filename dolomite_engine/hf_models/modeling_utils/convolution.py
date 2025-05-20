@@ -1,7 +1,13 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from typing import Union
 
 import torch
 import torch.nn as nn
+
+from ..parameter import mark_parameter_as_no_weight_decay
 
 
 class ParameterizedConv1d(nn.Conv1d):
@@ -34,6 +40,8 @@ class ParameterizedConv1d(nn.Conv1d):
             device=device,
             dtype=dtype,
         )
+
+        mark_parameter_as_no_weight_decay(self.bias)
 
     @torch.no_grad()
     def reset_parameters(self) -> None:

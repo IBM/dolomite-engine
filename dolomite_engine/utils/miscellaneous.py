@@ -1,3 +1,8 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
+
 def divide_if_divisible(dividend: int, divisor: int, msg: str) -> int:
     """divide if divisible else raise an error
 

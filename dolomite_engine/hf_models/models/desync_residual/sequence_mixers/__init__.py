@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ..config import DesyncResidualConfig
 from .base import DesyncResidualAttention
 

@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ...config import CommonConfig
 from .softmax_attention import Attention_TP
 

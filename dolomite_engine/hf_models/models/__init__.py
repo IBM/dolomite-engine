@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from .desync_residual import DesyncResidualConfig, DesyncResidualForCausalLM, DesyncResidualModel
 from .gpt_crosslayer import (
     GPTCrossLayerConfig,

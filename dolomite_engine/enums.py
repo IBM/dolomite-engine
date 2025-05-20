@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from enum import Enum
 
 
@@ -72,7 +76,7 @@ class Kernel(Enum):
     pack_sequence_cute = "pack_sequence_cute"
     rmsnorm_cute = "rmsnorm_cute"
     rnn_cute = "rnn_cute"
-    swiglu_unchunked_cute = "swiglu_unchunked_cute"
+    swiglu_packed_cute = "swiglu_packed_cute"
     unpack_sequence_cute = "unpack_sequence_cute"
     # external kernels
     flash_attention_2 = "flash_attention_2"

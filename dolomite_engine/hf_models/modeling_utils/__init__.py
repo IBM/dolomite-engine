@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from .activations import get_activation_function, is_glu
 from .convolution import ParameterizedConv1d
 from .embedding import ParameterizedEmbedding

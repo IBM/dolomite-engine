@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch
 import torch.nn.functional as F
 from torch.distributed._tensor.placement_types import Replicate, Shard
