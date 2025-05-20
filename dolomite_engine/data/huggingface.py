@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from datasets import load_dataset
 from transformers import AutoTokenizer
 

@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch.nn as nn
 from transformers.activations import ACT2CLS, ClassInstantier
 

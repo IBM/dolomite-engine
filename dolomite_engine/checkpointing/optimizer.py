@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import os
 
 from torch.distributed.checkpoint.state_dict import (

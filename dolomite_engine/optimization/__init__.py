@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ..containers import BackwardHookOptimizerContainer, ModelContainer, OptimizerContainer
 from .optimizer import get_optimizer_container
 from .scheduler import get_scheduler_container

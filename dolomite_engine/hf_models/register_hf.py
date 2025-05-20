@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
 
 from .models import (
