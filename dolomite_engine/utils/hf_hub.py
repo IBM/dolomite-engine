@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import os
 
 from transformers import AutoConfig, AutoTokenizer

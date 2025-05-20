@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from .config import CommonConfig
 from .loss import get_autoregressive_language_modeling_loss, is_aux_loss_zero
 from .mixins import CausalLMOutputWithPast, PipelineParallelInput, PipelineParallelOutput

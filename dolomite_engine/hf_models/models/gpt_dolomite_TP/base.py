@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
 from ..gpt_dolomite import GPTDolomiteConfig
 

@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ...mixins import CausalLMModelMixin_TP
 from .base import GPTDolomiteModel_TP, GPTDolomitePreTrainedModel_TP
 from .weights import get_gpt_dolomite_model_parallel_state_dict
