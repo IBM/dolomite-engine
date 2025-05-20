@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from .config import CommonConfig
 from .models import (
     DesyncResidualConfig,

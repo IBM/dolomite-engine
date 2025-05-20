@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ...config import CommonConfig
 from .flash_attention_utils import flash_attention
 from .gru import GRU

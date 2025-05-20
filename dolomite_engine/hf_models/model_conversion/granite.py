@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteConfig, GraniteForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
