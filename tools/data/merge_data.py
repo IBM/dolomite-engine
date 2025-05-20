@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from argparse import ArgumentParser, Namespace
 
 from dolomite_engine.data.megatron.merge_data import merge_files

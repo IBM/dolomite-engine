@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch
 from torch.distributed._tensor.placement_types import Replicate
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
@@ -245,7 +249,7 @@ class ModelWrapperForPretraining(ModelWrapper):
                     position_ids = self.position_ids
             else:
                 cu_seqlens = self.cu_seqlens
-                max_seqlen = self.max_seqlen
+                max_seqlen = self.sequence_length
                 position_ids = self.position_ids
 
             batch["cu_seqlens"] = cu_seqlens
@@ -279,7 +283,6 @@ class ModelWrapperForPretraining(ModelWrapper):
                     ),
                     persistent=False,
                 )
-                self.max_seqlen = self.sequence_length
 
             if self.reset_position_ids:
                 assert self.reset_attention_mask, "reset_attention_mask should be specified with reset_position_ids"

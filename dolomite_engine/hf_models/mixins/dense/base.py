@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch
 import torch.nn as nn
 from transformers import PreTrainedModel
@@ -47,7 +51,7 @@ class PreTrainedModelMixin(PreTrainedModel):
         token_type_ids: torch.Tensor | list[list[int]] | None,
         labels: torch.Tensor | list[list[int]] | None,
         cu_seqlens: torch.Tensor | None,
-        max_seqlen: torch.Tensor | None,
+        max_seqlen: int | None,
         past_key_values: tuple[tuple[torch.Tensor]],
         attention_mask: torch.Tensor | None,
         use_cache: bool,
@@ -141,7 +145,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> BaseModelOutputWithPast:
         (
             use_cache,
@@ -307,7 +311,7 @@ class BaseModelMixin(PreTrainedModelMixin):
         inputs_embeds: torch.Tensor | None = None,
         use_cache: bool | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> tuple[
         bool,
         bool,

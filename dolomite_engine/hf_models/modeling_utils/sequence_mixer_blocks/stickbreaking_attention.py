@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import math
 
 import torch
@@ -82,7 +86,7 @@ class SBAttention(Attention):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
         # assert past_key_values is None
@@ -149,7 +153,7 @@ class PaddingFreeSBAttention(SBAttention):
         attention_mask: torch.Tensor | None = None,
         rope_cos_sin: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         sb_metadata=None,
     ) -> torch.Tensor:
         assert past_key_values is None

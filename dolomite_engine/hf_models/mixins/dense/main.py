@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch
 import torch.nn.functional as F
 from transformers import GenerationMixin
@@ -60,7 +64,7 @@ class CausalLMModelMixin(PreTrainedModelMixin, GenerationMixin):
         use_cache: bool | None = None,
         return_dict: bool = True,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
         reduction: str = "mean",
     ) -> CausalLMOutputWithPast:
         assert return_dict

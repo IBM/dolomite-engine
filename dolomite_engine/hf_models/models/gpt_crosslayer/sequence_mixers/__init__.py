@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ..config import GPTCrossLayerConfig
 from .base import CrossLayerAttention, KeyValueProjection
 

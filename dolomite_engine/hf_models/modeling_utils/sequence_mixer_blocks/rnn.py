@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import math
 
 import torch
@@ -7,8 +11,9 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
+from ...parameter import mark_parameter_as_mup_learning_rate
 from ..linear import ParameterizedLinear
-from .padding import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
+from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
 
 if is_cute_kernels_available():
@@ -24,6 +29,8 @@ class RNN(nn.Module):
         num_heads: int,
         add_bias: bool,
         gradient_clipping: float | None,
+        activation_function: str,
+        relu_negative_slope: float | None,
         initializer_range: float,
         m_width: float,
         init_method: str,
@@ -40,8 +47,8 @@ class RNN(nn.Module):
         self.gradient_clipping = gradient_clipping
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
-
-        self.input_head_dim = divide_if_divisible(self.input_size, self.num_heads, "")
+        self.activation_function = activation_function
+        self.relu_negative_slope = relu_negative_slope
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
 
         std = initializer_range
@@ -60,13 +67,17 @@ class RNN(nn.Module):
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
 
+        mark_parameter_as_mup_learning_rate(self.input_projection.weight)
+        mark_parameter_as_mup_learning_rate(self.state_weight)
+        mark_parameter_as_mup_learning_rate(self.output_projection.weight)
+
     def forward(
         self,
         input: torch.Tensor,
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
         cu_seqlens: torch.Tensor | None = None,
-        max_seqlen: torch.Tensor | None = None,
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         if self.use_padding_free_transformer:
             assert cache_params is None
@@ -79,7 +90,7 @@ class RNN(nn.Module):
 
             if attention_mask is not None:
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
-                input = pack_sequence(input=input, cu_seqlens=cu_seqlens)
+                input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
@@ -89,32 +100,25 @@ class RNN(nn.Module):
         input = input * self.factor
         weight = self.state_weight * self.factor
 
-        if is_kernel_allowed(Kernel.rnn_cute):
-            input = rnn_cute(
-                input=input,
-                weight=weight,
-                input_state=input_state,
-                gradient_clipping=self.gradient_clipping,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-            )
-        else:
-            input = rnn_torch(
-                input=input,
-                weight=weight,
-                input_state=input_state,
-                gradient_clipping=self.gradient_clipping,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-            )
+        input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
+            input=input,
+            weight=weight,
+            input_state=input_state,
+            gradient_clipping=self.gradient_clipping,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+            activation_function=self.activation_function,
+            relu_negative_slope=self.relu_negative_slope,
+        )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
-                input=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
+                inputs=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
             )
 
         if cache_params is not None:
-            cache_params.update(state=input[:, -1, ...], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
+            input_state = input[:, -1].view(input.size(0), -1)
+            cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
         input = self.output_projection(input)
@@ -124,3 +128,6 @@ class RNN(nn.Module):
     @torch.no_grad()
     def reset_parameters(self) -> None:
         nn.init.normal_(self.state_weight, std=self.state_weight_std)
+
+    def extra_repr(self) -> str:
+        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.state_weight.shape)}"

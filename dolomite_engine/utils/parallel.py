@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import os
 from contextlib import ExitStack, contextmanager
 from datetime import timedelta

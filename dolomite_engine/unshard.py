@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from .arguments import get_args
 from .checkpointing import load_checkpoint_for_inference
 from .enums import Mode

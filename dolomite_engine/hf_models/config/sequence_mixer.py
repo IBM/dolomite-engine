@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from typing import Any
 
 from ...utils import BaseArgs
@@ -67,12 +71,28 @@ class _Mamba2Args(BaseArgs):
         assert self.sequence_mixer_type == "mamba2"
 
 
-class _RNNArgs(BaseArgs):
-    sequence_mixer_type: str = "rnn"
+class _GRUArgs(BaseArgs):
+    sequence_mixer_type: str = "gru"
     state_size: int = 2048
     num_heads: int = 128
     add_bias: bool = True
     gradient_clipping: float | None = None
 
     def model_post_init(self, __context: Any) -> None:
+        assert self.sequence_mixer_type == "gru"
+
+
+class _RNNArgs(_GRUArgs):
+    sequence_mixer_type: str = "rnn"
+    activation_function: str = "tanh"
+    relu_negative_slope: float | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        assert self.activation_function in ["tanh", "leaky_relu"]
+
+        if self.activation_function == "leaky_relu":
+            assert self.relu_negative_slope is not None
+        else:
+            assert self.relu_negative_slope is None
+
         assert self.sequence_mixer_type == "rnn"

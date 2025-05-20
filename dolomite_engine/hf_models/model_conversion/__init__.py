@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from transformers import AutoConfig
 
 from .bigcode import export_to_huggingface_bigcode, import_from_huggingface_bigcode

@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import logging
 
 import torch
@@ -160,7 +164,19 @@ def get_model_tflops(
             sequence_mixer_flops += _get_linear_flops(b * s, block.state_size, h)
 
             head_dim = block.state_size / block.num_heads
+
+            # sigmoid(Wh + x)
             sequence_mixer_flops += s * block.num_heads * (_get_linear_flops(b, head_dim, head_dim) + b * head_dim)
+        elif sequence_mixer_type == "gru":
+            # input projection FLOPs
+            sequence_mixer_flops = _get_linear_flops(b * s, h, 3 * block.state_size)
+            # output projection FLOPs
+            sequence_mixer_flops += _get_linear_flops(b * s, block.state_size, h)
+
+            head_dim = block.state_size / block.num_heads
+
+            # sigmoid(Wh + x)
+            sequence_mixer_flops += 3 * s * block.num_heads * (_get_linear_flops(b, head_dim, head_dim) + b * head_dim)
         else:
             raise NotImplementedError(f"unexpected sequence_mixer_type ({sequence_mixer_type})")
 

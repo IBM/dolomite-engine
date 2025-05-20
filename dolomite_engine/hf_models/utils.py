@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from typing import Any
 
 import torch
@@ -10,7 +14,7 @@ def convert_padding_free_lists_to_tensors(
     token_type_ids: list[list[int]] | None = None,
     labels: list[list[int]] | None = None,
     device: torch.device = None,
-) -> tuple[torch.Tensor]:
+) -> tuple[torch.Tensor | int]:
 
     # check input types are correct
     error_message = "{variable} should be of type List[List[{dtype}]]"

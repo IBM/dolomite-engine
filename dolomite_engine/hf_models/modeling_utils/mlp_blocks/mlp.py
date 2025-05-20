@@ -1,8 +1,13 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import math
 
 import torch
 import torch.nn as nn
 
+from ...parameter import mark_parameter_as_mup_learning_rate
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 
@@ -38,6 +43,9 @@ class MLP(nn.Module):
         )
 
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
+
+        mark_parameter_as_mup_learning_rate(self.c_fc.weight)
+        mark_parameter_as_mup_learning_rate(self.c_proj.weight)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc(hidden_states)

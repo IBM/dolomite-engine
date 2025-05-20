@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch.nn as nn
 from torch.optim import Optimizer
 from torch.optim.adadelta import Adadelta as TorchAdadelta
