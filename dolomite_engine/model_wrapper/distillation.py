@@ -122,7 +122,10 @@ class ModelWrapperForDistillation(ModelWrapperForPretraining):
         # instead of (sequence_length), so we need to trim the input_ids before forward pass.
         # transformers does forward pass before however and then trims the tokens.
 
-        input_ids, labels = self._prepare_inputs_ids_and_labels_for_forward(batch)
+        tokens = batch["text"]
+        input_ids = tokens[:, :-1]
+        labels = tokens[:, 1:]
+
         batch = self._prepare_model_inputs(input_ids)
         output: CausalLMOutputWithPast | PipelineParallelOutput = self.model(**batch, return_dict=True)
 
