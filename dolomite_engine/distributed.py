@@ -130,7 +130,7 @@ def _set_parameter_marker_maps(model_container: ModelContainer, marker_maps: lis
 
     for model, _marker_map in zip(model_container, marker_maps):
         for new_param_name, parameter in model.named_parameters():
-            original_param_name = new_param_name.split(prefix)[-1]
+            original_param_name = new_param_name.split(prefix)[-1] if len(prefix) > 0 else new_param_name
 
             for marker, value in _marker_map[original_param_name].items():
                 setattr(parameter, marker, value)
