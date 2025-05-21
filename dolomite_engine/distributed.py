@@ -119,6 +119,23 @@ def _get_parameter_marker_maps(model_container: ModelContainer) -> list[dict]:
     return marker_maps
 
 
+def _set_parameter_marker_maps(model_container: ModelContainer, marker_maps: list[dict]) -> None:
+    for original_param_name in marker_maps[0]:
+        break
+
+    for new_param_name, _ in model_container[0].named_parameters():
+        break
+
+    prefix = new_param_name.split(original_param_name)[0]
+
+    for model, _marker_map in zip(model_container, marker_maps):
+        for new_param_name, parameter in model.named_parameters():
+            original_param_name = new_param_name.split(prefix)[-1]
+
+            for marker, value in _marker_map[original_param_name].items():
+                setattr(parameter, marker, value)
+
+
 def wrap_model_container_for_distributed_training(
     args: TrainingArgs, model_container: ModelContainer
 ) -> tuple[ModelContainer, _PipelineSchedule]:
@@ -180,7 +197,7 @@ def wrap_model_container_for_distributed_training(
         get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
     ]
 
-    _get_parameter_marker_maps(model_container)
+    marker_maps = _get_parameter_marker_maps(model_container)
 
     if args.distributed_args.gradient_checkpointing_method is not None:
         assert len(block_names) == 1
@@ -334,6 +351,8 @@ def wrap_model_container_for_distributed_training(
 
         for i, model in enumerate(model_container):
             model_container[i] = torch.compile(model)
+
+    _set_parameter_marker_maps(model_container, marker_maps)
 
     pipeline_stages = []
     pipeline_schedule = None
