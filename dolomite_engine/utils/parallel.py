@@ -52,7 +52,6 @@ class ProcessGroupManager:
         self,
         tensor_parallel_world_size: int = 1,
         pipeline_parallel_world_size: int = 1,
-        data_parallel_size: int | None = None,
         data_parallel_replication_world_size: int | None = None,
         data_parallel_sharding_world_size: int | None = None,
         context_parallel_world_size: int | None = None,
@@ -71,9 +70,7 @@ class ProcessGroupManager:
         )
 
         total_gpus = int(os.getenv("WORLD_SIZE", 1))
-
-        if data_parallel_size is None:
-            data_parallel_size = total_gpus // (tensor_parallel_world_size * pipeline_parallel_world_size)
+        data_parallel_size = total_gpus // (tensor_parallel_world_size * pipeline_parallel_world_size)
 
         assert tensor_parallel_world_size * pipeline_parallel_world_size * data_parallel_size == total_gpus
 

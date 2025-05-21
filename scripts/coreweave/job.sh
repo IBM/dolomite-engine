@@ -18,7 +18,7 @@ export HF_HOME="$HOME/.cache/huggingface/"
 proj_dir="/mnt/vast/proj/checkpoints/$USER" #sets the place to write all logs 
 min_bw=$( echo "140" | bc -l)
 
-# export WANDB_BASE_URL=https://api.wandb.ai
+export WANDB_BASE_URL=https://api.wandb.ai
 # export WANDB_PROJECT=SUT
 # export WANDB_ENTITY=ete-dcgm-monitor
 # export WANDB_NAME=120b-moe-test
@@ -103,7 +103,7 @@ SRUN_ARGS=" --kill-on-bad-exit=1  \
 --container-mounts=${container_mounts}  \
 --no-container-remap-root \
 --container-workdir=$PWD \
---output=$PWD/logs/$expname.log \
+--output=$PWD/logs/out-$expname.log \
 --error=$PWD/logs/err-$expname.log
 "
 
@@ -128,6 +128,8 @@ export DISTRIBUTED_ARGS="\
 --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
 "
 echo $DISTRIBUTED_ARGS
+
+export TRITON_PRINT_AUTOTUNING=1
 
 # # srun ${SRUN_ARGS} pip install -e ../cute-kernels/
 # command='bash -c "pip install -e ../cute-kernels/ && torchrun $DISTRIBUTED_ARGS  -m dolomite_engine.pretrain --config $config"'

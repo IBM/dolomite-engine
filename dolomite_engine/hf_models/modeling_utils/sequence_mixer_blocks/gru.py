@@ -11,6 +11,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
+from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..linear import ParameterizedLinear
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 from .rnn import RNN
@@ -53,7 +54,7 @@ class GRU(nn.Module):
         self.state_weight_std = std
 
         self.input_projection = ParameterizedLinear(self.input_size, 3 * self.state_size, bias=add_bias, std=std)
-        self.weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
+        self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
@@ -62,6 +63,12 @@ class GRU(nn.Module):
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
+
+        mark_parameter_as_mup_learning_rate(self.input_projection.weight)
+        mark_parameter_as_mup_learning_rate(self.state_weight)
+        mark_parameter_as_mup_learning_rate(self.output_projection.weight)
+
+        mark_parameter_as_no_weight_decay(self.state_weight)
 
     def forward(
         self,
@@ -87,7 +94,7 @@ class GRU(nn.Module):
         input = self.input_projection(input)
 
         input = input * self.factor
-        weight = self.weight * self.factor
+        weight = self.state_weight * self.factor
 
         input, forget_input, reset_input = input.chunk(3, dim=-1)
         weight, forget_weight, reset_weight = weight.chunk(3, dim=0)
@@ -127,7 +134,7 @@ class GRU(nn.Module):
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
-        nn.init.normal_(self.weight, std=self.state_weight_std)
+        nn.init.normal_(self.state_weight, std=self.state_weight_std)
 
     def extra_repr(self) -> str:
-        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.weight.shape)}"
+        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.state_weight.shape)}"
