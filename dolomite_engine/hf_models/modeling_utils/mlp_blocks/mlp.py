@@ -7,9 +7,17 @@ import math
 import torch
 import torch.nn as nn
 
+from ....enums import Kernel
+from ....kernels import is_kernel_allowed
+from ....utils import is_cute_kernels_available
 from ...parameter import mark_parameter_as_mup_learning_rate
 from ..activations import get_activation_function, is_glu
+from ..activations.glu import GLUActivation
 from ..linear import ParameterizedLinear
+
+
+if is_cute_kernels_available():
+    from cute_kernels import fused_swiglu_cute
 
 
 class MLP(nn.Module):
@@ -48,10 +56,23 @@ class MLP(nn.Module):
         mark_parameter_as_mup_learning_rate(self.c_proj.weight)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.c_fc(hidden_states)
-        hidden_states = self.act(hidden_states)
-        hidden_states = self.c_proj(hidden_states)
+        if isinstance(self.act, GLUActivation) and is_kernel_allowed(Kernel.fused_swiglu_cute):
+            up_weight, gate_weight = self.c_fc.weight.chunk(2, dim=0)
+
+            hidden_states = fused_swiglu_cute(
+                x=hidden_states,
+                gate_weight=gate_weight,
+                up_weight=up_weight,
+                down_weight=self.c_proj.weight,
+                memory_efficient=True,
+            )
+        else:
+            hidden_states = self.c_fc(hidden_states)
+            hidden_states = self.act(hidden_states)
+            hidden_states = self.c_proj(hidden_states)
+
         hidden_states = self.dropout(hidden_states)
+
         return hidden_states
 
 
