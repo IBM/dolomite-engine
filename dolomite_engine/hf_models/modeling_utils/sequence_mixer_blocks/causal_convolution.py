@@ -2,6 +2,8 @@
 # Copyright (c) 2025, Mayank Mishra
 # **************************************************
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -27,6 +29,7 @@ class CausalConvolution(nn.Module):
         initializer_range: float | None,
         m_width: float,
         init_method: str,
+        num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
     ) -> None:
@@ -39,7 +42,7 @@ class CausalConvolution(nn.Module):
         self.layer_idx = layer_idx
 
         std = _get_std_for_linear(initializer_range, init_method, m_width)
-        self.input_projection = ParameterizedLinear(hidden_size, in_channels, bias=add_bias)
+        self.input_projection = ParameterizedLinear(hidden_size, in_channels, bias=add_bias, std=std)
 
         divide_if_divisible(in_channels, num_groups, "")
         divide_if_divisible(out_channels, num_groups, "")
@@ -61,7 +64,9 @@ class CausalConvolution(nn.Module):
 
         self.activation_function = get_activation_function(activation_function)
 
-        self.output_projection = ParameterizedLinear(intermediate_size, hidden_size, bias=add_bias)
+        self.output_projection = ParameterizedLinear(
+            intermediate_size, hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
+        )
 
     def forward(
         self,
