@@ -74,7 +74,10 @@ class CausalConvolution(nn.Module):
 
         hidden_states = self.input_projection(hidden_states)
 
+        hidden_states = hidden_states.transpose(-1, -2)
         hidden_states = self.conv1d(hidden_states)
+
+        hidden_states = hidden_states.transpose(-1, -2)
         hidden_states = self.activation_function(hidden_states)
 
         hidden_states = self.output_projection(hidden_states)
