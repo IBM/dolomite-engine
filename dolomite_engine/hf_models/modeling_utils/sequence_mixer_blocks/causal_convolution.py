@@ -78,10 +78,8 @@ class CausalConvolution(nn.Module):
             intermediate_size, hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
 
-        self.casual_conv1d_compatible = (
-            self.num_groups == self.in_channels == self.out_channels
-            and self.activation_string in [None, "silu", "swish"]
-        )
+        self.casual_conv1d_compatible = self.num_groups == self.in_channels == self.out_channels
+        self.use_activation_inside_kernel = self.activation_string in [None, "silu", "swish"]
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
         mark_parameter_as_mup_learning_rate(self.conv1d.weight)
@@ -109,10 +107,13 @@ class CausalConvolution(nn.Module):
                 x=hidden_states,
                 weight=self.conv1d.weight.squeeze(1),
                 bias=self.conv1d.bias,
-                activation=self.activation_string,
+                activation=self.activation_string if self.use_activation_inside_kernel else None,
             )
 
-            hidden_states = hidden_states.transpose(1, 2)
+            if not self.use_activation_inside_kernel:
+                hidden_states = self.activation_function(hidden_states)
+
+            hidden_states = hidden_states.transpose(-1, -2)
         else:
             hidden_states = self.conv1d(hidden_states)
             hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
