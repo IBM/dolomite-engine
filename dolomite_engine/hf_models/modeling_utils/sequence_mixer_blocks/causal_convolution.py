@@ -30,6 +30,8 @@ class CausalConvolution(nn.Module):
         layer_idx: int,
         use_padding_free_transformer: bool,
     ) -> None:
+        super().__init__()
+
         if use_padding_free_transformer:
             raise NotImplementedError()
 
