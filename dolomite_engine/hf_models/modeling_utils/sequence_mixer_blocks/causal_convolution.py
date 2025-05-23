@@ -35,10 +35,10 @@ class CausalConvolution(nn.Module):
         if use_padding_free_transformer:
             raise NotImplementedError()
 
+        self.kernel_size = kernel_size
         self.layer_idx = layer_idx
 
         std = _get_std_for_linear(initializer_range, init_method, m_width)
-
         self.input_projection = ParameterizedLinear(hidden_size, in_channels, bias=add_bias)
 
         divide_if_divisible(in_channels, num_groups, "")
@@ -76,6 +76,7 @@ class CausalConvolution(nn.Module):
 
         hidden_states = hidden_states.transpose(-1, -2)
         hidden_states = self.conv1d(hidden_states)
+        hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
 
         hidden_states = hidden_states.transpose(-1, -2)
         hidden_states = self.activation_function(hidden_states)
