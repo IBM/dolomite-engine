@@ -49,6 +49,7 @@ class CausalConvolution(nn.Module):
         self.kernel_size = kernel_size
         self.num_groups = num_groups
         self.layer_idx = layer_idx
+        self.activation_string = activation_function
 
         std = _get_std_for_linear(initializer_range, init_method, m_width)
         self.input_projection = ParameterizedLinear(hidden_size, in_channels, bias=add_bias, std=std)
@@ -56,7 +57,7 @@ class CausalConvolution(nn.Module):
         divide_if_divisible(in_channels, num_groups, "")
         divide_if_divisible(out_channels, num_groups, "")
 
-        if is_glu(activation_function):
+        if is_glu(self.activation_string):
             intermediate_size = divide_if_divisible(out_channels, 2, "")
         else:
             intermediate_size = out_channels
@@ -71,14 +72,15 @@ class CausalConvolution(nn.Module):
             std=std,
         )
 
-        self.activation_function = get_activation_function(activation_function)
+        self.activation_function = get_activation_function(self.activation_string)
 
         self.output_projection = ParameterizedLinear(
             intermediate_size, hidden_size, bias=add_bias, std=std / math.sqrt(2 * num_layers)
         )
 
         self.casual_conv1d_compatible = (
-            self.num_groups == self.in_channels == self.out_channels and activation_function in [None, "silu", "swish"]
+            self.num_groups == self.in_channels == self.out_channels
+            and self.activation_string in [None, "silu", "swish"]
         )
 
     def forward(
