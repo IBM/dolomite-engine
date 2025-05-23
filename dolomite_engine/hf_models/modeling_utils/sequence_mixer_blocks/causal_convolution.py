@@ -83,6 +83,14 @@ class CausalConvolution(nn.Module):
             and self.activation_string in [None, "silu", "swish"]
         )
 
+        mark_parameter_as_mup_learning_rate(self.input_projection.weight)
+        mark_parameter_as_mup_learning_rate(self.conv1d.weight)
+        mark_parameter_as_mup_learning_rate(self.output_projection.weight)
+
+        mark_parameter_as_no_weight_decay(self.input_projection.bias)
+        mark_parameter_as_no_weight_decay(self.conv1d.bias)
+        mark_parameter_as_no_weight_decay(self.output_projection.bias)
+
     def forward(
         self,
         hidden_states: torch.Tensor,
