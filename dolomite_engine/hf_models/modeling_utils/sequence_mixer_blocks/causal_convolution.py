@@ -55,6 +55,7 @@ class CausalConvolution(nn.Module):
             kernel_size=kernel_size,
             bias=add_bias,
             padding=kernel_size - 1,
+            groups=num_groups,
             std=std,
         )
 
