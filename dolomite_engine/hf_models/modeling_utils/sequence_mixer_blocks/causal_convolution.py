@@ -41,11 +41,11 @@ class CausalConvolution(nn.Module):
 
         self.input_projection = ParameterizedLinear(hidden_size, in_channels, bias=add_bias)
 
-        divide_if_divisible(in_channels, num_groups)
-        divide_if_divisible(out_channels, num_groups)
+        divide_if_divisible(in_channels, num_groups, "")
+        divide_if_divisible(out_channels, num_groups, "")
 
         if is_glu(activation_function):
-            intermediate_size = divide_if_divisible(out_channels, 2)
+            intermediate_size = divide_if_divisible(out_channels, 2, "")
         else:
             intermediate_size = out_channels
 
