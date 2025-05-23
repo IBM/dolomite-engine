@@ -114,7 +114,9 @@ def get_model_tflops(
         sequence_mixer_type = block.sequence_mixer_type
         gradient_checkpointing_enabled = layer_idx < num_layers_checkpointed
 
-        if sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
+        if sequence_mixer_flops == "causal_convolution":
+            sequence_mixer_flops = 0
+        elif sequence_mixer_type in ["softmax_attention", "stickbreaking_attention"]:
             # QKV projection FLOPs
             sequence_mixer_flops = _get_linear_flops(
                 b * s,
