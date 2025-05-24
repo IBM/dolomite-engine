@@ -196,10 +196,12 @@ class CommonConfig(PretrainedConfig):
             self.sequence_mixer_blocks = [{} for _ in range(self.num_layers)]
 
         sequence_mixer_blocks: list[
-            _SoftmaxAttentionArgs
+            _CausalConvolution
+            | _GRUArgs
             | _Mamba2Args
             | _MultiHeadLatentAttentionArgs
             | _RNNArgs
+            | _SoftmaxAttentionArgs
             | _StickbreakingAttentionArgs
         ] = []
         for i in range(self.num_layers):
