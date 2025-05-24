@@ -104,12 +104,15 @@ class CausalConvolution(nn.Module):
         hidden_states = hidden_states.transpose(-1, -2)
 
         if is_kernel_allowed(Kernel.causal_conv1d) and self.casual_conv1d_compatible:
-            hidden_states = causal_conv1d_fn(
-                x=hidden_states,
-                weight=self.conv1d.weight.squeeze(1),
-                bias=self.conv1d.bias,
-                activation=self.activation_string if self.use_activation_inside_kernel else None,
-            )
+            if input_state is None:
+                hidden_states = causal_conv1d_fn(
+                    x=hidden_states,
+                    weight=self.conv1d.weight.squeeze(1),
+                    bias=self.conv1d.bias,
+                    activation=self.activation_string if self.use_activation_inside_kernel else None,
+                )
+            else:
+                pass
 
             if not self.use_activation_inside_kernel:
                 hidden_states = self.activation_function(hidden_states)
