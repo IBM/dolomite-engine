@@ -96,8 +96,9 @@ class CausalConvolution(nn.Module):
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
-        if input_state is not None:
-            input_state = input_state.roll(shifts=-1, dims=-1)
+
+        if attention_mask is not None:
+            hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
 
         hidden_states = self.input_projection(hidden_states)
         hidden_states = hidden_states.transpose(-1, -2)
@@ -113,12 +114,26 @@ class CausalConvolution(nn.Module):
             if not self.use_activation_inside_kernel:
                 hidden_states = self.activation_function(hidden_states)
         else:
-            hidden_states = self.conv1d(hidden_states)
-            hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
+            if input_state is None:
+                hidden_states = self.conv1d(hidden_states)
+                hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
+            else:
+                input_state = input_state.roll(shifts=-1, dims=-1)
+                input_state[..., -1] = hidden_states[:, 0]
+
+                cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
+
+                hidden_states = (input_state * self.conv1d.weight.squeeze(1)).sum(dim=-1)
+                if self.conv1d.bias is not None:
+                    hidden_states = hidden_states + self.conv1d.bias
 
             hidden_states = self.activation_function(hidden_states)
 
         hidden_states = hidden_states.transpose(-1, -2)
+
+        if attention_mask is not None:
+            hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
+
         hidden_states = self.output_projection(hidden_states)
 
         return hidden_states
