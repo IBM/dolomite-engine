@@ -18,6 +18,7 @@ from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
 from ..mlp_blocks.mlp import _get_std_for_linear
 from ..normalization import get_normalization_function
+from .causal_convolution import _apply_mask_to_padding_states
 
 
 if is_mamba_2_ssm_available():
@@ -79,17 +80,6 @@ def _segment_sum(input_tensor: torch.Tensor) -> torch.Tensor:
     mask = torch.tril(torch.ones(chunk_size, chunk_size, device=input_tensor.device, dtype=torch.bool), diagonal=0)
     tensor_segsum = tensor_segsum.masked_fill(~mask, -torch.inf)
     return tensor_segsum
-
-
-def _apply_mask_to_padding_states(hidden_states: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
-    """
-    Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
-    """
-    if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
-        dtype = hidden_states.dtype
-        hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
-
-    return hidden_states
 
 
 class Mamba2(nn.Module):
