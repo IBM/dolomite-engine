@@ -101,12 +101,13 @@ class CausalConvolution(nn.Module):
         if attention_mask is not None:
             hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
 
-        hidden_states = self.input_projection(hidden_states)
-        hidden_states = hidden_states.transpose(-1, -2)
+        sequence_length = hidden_states.size(1)
 
-        sequence_length = hidden_states.size(-1)
+        hidden_states = self.input_projection(hidden_states)
 
         if is_kernel_allowed(Kernel.causal_conv1d) and self.casual_conv1d_compatible:
+            hidden_states = hidden_states.transpose(-1, -2)
+
             if input_state is None:
                 hidden_states = causal_conv1d_fn(
                     x=hidden_states,
@@ -132,6 +133,8 @@ class CausalConvolution(nn.Module):
                 hidden_states = self.activation_function(hidden_states)
         else:
             if input_state is None:
+                hidden_states = hidden_states.transpose(-1, -2)
+
                 if cache_params is not None:
                     # F.pad trims the hidden_states if sequence_length > kernel_size
                     input_state = F.pad(hidden_states, (self.kernel_size - sequence_length, 0))
@@ -140,6 +143,7 @@ class CausalConvolution(nn.Module):
                 hidden_states = self.conv1d(hidden_states)
                 # removes padding on the right side of the sequence
                 hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
+                hidden_states = hidden_states.transpose(-1, -2)
             else:
                 input_state = input_state.roll(shifts=-1, dims=-1)
                 input_state[..., -1] = hidden_states[:, 0]
@@ -150,8 +154,6 @@ class CausalConvolution(nn.Module):
                     hidden_states = hidden_states + self.conv1d.bias
 
             hidden_states = self.activation_function(hidden_states)
-
-        hidden_states = hidden_states.transpose(-1, -2)
 
         if attention_mask is not None:
             hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
