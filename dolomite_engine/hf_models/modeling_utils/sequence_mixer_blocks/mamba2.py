@@ -511,13 +511,14 @@ class Mamba2(nn.Module):
                     [self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
                 )
 
+                hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
+
                 # 2. Convolution sequence transformation
                 # Init cache
                 if cache_params is not None:
                     # storing the states
                     # If we just take xBC[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
                     # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
-                    hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
                     conv_state = F.pad(
                         hidden_states_B_C_transposed,
                         (self.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0),
@@ -525,7 +526,7 @@ class Mamba2(nn.Module):
                     cache_params.update(conv_state=conv_state, layer_idx=self.layer_idx)
 
                 hidden_states_B_C = causal_conv1d_fn(
-                    x=hidden_states_B_C.transpose(1, 2),
+                    x=hidden_states_B_C_transposed,
                     weight=self.conv1d.weight.squeeze(1),
                     bias=self.conv1d.bias,
                     activation=self.activation_string if self.use_activation_inside_kernel else None,
