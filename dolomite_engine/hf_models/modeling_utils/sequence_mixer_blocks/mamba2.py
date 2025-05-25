@@ -189,7 +189,6 @@ class Mamba2(nn.Module):
         mark_parameter_as_mup_learning_rate(self.in_proj.weight)
         mark_parameter_as_mup_learning_rate(self.out_proj.weight)
 
-    @torch._dynamo.disable
     def forward(
         self,
         hidden_states: torch.Tensor,
