@@ -6,14 +6,13 @@ import torch
 from transformers import Cache
 
 from ..config import CommonConfig
-from .causal_convolution import _CausalConvolutionCache
 from .mamba2 import _Mamba2Cache
 from .rnn import _RNNCache
 from .softmax_attention import _SoftmaxAttentionCache
 
 
 _CACHE_CLASSES = {
-    "causal_convolution": _CausalConvolutionCache,
+    "causal_convolution": _RNNCache,
     "mamba2": _Mamba2Cache,
     "multihead_latent_attention": _SoftmaxAttentionCache,
     "rnn": _RNNCache,

@@ -121,6 +121,11 @@ class CausalConvolution(nn.Module):
                     bias=self.conv1d.bias,
                     activation=self.activation_string if self.use_activation_inside_kernel else None,
                 )
+
+                if cache_params is not None:
+                    cache_params.update(
+                        conv_state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx
+                    )
             else:
                 assert sequence_length == 1
 
@@ -131,9 +136,6 @@ class CausalConvolution(nn.Module):
                     self.conv1d.bias,
                     activation=self.activation_string if self.use_activation_inside_kernel else None,
                 )
-
-            if cache_params is not None:
-                cache_params.update(conv_state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx)
 
             if not self.use_activation_inside_kernel:
                 hidden_states = self.activation_function(hidden_states)
