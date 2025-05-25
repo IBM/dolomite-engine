@@ -122,6 +122,7 @@ class Mamba2(nn.Module):
 
         self.activation_string = ssm_activation_function
         self.activation = get_activation_function(self.activation_string)
+        self.use_activation_inside_kernel = self.activation_string in [None, "silu", "swish"]
 
         self.n_groups = num_groups
         self.head_dim = divide_if_divisible(ssm_intermediate_size, ssm_num_heads, "")
@@ -523,17 +524,15 @@ class Mamba2(nn.Module):
                     )
                     cache_params.update(conv_state=conv_state, layer_idx=self.layer_idx)
 
-                if self.activation_string not in ["silu", "swish"]:
-                    hidden_states_B_C = self.activation(
-                        self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2)
-                    )
-                else:
-                    hidden_states_B_C = causal_conv1d_fn(
-                        x=hidden_states_B_C.transpose(1, 2),
-                        weight=self.conv1d.weight.squeeze(1),
-                        bias=self.conv1d.bias,
-                        activation=self.activation_string,
-                    ).transpose(1, 2)
+                hidden_states_B_C = causal_conv1d_fn(
+                    x=hidden_states_B_C.transpose(1, 2),
+                    weight=self.conv1d.weight.squeeze(1),
+                    bias=self.conv1d.bias,
+                    activation=self.activation_string if self.use_activation_inside_kernel else None,
+                ).transpose(1, 2)
+
+                if not self.use_activation_inside_kernel:
+                    hidden_states_B_C = self.activation(hidden_states_B_C)
 
                 hidden_states_B_C = _apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
                 hidden_states, B, C = torch.split(
