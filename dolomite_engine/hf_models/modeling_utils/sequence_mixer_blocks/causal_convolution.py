@@ -106,8 +106,6 @@ class CausalConvolution(nn.Module):
         hidden_states = self.input_projection(hidden_states)
 
         if is_kernel_allowed(Kernel.causal_conv1d) and self.casual_conv1d_compatible:
-            hidden_states = hidden_states.transpose(-1, -2)
-
             if input_state is None:
                 hidden_states = causal_conv1d_fn(
                     x=hidden_states,
