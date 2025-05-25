@@ -115,6 +115,13 @@ class CausalConvolution(nn.Module):
 
         if is_kernel_allowed(Kernel.causal_conv1d) and self.casual_conv1d_compatible:
             if input_state is None:
+                hidden_states = hidden_states.transpose(-1, -2)
+
+                if cache_params is not None:
+                    # F.pad trims the hidden_states if sequence_length > kernel_size
+                    input_state = F.pad(hidden_states, (self.kernel_size - sequence_length, 0))
+                    cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
+
                 hidden_states = causal_conv1d_fn(
                     x=hidden_states,
                     weight=self.conv1d.weight.squeeze(1),
@@ -122,10 +129,7 @@ class CausalConvolution(nn.Module):
                     activation=self.activation_string if self.use_activation_inside_kernel else None,
                 )
 
-                if cache_params is not None:
-                    cache_params.update(
-                        conv_state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx
-                    )
+                hidden_states = hidden_states.transpose(-1, -2)
             else:
                 assert sequence_length == 1
 
@@ -153,6 +157,8 @@ class CausalConvolution(nn.Module):
                 hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
                 hidden_states = hidden_states.transpose(-1, -2)
             else:
+                assert sequence_length == 1
+
                 input_state = input_state.roll(shifts=-1, dims=-1)
                 input_state[..., -1] = hidden_states[:, 0]
                 cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
