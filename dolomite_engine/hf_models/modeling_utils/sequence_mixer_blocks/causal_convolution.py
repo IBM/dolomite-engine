@@ -133,13 +133,17 @@ class CausalConvolution(nn.Module):
         else:
             if input_state is None:
                 if cache_params is not None:
-                    input_state = F.pad(hidden_states, (self.kernel_size - hidden_states.size(-1), 0))
+                    # F.pad trims the hidden_states if sequence_length > kernel_size
+                    input_state = F.pad(hidden_states, (self.kernel_size - sequence_length, 0))
+                    cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
 
                 hidden_states = self.conv1d(hidden_states)
+                # removes padding on the right side of the sequence
                 hidden_states = hidden_states[..., : -(self.kernel_size - 1)]
             else:
                 input_state = input_state.roll(shifts=-1, dims=-1)
                 input_state[..., -1] = hidden_states[:, 0]
+                cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
 
                 hidden_states = (input_state * self.conv1d.weight.squeeze(1)).sum(dim=-1)
                 if self.conv1d.bias is not None:
@@ -153,9 +157,5 @@ class CausalConvolution(nn.Module):
             hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
 
         hidden_states = self.output_projection(hidden_states)
-
-        if cache_params is not None:
-            assert input_state is not None
-            cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
 
         return hidden_states
