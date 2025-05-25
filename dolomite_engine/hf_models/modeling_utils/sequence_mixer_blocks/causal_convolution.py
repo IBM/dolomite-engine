@@ -23,6 +23,17 @@ if is_causal_conv1d_available():
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
 
 
+def _apply_mask_to_padding_states(hidden_states: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
+    """
+    Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
+    """
+    if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
+        dtype = hidden_states.dtype
+        hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
+
+    return hidden_states
+
+
 class CausalConvolution(nn.Module):
     def __init__(
         self,
@@ -97,12 +108,9 @@ class CausalConvolution(nn.Module):
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
-
-        if attention_mask is not None:
-            hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
-
         sequence_length = hidden_states.size(1)
 
+        hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
         hidden_states = self.input_projection(hidden_states)
 
         if is_kernel_allowed(Kernel.causal_conv1d) and self.casual_conv1d_compatible:
@@ -152,9 +160,7 @@ class CausalConvolution(nn.Module):
                     hidden_states = hidden_states + self.conv1d.bias
 
             hidden_states = self.activation_function(hidden_states)
-
-        if attention_mask is not None:
-            hidden_states = (hidden_states * attention_mask.unsqueeze(-1)).type_as(hidden_states)
+            hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
 
         hidden_states = self.output_projection(hidden_states)
 
