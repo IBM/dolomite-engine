@@ -20,7 +20,7 @@ from ..mlp_blocks.mlp import _get_std_for_linear
 
 
 if is_causal_conv1d_available():
-    from causal_conv1d import causal_conv1d_fn
+    from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
 
 
 class CausalConvolution(nn.Module):
@@ -104,6 +104,8 @@ class CausalConvolution(nn.Module):
         hidden_states = self.input_projection(hidden_states)
         hidden_states = hidden_states.transpose(-1, -2)
 
+        sequence_length = hidden_states.size(-1)
+
         if is_kernel_allowed(Kernel.causal_conv1d) and self.casual_conv1d_compatible:
             if input_state is None:
                 hidden_states = causal_conv1d_fn(
@@ -113,7 +115,18 @@ class CausalConvolution(nn.Module):
                     activation=self.activation_string if self.use_activation_inside_kernel else None,
                 )
             else:
-                pass
+                assert sequence_length == 1
+
+                hidden_states = causal_conv1d_update(
+                    hidden_states,
+                    input_state,
+                    self.conv1d.weight.squeeze(1),
+                    self.conv1d.bias,
+                    activation=self.activation_string if self.use_activation_inside_kernel else None,
+                )
+
+            if cache_params is not None:
+                cache_params.update(conv_state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx)
 
             if not self.use_activation_inside_kernel:
                 hidden_states = self.activation_function(hidden_states)

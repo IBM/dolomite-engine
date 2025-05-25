@@ -13,7 +13,6 @@ from ..dtensors import tensor_to_dtensor
 from ..enums import Kernel, KLDivergenceMethod, Mode
 from ..hf_models import (
     CausalLMOutputWithPast,
-    PipelineParallelInput,
     PipelineParallelOutput,
     get_autoregressive_language_modeling_loss,
     is_aux_loss_zero,
