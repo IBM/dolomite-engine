@@ -18,6 +18,7 @@ from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
 from ..mlp_blocks.mlp import _get_std_for_linear
 from ..normalization import get_normalization_function
+from .causal_convolution import _apply_mask_to_padding_states
 
 
 if is_mamba_2_ssm_available():
@@ -36,7 +37,7 @@ def _pad_tensor_by_size(input_tensor: torch.Tensor, pad_size: int) -> torch.Tens
     """
     pad_shape = (0, 0, 0, 0, 0, pad_size, 0, 0) if len(input_tensor.shape) == 4 else (0, 0, 0, pad_size, 0, 0)
 
-    return torch.nn.functional.pad(input_tensor, pad_shape, mode="constant", value=0)
+    return F.pad(input_tensor, pad_shape, mode="constant", value=0)
 
 
 def _reshape_into_chunks(input_tensor: torch.Tensor, pad_size: int, chunk_size: int) -> torch.Tensor:
@@ -81,17 +82,6 @@ def _segment_sum(input_tensor: torch.Tensor) -> torch.Tensor:
     return tensor_segsum
 
 
-def _apply_mask_to_padding_states(hidden_states: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
-    """
-    Tunes out the hidden states for padding tokens, see https://github.com/state-spaces/mamba/issues/66
-    """
-    if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
-        dtype = hidden_states.dtype
-        hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
-
-    return hidden_states
-
-
 class Mamba2(nn.Module):
     """
     Compute ∆, A, B, C, and D the state space parameters and compute the `contextualized_states`.
@@ -132,6 +122,7 @@ class Mamba2(nn.Module):
 
         self.activation_string = ssm_activation_function
         self.activation = get_activation_function(self.activation_string)
+        self.use_activation_inside_kernel = self.activation_string in [None, "silu", "swish"]
 
         self.n_groups = num_groups
         self.head_dim = divide_if_divisible(ssm_intermediate_size, ssm_num_heads, "")
@@ -195,6 +186,8 @@ class Mamba2(nn.Module):
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
+
         if is_kernel_allowed(Kernel.mamba2_ssm):
             hidden_states = self._cuda_forward(hidden_states, cache_params, attention_mask)
         else:
@@ -208,11 +201,6 @@ class Mamba2(nn.Module):
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        dtype = hidden_states.dtype
-        if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
-            # tune out hidden states for pad tokens, see https://github.com/state-spaces/mamba/issues/66
-            hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
-
         batch_size, seq_len, _ = hidden_states.shape
         dtype = hidden_states.dtype
 
@@ -284,7 +272,7 @@ class Mamba2(nn.Module):
             # [num_heads] -> [num_heads, head_dim]
             dt_bias = self.dt_bias[..., None].expand(self.dt_bias.shape[0], self.head_dim)
 
-            dt = torch.nn.functional.softplus(dt + dt_bias.to(dt.dtype))
+            dt = F.softplus(dt + dt_bias.to(dt.dtype))
             dt = torch.clamp(dt, self.time_step_limit[0], self.time_step_limit[1])
             A = A[..., None, None].expand(self.num_heads, self.head_dim, self.ssm_state_size).to(dtype=torch.float32)
             # [bsz, num_heads, head_dim, state_size]
@@ -385,7 +373,7 @@ class Mamba2(nn.Module):
             else:
                 previous_states = torch.zeros_like(states[:, :1])
             states = torch.cat([previous_states, states], dim=1)
-            decay_chunk = torch.exp(_segment_sum(nn.functional.pad(A_cumsum[:, :, :, -1], (1, 0))))
+            decay_chunk = torch.exp(_segment_sum(F.pad(A_cumsum[:, :, :, -1], (1, 0))))
             decay_chunk = decay_chunk.transpose(1, 3)
             new_states = (decay_chunk[..., None, None] * states[:, :, None, ...]).sum(dim=1)
             states, ssm_state = new_states[:, :-1], new_states[:, -1]
@@ -428,7 +416,6 @@ class Mamba2(nn.Module):
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # 1. Gated MLP's linear projection
-        hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
         projected_states = self.in_proj(hidden_states)
 
         # Set up dimensions for reshapes later
@@ -520,30 +507,29 @@ class Mamba2(nn.Module):
                     [self.intermediate_size, self.conv_dim, self.num_heads], dim=-1
                 )
 
+                hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
+
                 # 2. Convolution sequence transformation
                 # Init cache
                 if cache_params is not None:
                     # storing the states
                     # If we just take xBC[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
                     # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
-                    hidden_states_B_C_transposed = hidden_states_B_C.transpose(1, 2)
                     conv_state = F.pad(
                         hidden_states_B_C_transposed,
                         (self.conv_kernel_size - hidden_states_B_C_transposed.shape[-1], 0),
                     )
                     cache_params.update(conv_state=conv_state, layer_idx=self.layer_idx)
 
-                if self.activation_string not in ["silu", "swish"]:
-                    hidden_states_B_C = self.activation(
-                        self.conv1d(hidden_states_B_C.transpose(1, 2))[..., :seq_len].transpose(1, 2)
-                    )
-                else:
-                    hidden_states_B_C = causal_conv1d_fn(
-                        x=hidden_states_B_C.transpose(1, 2),
-                        weight=self.conv1d.weight.squeeze(1),
-                        bias=self.conv1d.bias,
-                        activation=self.activation_string,
-                    ).transpose(1, 2)
+                hidden_states_B_C = causal_conv1d_fn(
+                    x=hidden_states_B_C_transposed,
+                    weight=self.conv1d.weight.squeeze(1),
+                    bias=self.conv1d.bias,
+                    activation=self.activation_string if self.use_activation_inside_kernel else None,
+                ).transpose(1, 2)
+
+                if not self.use_activation_inside_kernel:
+                    hidden_states_B_C = self.activation(hidden_states_B_C)
 
                 hidden_states_B_C = _apply_mask_to_padding_states(hidden_states_B_C, attention_mask)
                 hidden_states, B, C = torch.split(
