@@ -199,6 +199,7 @@ class CausalConvolution(nn.Module):
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
+        sequence_length = hidden_states.size(1)
 
         hidden_states = self.input_projection(hidden_states)
 
@@ -216,7 +217,7 @@ class CausalConvolution(nn.Module):
         )
 
         if cache_params is not None:
-            cache_params.update(conv_state=input_state, layer_idx=self.layer_idx)
+            cache_params.update(conv_state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx)
 
         hidden_states = self.output_projection(hidden_states)
 
