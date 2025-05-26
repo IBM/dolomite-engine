@@ -222,7 +222,7 @@ class CausalConvolution(nn.Module):
         )
 
         if cache_params is not None:
-            cache_params.update(conv_state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx)
+            cache_params.update(state=input_state, num_tokens_added=sequence_length, layer_idx=self.layer_idx)
 
         hidden_states = self.output_projection(hidden_states)
 
