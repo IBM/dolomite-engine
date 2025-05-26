@@ -100,7 +100,12 @@ def causal_convolution(
                 input_state = F.pad(hidden_states, (kernel_size - sequence_length, 0))
 
             hidden_states = F.conv1d(
-                hidden_states, weight=conv1d_weight, bias=conv1d_bias, stride=conv1d_stride, padding=conv1d_padding
+                input=hidden_states,
+                weight=conv1d_weight,
+                bias=conv1d_bias,
+                stride=conv1d_stride,
+                padding=conv1d_padding,
+                groups=conv1d_num_groups,
             )
 
             # removes padding on the right side of the sequence
