@@ -186,6 +186,8 @@ class Mamba2(nn.Module):
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
+
         if is_kernel_allowed(Kernel.mamba2_ssm):
             hidden_states = self._cuda_forward(hidden_states, cache_params, attention_mask)
         else:
@@ -199,11 +201,6 @@ class Mamba2(nn.Module):
         cache_params: GenerationCache | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        dtype = hidden_states.dtype
-        if attention_mask is not None and attention_mask.shape[1] > 1 and attention_mask.shape[0] > 1:
-            # tune out hidden states for pad tokens, see https://github.com/state-spaces/mamba/issues/66
-            hidden_states = (hidden_states * attention_mask[:, :, None]).to(dtype)
-
         batch_size, seq_len, _ = hidden_states.shape
         dtype = hidden_states.dtype
 
@@ -419,7 +416,6 @@ class Mamba2(nn.Module):
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # 1. Gated MLP's linear projection
-        hidden_states = _apply_mask_to_padding_states(hidden_states, attention_mask)
         projected_states = self.in_proj(hidden_states)
 
         # Set up dimensions for reshapes later
