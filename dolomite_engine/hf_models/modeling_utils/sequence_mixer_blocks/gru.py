@@ -57,9 +57,9 @@ class GroupedLinear(nn.Module):
                 self.bias.zero_()
 
     def forward(self, x):
-        x_size = x.size() 
+        x_size = x.size()
         # X: ..., groups * in_dim
-        x = x.view(-1, self.groups, self.in_dim) 
+        x = x.view(-1, self.groups, self.in_dim)
         # X: ..., groups, in_dim
         x = x.transpose(1, 0)
         # X: groups,  *, in_dim
@@ -139,10 +139,7 @@ class GRU(nn.Module):
         # )
 
         self.output_head_projection = GroupedLinear(
-            in_channels=self.state_size,
-            out_channels=self.input_size,
-            groups=self.num_heads,
-            std=std
+            in_channels=self.state_size, out_channels=self.input_size, groups=self.num_heads, std=std
         )
         self.ln_output_head = nn.GroupNorm(num_groups=self.num_heads, num_channels=self.input_size)
 
@@ -222,7 +219,6 @@ class GRU(nn.Module):
         if cache_params is not None:
             input_state = input[:, -1].view(input.size(0), -1)
             cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
-
 
         input = self.output_projection(input)
 
