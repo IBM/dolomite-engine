@@ -173,6 +173,7 @@ class Mamba2(nn.Module):
         mark_parameter_as_no_weight_decay(self.dt_bias)
         mark_parameter_as_no_weight_decay(self.A_log)
         mark_parameter_as_no_weight_decay(self.D)
+        mark_parameter_as_no_weight_decay(self.conv1d.bias)
 
         mark_parameter_as_mup_learning_rate(self.A_log)
         mark_parameter_as_mup_learning_rate(self.D)

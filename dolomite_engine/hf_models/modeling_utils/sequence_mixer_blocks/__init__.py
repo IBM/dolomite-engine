@@ -50,6 +50,7 @@ def get_sequence_mixer(
             state_size=block.state_size,
             output_size=config.hidden_size,
             num_heads=block.num_heads,
+            kernel_size=block.conv_kernel_size,
             add_bias=block.add_bias,
             gradient_clipping=block.gradient_clipping,
             initializer_range=config.initializer_range,

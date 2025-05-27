@@ -12,9 +12,10 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
+from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
-from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
-from .rnn import RNN
+from .causal_convolution import causal_convolution
+from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequencef
 
 
 if is_cute_kernels_available():
@@ -28,6 +29,7 @@ class GRU(nn.Module):
         state_size: int,
         output_size: int,
         num_heads: int,
+        kernel_size: int,
         add_bias: bool,
         gradient_clipping: float | None,
         initializer_range: float,
@@ -47,6 +49,7 @@ class GRU(nn.Module):
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
+        self.kernel_size = kernel_size
 
         std = initializer_range
         if init_method == "mup":
@@ -54,6 +57,17 @@ class GRU(nn.Module):
         self.state_weight_std = std
 
         self.input_projection = ParameterizedLinear(self.input_size, 3 * self.state_size, bias=add_bias, std=std)
+
+        self.conv1d = ParameterizedConv1d(
+            in_channels=3 * self.state_size,
+            out_channels=3 * self.state_size,
+            bias=add_bias,
+            kernel_size=self.kernel_size,
+            groups=3 * self.state_size,
+            padding=self.kernel_size - 1,
+            std=std,
+        )
+
         self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
 
         std = initializer_range / math.sqrt(2 * num_layers)
@@ -65,10 +79,12 @@ class GRU(nn.Module):
         self.reset_parameters()
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
+        mark_parameter_as_mup_learning_rate(self.conv1d.weight)
         mark_parameter_as_mup_learning_rate(self.state_weight)
         mark_parameter_as_mup_learning_rate(self.output_projection.weight)
 
         mark_parameter_as_no_weight_decay(self.state_weight)
+        mark_parameter_as_no_weight_decay(self.conv1d.bias)
 
     def forward(
         self,
@@ -78,6 +94,21 @@ class GRU(nn.Module):
         cu_seqlens: torch.Tensor | None = None,
         max_seqlen: int | None = None,
     ) -> torch.Tensor:
+        input = self.input_projection(input)
+        if self.kernel_size > 0:
+            input, _ = causal_convolution(
+                hidden_states=input,
+                input_state=None,
+                attention_mask=attention_mask,
+                conv1d_weight=self.conv1d.weight,
+                conv1d_bias=self.conv1d.bias,
+                conv1d_num_groups=self.conv1d.groups,
+                return_cache_state=cache_params is not None,
+                activation_string="silu",
+                conv1d_padding=self.conv1d.padding,
+                conv1d_stride=self.conv1d.stride,
+            )
+
         if self.use_padding_free_transformer:
             assert cache_params is None
             assert attention_mask is None
@@ -90,8 +121,6 @@ class GRU(nn.Module):
             if attention_mask is not None:
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
-
-        input = self.input_projection(input)
 
         input = input * self.factor
         weight = self.state_weight * self.factor
