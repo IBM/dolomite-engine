@@ -184,16 +184,16 @@ class BaseModelMixin(PreTrainedModelMixin):
         mamba_mask_computed = False
 
         for sequence_mixer_type, block in zip(self.sequence_mixer_block_types, self.h):
-            is_mamba_layer = sequence_mixer_type in ["mamba2", "rnn"]
+            is_linear_layer = sequence_mixer_type in ["mamba2", "rnn", "gru"]
 
-            if is_mamba_layer and not mamba_mask_computed:
+            if is_linear_layer and not mamba_mask_computed:
                 mamba_mask = self._get_mamba_mask(attention_mask, past_key_values)
                 mamba_mask_computed = True
 
             hidden_states = block(
                 hidden_states,
                 past_key_values=past_key_values,
-                attention_mask=mamba_mask if is_mamba_layer else causal_mask,
+                attention_mask=mamba_mask if is_linear_layer else causal_mask,
                 rope_cos_sin=rope_cos_sin,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
