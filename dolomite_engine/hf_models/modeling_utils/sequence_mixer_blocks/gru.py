@@ -65,7 +65,7 @@ class GRU(nn.Module):
             bias=add_bias,
             kernel_size=self.kernel_size,
             groups=3 * self.state_size,
-            padding=self.padding,
+            padding=self.kernel_size - 1,
             std=std,
         )
 
