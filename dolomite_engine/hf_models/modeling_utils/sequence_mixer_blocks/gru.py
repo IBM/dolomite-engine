@@ -15,7 +15,7 @@ from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_
 from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
 from .causal_convolution import causal_convolution
-from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequencef
+from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
 
 if is_cute_kernels_available():
