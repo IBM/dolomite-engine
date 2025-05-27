@@ -6,6 +6,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ....enums import Kernel
 from ....kernels import is_kernel_allowed
@@ -95,6 +96,8 @@ class GRU(nn.Module):
         max_seqlen: int | None = None,
     ) -> torch.Tensor:
         input = self.input_projection(input)
+        input = F.tanh(input)
+
         if self.kernel_size is not None:
             input, _ = causal_convolution(
                 hidden_states=input,
@@ -104,7 +107,7 @@ class GRU(nn.Module):
                 conv1d_bias=self.conv1d.bias,
                 conv1d_num_groups=self.conv1d.groups,
                 return_cache_state=cache_params is not None,
-                activation_string="silu",
+                activation_string=None,
                 conv1d_padding=self.kernel_size - 1,
                 conv1d_stride=1,
             )
