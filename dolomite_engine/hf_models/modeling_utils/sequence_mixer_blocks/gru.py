@@ -29,7 +29,7 @@ class GRU(nn.Module):
         state_size: int,
         output_size: int,
         num_heads: int,
-        kernel_size: int,
+        kernel_size: int | None,
         add_bias: bool,
         gradient_clipping: float | None,
         initializer_range: float,
@@ -50,6 +50,7 @@ class GRU(nn.Module):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
         self.kernel_size = kernel_size
+        self.padding = None if self.kernel_size is None else self.kernel_size - 1
 
         std = initializer_range
         if init_method == "mup":
@@ -64,7 +65,7 @@ class GRU(nn.Module):
             bias=add_bias,
             kernel_size=self.kernel_size,
             groups=3 * self.state_size,
-            padding=self.kernel_size - 1,
+            padding=self.padding,
             std=std,
         )
 
@@ -95,7 +96,7 @@ class GRU(nn.Module):
         max_seqlen: int | None = None,
     ) -> torch.Tensor:
         input = self.input_projection(input)
-        if self.kernel_size > 0:
+        if self.kernel_size is not None:
             input, _ = causal_convolution(
                 hidden_states=input,
                 input_state=None,
@@ -105,8 +106,8 @@ class GRU(nn.Module):
                 conv1d_num_groups=self.conv1d.groups,
                 return_cache_state=cache_params is not None,
                 activation_string="silu",
-                conv1d_padding=self.conv1d.padding,
-                conv1d_stride=self.conv1d.stride,
+                conv1d_padding=self.padding,
+                conv1d_stride=1,
             )
 
         if self.use_padding_free_transformer:
