@@ -50,7 +50,6 @@ class GRU(nn.Module):
         self.use_padding_free_transformer = use_padding_free_transformer
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
         self.kernel_size = kernel_size
-        self.padding = None if self.kernel_size is None else self.kernel_size - 1
 
         std = initializer_range
         if init_method == "mup":
@@ -106,7 +105,7 @@ class GRU(nn.Module):
                 conv1d_num_groups=self.conv1d.groups,
                 return_cache_state=cache_params is not None,
                 activation_string="silu",
-                conv1d_padding=self.padding,
+                conv1d_padding=self.kernel_size - 1,
                 conv1d_stride=1,
             )
 
