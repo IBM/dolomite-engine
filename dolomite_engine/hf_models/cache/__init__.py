@@ -13,6 +13,7 @@ from .softmax_attention import _SoftmaxAttentionCache
 
 _CACHE_CLASSES = {
     "causal_convolution": _RNNCache,
+    "gru": _RNNCache,
     "mamba2": _Mamba2Cache,
     "multihead_latent_attention": _SoftmaxAttentionCache,
     "rnn": _RNNCache,

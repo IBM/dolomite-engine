@@ -124,8 +124,7 @@ class GRU(nn.Module):
             )
 
         if cache_params is not None:
-            input_state = input[:, -1].view(input.size(0), -1)
-            cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
+            cache_params.update(state=input[:, -1], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
         input = self.output_projection(input)
