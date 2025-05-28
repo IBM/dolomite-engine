@@ -13,8 +13,8 @@ from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..linear import ParameterizedLinear
+from ..normalization import get_normalization_function
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
-from .rnn import RNN
 
 
 if is_cute_kernels_available():
@@ -33,6 +33,7 @@ class GRU(nn.Module):
         initializer_range: float,
         m_width: float,
         init_method: str,
+        normalization_function: str | None,
         num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
@@ -60,6 +61,8 @@ class GRU(nn.Module):
         if init_method == "mup":
             std /= math.sqrt(m_width)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
+
+        self.norm = get_normalization_function(normalization_function, self.input_size)
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
@@ -91,6 +94,8 @@ class GRU(nn.Module):
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
+        input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
+
         input = self.input_projection(input)
 
         input = input * self.factor
@@ -102,8 +107,6 @@ class GRU(nn.Module):
         input, forget_input, reset_input = [
             i.view(*input.size()[:-1], self.num_heads, self.state_head_dim) for i in (input, forget_input, reset_input)
         ]
-
-        input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
         input = (gru_cute if is_kernel_allowed(Kernel.gru_cute) else gru_torch)(
             input=input,
@@ -127,6 +130,7 @@ class GRU(nn.Module):
             cache_params.update(state=input[:, -1], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
+        input = self.norm(input)
         input = self.output_projection(input)
 
         return input

@@ -13,6 +13,7 @@ from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..linear import ParameterizedLinear
+from ..normalization import get_normalization_function
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 
 
@@ -29,11 +30,10 @@ class RNN(nn.Module):
         num_heads: int,
         add_bias: bool,
         gradient_clipping: float | None,
-        activation_function: str,
-        relu_negative_slope: float | None,
         initializer_range: float,
         m_width: float,
         init_method: str,
+        normalization_function: str | None,
         num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
@@ -47,8 +47,6 @@ class RNN(nn.Module):
         self.gradient_clipping = gradient_clipping
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
-        self.activation_function = activation_function
-        self.relu_negative_slope = relu_negative_slope
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
 
         std = initializer_range
@@ -63,6 +61,8 @@ class RNN(nn.Module):
         if init_method == "mup":
             std /= math.sqrt(m_width)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
+
+        self.norm = get_normalization_function(normalization_function, self.input_size)
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
@@ -94,10 +94,10 @@ class RNN(nn.Module):
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
+        input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
+
         input = self.input_projection(input)
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
-
-        input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
         input = input * self.factor
         weight = self.state_weight * self.factor
@@ -109,8 +109,6 @@ class RNN(nn.Module):
             gradient_clipping=self.gradient_clipping,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            activation_function=self.activation_function,
-            relu_negative_slope=self.relu_negative_slope,
         )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
@@ -122,6 +120,7 @@ class RNN(nn.Module):
             cache_params.update(state=input[:, -1], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
+        input = self.norm(input)
         input = self.output_projection(input)
 
         return input
