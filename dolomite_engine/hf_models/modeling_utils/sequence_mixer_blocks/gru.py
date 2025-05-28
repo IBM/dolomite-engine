@@ -12,13 +12,64 @@ from ....kernels import is_kernel_allowed
 from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
+from ..activations import get_activation_function, is_glu
+from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
+from .causal_convolution import causal_convolution
 from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack_sequence, unpack_sequence
 from .rnn import RNN
 
 
 if is_cute_kernels_available():
     from cute_kernels import gru_cute, gru_torch
+
+
+class GroupedLinear(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        groups: int = 1,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+        std: float | None = None,
+    ) -> None:
+        self.std = std
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.groups = groups
+        self.in_dim = divide_if_divisible(in_channels, groups, "in_channels must be divisible by groups")
+        self.out_dim = divide_if_divisible(out_channels, groups, "out_channels must be divisible by groups")
+        self.weight = nn.Parameter(torch.empty(self.groups, self.in_dim, self.out_dim))
+        self.reset_parameters()
+
+        # mark_parameter_as_no_weight_decay(self.bias)
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        if self.std is None:
+            super().reset_parameters()
+        else:
+            nn.init.normal_(self.weight, mean=0, std=self.std)
+            if hasattr(self, "bias") and self.bias is not None:
+                self.bias.zero_()
+
+    def forward(self, x):
+        x_size = x.size()
+        # X: ..., groups * in_dim
+        x = x.view(-1, self.groups, self.in_dim)
+        # X: ..., groups, in_dim
+        x = x.transpose(1, 0)
+        # X: groups,  *, in_dim
+        # weight: groups, in_dim, out_dim
+        y = torch.bmm(x, self.weight)
+        # y: groups, *, out_dim
+        y = y.transpose(1, 0)
+        # y: *, groups, out_dim
+        y = y.reshape(*(x_size[:-1]), self.out_channels)
+        return y
 
 
 class GRU(nn.Module):
@@ -36,6 +87,8 @@ class GRU(nn.Module):
         num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
+        head_activation: str = "tanh",
+        factor: float = None,
     ) -> None:
         super().__init__()
 
@@ -53,22 +106,57 @@ class GRU(nn.Module):
             std /= math.sqrt(m_width)
         self.state_weight_std = std
 
-        self.input_projection = ParameterizedLinear(self.input_size, 3 * self.state_size, bias=add_bias, std=std)
+        self.input_projection = ParameterizedLinear(self.input_size, self.input_size, bias=add_bias, std=std)
+
+        self.head_activation = get_activation_function(head_activation)
+        # self.head_projection = ParameterizedConv1d(
+        #     in_channels=self.input_size,
+        #     out_channels=3 * self.state_size,
+        #     kernel_size=1,
+        #     groups=self.num_heads,
+        #     bias=add_bias,
+        #     std=std,
+        # )
+        self.head_projection = GroupedLinear(
+            in_channels=self.input_size,
+            out_channels=3 * self.state_size,
+            groups=self.num_heads,
+            std=std,
+        )
+
         self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
 
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
             std /= math.sqrt(m_width)
+        # self.output_head_projection = ParameterizedConv1d(
+        #     in_channels=self.state_size,
+        #     out_channels=self.input_size,
+        #     kernel_size=1,
+        #     groups=self.num_heads,
+        #     bias=add_bias,
+        #     std=std,
+        # )
+
+        self.output_head_projection = GroupedLinear(
+            in_channels=self.state_size, out_channels=self.input_size, groups=self.num_heads, std=std
+        )
+        self.ln_output_head = nn.GroupNorm(num_groups=self.num_heads, num_channels=self.input_size)
+
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
-        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
+        if factor is None:
+            factor = 1 / math.sqrt(2 * self.state_head_dim)
+
+        self.factor = factor
+
         self.reset_parameters()
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
         mark_parameter_as_mup_learning_rate(self.state_weight)
         mark_parameter_as_mup_learning_rate(self.output_projection.weight)
 
-        mark_parameter_as_no_weight_decay(self.state_weight)
+        # mark_parameter_as_no_weight_decay(self.state_weight)
 
     def forward(
         self,
@@ -92,6 +180,8 @@ class GRU(nn.Module):
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
+        input = self.head_activation(input)
+        input = self.head_projection(input)
 
         input = input * self.factor
         weight = self.state_weight * self.factor
@@ -117,6 +207,9 @@ class GRU(nn.Module):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
+        input = self.output_head_projection(input.flatten(-2, -1))
+        input_size = input.size()
+        input = self.ln_output_head(input.flatten(0, 1)).view(input_size)
 
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
@@ -124,9 +217,9 @@ class GRU(nn.Module):
             )
 
         if cache_params is not None:
-            cache_params.update(state=input[:, -1], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
+            input_state = input[:, -1].view(input.size(0), -1)
+            cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
-        input = input.view(*input.size()[:-2], -1)
         input = self.output_projection(input)
 
         return input
@@ -136,4 +229,4 @@ class GRU(nn.Module):
         nn.init.normal_(self.state_weight, std=self.state_weight_std)
 
     def extra_repr(self) -> str:
-        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.state_weight.shape)}"
+        return f"gradient_clipping = {self.gradient_clipping},\nweight_shape= {str(self.state_weight.shape)},\nfactor={self.factor}"
