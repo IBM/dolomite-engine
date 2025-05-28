@@ -76,6 +76,7 @@ class _GRUArgs(BaseArgs):
     state_size: int = 2048
     num_heads: int = 128
     add_bias: bool = True
+    normalization_function: str | None = None
     gradient_clipping: float | None = None
 
     def model_post_init(self, __context: Any) -> None:

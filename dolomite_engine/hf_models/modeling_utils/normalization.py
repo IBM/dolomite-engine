@@ -51,6 +51,9 @@ _NORMALIZATION_FUNCTIONS = {"layernorm": nn.LayerNorm, "rmsnorm": RMSNorm, "silu
 def get_normalization_function(
     normalization_function: str, normalized_shape: int, eps: float = 1e-5
 ) -> nn.LayerNorm | RMSNorm:
+    if normalization_function is None:
+        return nn.Identity()
+
     if normalization_function in _NORMALIZATION_FUNCTIONS:
         normalization = _NORMALIZATION_FUNCTIONS[normalization_function](normalized_shape, eps=eps)
     else:
