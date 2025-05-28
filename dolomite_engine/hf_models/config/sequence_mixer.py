@@ -85,17 +85,8 @@ class _GRUArgs(BaseArgs):
 
 class _RNNArgs(_GRUArgs):
     sequence_mixer_type: str = "rnn"
-    activation_function: str = "tanh"
-    relu_negative_slope: float | None = None
 
     def model_post_init(self, __context: Any) -> None:
-        assert self.activation_function in ["tanh", "leaky_relu"]
-
-        if self.activation_function == "leaky_relu":
-            assert self.relu_negative_slope is not None
-        else:
-            assert self.relu_negative_slope is None
-
         assert self.sequence_mixer_type == "rnn"
 
 
