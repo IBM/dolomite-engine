@@ -62,7 +62,7 @@ class GRU(nn.Module):
             std /= math.sqrt(m_width)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
-        self.norm = get_normalization_function(normalization_function)
+        self.norm = get_normalization_function(normalization_function, self.input_size)
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
