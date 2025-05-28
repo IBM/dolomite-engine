@@ -76,6 +76,7 @@ class Kernel(Enum):
     gru_cute = "gru_cute"
     pack_sequence_cute = "pack_sequence_cute"
     rmsnorm_cute = "rmsnorm_cute"
+    rmsnorm_memory_efficient_cute = "rmsnorm_memory_efficient_cute"
     rnn_cute = "rnn_cute"
     swiglu_packed_cute = "swiglu_packed_cute"
     unpack_sequence_cute = "unpack_sequence_cute"

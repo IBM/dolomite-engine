@@ -18,8 +18,16 @@ if is_cute_kernels_available():
 
 class RMSNorm(nn.RMSNorm):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        if is_kernel_allowed(Kernel.rmsnorm_cute):
-            hidden_states = rmsnorm_cute(x=hidden_states, weight=self.weight, eps=self.eps, memory_efficient=False)
+        rmsnorm_cute_allowed = is_kernel_allowed(Kernel.rmsnorm_cute)
+        rmsnorm_memory_efficient_cute_allowed = is_kernel_allowed(Kernel.rmsnorm_memory_efficient_cute)
+
+        if rmsnorm_cute_allowed or rmsnorm_memory_efficient_cute_allowed:
+            hidden_states = rmsnorm_cute(
+                x=hidden_states,
+                weight=self.weight,
+                eps=self.eps,
+                memory_efficient=rmsnorm_memory_efficient_cute_allowed,
+            )
         else:
             hidden_states = super().forward(hidden_states)
 
