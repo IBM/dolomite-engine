@@ -74,7 +74,10 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
         self.placement = get_module_placements(use_padding_free_transformer, sequence_parallel)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        if is_kernel_allowed(Kernel.rmsnorm_cute):
+        rmsnorm_cute_allowed = is_kernel_allowed(Kernel.rmsnorm_cute)
+        rmsnorm_memory_efficient_cute_allowed = is_kernel_allowed(Kernel.rmsnorm_memory_efficient_cute)
+
+        if rmsnorm_cute_allowed or rmsnorm_memory_efficient_cute_allowed:
             input = wait_for_ACT(input, wait_in_forward=True, wait_in_backward=False)
             input = rmsnorm_cute(
                 x=input,
@@ -82,7 +85,7 @@ class RMSNorm_TP(nn.RMSNorm, DTensorModule):
                     self.weight, grad_placement=Partial() if self.sequence_parallel else Replicate()
                 ),
                 eps=self.eps,
-                memory_efficient=False,
+                memory_efficient=rmsnorm_memory_efficient_cute_allowed,
             )
             input = wait_for_ACT(input, wait_in_forward=False, wait_in_backward=True)
         else:
