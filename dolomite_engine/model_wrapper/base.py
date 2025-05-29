@@ -75,7 +75,10 @@ class ModelWrapper(nn.Module):
         self._setup_config()
         self.is_custom_model = is_custom_model(self.config.model_type)
 
-        log_rank_0(logging.INFO, f"num parameters in the model = {self.calculate_num_parameters():,}")
+        total_parameters, active_parameters = self.calculate_num_parameters()
+
+        log_rank_0(logging.INFO, f"num parameters in the model = {total_parameters:,}")
+        log_rank_0(logging.INFO, f"active parameters in the model = {active_parameters:,}")
 
         if use_model_parallelism:
             self.tp_mesh = ProcessGroupManager.get_tensor_parallel_mesh()
@@ -231,20 +234,33 @@ class ModelWrapper(nn.Module):
 
             self.model = _get_model(torch_dtype=torch_dtype)
 
-    def calculate_num_parameters(self) -> int:
+    def calculate_num_parameters(self) -> tuple[int]:
         model_kwargs = self._get_model_kwargs()
 
         with torch.device("meta"):
             if self.model_name is not None:
                 model_kwargs["config"] = AutoConfig.from_pretrained(model_kwargs.pop("pretrained_model_name_or_path"))
 
-            model = self.model_class.from_config(**model_kwargs)
+            model: nn.Module = self.model_class.from_config(**model_kwargs)
 
             num_parameters = 0
             for param in model.parameters():
                 num_parameters += param.numel()
 
-            return num_parameters
+            active_parameters = 0
+
+            def _recurse_immediate_children_and_count_active_parameters(module: nn.Module) -> None:
+                nonlocal active_parameters
+
+                for m in module.children():
+                    if hasattr(m, "get_num_active_parameters"):
+                        active_parameters += m.get_num_active_parameters()
+                    else:
+                        _recurse_immediate_children_and_count_active_parameters(m)
+
+            _recurse_immediate_children_and_count_active_parameters(self)
+
+            return num_parameters, active_parameters
 
     def has_teacher_model(self) -> bool:
         return False
