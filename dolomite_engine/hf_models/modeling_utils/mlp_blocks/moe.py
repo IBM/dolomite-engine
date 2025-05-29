@@ -375,10 +375,10 @@ class MoE(nn.Module):
 
         for parameter in self.c_fc.parameters():
             num_elements -= parameter.numel()
-            num_elements += parameter.numel() * self.top_k // parameter.size(0)
+            num_elements += (parameter.numel() * self.top_k) // self.num_experts
 
         for parameter in self.c_proj.parameters():
             num_elements -= parameter.numel()
-            num_elements += parameter.numel() * self.top_k // parameter.size(0)
+            num_elements += (parameter.numel() * self.top_k) // parameter.size(0)
 
         return num_elements
