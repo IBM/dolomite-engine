@@ -257,6 +257,9 @@ class ModelWrapper(nn.Module):
                         active_parameters += m.get_num_active_parameters()
                     else:
                         _recurse_immediate_children_and_count_active_parameters(m)
+                        if len(m.children()) == 0:
+                            for parameter in m.parameters(recurse=False):
+                                active_parameters += parameter.numel()
 
             _recurse_immediate_children_and_count_active_parameters(model)
 
