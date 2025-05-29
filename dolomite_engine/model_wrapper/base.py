@@ -258,7 +258,7 @@ class ModelWrapper(nn.Module):
                     else:
                         _recurse_immediate_children_and_count_active_parameters(m)
 
-            _recurse_immediate_children_and_count_active_parameters(self)
+            _recurse_immediate_children_and_count_active_parameters(model)
 
             return num_parameters, active_parameters
 
