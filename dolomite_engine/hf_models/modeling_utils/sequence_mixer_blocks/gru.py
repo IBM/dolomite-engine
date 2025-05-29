@@ -106,7 +106,7 @@ class GRU(nn.Module):
         input = self.input_projection(input)
 
         if self.is_gated_normalization:
-            input, gate = input.split(3 * self.state_size, self.input_size)
+            input, gate = input.split(3 * self.state_size, self.input_size, dim=-1)
 
         input = input * self.factor
         weight = self.state_weight * self.factor
