@@ -234,7 +234,7 @@ class ModelWrapper(nn.Module):
 
             self.model = _get_model(torch_dtype=torch_dtype)
 
-    def calculate_num_parameters(self) -> tuple[int]:
+    def calculate_num_parameters(self) -> tuple[int, int]:
         model_kwargs = self._get_model_kwargs()
 
         with torch.device("meta"):
