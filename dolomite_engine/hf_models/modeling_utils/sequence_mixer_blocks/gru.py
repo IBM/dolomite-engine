@@ -34,6 +34,7 @@ class GRU(nn.Module):
         m_width: float,
         init_method: str,
         normalization_function: str | None,
+        factor: int | None,
         num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
@@ -71,7 +72,7 @@ class GRU(nn.Module):
 
         self.norm = get_normalization_function(normalization_function, self.state_size)
 
-        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
+        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim) if factor is None else factor
         self.reset_parameters()
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
