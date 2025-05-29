@@ -529,6 +529,10 @@ def evaluate(
 
         for _ in range(eval_steps):
             batch = get_next_batch(val_dataloader)
+
+            if batch is None:
+                continue
+
             loss_step_dict = model(batch, lm_loss_multiplier=lm_loss_multiplier)
             metrics_tracker = metrics_tracker + loss_step_dict
 
