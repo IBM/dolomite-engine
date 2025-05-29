@@ -57,7 +57,7 @@ class RNN(nn.Module):
 
         self.input_projection = ParameterizedLinear(
             self.input_size,
-            self.state_size + self.input_size if self.is_gated_normalization else self.state_size,
+            self.state_size + (self.state_size if self.is_gated_normalization else 0),
             bias=add_bias,
             std=std,
         )
