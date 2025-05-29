@@ -106,7 +106,7 @@ class RNN(nn.Module):
         input = self.input_projection(input)
 
         if self.is_gated_normalization:
-            input, gate = input.split(self.state_size, self.input_size)
+            input, gate = input.chunk(2, dim=-1)
 
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
 
