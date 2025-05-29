@@ -48,13 +48,20 @@ class GRU(nn.Module):
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
+        self.is_gated_normalization = normalization_function == "silu_gated_rmsnorm"
 
         std = initializer_range
         if init_method == "mup":
             std /= math.sqrt(m_width)
         self.state_weight_std = std
 
-        self.input_projection = ParameterizedLinear(self.input_size, 3 * self.state_size, bias=add_bias, std=std)
+        self.input_projection = ParameterizedLinear(
+            self.input_size,
+            3 * self.state_size + (self.state_size if self.is_gated_normalization else 0),
+            bias=add_bias,
+            std=std,
+        )
+
         self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
 
         std = initializer_range / math.sqrt(2 * num_layers)
@@ -62,7 +69,7 @@ class GRU(nn.Module):
             std /= math.sqrt(m_width)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
-        self.norm = get_normalization_function(normalization_function, self.input_size)
+        self.norm = get_normalization_function(normalization_function, self.state_size)
 
         self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
         self.reset_parameters()
@@ -98,6 +105,9 @@ class GRU(nn.Module):
 
         input = self.input_projection(input)
 
+        if self.is_gated_normalization:
+            input, gate = input.split((3 * self.state_size, self.state_size), dim=-1)
+
         input = input * self.factor
         weight = self.state_weight * self.factor
 
@@ -130,7 +140,12 @@ class GRU(nn.Module):
             cache_params.update(state=input[:, -1], num_tokens_added=input.size(1), layer_idx=self.layer_idx)
 
         input = input.view(*input.size()[:-2], -1)
-        input = self.norm(input)
+
+        if self.is_gated_normalization:
+            input = self.norm(input, gate)
+        else:
+            input = self.norm(input)
+
         input = self.output_projection(input)
 
         return input
