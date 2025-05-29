@@ -13,6 +13,7 @@ from ....utils import divide_if_divisible, is_cute_kernels_available
 from ...cache import GenerationCache
 from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function, is_glu
+from ..normalization import get_normalization_function
 from ..convolution import ParameterizedConv1d
 from ..linear import ParameterizedLinear
 from .causal_convolution import causal_convolution
@@ -44,6 +45,9 @@ class GroupedLinear(nn.Module):
         self.out_dim = divide_if_divisible(out_channels, groups, "out_channels must be divisible by groups")
         self.weight = nn.Parameter(torch.empty(self.groups, self.in_dim, self.out_dim))
         self.reset_parameters()
+    def extra_repr(self) -> str:
+        return f"groups={self.groups}, in_channels={self.in_channels}, out_channels={self.out_channels}, in_dim={self.in_dim}, out_dim={self.out_dim}"
+
 
         # mark_parameter_as_no_weight_decay(self.bias)
 
@@ -88,7 +92,7 @@ class GRU(nn.Module):
         layer_idx: int,
         use_padding_free_transformer: bool,
         head_activation: str = "tanh",
-        factor: float = None,
+        factor: float = 1.414213562373095,
     ) -> None:
         super().__init__()
 
@@ -105,10 +109,9 @@ class GRU(nn.Module):
         if init_method == "mup":
             std /= math.sqrt(m_width)
         self.state_weight_std = std
-
         self.input_projection = ParameterizedLinear(self.input_size, self.input_size, bias=add_bias, std=std)
-
-        self.head_activation = get_activation_function(head_activation)
+        self.head_activation = get_normalization_function("rmsnorm", self.input_size)
+        # self.head_activation = get_activation_function(head_activation)
         # self.head_projection = ParameterizedConv1d(
         #     in_channels=self.input_size,
         #     out_channels=3 * self.state_size,
@@ -123,9 +126,11 @@ class GRU(nn.Module):
             groups=self.num_heads,
             std=std,
         )
-
         self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
-
+        nn.init.normal_(self.state_weight, std=self.state_weight_std)
+        self.state_weight.data = self.state_weight.data + torch.eye(self.state_head_dim,
+                                                                    dtype=self.state_weight.dtype,
+                                                                    device=self.state_weight.device)
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
             std /= math.sqrt(m_width)
@@ -137,15 +142,13 @@ class GRU(nn.Module):
         #     bias=add_bias,
         #     std=std,
         # )
-
         self.output_head_projection = GroupedLinear(
             in_channels=self.state_size,
             out_channels=self.input_size,
             groups=self.num_heads,
             std=std
         )
-        self.ln_output_head = nn.GroupNorm(num_groups=self.num_heads, num_channels=self.input_size)
-
+        self.ln_output_head = get_normalization_function("rmsnorm", self.input_size) #, eps=layer_norm_epsilon)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
         if factor is None:
@@ -158,7 +161,6 @@ class GRU(nn.Module):
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
         mark_parameter_as_mup_learning_rate(self.state_weight)
         mark_parameter_as_mup_learning_rate(self.output_projection.weight)
-
         # mark_parameter_as_no_weight_decay(self.state_weight)
 
     def forward(
@@ -187,11 +189,23 @@ class GRU(nn.Module):
         input = self.head_projection(input)
 
         input = input * self.factor
+        # weight = self.factor * (
+        #     self.state_weight +
+        #     torch.eye(self.state_head_dim,
+        #               dtype=self.state_weight.dtype,
+        #               device=self.state_weight.device)
+        # )
         weight = self.state_weight * self.factor
 
         input, forget_input, reset_input = input.chunk(3, dim=-1)
+        # reset_input = 0. * reset_input + 10.
         weight, forget_weight, reset_weight = weight.chunk(3, dim=0)
-
+        # weight = (
+        #     weight +
+        #     torch.eye(self.state_head_dim,
+        #               dtype=self.state_weight.dtype,
+        #               device=self.state_weight.device)
+        # )
         input, forget_input, reset_input = [
             i.view(*input.size()[:-1], self.num_heads, self.state_head_dim) for i in (input, forget_input, reset_input)
         ]
@@ -210,10 +224,6 @@ class GRU(nn.Module):
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
         )
-        input = self.output_head_projection(input.flatten(-2, -1))
-        input_size = input.size()
-        input = self.ln_output_head(input.flatten(0, 1)).view(input_size)
-
         if not self.use_padding_free_transformer and attention_mask is not None:
             input = unpack_sequence(
                 inputs=input, cu_seqlens=cu_seqlens, desired_shape=(batch_size, sequence_length, *input.size()[1:])
@@ -222,15 +232,18 @@ class GRU(nn.Module):
         if cache_params is not None:
             input_state = input[:, -1].view(input.size(0), -1)
             cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
-
-
+        input = self.output_head_projection(input.flatten(-2, -1))
+        input = self.ln_output_head(input)
         input = self.output_projection(input)
 
         return input
 
     @torch.no_grad()
     def reset_parameters(self) -> None:
-        nn.init.normal_(self.state_weight, std=self.state_weight_std)
-
+        # nn.init.normal_(self.state_weight, std=self.state_weight_std)
+        # nn.init.zeros_(self.state_weight)
+        # for i in range(self.state_weight.size(0)):
+        #     nn.init.orthogonal_(self.state_weight[i])
+        pass
     def extra_repr(self) -> str:
-        return f"gradient_clipping = {self.gradient_clipping},\nweight_shape= {str(self.state_weight.shape)},\nfactor={self.factor}"
+        return f"gradient_clipping={self.gradient_clipping}, weight_shape={str(tuple(self.state_weight.shape))}, factor={self.factor}"
