@@ -145,4 +145,4 @@ class RNN(nn.Module):
         nn.init.normal_(self.state_weight, std=self.state_weight_std)
 
     def extra_repr(self) -> str:
-        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.state_weight.shape)}"
+        return f"gradient_clipping = {self.gradient_clipping}\nweight_shape: {str(self.state_weight.shape)}\nfactor = {self.factor}"
