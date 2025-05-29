@@ -35,12 +35,11 @@ class RMSNorm(nn.RMSNorm):
 
 
 class SiluGatedRMSNorm(RMSNorm):
-    def forward(self, hidden_states: torch.Tensor, gate: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.float()
 
-        if gate is not None:
-            hidden_states = hidden_states * F.silu(gate.float())
+        hidden_states = hidden_states * F.silu(gate.float())
 
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.eps)
