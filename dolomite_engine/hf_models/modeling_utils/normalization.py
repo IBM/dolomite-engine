@@ -34,7 +34,7 @@ class RMSNorm(nn.RMSNorm):
         return hidden_states
 
 
-class GatedRMSNorm(RMSNorm):
+class SiluGatedRMSNorm(RMSNorm):
     def forward(self, hidden_states: torch.Tensor, gate: torch.Tensor | None = None) -> torch.Tensor:
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.float()
@@ -53,7 +53,7 @@ class GatedRMSNorm(RMSNorm):
         return hidden_states
 
 
-_NORMALIZATION_FUNCTIONS = {"layernorm": nn.LayerNorm, "rmsnorm": RMSNorm, "silu_gated_rmsnorm": GatedRMSNorm}
+_NORMALIZATION_FUNCTIONS = {"layernorm": nn.LayerNorm, "rmsnorm": RMSNorm, "silu_gated_rmsnorm": SiluGatedRMSNorm}
 
 
 def get_normalization_function(
