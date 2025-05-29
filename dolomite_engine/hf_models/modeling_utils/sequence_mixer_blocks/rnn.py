@@ -101,8 +101,6 @@ class RNN(nn.Module):
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
-        input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
-
         input = self.input_projection(input)
 
         if self.is_gated_normalization:
@@ -116,7 +114,7 @@ class RNN(nn.Module):
         input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
             input=input,
             weight=weight,
-            input_state=input_state,
+            input_state=None if cache_params is None else cache_params.get_cache(self.layer_idx),
             gradient_clipping=self.gradient_clipping,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
