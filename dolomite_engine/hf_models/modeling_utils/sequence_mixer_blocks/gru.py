@@ -34,6 +34,7 @@ class GRU(nn.Module):
         m_width: float,
         init_method: str,
         normalization_function: str | None,
+        factor: float | None,
         num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
@@ -108,8 +109,9 @@ class GRU(nn.Module):
         if self.is_gated_normalization:
             input, gate = input.split((3 * self.state_size, self.state_size), dim=-1)
 
-        input = input * self.factor
-        weight = self.state_weight * self.factor
+        if self.factor is not None:
+            input = input * self.factor
+            weight = self.state_weight * self.factor
 
         input, forget_input, reset_input = input.chunk(3, dim=-1)
         weight, forget_weight, reset_weight = weight.chunk(3, dim=0)

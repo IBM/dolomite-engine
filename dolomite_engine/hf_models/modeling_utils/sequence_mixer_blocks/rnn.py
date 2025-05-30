@@ -34,6 +34,7 @@ class RNN(nn.Module):
         m_width: float,
         init_method: str,
         normalization_function: str | None,
+        factor: float | None,
         num_layers: int,
         layer_idx: int,
         use_padding_free_transformer: bool,
@@ -71,7 +72,7 @@ class RNN(nn.Module):
 
         self.norm = get_normalization_function(normalization_function, self.state_size)
 
-        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
+        self.factor = factor
         self.reset_parameters()
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
@@ -110,8 +111,9 @@ class RNN(nn.Module):
 
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
 
-        input = input * self.factor
-        weight = self.state_weight * self.factor
+        if self.factor is not None:
+            input = input * self.factor
+            weight = self.state_weight * self.factor
 
         input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
             input=input,
