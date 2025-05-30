@@ -111,9 +111,10 @@ class RNN(nn.Module):
 
         input = input.view(*input.size()[:-1], self.num_heads, self.state_head_dim)
 
+        weight = self.state_weight
         if self.factor is not None:
             input = input * self.factor
-            weight = self.state_weight * self.factor
+            weight = weight * self.factor
 
         input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
             input=input,
