@@ -72,7 +72,7 @@ class GRU(nn.Module):
 
         self.norm = get_normalization_function(normalization_function, self.state_size)
 
-        self.factor = 1 / math.sqrt(self.input_size + self.state_head_dim)
+        self.factor = factor
         self.reset_parameters()
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
