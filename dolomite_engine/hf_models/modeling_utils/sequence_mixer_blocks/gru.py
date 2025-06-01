@@ -109,8 +109,12 @@ class GRU(nn.Module):
         if init_method == "mup":
             std /= math.sqrt(m_width)
         self.state_weight_std = std
-        self.input_projection = ParameterizedLinear(self.input_size, self.input_size, bias=add_bias, std=std)
-        self.head_activation = get_normalization_function("rmsnorm", self.input_size)
+
+        self.head_group_size = 4
+        self.num_head_groups = divide_if_divisible(self.num_heads, self.head_group_size, "head groups")
+        self.in_state_size = self.num_head_groups * self.state_head_dim
+        self.input_projection = ParameterizedLinear(self.input_size, self.in_state_size * 3, bias=add_bias, std=std)
+        self.head_activation = get_normalization_function("rmsnorm", self.in_state_size * 3)
         # self.head_activation = get_activation_function(head_activation)
         # self.head_projection = ParameterizedConv1d(
         #     in_channels=self.input_size,
@@ -120,17 +124,25 @@ class GRU(nn.Module):
         #     bias=add_bias,
         #     std=std,
         # )
+        assert self.num_head_groups * self.head_group_size * self.state_head_dim == self.state_size
+        assert self.state_size * 3 == self.in_state_size * 3 * self.head_group_size
         self.head_projection = GroupedLinear(
-            in_channels=self.input_size,
-            out_channels=3 * self.state_size,
-            groups=self.num_heads,
+            in_channels=self.in_state_size * 3,
+            out_channels=self.in_state_size * 3 * self.head_group_size,
+            groups=self.num_head_groups,
             std=std,
         )
+        # nn.init.zeros_(self.head_projection.weight[:, :, self.state_head_dim:])
+
         self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
         nn.init.normal_(self.state_weight, std=self.state_weight_std)
-        self.state_weight.data = self.state_weight.data + torch.eye(self.state_head_dim,
-                                                                    dtype=self.state_weight.dtype,
-                                                                    device=self.state_weight.device)
+        self.state_weight.data = (
+            self.state_weight.data + 
+            torch.eye(self.state_head_dim,
+                      dtype=self.state_weight.dtype,
+                      device=self.state_weight.device) / factor
+        )
+
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
             std /= math.sqrt(m_width)
@@ -144,11 +156,11 @@ class GRU(nn.Module):
         # )
         self.output_head_projection = GroupedLinear(
             in_channels=self.state_size,
-            out_channels=self.input_size,
+            out_channels=self.state_size,
             groups=self.num_heads,
             std=std
         )
-        self.ln_output_head = get_normalization_function("rmsnorm", self.input_size) #, eps=layer_norm_epsilon)
+        self.ln_output_head = get_normalization_function("rmsnorm", self.state_size) #, eps=layer_norm_epsilon)
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
         if factor is None:
@@ -188,7 +200,6 @@ class GRU(nn.Module):
         input = self.head_activation(input)
         input = self.head_projection(input)
 
-        input = input * self.factor
         # weight = self.factor * (
         #     self.state_weight +
         #     torch.eye(self.state_head_dim,
@@ -197,7 +208,6 @@ class GRU(nn.Module):
         # )
         weight = self.state_weight * self.factor
 
-        input, forget_input, reset_input = input.chunk(3, dim=-1)
         # reset_input = 0. * reset_input + 10.
         weight, forget_weight, reset_weight = weight.chunk(3, dim=0)
         # weight = (
@@ -206,9 +216,17 @@ class GRU(nn.Module):
         #               dtype=self.state_weight.dtype,
         #               device=self.state_weight.device)
         # )
+        input = input * self.factor
+        input, forget_input, reset_input = input.chunk(3, dim=-1)
         input, forget_input, reset_input = [
             i.view(*input.size()[:-1], self.num_heads, self.state_head_dim) for i in (input, forget_input, reset_input)
         ]
+
+        # input = input.view(*(input.size()[:-1]), self.num_heads, 3, self.state_head_dim)
+        # input, forget_input, reset_input = [input[..., i, :] for i in range(3)]
+
+
+
 
         input_state = None if cache_params is None else cache_params.get_cache(self.layer_idx)
 
