@@ -29,7 +29,7 @@ if is_cute_kernels_available():
 import os
 tuning_params = {
     "input_head_norm": "rmsnorm",
-    "output_head_norm": "rmsnorm",
+    "output_head_norm": "gatednorm",
     "factor_mul": 8,
     "state_weight_init": "identity",
     "gate_in_state_init": 'zero',
@@ -134,7 +134,7 @@ class GRU(nn.Module):
         self.head_group_size = 4
         self.num_head_groups = divide_if_divisible(self.num_heads, self.head_group_size, "head groups")
         self.in_state_size = self.num_head_groups * self.state_head_dim
-        self.input_projection = ParameterizedLinear(self.input_size, self.in_state_size * 3, bias=add_bias, std=std)
+        self.input_projection = ParameterizedLinear(self.input_size, self.in_state_size * 3  + self.state_size, bias=add_bias, std=std)
 
         self.conv1d = ParameterizedConv1d(
             in_channels=self.in_state_size * 3,
@@ -184,6 +184,10 @@ class GRU(nn.Module):
             self.ln_output_head = get_normalization_function("rmsnorm", self.state_size)
         elif tuning_params['output_head_norm'] == 'groupnorm':
             self.ln_output_head = nn.GroupNorm(self.num_heads, self.state_size)
+        elif tuning_params['output_head_norm'] == 'gatednorm':
+
+            self.ln_output_head = get_normalization_function("silu_gated_rmsnorm", self.state_size)
+
 
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
@@ -274,7 +278,7 @@ class GRU(nn.Module):
                 cu_seqlens, max_seqlen = compute_cu_seqlens_and_max_seqlen_from_attention_mask(attention_mask)
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
-        input = self.input_projection(input)
+        input, gate = self.input_projection(input).split((self.in_state_size * 3 , self.state_size, ), dim=-1)
         input, _ = causal_convolution(
             hidden_states=input,
             input_state=None,
@@ -333,7 +337,7 @@ class GRU(nn.Module):
             input_state = input[:, -1].view(input.size(0), -1)
             cache_params.update(state=input_state, num_tokens_added=input.size(1), layer_idx=self.layer_idx)
         input = self.output_head_projection(input.flatten(-2, -1))
-        input = self.ln_output_head(input)
+        input = self.ln_output_head(input, gate)
         input = self.output_projection(input)
 
         return input
