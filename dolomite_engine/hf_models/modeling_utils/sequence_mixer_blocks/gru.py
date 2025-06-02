@@ -33,7 +33,7 @@ tuning_params = {
     "factor_mul": 8,
     "state_weight_init": "identity",
     "gate_in_state_init": 'zero',
-    "forget_bias_init": 'within_group_gradual',
+    "forget_bias_init": 'all_heads_gradual_reset',
     "reset_bias_init": 1.0,
 }
 
@@ -124,6 +124,7 @@ class GRU(nn.Module):
         self.layer_idx = layer_idx
         self.use_padding_free_transformer = use_padding_free_transformer
         self.state_head_dim = divide_if_divisible(self.state_size, self.num_heads, "")
+        self.conv_kernel_size = 4
 
         std = initializer_range
         if init_method == "mup":
@@ -134,6 +135,18 @@ class GRU(nn.Module):
         self.num_head_groups = divide_if_divisible(self.num_heads, self.head_group_size, "head groups")
         self.in_state_size = self.num_head_groups * self.state_head_dim
         self.input_projection = ParameterizedLinear(self.input_size, self.in_state_size * 3, bias=add_bias, std=std)
+
+        self.conv1d = ParameterizedConv1d(
+            in_channels=self.in_state_size * 3,
+            out_channels=self.in_state_size * 3,
+            bias=False,
+            kernel_size=self.conv_kernel_size,
+            groups=self.in_state_size * 3,
+            padding=self.conv_kernel_size - 1,
+            std=std,
+        ) # TODO new
+
+
         if tuning_params['input_head_norm'] == 'rmsnorm':
             self.head_activation = get_normalization_function("rmsnorm", self.in_state_size * 3)
         elif tuning_params['input_head_norm'] == 'groupnorm':
@@ -262,9 +275,21 @@ class GRU(nn.Module):
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
-
+        input, _ = causal_convolution(
+            hidden_states=input,
+            input_state=None,
+            attention_mask=attention_mask,
+            conv1d_weight=self.conv1d.weight,
+            conv1d_bias=self.conv1d.bias,
+            conv1d_num_groups=self.conv1d.groups,
+            return_cache_state=cache_params is not None,
+            activation_string=None,
+            conv1d_padding=self.conv_kernel_size - 1,
+            conv1d_stride=1,
+        )
+        # input = self.conv1d(input) # TODO
         input_size = input.size()
-        input = self.head_activation(input.view(-1, input.size(-1)))
+        input = self.head_activation(input.reshape(-1, input.size(-1)))
         input = input.view(input_size)
         input = self.head_projection(input)
 
