@@ -3,9 +3,9 @@
 # **************************************************
 
 import os
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import timedelta
-from typing import Callable
+from typing import Callable, Generator, List, Optional, Set
 
 import torch
 import torch.distributed
@@ -43,6 +43,9 @@ _DATA_PARALLEL_WORLD_SIZE: int | None = None
 _DATA_PARALLEL_REPLICATION_WORLD_SIZE: int | None = None
 _DATA_PARALLEL_SHARDING_WORLD_SIZE: int | None = None
 
+# context parallel
+_DATA_PARALLEL_CONTEXT_PARALLEL_MESH: DeviceMesh | None = None
+
 
 class ProcessGroupManager:
     def __init__(
@@ -51,6 +54,7 @@ class ProcessGroupManager:
         pipeline_parallel_world_size: int = 1,
         data_parallel_replication_world_size: int | None = None,
         data_parallel_sharding_world_size: int | None = None,
+        context_parallel_world_size: int | None = None,
         zero_stage: int = 3,
         timeout_minutes: int | None = None,
         use_async_tensor_parallel: bool = False,
@@ -84,7 +88,10 @@ class ProcessGroupManager:
             else:
                 assert data_parallel_sharding_world_size is not None
 
-        assert data_parallel_replication_world_size * data_parallel_sharding_world_size == data_parallel_size
+        assert (
+            data_parallel_replication_world_size * data_parallel_sharding_world_size * context_parallel_world_size
+            == data_parallel_size
+        )
 
         global _MESH, _TENSOR_PARALLEL_FIRST_RANK, _DATA_PARALLEL_REPLICATION_WORLD_SIZE, _DATA_PARALLEL_SHARDING_WORLD_SIZE
 
@@ -97,10 +104,13 @@ class ProcessGroupManager:
                 pipeline_parallel_world_size,
                 data_parallel_replication_world_size,
                 data_parallel_sharding_world_size,
+                context_parallel_world_size,
                 tensor_parallel_world_size,
             ),
-            mesh_dim_names=("pp", "ddp", "fsdp", "tp"),
+            mesh_dim_names=("pp", "ddp", "fsdp", "cp", "tp"),
         )
+
+        _MESH["fsdp", "cp"]._flatten(mesh_dim_name="fsdp_cp")
 
         local_rank = int(os.getenv("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
@@ -295,6 +305,23 @@ class ProcessGroupManager:
             _DATA_PARALLEL_MESH = ProcessGroupManager.get_mesh()["ddp", "fsdp"]
         return _DATA_PARALLEL_MESH
 
+    # data parallel + context parallel
+    @staticmethod
+    def get_data_parallel_context_parallel_mesh() -> DeviceMesh:
+        global _DATA_PARALLEL_CONTEXT_PARALLEL_MESH
+
+        if _DATA_PARALLEL_CONTEXT_PARALLEL_MESH is None:
+            _DATA_PARALLEL_CONTEXT_PARALLEL_MESH = ProcessGroupManager.get_mesh()["ddp", "fsdp_cp"]
+        return _DATA_PARALLEL_CONTEXT_PARALLEL_MESH
+
+    @staticmethod
+    def get_context_parallel_world_size() -> int:
+        return ProcessGroupManager.get_mesh()["cp"].size()
+
+    @staticmethod
+    def is_context_parallel_enabled() -> bool:
+        return ProcessGroupManager.get_context_parallel_world_size() > 1
+
     @staticmethod
     def get_data_parallel_group() -> ProcessGroup:
         global _DATA_PARALLEL_GROUP
@@ -399,8 +426,11 @@ def run_rank_n(func: Callable, rank: int = 0, barrier: bool = False) -> Callable
 
 
 def is_tracking_rank() -> bool:
+
+    ## TODO verify cp local rank for logging
     return (
         ProcessGroupManager.get_data_parallel_rank() == 0
+        and ProcessGroupManager.get_mesh()["cp"].get_local_rank() == 0
         and ProcessGroupManager.is_tensor_parallel_first_rank()
         and ProcessGroupManager.get_pipeline_parallel_rank()
         == ProcessGroupManager.get_pipeline_parallel_world_size() - 1
@@ -418,3 +448,51 @@ def get_pipeline_stage_ids_on_current_rank(num_pipeline_stages: int) -> int:
     )
 
     return tuple(pp_rank + i * pp_world_size for i in range(num_pipeline_stages_per_rank))
+
+
+def create_context_parallel_ctx(
+    cp_mesh: DeviceMesh,
+    cp_buffers: List[torch.Tensor],
+    cp_seq_dims: List[int],
+    cp_no_restore_buffers: Set[torch.Tensor],
+    cp_rotate_method: str,
+):
+    try:
+        from torch.distributed.tensor.experimental import context_parallel
+        from torch.distributed.tensor.experimental._attention import set_rotate_method
+    except ImportError:
+        print(
+            f"PyTorch version {torch.__version__} does not include the experimental "
+            "Context Parallel API. Please update to a newer version."
+        )
+
+    set_rotate_method(cp_rotate_method)
+    return context_parallel(
+        cp_mesh,
+        buffers=cp_buffers,
+        buffer_seq_dims=cp_seq_dims,
+        no_restore_buffers=cp_no_restore_buffers,
+    )
+
+
+def get_cp_context(enable_loss_parallel: bool, enable_compiled_autograd: bool):
+    @contextmanager
+    def context(cp_context: Optional[Generator[None, None, None]] = None):
+        with ExitStack() as stack:
+            if enable_loss_parallel:
+                stack.enter_context(torch.distributed.tensor.parallel.loss_parallel())
+
+            if enable_compiled_autograd:
+                stack.enter_context(torch._dynamo.utils.maybe_enable_compiled_autograd(True))
+
+            if cp_context is not None:
+                from torch.nn.attention import SDPBackend, sdpa_kernel
+
+                # currently we only support these two SDP backends.
+                # TODO (xilunwu): support cuDNN backend
+                stack.enter_context(sdpa_kernel([SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION]))
+                stack.enter_context(cp_context)
+
+            yield
+
+    return context
