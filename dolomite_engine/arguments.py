@@ -320,12 +320,13 @@ class WandBArgs(BaseArgs):
     # aim repo, experiment logs are saved here
     project: str = None
     # name of the experiment
-    name: str = None
+    name: str | None = None
     # run hash for the experiment
     entity: str | None = None
 
     def model_post_init(self, __context: Any) -> None:
-        _check_not_None([(self.project, "project"), (self.name, "name")])
+        # _check_not_None([(self.project, "project"), (self.name, "name")])
+        _check_not_None([(self.project, "project")])
 
 
 class LoggingArgs(BaseArgs):

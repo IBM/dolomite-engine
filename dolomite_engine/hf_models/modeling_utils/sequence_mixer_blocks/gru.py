@@ -25,6 +25,26 @@ if is_cute_kernels_available():
     from cute_kernels import gru_cute, gru_torch
 
 
+# HACK TUNING CODE
+import os
+tuning_params = {
+    "input_head_norm": "rmsnorm",
+    "output_head_norm": "rmsnorm",
+    "factor_mul": 8,
+    "state_weight_init": "identity",
+    "gate_in_state_init": 'zero',
+    "forget_bias_init": 'within_group_gradual',
+    "reset_bias_init": 1.0,
+}
+
+for key in tuning_params:
+    if key in os.environ:
+        tuning_params[key] = type(tuning_params[key])(os.environ[key])
+    else:
+        print(key, "not existent")
+# HACK END
+
+
 class GroupedLinear(nn.Module):
     def __init__(
         self,
@@ -92,7 +112,7 @@ class GRU(nn.Module):
         layer_idx: int,
         use_padding_free_transformer: bool,
         head_activation: str = "tanh",
-        factor: float = 1.414213562373095,
+        factor: float | None = None,
     ) -> None:
         super().__init__()
 
@@ -114,7 +134,10 @@ class GRU(nn.Module):
         self.num_head_groups = divide_if_divisible(self.num_heads, self.head_group_size, "head groups")
         self.in_state_size = self.num_head_groups * self.state_head_dim
         self.input_projection = ParameterizedLinear(self.input_size, self.in_state_size * 3, bias=add_bias, std=std)
-        self.head_activation = get_normalization_function("rmsnorm", self.in_state_size * 3)
+        if tuning_params['input_head_norm'] == 'rmsnorm':
+            self.head_activation = get_normalization_function("rmsnorm", self.in_state_size * 3)
+        elif tuning_params['input_head_norm'] == 'groupnorm':
+            self.head_activation = nn.GroupNorm(self.num_head_groups * 3, self.in_state_size * 3)
         # self.head_activation = get_activation_function(head_activation)
         # self.head_projection = ParameterizedConv1d(
         #     in_channels=self.input_size,
@@ -129,51 +152,93 @@ class GRU(nn.Module):
         self.head_projection = GroupedLinear(
             in_channels=self.in_state_size * 3,
             out_channels=self.in_state_size * 3 * self.head_group_size,
-            groups=self.num_head_groups,
+            groups=self.num_head_groups * 3,
             std=std,
         )
-        # nn.init.zeros_(self.head_projection.weight[:, :, self.state_head_dim:])
 
         self.state_weight = nn.Parameter(torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim))
-        nn.init.normal_(self.state_weight, std=self.state_weight_std)
-        self.state_weight.data = (
-            self.state_weight.data + 
-            torch.eye(self.state_head_dim,
-                      dtype=self.state_weight.dtype,
-                      device=self.state_weight.device) / factor
-        )
-
         std = initializer_range / math.sqrt(2 * num_layers)
         if init_method == "mup":
             std /= math.sqrt(m_width)
-        # self.output_head_projection = ParameterizedConv1d(
-        #     in_channels=self.state_size,
-        #     out_channels=self.input_size,
-        #     kernel_size=1,
-        #     groups=self.num_heads,
-        #     bias=add_bias,
-        #     std=std,
-        # )
+
         self.output_head_projection = GroupedLinear(
             in_channels=self.state_size,
             out_channels=self.state_size,
             groups=self.num_heads,
             std=std
         )
-        self.ln_output_head = get_normalization_function("rmsnorm", self.state_size) #, eps=layer_norm_epsilon)
+        if tuning_params['output_head_norm'] == 'rmsnorm':
+            self.ln_output_head = get_normalization_function("rmsnorm", self.state_size)
+        elif tuning_params['output_head_norm'] == 'groupnorm':
+            self.ln_output_head = nn.GroupNorm(self.num_heads, self.state_size)
+
         self.output_projection = ParameterizedLinear(self.state_size, self.output_size, bias=False, std=std)
 
         if factor is None:
-            factor = 1 / math.sqrt(2 * self.state_head_dim)
+            factor =  tuning_params['factor_mul'] / math.sqrt(2 * self.state_head_dim)
 
         self.factor = factor
-
+        self.forget_bias = nn.Parameter(torch.empty(self.num_heads, self.state_head_dim))
+        self.reset_bias = nn.Parameter(torch.empty(self.num_heads, self.state_head_dim))
         self.reset_parameters()
 
         mark_parameter_as_mup_learning_rate(self.input_projection.weight)
         mark_parameter_as_mup_learning_rate(self.state_weight)
         mark_parameter_as_mup_learning_rate(self.output_projection.weight)
         # mark_parameter_as_no_weight_decay(self.state_weight)
+        mark_parameter_as_no_weight_decay(self.forget_bias)
+        mark_parameter_as_no_weight_decay(self.reset_bias)
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        # nn.init.normal_(self.state_weight, std=self.state_weight_std)
+        # nn.init.zeros_(self.state_weight)
+        # for i in range(self.state_weight.size(0)):
+        #     nn.init.orthogonal_(self.state_weight[i])
+
+        nn.init.normal_(self.state_weight, std=self.state_weight_std)
+
+        if tuning_params['state_weight_init'] == "identity":
+            self.state_weight.data = (
+                self.state_weight.data + 
+                torch.eye(self.state_head_dim,
+                          dtype=self.state_weight.dtype,
+                          device=self.state_weight.device) / self.factor
+            )
+        elif tuning_params['state_weight_init'] == "orthogonal":
+            nn.init.zeros_(self.state_weight)
+            W = torch.empty(3 * self.num_heads, self.state_head_dim, self.state_head_dim, device=torch.device("cuda"))
+            for i in range(self.state_weight.size(0)):
+                nn.init.orthogonal_(W[i])
+            self.state_weight.data[:] = W.cpu() / self.factor
+
+        if tuning_params['gate_in_state_init'] == 'zero':
+            # set the gates to 0 init.
+            assert self.head_projection.weight.size(0) == self.num_head_groups * 3
+            assert self.state_weight.size(0) == self.num_heads * 3
+            nn.init.zeros_(self.head_projection.weight[self.num_head_groups:])
+            nn.init.zeros_(self.state_weight[self.num_heads:])
+
+
+        nn.init.zeros_(self.forget_bias)
+        nn.init.zeros_(self.reset_bias)
+        if not self.forget_bias.is_meta:
+            if tuning_params['forget_bias_init'] == 'within_group_gradual':
+                forget_init = torch.linspace(0.01, 0.99, self.head_group_size)
+                b = self.forget_bias.data.view(self.num_head_groups, self.head_group_size, self.state_head_dim)
+                b = b + (torch.log(forget_init) - torch.log(1 - forget_init))[None, :, None]
+                self.forget_bias.data[:] = b.view(self.forget_bias.size())
+                nn.init.constant_(self.reset_bias, 1.)
+            elif tuning_params['forget_bias_init'] == 'all_heads_gradual':
+                forget_init = torch.linspace(0.01, 0.99, self.num_heads)
+                b = self.forget_bias.data
+                b = b + (torch.log(forget_init) - torch.log(1 - forget_init))[:, None]
+                self.forget_bias.data[:] = b
+
+        nn.init.constant_(self.reset_bias, tuning_params['reset_bias_init'])
+
+
+
 
     def forward(
         self,
@@ -197,30 +262,22 @@ class GRU(nn.Module):
                 input = pack_sequence(inputs=input, cu_seqlens=cu_seqlens)
 
         input = self.input_projection(input)
-        input = self.head_activation(input)
+
+        input_size = input.size()
+        input = self.head_activation(input.view(-1, input.size(-1)))
+        input = input.view(input_size)
         input = self.head_projection(input)
 
-        # weight = self.factor * (
-        #     self.state_weight +
-        #     torch.eye(self.state_head_dim,
-        #               dtype=self.state_weight.dtype,
-        #               device=self.state_weight.device)
-        # )
         weight = self.state_weight * self.factor
-
-        # reset_input = 0. * reset_input + 10.
         weight, forget_weight, reset_weight = weight.chunk(3, dim=0)
-        # weight = (
-        #     weight +
-        #     torch.eye(self.state_head_dim,
-        #               dtype=self.state_weight.dtype,
-        #               device=self.state_weight.device)
-        # )
+
         input = input * self.factor
         input, forget_input, reset_input = input.chunk(3, dim=-1)
         input, forget_input, reset_input = [
             i.view(*input.size()[:-1], self.num_heads, self.state_head_dim) for i in (input, forget_input, reset_input)
         ]
+        forget_input = forget_input + self.forget_bias
+        reset_input = reset_input + self.reset_bias
 
         # input = input.view(*(input.size()[:-1]), self.num_heads, 3, self.state_head_dim)
         # input, forget_input, reset_input = [input[..., i, :] for i in range(3)]
@@ -256,12 +313,5 @@ class GRU(nn.Module):
 
         return input
 
-    @torch.no_grad()
-    def reset_parameters(self) -> None:
-        # nn.init.normal_(self.state_weight, std=self.state_weight_std)
-        # nn.init.zeros_(self.state_weight)
-        # for i in range(self.state_weight.size(0)):
-        #     nn.init.orthogonal_(self.state_weight[i])
-        pass
     def extra_repr(self) -> str:
         return f"gradient_clipping={self.gradient_clipping}, weight_shape={str(tuple(self.state_weight.shape))}, factor={self.factor}"
