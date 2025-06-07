@@ -21,7 +21,7 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
+    from cute_kernels.kernels.moe import scattered_experts
 
 
 # TODO add support for combileable bincount in PyTorch directly
