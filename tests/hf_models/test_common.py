@@ -309,3 +309,12 @@ class TestCommons(BaseTestCommons):
                 assert_close(x, y, rtol=rtol_bfloat16, atol=atol_bfloat16)
             else:
                 raise ValueError(f"unexpected dtype ({dtype})")
+
+    def get_random_duplicated_tensors(
+        self, size: tuple[int], device: torch.device, dtype: torch.dtype, std: float = 1
+    ) -> tuple[torch.Tensor]:
+        x = torch.randn(size, device=device, dtype=dtype, requires_grad=False) * std
+        x.requires_grad_()
+        x_clone = x.clone().detach().requires_grad_()
+
+        return x, x_clone
