@@ -18,7 +18,7 @@ from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack
 
 
 if is_cute_kernels_available():
-    from cute_kernels import gru_cute, gru_torch
+    from cute_kernels import KernelBackend, gru_cute
 
 
 class GRU(nn.Module):
@@ -118,7 +118,7 @@ class GRU(nn.Module):
             i.view(*input.size()[:-1], self.num_heads, self.state_head_dim) for i in (input, forget_input, reset_input)
         ]
 
-        input = (gru_cute if is_kernel_allowed(Kernel.gru_cute) else gru_torch)(
+        input = gru_cute(
             input=input,
             weight=weight,
             forget_input=forget_input,
@@ -129,6 +129,7 @@ class GRU(nn.Module):
             gradient_clipping=self.gradient_clipping,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
+            kernel_backend=KernelBackend.triton if is_kernel_allowed(Kernel.gru_cute) else KernelBackend.torch,
         )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
