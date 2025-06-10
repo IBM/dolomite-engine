@@ -21,7 +21,7 @@ from ..linear import ColumnParallelLinear, RowParallelLinear
 
 
 if is_cute_kernels_available():
-    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
+    from cute_kernels.kernels.moe import scattered_experts
 
 
 class ReplicatedLinear_TP(ParameterizedLinear, DTensorModule):
