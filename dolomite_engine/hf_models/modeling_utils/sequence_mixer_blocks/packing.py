@@ -11,7 +11,7 @@ from ....utils import is_cute_kernels_available
 
 
 if is_cute_kernels_available():
-    from cute_kernels import pack_sequence_cute, pack_sequence_torch, unpack_sequence_cute, unpack_sequence_torch
+    from cute_kernels import KernelBackend, pack_sequence_cute, unpack_sequence_cute
 
 
 def compute_cu_seqlens_and_max_seqlen_from_attention_mask(
@@ -29,7 +29,12 @@ def pack_sequence(
     if is_kernel_allowed(Kernel.pack_sequence_cute):
         inputs = pack_sequence_cute(inputs=inputs, cu_seqlens=cu_seqlens)
     else:
-        inputs = pack_sequence_torch(inputs=inputs, cu_seqlens=cu_seqlens)
+        inputs = pack_sequence_cute(
+            inputs=inputs,
+            cu_seqlens=cu_seqlens,
+            kernel_backend_forward=KernelBackend.torch,
+            kernel_backend_backward=KernelBackend.torch,
+        )
 
     return inputs
 
@@ -40,6 +45,12 @@ def unpack_sequence(
     if is_kernel_allowed(Kernel.pack_sequence_cute):
         inputs = unpack_sequence_cute(inputs=inputs, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
     else:
-        inputs = unpack_sequence_torch(inputs=inputs, cu_seqlens=cu_seqlens, desired_shape=desired_shape)
+        inputs = unpack_sequence_cute(
+            inputs=inputs,
+            cu_seqlens=cu_seqlens,
+            desired_shape=desired_shape,
+            kernel_backend_forward=KernelBackend.torch,
+            kernel_backend_backward=KernelBackend.torch,
+        )
 
     return inputs

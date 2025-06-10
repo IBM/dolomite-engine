@@ -18,7 +18,7 @@ from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack
 
 
 if is_cute_kernels_available():
-    from cute_kernels import rnn_cute, rnn_torch
+    from cute_kernels import KernelBackend, rnn_cute
 
 
 class RNN(nn.Module):
@@ -113,13 +113,14 @@ class RNN(nn.Module):
         input = input * self.factor
         weight = self.state_weight * self.factor
 
-        input = (rnn_cute if is_kernel_allowed(Kernel.rnn_cute) else rnn_torch)(
+        input = rnn_cute(
             input=input,
             weight=weight,
             input_state=input_state,
             gradient_clipping=self.gradient_clipping,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
+            kernel_backend=KernelBackend.triton if is_kernel_allowed(Kernel.rnn_cute) else KernelBackend.torch,
         )
 
         if not self.use_padding_free_transformer and attention_mask is not None:
