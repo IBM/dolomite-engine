@@ -259,16 +259,18 @@ class MoE(nn.Module):
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
+        with torch.no_grad():
+            sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
+
+            expert_frequency = compute_bincount(
+                x=sorted_expert_idxs,
+                size=self.num_experts,
+                use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
+            )
+
         if is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
-                sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-
-                expert_offsets = compute_bincount(
-                    x=sorted_expert_idxs,
-                    size=self.num_experts,
-                    use_continuous_count=self.is_hopper_or_newer_gpu
-                    and is_kernel_allowed(Kernel.continuous_count_cute),
-                ).cumsum(-1)
+                expert_offsets = expert_frequency.cumsum(-1)
 
             hidden_states = self.c_fc(
                 input=hidden_states,
