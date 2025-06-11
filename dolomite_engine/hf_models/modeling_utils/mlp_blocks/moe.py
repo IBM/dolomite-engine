@@ -236,7 +236,7 @@ class MoE(nn.Module):
 
         aux_loss = (
             self._compute_switch_loss(
-                logits=router_logits, probs=torch.softmax(router_logits, dim=-1), topk_idxs=selected_experts
+                logits=router_logits, probs=torch.softmax(router_logits, dim=-1), expert_frequency=expert_frequency
             )
             if self.training
             else 0
@@ -331,25 +331,25 @@ class MoE(nn.Module):
 
         return x, indices
 
-    def _compute_switch_loss(self, logits: torch.Tensor, probs: torch.Tensor, topk_idxs: torch.Tensor) -> torch.Tensor:
+    def _compute_switch_loss(
+        self, logits: torch.Tensor, probs: torch.Tensor, expert_frequency: torch.Tensor
+    ) -> torch.Tensor:
         logits = logits.view(-1, logits.size(-1))
         probs = probs.view(-1, probs.size(-1))
 
         num_experts = logits.size(1)
         acc_probs = probs.sum(0)
 
-        freq = compute_bincount(
-            x=topk_idxs.flatten(),
-            size=num_experts,
-            use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
-        )
-
-        freq = freq.float()
+        expert_frequency = expert_frequency.float()
 
         if ProcessGroupManager.is_initialized() and ProcessGroupManager.get_data_parallel_world_size() > 1:
-            freq = all_reduce(freq, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group())
+            expert_frequency = all_reduce(
+                expert_frequency, reduceOp="sum", group=ProcessGroupManager.get_data_parallel_group()
+            )
 
-        switch_loss = num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(freq, p=1, dim=0)).sum()
+        switch_loss = (
+            num_experts * (F.normalize(acc_probs, p=1, dim=0) * F.normalize(expert_frequency, p=1, dim=0)).sum()
+        )
         z_loss = (torch.logsumexp(logits, dim=-1) ** 2).mean()
 
         loss = switch_loss + 0.1 * z_loss
