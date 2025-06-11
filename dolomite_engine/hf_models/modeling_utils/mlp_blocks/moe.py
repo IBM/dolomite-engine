@@ -259,16 +259,20 @@ class MoE(nn.Module):
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
     ) -> torch.Tensor:
+        with torch.no_grad():
+            sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
+
+            expert_frequency = compute_bincount(
+                x=sorted_expert_idxs,
+                size=self.num_experts,
+                use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
+            )
+
+        T = hidden_states.size(0)
+
         if is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
-                sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
-
-                expert_offsets = compute_bincount(
-                    x=sorted_expert_idxs,
-                    size=self.num_experts,
-                    use_continuous_count=self.is_hopper_or_newer_gpu
-                    and is_kernel_allowed(Kernel.continuous_count_cute),
-                ).cumsum(-1)
+                expert_offsets = expert_frequency.cumsum(-1)
 
             hidden_states = self.c_fc(
                 input=hidden_states,
@@ -290,8 +294,6 @@ class MoE(nn.Module):
             )
             hidden_states = self.dropout(hidden_states)
         else:
-            total_q = hidden_states.shape[0]
-
             batch_index, batch_gates, num_tokens_per_expert = self._compute_expert_assignment(
                 router_weights, selected_experts
             )
@@ -303,7 +305,7 @@ class MoE(nn.Module):
             hidden_states = self.c_proj(input=hidden_states, num_tokens_per_expert=num_tokens_per_expert)
 
             hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
-            zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
+            zeros = torch.zeros((T, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
             hidden_states = zeros.index_add(0, batch_index, hidden_states)
 
         return hidden_states
