@@ -225,7 +225,7 @@ class MoE(nn.Module):
 
         router_logits, router_weights, selected_experts = self._compute_routing_weights(hidden_states)
 
-        moe_output = self._compute_experts(hidden_states, router_weights, selected_experts)
+        moe_output, expert_frequency = self._compute_experts(hidden_states, router_weights, selected_experts)
 
         if self.shared_intermediate_size is None:
             hidden_states = moe_output
@@ -266,7 +266,7 @@ class MoE(nn.Module):
 
     def _compute_experts(
         self, hidden_states: torch.Tensor, router_weights: torch.Tensor, selected_experts: torch.Tensor
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             sorted_expert_idxs, sorted_scattered_idxs = selected_experts.flatten().sort()
 
@@ -344,7 +344,7 @@ class MoE(nn.Module):
             zeros = torch.zeros((T, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
             hidden_states = zeros.index_add(0, batch_index, hidden_states)
 
-        return hidden_states
+        return hidden_states, expert_frequency
 
     def _compute_shared_experts(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.c_fc_shared(hidden_states)
