@@ -288,13 +288,9 @@ class MoE(nn.Module):
                 pad_to_multiple_of=8,
             )
 
-            hidden_states = self.c_fc(
-                input=hidden_states, kernel_backend=kernel_backend, expert_frequency=padded_expert_frequency
-            )
+            hidden_states = self.c_fc(input=hidden_states, expert_frequency=padded_expert_frequency)
             hidden_states = self.act(hidden_states)
-            hidden_states = self.c_proj(
-                input=hidden_states, kernel_backend=kernel_backend, expert_frequency=padded_expert_frequency
-            )
+            hidden_states = self.c_proj(input=hidden_states, expert_frequency=padded_expert_frequency)
 
             hidden_states = ungroup_with_padding(
                 x=hidden_states,
