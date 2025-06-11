@@ -299,9 +299,7 @@ class MoE(nn.Module):
             )
             hidden_states = self.dropout(hidden_states)
         else:
-            batch_index, batch_gates, expert_frequency = self._compute_expert_assignment(
-                router_weights, selected_experts
-            )
+            batch_index, batch_gates = self._compute_expert_assignment(router_weights, selected_experts)
 
             hidden_states = hidden_states[batch_index]
 
