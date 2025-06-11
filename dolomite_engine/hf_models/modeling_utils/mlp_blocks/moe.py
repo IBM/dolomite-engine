@@ -299,7 +299,11 @@ class MoE(nn.Module):
             )
             hidden_states = self.dropout(hidden_states)
         else:
-            batch_index, batch_gates = self._compute_expert_assignment(router_weights, selected_experts)
+            batch_index = sorted_scattered_idxs // self.top_k
+
+            # gather the gate values for grouped input tokens
+            router_weights = router_weights.flatten()
+            batch_gates = router_weights[sorted_scattered_idxs]
 
             hidden_states = hidden_states[batch_index]
 
@@ -318,21 +322,6 @@ class MoE(nn.Module):
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj_shared(hidden_states)
         return hidden_states
-
-    def _compute_expert_assignment(
-        self, router_weights: torch.Tensor, selected_experts: torch.Tensor
-    ) -> tuple[torch.Tensor]:
-        selected_experts = selected_experts.flatten()
-
-        # sort and group input tokens according to expert assignment
-        _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
-        batch_index = index_sorted_experts // self.top_k  # [num_tokens * top_k]
-
-        # gather the gate values for grouped input tokens
-        router_weights = router_weights.flatten()  # [num_tokens * top_k]
-        batch_gates = router_weights[index_sorted_experts]  # [num_tokens * top_k]
-
-        return batch_index, batch_gates
 
     def _get_topk(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.top_k == 1:
