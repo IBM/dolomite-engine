@@ -326,12 +326,6 @@ class MoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        expert_frequency = compute_bincount(
-            x=selected_experts,
-            size=self.num_experts,
-            use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
-        )
-
         # sort and group input tokens according to expert assignment
         _, index_sorted_experts = selected_experts.sort(0)  # [num_tokens * top_k]
         batch_index = index_sorted_experts // self.top_k  # [num_tokens * top_k]
@@ -340,7 +334,7 @@ class MoE(nn.Module):
         router_weights = router_weights.flatten()  # [num_tokens * top_k]
         batch_gates = router_weights[index_sorted_experts]  # [num_tokens * top_k]
 
-        return batch_index, batch_gates, expert_frequency
+        return batch_index, batch_gates
 
     def _get_topk(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.top_k == 1:
