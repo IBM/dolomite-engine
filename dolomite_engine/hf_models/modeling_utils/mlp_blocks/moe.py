@@ -21,7 +21,12 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.moe import grouped_gemm_experts_cute, scattered_experts
+    from cute_kernels.kernels.moe import (
+        group_with_padding,
+        grouped_gemm_experts_cute,
+        scattered_experts,
+        ungroup_with_padding,
+    )
 
 
 # TODO add support for combileable bincount in PyTorch directly
@@ -274,7 +279,35 @@ class MoE(nn.Module):
         T = hidden_states.size(0)
 
         if is_kernel_allowed(Kernel.grouped_gemm_cute):
-            pass
+            hidden_states, padded_expert_frequency, expert_padding_offset = group_with_padding(
+                x=hidden_states,
+                expert_frequency=expert_frequency,
+                sorted_idxs=sorted_expert_idxs,
+                scattered_idxs=sorted_scattered_idxs,
+                top_k=self.top_k,
+                pad_to_multiple_of=8,
+            )
+
+            hidden_states = self.c_fc(
+                input=hidden_states, kernel_backend=kernel_backend, expert_frequency=padded_expert_frequency
+            )
+            hidden_states = self.act(hidden_states)
+            hidden_states = self.c_proj(
+                input=hidden_states, kernel_backend=kernel_backend, expert_frequency=padded_expert_frequency
+            )
+
+            hidden_states = ungroup_with_padding(
+                x=hidden_states,
+                expert_padding_offset=expert_padding_offset,
+                sorted_idxs=sorted_expert_idxs,
+                scattered_idxs=sorted_scattered_idxs,
+                top_k=self.top_k,
+                num_tokens=T,
+                pad_to_multiple_of=8,
+            )
+
+            hidden_states = hidden_states.view(T, self.top_k, -1)
+            hidden_states = torch.bmm(router_weights.unsqueeze(1), hidden_states)
         elif is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 expert_offsets = expert_frequency.cumsum(-1)
