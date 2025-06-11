@@ -21,7 +21,7 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.moe import scattered_experts
+    from cute_kernels.kernels.moe import grouped_gemm_experts_cute, scattered_experts
 
 
 # TODO add support for combileable bincount in PyTorch directly
@@ -77,7 +77,7 @@ class ParameterizedExperts(nn.Module):
         self,
         input: torch.Tensor,
         num_experts_per_token: int | None = None,
-        num_tokens_per_expert: torch.Tensor | None = None,
+        expert_frequency: torch.Tensor | None = None,
         sorted_expert_idxs: torch.Tensor | None = None,
         sorted_scattered_idxs: torch.Tensor | None = None,
         expert_offsets: torch.Tensor | None = None,
@@ -85,7 +85,10 @@ class ParameterizedExperts(nn.Module):
         grouped_in: bool = False,
         grouped_out: bool = False,
     ) -> torch.Tensor:
-        if is_kernel_allowed(Kernel.scattermoe):
+        if is_kernel_allowed(Kernel.grouped_gemm_cute):
+            assert self.bias is None
+            input = grouped_gemm_experts_cute(x=input, weight=self.weight, expert_frequency=expert_frequency)
+        elif is_kernel_allowed(Kernel.scattermoe):
             assert self.bias is None
 
             input = scattered_experts(
@@ -100,7 +103,7 @@ class ParameterizedExperts(nn.Module):
                 grouped_out=grouped_out,
             )
         else:
-            input = input.split(num_tokens_per_expert.tolist(), dim=0)
+            input = input.split(expert_frequency.tolist(), dim=0)
             input = [
                 F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
                 for i in range(self.num_experts)
@@ -296,15 +299,15 @@ class MoE(nn.Module):
             )
             hidden_states = self.dropout(hidden_states)
         else:
-            batch_index, batch_gates, num_tokens_per_expert = self._compute_expert_assignment(
+            batch_index, batch_gates, expert_frequency = self._compute_expert_assignment(
                 router_weights, selected_experts
             )
 
             hidden_states = hidden_states[batch_index]
 
-            hidden_states = self.c_fc(input=hidden_states, num_tokens_per_expert=num_tokens_per_expert)
+            hidden_states = self.c_fc(input=hidden_states, expert_frequency=expert_frequency)
             hidden_states = self.act(hidden_states)
-            hidden_states = self.c_proj(input=hidden_states, num_tokens_per_expert=num_tokens_per_expert)
+            hidden_states = self.c_proj(input=hidden_states, expert_frequency=expert_frequency)
 
             hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
             zeros = torch.zeros((T, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
@@ -323,7 +326,7 @@ class MoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_tokens_per_expert = compute_bincount(
+        expert_frequency = compute_bincount(
             x=selected_experts,
             size=self.num_experts,
             use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
@@ -337,7 +340,7 @@ class MoE(nn.Module):
         router_weights = router_weights.flatten()  # [num_tokens * top_k]
         batch_gates = router_weights[index_sorted_experts]  # [num_tokens * top_k]
 
-        return batch_index, batch_gates, num_tokens_per_expert
+        return batch_index, batch_gates, expert_frequency
 
     def _get_topk(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.top_k == 1:
