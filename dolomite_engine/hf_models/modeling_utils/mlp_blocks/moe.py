@@ -270,7 +270,9 @@ class MoE(nn.Module):
 
         T = hidden_states.size(0)
 
-        if is_kernel_allowed(Kernel.scattermoe):
+        if is_kernel_allowed(Kernel.grouped_gemm_cute):
+            pass
+        elif is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 expert_offsets = expert_frequency.cumsum(-1)
 
