@@ -29,6 +29,7 @@ def is_kernel_allowed(kernel: Kernel) -> bool:
 def enable_kernels(kernels: set[Kernel] | list[Kernel]):
     if not isinstance(kernels, set):
         kernels = set(kernels)
+        kernels = list(kernels)
 
     global _KERNELS
 
