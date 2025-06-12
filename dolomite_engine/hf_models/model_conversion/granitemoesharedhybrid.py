@@ -3,7 +3,13 @@
 # **************************************************
 
 import torch
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig
+from transformers import (
+    AutoConfig,
+    AutoTokenizer,
+    GenerationConfig,
+    GraniteMoeHybridConfig,
+    GraniteMoeHybridForCausalLM,
+)
 
 from ...utils import SafeTensorsWeightsManager, divide_if_divisible, download_repo
 from ..modeling_utils import (
@@ -12,14 +18,6 @@ from ..modeling_utils import (
     split_query_key_value_tensor_for_attention,
 )
 from ..models import GPTDolomiteConfig
-
-
-# TODO remove try except once GraniteMoeHybrid is added into HF
-try:
-    from transformers import GraniteMoeHybridConfig, GraniteMoeHybridForCausalLM
-except:
-    GraniteMoeHybridConfig = None
-    GraniteMoeHybridForCausalLM = None
 
 
 def import_from_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -89,6 +87,35 @@ def _import_config_from_huggingface(original_config: GraniteMoeHybridConfig) -> 
     assert original_config.hidden_act == "silu"
     assert not original_config.attention_bias
 
+    # Allow for 0 experts by setting mlp_blocks accordingly
+    mlp_blocks = []
+    for _ in range(original_config.num_hidden_layers):
+        if original_config.num_local_experts == 0:
+            mlp_block = {
+                "mlp_type": "None",
+                "intermediate_size": original_config.intermediate_size,
+                "shared_intermediate_size": (
+                    None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
+                ),
+                "num_experts": 0,
+                "num_experts_per_tok": 0,
+                "activation_function": "swiglu",
+                "add_bias": False,
+            }
+        else:
+            mlp_block = {
+                "mlp_type": "MoE",
+                "intermediate_size": original_config.intermediate_size,
+                "shared_intermediate_size": (
+                    None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
+                ),
+                "num_experts": original_config.num_local_experts,
+                "num_experts_per_tok": original_config.num_experts_per_tok,
+                "activation_function": "swiglu",
+                "add_bias": False,
+            }
+        mlp_blocks.append(mlp_block)
+
     config = GPTDolomiteConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
@@ -109,20 +136,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeHybridConfig) -> 
         m_residual=None if original_config.residual_multiplier == 1 else original_config.residual_multiplier,
         m_width=None if original_config.logits_scaling == 1 else original_config.logits_scaling,
         sequence_mixer_blocks=_import_sequence_mixer_config(original_config),
-        mlp_blocks=[
-            {
-                "mlp_type": "MoE",
-                "intermediate_size": original_config.intermediate_size,
-                "shared_intermediate_size": (
-                    None if original_config.shared_intermediate_size == 0 else original_config.shared_intermediate_size
-                ),
-                "num_experts": original_config.num_local_experts,
-                "num_experts_per_tok": original_config.num_experts_per_tok,
-                "activation_function": "swiglu",
-                "add_bias": False,
-            }
-            for _ in range(original_config.num_hidden_layers)
-        ],
+        mlp_blocks=mlp_blocks,
     )
 
     return config
@@ -243,6 +257,7 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
         num_heads=original_config.num_attention_heads,
         num_key_value_heads=original_config.num_key_value_heads,
         head_dim=original_config.hidden_size // original_config.num_attention_heads,
+        num_experts=original_config.num_local_experts,
     )
 
     SafeTensorsWeightsManager.save_state_dict(state_dict, save_path)
@@ -277,13 +292,24 @@ def _get_sequence_mixer_block_types(config: GPTDolomiteConfig) -> list:
 
 
 def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybridConfig:
+    print(config)
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "nope"
 
     config.check_equal_for_all_and_get_value("mlp_blocks", "add_bias", False)
     config.check_equal_for_all_and_get_value("mlp_blocks", "activation_function", "swiglu")
-    config.check_equal_for_all_and_get_value("mlp_blocks", "mlp_type", "MoE")
-    shared_intermediate_size = config.check_equal_for_all_and_get_value("mlp_blocks", "shared_intermediate_size")
+    # Allow for 0 experts: if all mlp_blocks have mlp_type "None", set num_local_experts to 0
+    mlp_types = [
+        block["mlp_type"] if isinstance(block, dict) else getattr(block, "mlp_type") for block in config.mlp_blocks
+    ]
+    if all(t == "MLP" for t in mlp_types):
+        num_local_experts = 0
+        num_experts_per_tok = 0
+        shared_intermediate_size = config.check_equal_for_all_and_get_value("mlp_blocks", "intermediate_size")
+    else:
+        num_local_experts = config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts")
+        num_experts_per_tok = config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts_per_tok")
+        shared_intermediate_size = config.check_equal_for_all_and_get_value("mlp_blocks", "shared_intermediate_size")
 
     original_config = GraniteMoeHybridConfig(
         vocab_size=config.vocab_size,
@@ -311,8 +337,8 @@ def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybrid
         attention_dropout=config.check_equal_for_all_and_get_value(
             key="sequence_mixer_blocks", key_block="dropout", sequence_mixer_type="softmax_attention"
         ),
-        num_local_experts=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts"),
-        num_experts_per_tok=config.check_equal_for_all_and_get_value("mlp_blocks", "num_experts_per_tok"),
+        num_local_experts=num_local_experts,
+        num_experts_per_tok=num_experts_per_tok,
         router_aux_loss_coef=config.router_aux_loss_coef,
         bos_token_id=config.bos_token_id,
         eos_token_id=config.eos_token_id,
@@ -369,6 +395,7 @@ def _export_state_dict_to_huggingface(
     num_heads: int,
     num_key_value_heads: int,
     head_dim: int,
+    num_experts: int,
 ) -> None:
     attention_head_type = get_attention_head_type(num_heads, num_key_value_heads)
 
@@ -387,25 +414,33 @@ def _export_state_dict_to_huggingface(
         state_dict[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = (
             safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.ln_2.weight")
         )
-
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.gate.weight")
-        )
-
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"), dim=1
-        )
-        state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
-            safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
-        )
-
-        if safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"):
+        if num_experts > 0:
+            state_dict[f"model.layers.{layer_idx}.block_sparse_moe.router.layer.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.gate.weight")
+            )
+            state_dict[f"model.layers.{layer_idx}.block_sparse_moe.input_linear.weight"] = _split_and_reorder_for_glu(
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"), dim=1
+            )
+            state_dict[f"model.layers.{layer_idx}.block_sparse_moe.output_linear.weight"] = (
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
+            )
+            if safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"):
+                state_dict[f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"] = _split_and_reorder_for_glu(
+                    safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"),
+                    dim=0,
+                )
+                state_dict[f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"] = (
+                    safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj_shared.weight")
+                )
+        else:
+            # make sure if there are no experts, the MLP weights are there and copy those
+            assert safetensors_weights_manager.has_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight")
             state_dict[f"model.layers.{layer_idx}.shared_mlp.input_linear.weight"] = _split_and_reorder_for_glu(
-                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc_shared.weight"),
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_fc.weight"),
                 dim=0,
             )
             state_dict[f"model.layers.{layer_idx}.shared_mlp.output_linear.weight"] = (
-                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj_shared.weight")
+                safetensors_weights_manager.get_tensor(f"transformer.h.{layer_idx}.mlp_block.c_proj.weight")
             )
 
         if sequence_mixer_block_types[layer_idx] == "mamba":
