@@ -10,7 +10,7 @@ from ....modeling_utils_TP import get_tensor_parallel_vocab_info, tensor_paralle
 from ...gpt_base import GPTBaseConfig
 
 
-def get_gpt_dolomite_model_parallel_state_dict(
+def get_gpt_base_model_parallel_state_dict(
     config: GPTBaseConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_pipeline_stages: int,

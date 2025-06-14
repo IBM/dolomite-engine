@@ -8,7 +8,7 @@ from ....modeling_utils import get_attention_head_type, is_glu
 from ...gpt_base import GPTBaseConfig
 
 
-def fix_gpt_dolomite_unsharded_state_dict(
+def fix_gpt_base_unsharded_state_dict(
     config: GPTBaseConfig, state_dict: dict, tensor_parallel_world_size: int, prefix: str = ""
 ) -> dict:
     state_dict[prefix + "transformer.wte.weight"] = state_dict[prefix + "transformer.wte.weight"][

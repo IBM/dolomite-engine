@@ -9,7 +9,7 @@ from ....modeling_utils import get_attention_head_type, is_glu
 from ...gpt_base import GPTBaseConfig
 
 
-def unshard_gpt_dolomite_tensor_parallel_state_dicts(
+def unshard_gpt_base_tensor_parallel_state_dicts(
     config: GPTBaseConfig,
     tensor_parallel_state_dicts: list[dict],
     prefix: str = "",

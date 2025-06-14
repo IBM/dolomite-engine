@@ -6,8 +6,8 @@ from ...mixins import BaseModelMixin_TP, PreTrainedModelMixin_TP
 from ..gpt_base import GPTBaseConfig
 
 
-class GPTDolomitePreTrainedModel_TP(PreTrainedModelMixin_TP):
+class GPTBasePreTrainedModel_TP(PreTrainedModelMixin_TP):
     config_class = GPTBaseConfig
 
 
-class GPTBaseModel_TP(GPTDolomitePreTrainedModel_TP, BaseModelMixin_TP): ...
+class GPTBaseModel_TP(GPTBasePreTrainedModel_TP, BaseModelMixin_TP): ...

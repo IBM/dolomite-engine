@@ -6,4 +6,4 @@ from ...config import CommonConfig
 
 
 class GPTBaseConfig(CommonConfig):
-    model_type = "gpt_dolomite"
+    model_type = "gpt_base"

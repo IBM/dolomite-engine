@@ -6,8 +6,8 @@ from ...mixins import BaseModelMixin, PreTrainedModelMixin
 from .config import GPTBaseConfig
 
 
-class GPTDolomitePreTrainedModel(PreTrainedModelMixin):
+class GPTBasePreTrainedModel(PreTrainedModelMixin):
     config_class = GPTBaseConfig
 
 
-class GPTBaseModel(GPTDolomitePreTrainedModel, BaseModelMixin): ...
+class GPTBaseModel(GPTBasePreTrainedModel, BaseModelMixin): ...
