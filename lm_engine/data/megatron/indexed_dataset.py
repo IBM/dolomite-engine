@@ -1,7 +1,3 @@
-# **************************************************
-# Copyright (c) 2025, Mayank Mishra
-# **************************************************
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
