@@ -1,3 +1,8 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
+
 class MegatronBatchSampler:
     def __init__(
         self,

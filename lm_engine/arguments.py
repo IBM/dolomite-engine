@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import logging
 from argparse import ArgumentParser
 from typing import Any
@@ -267,8 +271,6 @@ class DistributedArgs(BaseArgs):
     sequence_parallel: bool = False
     # pipeline parallel world size
     pipeline_parallel_world_size: int = 1
-    # data parallel world size
-    data_parallel_size: int | None = None
     # distributed timeout for NCCL in minutes
     timeout_minutes: int | None = None
     # fsdp algorithm

@@ -1,3 +1,7 @@
+<!-- **************************************************
+Copyright (c) 2025, Mayank Mishra
+************************************************** -->
+
 <h1 align="center" style="font-size: 50px;">LM Engine</h1>
 
 <p align="center">

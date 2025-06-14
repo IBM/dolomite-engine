@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ...config import CommonConfig
 from .mlp import MLP_TP
 from .moe import MoE_TP

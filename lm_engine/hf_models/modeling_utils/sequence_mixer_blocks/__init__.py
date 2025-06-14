@@ -1,4 +1,9 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from ...config import CommonConfig
+from .causal_convolution import CausalConvolution
 from .flash_attention_utils import flash_attention
 from .gru import GRU
 from .mamba2 import Mamba2
@@ -23,8 +28,24 @@ def get_sequence_mixer(
     block = config.sequence_mixer_blocks[layer_idx]
     sequence_mixer_type = block.sequence_mixer_type
 
-    if sequence_mixer_type == "gru":
-        return GRU(
+    if sequence_mixer_type == "causal_convolution":
+        return CausalConvolution(
+            hidden_size=config.hidden_size,
+            in_channels=block.in_channels,
+            out_channels=block.out_channels,
+            kernel_size=block.kernel_size,
+            num_groups=block.num_groups,
+            activation_function=block.activation_function,
+            add_bias=block.add_bias,
+            initializer_range=config.initializer_range,
+            m_width=config.m_width,
+            init_method=config.init_method,
+            num_layers=config.num_layers,
+            layer_idx=layer_idx,
+            use_padding_free_transformer=use_padding_free_transformer,
+        )
+    elif sequence_mixer_type in ["rnn", "gru"]:
+        return (GRU if sequence_mixer_type == "gru" else RNN)(
             input_size=config.hidden_size,
             state_size=block.state_size,
             output_size=config.hidden_size,
@@ -34,6 +55,7 @@ def get_sequence_mixer(
             initializer_range=config.initializer_range,
             m_width=config.m_width,
             init_method=config.init_method,
+            normalization_function=block.normalization_function,
             num_layers=config.num_layers,
             layer_idx=layer_idx,
             use_padding_free_transformer=use_padding_free_transformer,
@@ -79,23 +101,6 @@ def get_sequence_mixer(
             use_padding_free_transformer=use_padding_free_transformer,
             normalization_function=block.normalization_function,
             layer_norm_epsilon=config.layer_norm_epsilon,
-        )
-    elif sequence_mixer_type == "rnn":
-        return RNN(
-            input_size=config.hidden_size,
-            state_size=block.state_size,
-            output_size=config.hidden_size,
-            num_heads=block.num_heads,
-            add_bias=block.add_bias,
-            gradient_clipping=block.gradient_clipping,
-            activation_function=block.activation_function,
-            relu_negative_slope=block.relu_negative_slope,
-            initializer_range=config.initializer_range,
-            m_width=config.m_width,
-            init_method=config.init_method,
-            num_layers=config.num_layers,
-            layer_idx=layer_idx,
-            use_padding_free_transformer=use_padding_free_transformer,
         )
     else:
         sequence_mixer_kwargs = dict(

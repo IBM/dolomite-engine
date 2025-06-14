@@ -1,9 +1,10 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import json
 import os
 import tempfile
-from itertools import product
-from typing import Any, Callable
-from unittest import TestCase, skipUnless
 
 import torch
 from torch.testing import assert_close
@@ -12,15 +13,13 @@ from transformers import AutoConfig, AutoModelForCausalLM
 from lm_engine import SafeTensorsWeightsManager
 from lm_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
 
+from ..test_common import BaseTestCommons
+
 
 _RUN_SLOW = True if os.getenv("RUN_SLOW", "False").lower() in ["1", "true"] else False
 
 
-class TestCommons(TestCase):
-    @staticmethod
-    def get_all_devices() -> list[torch.device]:
-        return [torch.device("cpu"), torch.device("cuda")]
-
+class TestCommons(BaseTestCommons):
     @staticmethod
     def get_attention_head_types() -> list[str]:
         return ["mha", "mqa", "gqa"]
@@ -32,21 +31,6 @@ class TestCommons(TestCase):
     @staticmethod
     def get_position_embedding_types() -> list[str]:
         return ["learned_absolute", "rope"]
-
-    @staticmethod
-    def get_dtypes() -> list[torch.dtype]:
-        return [torch.float32, torch.float16, torch.bfloat16]
-
-    def make_args_matrix(*args_lists) -> list[Any]:
-        return [p for p in product(*args_lists)]
-
-    def skip_test_if_device_unavailable(self, device: torch.device) -> None:
-        # convert to str
-        if isinstance(device, torch.device):
-            device = device.type
-
-        if device == "cuda" and not torch.cuda.is_available():
-            self.skipTest("skipping test because CUDA is unavailable")
 
     def skip_test_if_layernorm_kernel_unavailable(self, device: torch.device, dtype: torch.dtype) -> None:
         # convert to str
@@ -187,7 +171,7 @@ class TestCommons(TestCase):
 
     def model_conversion_test(
         self,
-        dolomite_config: CommonConfig,
+        lm_engine_config: CommonConfig,
         model_type: str,
         device: torch.device,
         exact_match: bool = True,
@@ -207,15 +191,15 @@ class TestCommons(TestCase):
     ) -> None:
         self.skip_test_if_device_unavailable(device)
 
-        dolomite_model = self.from_config(dolomite_config).to(device)
-        dolomite_model.eval()
+        lm_engine_model = self.from_config(lm_engine_config).to(device)
+        lm_engine_model.eval()
 
         with tempfile.TemporaryDirectory() as tmp_path:
             save_path = os.path.join(tmp_path, "save")
             export_path = os.path.join(tmp_path, "export")
             import_path = os.path.join(tmp_path, "import")
 
-            dolomite_model.save_pretrained(save_path, safe_serialization=True)
+            lm_engine_model.save_pretrained(save_path, safe_serialization=True)
 
             export_to_huggingface(save_path, export_path, model_type=model_type)
             import_from_huggingface(export_path, import_path)
@@ -231,18 +215,18 @@ class TestCommons(TestCase):
         hf_logits = hf_output.logits
         hf_loss = hf_output.loss
 
-        dolomite_output = dolomite_model(
+        lm_engine_output = lm_engine_model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels, return_dict=True
         )
-        dolomite_logits = dolomite_output.logits
-        dolomite_loss = dolomite_output.loss
+        lm_engine_logits = lm_engine_output.logits
+        lm_engine_loss = lm_engine_output.loss
 
         # we don't care about what happens on masked values (they don't match btw)
         hf_logits[attention_mask == 0] = 0
-        dolomite_logits[attention_mask == 0] = 0
+        lm_engine_logits[attention_mask == 0] = 0
 
         self.assert_equal_tensors(
-            dolomite_logits,
+            lm_engine_logits,
             hf_logits,
             exact_match,
             rtol_float32=logits_rtol_float32,
@@ -255,7 +239,7 @@ class TestCommons(TestCase):
 
         if compare_loss:
             self.assert_equal_tensors(
-                dolomite_loss,
+                lm_engine_loss,
                 hf_loss,
                 exact_match,
                 rtol_float32=loss_rtol_float32,
@@ -325,7 +309,3 @@ class TestCommons(TestCase):
                 assert_close(x, y, rtol=rtol_bfloat16, atol=atol_bfloat16)
             else:
                 raise ValueError(f"unexpected dtype ({dtype})")
-
-    @staticmethod
-    def slow_test(func: Callable) -> Callable:
-        return skipUnless(_RUN_SLOW, "skipping slow test since RUN_SLOW=True is not set in the environment")(func)

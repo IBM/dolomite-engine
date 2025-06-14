@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import torch
 import torch.distributed._functional_collectives as funcol
 import torch.nn.functional as F

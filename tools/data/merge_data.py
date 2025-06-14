@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from argparse import ArgumentParser, Namespace
 
 from lm_engine.data.megatron.merge_data import merge_files

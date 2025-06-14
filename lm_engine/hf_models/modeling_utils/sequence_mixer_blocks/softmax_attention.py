@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import inspect
 import math
 
@@ -9,6 +13,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed, wait_for_ACT
 from ....utils import divide_if_divisible
 from ...cache import GenerationCache
+from ...parameter import mark_parameter_as_mup_learning_rate
 from ..linear import ParameterizedLinear
 from ..position_embedding import apply_rotary_pos_emb
 from .flash_attention_utils import flash_attention
@@ -271,6 +276,9 @@ class Attention(nn.Module):
 
         self.softmax_dropout = nn.Identity() if softmax_dropout == 0 else nn.Dropout(softmax_dropout)
         self.dropout = nn.Identity() if dropout == 0 else nn.Dropout(dropout)
+
+        mark_parameter_as_mup_learning_rate(self.c_attn.weight)
+        mark_parameter_as_mup_learning_rate(self.c_proj.weight)
 
     def _prepare_qkv_for_forward(self, hidden_states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # the output of following is a tuple if using MQA with tensor parallel

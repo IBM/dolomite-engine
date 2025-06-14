@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from .activations import get_activation_function, is_glu
 from .convolution import ParameterizedConv1d
 from .embedding import ParameterizedEmbedding
@@ -13,9 +17,7 @@ from .mlp_blocks import (
 from .normalization import get_normalization_function
 from .position_embedding import RoPE, YaRNScaledRoPE, apply_rotary_pos_emb
 from .sequence_mixer_blocks import (
-    RNN,
     Attention,
-    Mamba2,
     flash_attention,
     get_attention_head_type,
     get_sequence_mixer,

@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 from transformers import AutoTokenizer
 
 from lm_engine.arguments import DatasetArgs, DistributedArgs, RandomArgs, TrainingParameters

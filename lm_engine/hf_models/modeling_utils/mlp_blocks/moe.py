@@ -1,3 +1,7 @@
+# **************************************************
+# Copyright (c) 2025, Mayank Mishra
+# **************************************************
+
 import math
 
 import torch
@@ -9,6 +13,7 @@ from ....enums import Kernel
 from ....kernels import is_kernel_allowed
 from ....utils import ProcessGroupManager, is_cute_kernels_available
 from ...loss import add_aux_loss
+from ...parameter import mark_parameter_as_mup_learning_rate, mark_parameter_as_no_weight_decay
 from ..activations import get_activation_function, is_glu
 from ..linear import ParameterizedLinear
 from .mlp import _get_std_for_linear
@@ -16,7 +21,7 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.scattermoe.triton_implementation import scattered_experts
+    from cute_kernels.kernels.moe import scattered_experts
 
 
 # TODO add support for combileable bincount in PyTorch directly
@@ -66,10 +71,13 @@ class ParameterizedExperts(nn.Module):
 
         self.reset_parameters()
 
+        mark_parameter_as_no_weight_decay(self.bias)
+
     def forward(
         self,
         input: torch.Tensor,
         num_experts_per_token: int | None = None,
+        num_tokens_per_expert: torch.Tensor | None = None,
         sorted_expert_idxs: torch.Tensor | None = None,
         sorted_scattered_idxs: torch.Tensor | None = None,
         expert_offsets: torch.Tensor | None = None,
@@ -92,7 +100,7 @@ class ParameterizedExperts(nn.Module):
                 grouped_out=grouped_out,
             )
         else:
-            input = input.split(num_experts_per_token.tolist(), dim=0)
+            input = input.split(num_tokens_per_expert.tolist(), dim=0)
             input = [
                 F.linear(input[i], self.weight[i], None if self.bias is None else self.bias[i])
                 for i in range(self.num_experts)
@@ -193,6 +201,14 @@ class MoE(nn.Module):
             torch.cuda.current_device()
         ) >= (9, 0)
 
+        mark_parameter_as_mup_learning_rate(self.gate.weight)
+        mark_parameter_as_mup_learning_rate(self.c_fc.weight)
+        mark_parameter_as_mup_learning_rate(self.c_proj.weight)
+
+        if shared_intermediate_size is not None:
+            mark_parameter_as_mup_learning_rate(self.c_fc_shared.weight)
+            mark_parameter_as_mup_learning_rate(self.c_proj_shared.weight)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if not self.use_padding_free_transformer:
             batch_size, sequence_length, _ = hidden_states.shape
@@ -255,20 +271,20 @@ class MoE(nn.Module):
                 ).cumsum(-1)
 
             hidden_states = self.c_fc(
-                hidden_states,
-                self.top_k,
-                sorted_expert_idxs,
-                sorted_scattered_idxs,
-                expert_offsets,
+                input=hidden_states,
+                num_experts_per_token=self.top_k,
+                sorted_expert_idxs=sorted_expert_idxs,
+                sorted_scattered_idxs=sorted_scattered_idxs,
+                expert_offsets=expert_offsets,
                 grouped_out=True,
             )
             hidden_states = self.act(hidden_states)
             hidden_states = self.c_proj(
-                hidden_states,
-                1,
-                sorted_expert_idxs,
-                sorted_scattered_idxs,
-                expert_offsets,
+                input=hidden_states,
+                num_experts_per_token=1,
+                sorted_expert_idxs=sorted_expert_idxs,
+                sorted_scattered_idxs=sorted_scattered_idxs,
+                expert_offsets=expert_offsets,
                 grouped_in=True,
                 gates=router_weights,
             )
@@ -276,15 +292,15 @@ class MoE(nn.Module):
         else:
             total_q = hidden_states.shape[0]
 
-            batch_index, batch_gates, num_experts_per_token = self._compute_expert_assignment(
+            batch_index, batch_gates, num_tokens_per_expert = self._compute_expert_assignment(
                 router_weights, selected_experts
             )
 
             hidden_states = hidden_states[batch_index]
 
-            hidden_states = self.c_fc(hidden_states, num_experts_per_token)
+            hidden_states = self.c_fc(input=hidden_states, num_tokens_per_expert=num_tokens_per_expert)
             hidden_states = self.act(hidden_states)
-            hidden_states = self.c_proj(hidden_states, num_experts_per_token)
+            hidden_states = self.c_proj(input=hidden_states, num_tokens_per_expert=num_tokens_per_expert)
 
             hidden_states = hidden_states * batch_gates.unsqueeze(-1)  # [:, None]
             zeros = torch.zeros((total_q, self.hidden_size), dtype=hidden_states.dtype, device=hidden_states.device)
@@ -303,7 +319,7 @@ class MoE(nn.Module):
     ) -> tuple[torch.Tensor]:
         selected_experts = selected_experts.flatten()
 
-        num_experts_per_token = compute_bincount(
+        num_tokens_per_expert = compute_bincount(
             x=selected_experts,
             size=self.num_experts,
             use_continuous_count=self.is_hopper_or_newer_gpu and is_kernel_allowed(Kernel.continuous_count_cute),
@@ -317,7 +333,7 @@ class MoE(nn.Module):
         router_weights = router_weights.flatten()  # [num_tokens * top_k]
         batch_gates = router_weights[index_sorted_experts]  # [num_tokens * top_k]
 
-        return batch_index, batch_gates, num_experts_per_token
+        return batch_index, batch_gates, num_tokens_per_expert
 
     def _get_topk(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.top_k == 1:
@@ -351,3 +367,18 @@ class MoE(nn.Module):
         loss = switch_loss + 0.1 * z_loss
 
         return loss.type_as(logits)
+
+    def get_num_active_parameters(self) -> int:
+        num_elements = 0
+        for parameter in self.parameters():
+            num_elements += parameter.numel()
+
+        for parameter in self.c_fc.parameters():
+            num_elements -= parameter.numel()
+            num_elements += (parameter.numel() * self.top_k) // self.num_experts
+
+        for parameter in self.c_proj.parameters():
+            num_elements -= parameter.numel()
+            num_elements += (parameter.numel() * self.top_k) // parameter.size(0)
+
+        return num_elements
