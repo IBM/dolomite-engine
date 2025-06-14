@@ -1,7 +1,3 @@
-# **************************************************
-# Copyright (c) 2025, Mayank Mishra
-# **************************************************
-
 from lm_engine.data.megatron.indexed_dataset import (
     MMapIndexedDataset,
     MMapIndexedDatasetBuilder,
