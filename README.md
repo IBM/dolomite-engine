@@ -17,7 +17,7 @@ Copyright (c) 2025, Mayank Mishra
 [Model Architecture]: https://img.shields.io/static/v1?label=&message=Model%20Architecture&color=blueviolet
 
 # Introduction
-This repository contains code used for pretraining and finetuning IBM's Granite models. It also includes the following key innovations on model architectures, finetuning methods, systems optimizations:
+This repository contains code used for training new model architectures. This repo has also been used to train IBM's Granite models. It also includes the following key innovations on model architectures, finetuning methods, systems optimizations:
 1. [Saving Memory Using Padding-Free Transformer Layers during Finetuning](https://huggingface.co/blog/mayank-mishra/padding-free-transformer)  
 _Mayank Mishra_  
 ![image][Efficient Training]
