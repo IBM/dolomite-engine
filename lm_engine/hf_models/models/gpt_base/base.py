@@ -3,11 +3,11 @@
 # **************************************************
 
 from ...mixins import BaseModelMixin, PreTrainedModelMixin
-from .config import GPTDolomiteConfig
+from .config import GPTBaseConfig
 
 
 class GPTDolomitePreTrainedModel(PreTrainedModelMixin):
-    config_class = GPTDolomiteConfig
+    config_class = GPTBaseConfig
 
 
-class GPTDolomiteModel(GPTDolomitePreTrainedModel, BaseModelMixin): ...
+class GPTBaseModel(GPTDolomitePreTrainedModel, BaseModelMixin): ...

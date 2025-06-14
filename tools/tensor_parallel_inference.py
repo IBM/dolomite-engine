@@ -6,7 +6,7 @@ import torch
 import torch.distributed
 from transformers import AutoTokenizer
 
-from lm_engine.hf_models import GPTDolomiteForCausalLM_TP
+from lm_engine.hf_models import GPTBaseForCausalLM_TP
 from lm_engine.utils import ProcessGroupManager
 
 
@@ -22,7 +22,7 @@ ProcessGroupManager(tensor_parallel_world_size=8)
 
 model_name = "save/"
 
-model = GPTDolomiteForCausalLM_TP.from_pretrained(model_name)
+model = GPTBaseForCausalLM_TP.from_pretrained(model_name)
 
 if torch.distributed.get_rank() == 0:
     print(model)

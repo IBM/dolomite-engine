@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=gb200
 #SBATCH --nodes=16
-#SBATCH --job-name=dolomite-job
+#SBATCH --job-name=lm-engine-job
 #SBATCH --ntasks-per-node=1  #<--must be 1 for torchrun / override for others like mpi
 #SBATCH --gpus-per-node=4
 #SBATCH --wait-all-nodes=1

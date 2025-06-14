@@ -17,7 +17,7 @@ from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..models import GPTDolomiteConfig
+from ..models import GPTBaseConfig
 
 
 def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -44,11 +44,11 @@ def import_from_huggingface_granitemoeshared(pretrained_model_name_or_path: str,
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> GPTDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeSharedConfig) -> GPTBaseConfig:
     assert original_config.hidden_act == "silu"
     assert not original_config.attention_bias
 
-    config = GPTDolomiteConfig(
+    config = GPTBaseConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
@@ -163,7 +163,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTBaseConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
     num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
@@ -189,7 +189,7 @@ def export_to_huggingface_granitemoeshared(pretrained_model_name_or_path: str, s
         pass
 
 
-def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeSharedConfig:
+def _export_config_to_huggingface(config: GPTBaseConfig) -> GraniteMoeSharedConfig:
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
 

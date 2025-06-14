@@ -6,14 +6,14 @@ import torch
 from transformers import AutoModelForCausalLM
 
 from ...modeling_utils import get_attention_head_type, split_query_key_value_tensor_for_attention
-from ..gpt_dolomite import GPTDolomiteConfig, GPTDolomiteForCausalLM
+from ..gpt_base import GPTBaseConfig, GPTBaseForCausalLM
 from .config import GPTCrossLayerConfig
 from .main import GPTCrossLayerForCausalLM
 
 
-def convert_gpt_dolomite_to_gpt_crosslayer(
-    original_config: GPTDolomiteConfig,
-    original_model: GPTDolomiteForCausalLM,
+def convert_gpt_base_to_gpt_crosslayer(
+    original_config: GPTBaseConfig,
+    original_model: GPTBaseForCausalLM,
     sharing_pattern: list[int] | None = None,
     **kwargs,
 ) -> GPTCrossLayerForCausalLM:

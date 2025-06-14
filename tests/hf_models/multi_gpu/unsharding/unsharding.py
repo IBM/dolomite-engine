@@ -12,7 +12,7 @@ from torch.distributed._tensor.api import DTensor
 from lm_engine.dtensors import dtensor_to_tensor
 from lm_engine.enums import Kernel
 from lm_engine.hf_models import (
-    GPTDolomiteConfig,
+    GPTBaseConfig,
     fix_unsharded_state_dict,
     get_model_parallel_class,
     unshard_tensor_parallel_state_dicts,
@@ -41,7 +41,7 @@ elif args.attention_head_type == "mqa":
 else:
     num_key_value_heads = 8
 
-config = GPTDolomiteConfig(
+config = GPTBaseConfig(
     num_layers=2,
     position_embedding_type="learned_absolute",
     hidden_size=128,

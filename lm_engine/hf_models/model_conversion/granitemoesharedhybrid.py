@@ -11,7 +11,7 @@ from ..modeling_utils import (
     interleave_query_key_value_tensor_for_attention,
     split_query_key_value_tensor_for_attention,
 )
-from ..models import GPTDolomiteConfig
+from ..models import GPTBaseConfig
 
 
 # TODO remove try except once GraniteMoeHybrid is added into HF
@@ -85,11 +85,11 @@ def _import_sequence_mixer_config(original_config: GraniteMoeHybridConfig) -> li
     return configs
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeHybridConfig) -> GPTDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeHybridConfig) -> GPTBaseConfig:
     assert original_config.hidden_act == "silu"
     assert not original_config.attention_bias
 
-    config = GPTDolomiteConfig(
+    config = GPTBaseConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
@@ -232,7 +232,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTBaseConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
@@ -258,7 +258,7 @@ def export_to_huggingface_granitemoehybrid(pretrained_model_name_or_path: str, s
         pass
 
 
-def _get_sequence_mixer_block_types(config: GPTDolomiteConfig) -> list:
+def _get_sequence_mixer_block_types(config: GPTBaseConfig) -> list:
     blocks = getattr(config, "sequence_mixer_blocks")
 
     def _get(block, key):
@@ -276,7 +276,7 @@ def _get_sequence_mixer_block_types(config: GPTDolomiteConfig) -> list:
     return seq_mixer_block_types
 
 
-def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeHybridConfig:
+def _export_config_to_huggingface(config: GPTBaseConfig) -> GraniteMoeHybridConfig:
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "nope"
 

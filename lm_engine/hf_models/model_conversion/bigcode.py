@@ -6,7 +6,7 @@ from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GPTBigCode
 
 from ...utils import SafeTensorsWeightsManager, divide_if_divisible, download_repo
 from ..modeling_utils import get_attention_head_type
-from ..models import GPTDolomiteConfig
+from ..models import GPTBaseConfig
 
 
 def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
@@ -26,10 +26,10 @@ def import_from_huggingface_bigcode(pretrained_model_name_or_path: str, save_pat
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTDolomiteConfig:
+def _import_config_from_huggingface(original_config: GPTBigCodeConfig) -> GPTBaseConfig:
     assert original_config.activation_function in ["gelu_pytorch_tanh", "gelu"]
 
-    config = GPTDolomiteConfig(
+    config = GPTBaseConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.n_positions,
         hidden_size=original_config.n_embd,
@@ -112,7 +112,7 @@ def _import_state_dict_from_huggingface(
 
 
 def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTBaseConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
 
     safetensors_weights_manager = SafeTensorsWeightsManager(pretrained_model_name_or_path)
@@ -131,7 +131,7 @@ def export_to_huggingface_bigcode(pretrained_model_name_or_path: str, save_path:
         pass
 
 
-def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GPTBigCodeConfig:
+def _export_config_to_huggingface(config: GPTBaseConfig) -> GPTBigCodeConfig:
     assert config.normalization_function == "layernorm"
     assert config.position_embedding_type == "learned_absolute"
     assert config.m_emb is None

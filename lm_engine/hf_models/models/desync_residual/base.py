@@ -5,7 +5,7 @@
 import torch
 
 from ...mixins import PreTrainedModelMixin
-from ..gpt_dolomite import GPTDolomiteModel
+from ..gpt_base import GPTBaseModel
 from .config import DesyncResidualConfig
 from .layer import DesyncResidualBlock
 
@@ -16,7 +16,7 @@ class DesyncResidualPreTrainedModel(PreTrainedModelMixin):
     _no_split_modules = ["DesyncResidualBlock"]
 
 
-class DesyncResidualModel(DesyncResidualPreTrainedModel, GPTDolomiteModel):
+class DesyncResidualModel(DesyncResidualPreTrainedModel, GPTBaseModel):
     def __init__(self, config: DesyncResidualConfig, **kwargs) -> None:
         self.tensor_parallel_size = config.pretraining_tensor_parallel_size
 

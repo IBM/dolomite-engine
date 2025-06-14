@@ -8,7 +8,7 @@ import tempfile
 import torch
 from parameterized import parameterized
 
-from lm_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig
+from lm_engine.hf_models import GPTBaseConfig, LadderResidualConfig
 from lm_engine.utils import torch_dtype_to_string
 
 from ...test_common import TestCommons
@@ -23,7 +23,7 @@ class TensorParallelTest(TestCommons):
             TestCommons.get_dtypes(),
             [False, True],
             [False, True],
-            [GPTDolomiteConfig.model_type],
+            [GPTBaseConfig.model_type],
         )
         + TestCommons.make_args_matrix(
             ["gqa"],

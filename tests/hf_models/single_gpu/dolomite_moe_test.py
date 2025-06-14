@@ -15,7 +15,7 @@ from ..test_common import TestCommons
 SEED = 1234
 
 
-class MoEDolomiteAttentionTest(TestCommons):
+class MoEBaseAttentionTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             [torch.device("cuda")],

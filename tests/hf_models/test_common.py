@@ -11,7 +11,7 @@ from torch.testing import assert_close
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from lm_engine import SafeTensorsWeightsManager
-from lm_engine.hf_models import CommonConfig, GPTDolomiteConfig, export_to_huggingface, import_from_huggingface
+from lm_engine.hf_models import CommonConfig, GPTBaseConfig, export_to_huggingface, import_from_huggingface
 
 from ..test_common import BaseTestCommons
 
@@ -53,7 +53,7 @@ class TestCommons(BaseTestCommons):
         m_residual: float = None,
         attention_multiplier: float = None,
         num_attention_heads: int = 4,
-    ) -> GPTDolomiteConfig:
+    ) -> GPTBaseConfig:
         if attention_head_type == "mha":
             num_key_value_heads = num_attention_heads
         elif attention_head_type == "mqa":
@@ -63,7 +63,7 @@ class TestCommons(BaseTestCommons):
         else:
             raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
 
-        return GPTDolomiteConfig(
+        return GPTBaseConfig(
             vocab_size=2048,
             max_position_embeddings=1024,
             hidden_size=32,
@@ -109,7 +109,7 @@ class TestCommons(BaseTestCommons):
         m_residual: float = None,
         attention_multiplier: float = None,
         num_attention_heads: int = 4,
-    ) -> GPTDolomiteConfig:
+    ) -> GPTBaseConfig:
         if attention_head_type == "mha":
             num_key_value_heads = num_attention_heads
         elif attention_head_type == "mqa":
@@ -119,7 +119,7 @@ class TestCommons(BaseTestCommons):
         else:
             raise ValueError(f"unexpected attention_head_type ({attention_head_type})")
 
-        return GPTDolomiteConfig(
+        return GPTBaseConfig(
             vocab_size=2048,
             max_position_embeddings=1024,
             hidden_size=32,

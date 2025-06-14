@@ -3,8 +3,8 @@
 # **************************************************
 
 from ...mixins import CausalLMModelMixin
-from .base import GPTDolomiteModel, GPTDolomitePreTrainedModel
+from .base import GPTBaseModel, GPTDolomitePreTrainedModel
 
 
-class GPTDolomiteForCausalLM(GPTDolomitePreTrainedModel, CausalLMModelMixin):
-    base_model_class = GPTDolomiteModel
+class GPTBaseForCausalLM(GPTDolomitePreTrainedModel, CausalLMModelMixin):
+    base_model_class = GPTBaseModel

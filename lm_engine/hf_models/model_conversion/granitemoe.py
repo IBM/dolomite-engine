@@ -5,7 +5,7 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteMoeConfig, GraniteMoeForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
-from ..models import GPTDolomiteConfig
+from ..models import GPTBaseConfig
 from .granitemoeshared import _export_state_dict_to_huggingface, _import_state_dict_from_huggingface
 
 
@@ -33,11 +33,11 @@ def import_from_huggingface_granitemoe(pretrained_model_name_or_path: str, save_
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTBaseConfig:
     assert original_config.hidden_act == "silu"
     assert not original_config.attention_bias
 
-    config = GPTDolomiteConfig(
+    config = GPTBaseConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
@@ -85,7 +85,7 @@ def _import_config_from_huggingface(original_config: GraniteMoeConfig) -> GPTDol
 
 
 def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTBaseConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
     num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
@@ -111,7 +111,7 @@ def export_to_huggingface_granitemoe(pretrained_model_name_or_path: str, save_pa
         pass
 
 
-def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteMoeConfig:
+def _export_config_to_huggingface(config: GPTBaseConfig) -> GraniteMoeConfig:
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
 

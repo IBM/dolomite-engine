@@ -6,11 +6,11 @@ import torch
 from tqdm import trange
 
 from ....modeling_utils import get_attention_head_type, is_glu
-from ...gpt_dolomite import GPTDolomiteConfig
+from ...gpt_base import GPTBaseConfig
 
 
 def unshard_gpt_dolomite_tensor_parallel_state_dicts(
-    config: GPTDolomiteConfig,
+    config: GPTBaseConfig,
     tensor_parallel_state_dicts: list[dict],
     prefix: str = "",
     check_correctness: bool = True,

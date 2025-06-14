@@ -51,10 +51,10 @@ The repository currently only supports generative models but can be easily exten
 Please note that this repository doesn't support Tensor Parallel or Pipeline Parallel (yet :wink:).
 
 # HuggingFace compatible custom models
-This repository works with all HuggingFace models (text-to-text only for the moment) out-of-the-box. The checkpoints have to be in safetensors format, if not you can check `tools/pt_to_safetensors.py`. If your model_type is `gpt_megatron` just change it to `gpt_dolomite`.
+This repository works with all HuggingFace models (text-to-text only for the moment) out-of-the-box. The checkpoints have to be in safetensors format, if not you can check `tools/pt_to_safetensors.py`.
 
 > [!TIP]
-> You might be able to enjoy additional memory and computation savings when finetuning your models using the [padding free transformers optimization](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This optimization is currently only supported for decoder models and requires converting your model (say LLama-3 for example) to a [custom class](lm_engine/hf_models/models/gpt_dolomite/) implemented in this repo. This is completely optional and not required for finetuning. The conversion can be achieved as follows:
+> You might be able to enjoy additional memory and computation savings when finetuning your models using the [padding free transformers optimization](https://huggingface.co/blog/mayank-mishra/padding-free-transformer). This optimization is currently only supported for decoder models and requires converting your model (say LLama-3 for example) to a [custom class](lm_engine/hf_models/models/gpt_base/) implemented in this repo. This is completely optional and not required for finetuning. The conversion can be achieved as follows:
 ```python
 from lm_engine.hf_models import import_from_huggingface
 
@@ -77,7 +77,7 @@ export_to_huggingface(
 If you are interested in using this optimization outside this repo for some reason, you can do as follows:
 ```python
 from lm_engine.enums import Kernel
-from lm_engine.hf_models import GPTDolomiteForCausalLM
+from lm_engine.hf_models import GPTBaseForCausalLM
 from lm_engine.kernels import enable_kernels
 
 
@@ -89,7 +89,7 @@ labels = [[-100, -100, -100, 4, 5, 0], [-100, -100, 8, 0]]
 
 # this will throw a warning saying that the model is of gpt_bigcode class
 # ignore the warning
-model = GPTDolomiteForCausalLM.from_pretrained(<model_path>, use_padding_free_transformer=True).cuda()
+model = GPTBaseForCausalLM.from_pretrained(<model_path>, use_padding_free_transformer=True).cuda()
 
 with enable_kernels([Kernel.flash_attention_2]):
     loss = model(input_ids=input_ids, labels=labels).loss

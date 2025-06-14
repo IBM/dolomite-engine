@@ -5,7 +5,7 @@
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig, GraniteConfig, GraniteForCausalLM
 
 from ...utils import SafeTensorsWeightsManager, download_repo
-from ..models import GPTDolomiteConfig
+from ..models import GPTBaseConfig
 from .llama import _export_state_dict_to_huggingface, _import_state_dict_from_huggingface
 
 
@@ -33,11 +33,11 @@ def import_from_huggingface_granite(pretrained_model_name_or_path: str, save_pat
         tokenizer.save_pretrained(save_path, legacy_format=False)
 
 
-def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomiteConfig:
+def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTBaseConfig:
     assert original_config.hidden_act == "silu"
     assert original_config.mlp_bias == original_config.attention_bias
 
-    config = GPTDolomiteConfig(
+    config = GPTBaseConfig(
         vocab_size=original_config.vocab_size,
         max_position_embeddings=original_config.max_position_embeddings,
         hidden_size=original_config.hidden_size,
@@ -82,7 +82,7 @@ def _import_config_from_huggingface(original_config: GraniteConfig) -> GPTDolomi
 
 
 def export_to_huggingface_granite(pretrained_model_name_or_path: str, save_path: str) -> None:
-    config: GPTDolomiteConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+    config: GPTBaseConfig = AutoConfig.from_pretrained(pretrained_model_name_or_path)
     original_config = _export_config_to_huggingface(config)
     num_attention_heads = config.check_equal_for_all_and_get_value("sequence_mixer_blocks", "num_attention_heads")
 
@@ -108,7 +108,7 @@ def export_to_huggingface_granite(pretrained_model_name_or_path: str, save_path:
         pass
 
 
-def _export_config_to_huggingface(config: GPTDolomiteConfig) -> GraniteConfig:
+def _export_config_to_huggingface(config: GPTBaseConfig) -> GraniteConfig:
     assert config.normalization_function == "rmsnorm"
     assert config.position_embedding_type == "rope"
 

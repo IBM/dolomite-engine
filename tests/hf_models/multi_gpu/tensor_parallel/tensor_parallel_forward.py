@@ -10,7 +10,7 @@ import torch.distributed
 from transformers import set_seed
 
 from lm_engine.enums import Kernel
-from lm_engine.hf_models import GPTDolomiteConfig, LadderResidualConfig, get_model_parallel_class
+from lm_engine.hf_models import GPTBaseConfig, LadderResidualConfig, get_model_parallel_class
 from lm_engine.kernels import enable_kernels
 from lm_engine.utils import ProcessGroupManager, SafeTensorsWeightsManager, string_to_torch_dtype
 
@@ -41,8 +41,8 @@ elif args.attention_head_type == "mqa":
 else:
     num_key_value_heads = 8
 
-if args.model_type == "gpt_dolomite":
-    config = GPTDolomiteConfig(
+if args.model_type == "gpt_base":
+    config = GPTBaseConfig(
         num_layers=2,
         position_embedding_type=args.position_embedding_type,
         hidden_size=128,

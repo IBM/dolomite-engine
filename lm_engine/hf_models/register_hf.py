@@ -8,13 +8,13 @@ from .models import (
     DesyncResidualConfig,
     DesyncResidualForCausalLM,
     DesyncResidualModel,
+    GPTBaseConfig,
+    GPTBaseForCausalLM,
+    GPTBaseForCausalLM_TP,
+    GPTBaseModel,
     GPTCrossLayerConfig,
     GPTCrossLayerForCausalLM,
     GPTCrossLayerModel,
-    GPTDolomiteConfig,
-    GPTDolomiteForCausalLM,
-    GPTDolomiteForCausalLM_TP,
-    GPTDolomiteModel,
     LadderResidualConfig,
     LadderResidualForCausalLM,
     LadderResidualForCausalLM_TP,
@@ -27,7 +27,7 @@ from .models import (
 
 # (AutoConfig, AutoModel, AutoModelForCausalLM)
 _CUSTOM_MODEL_REGISTRY = [
-    (GPTDolomiteConfig, GPTDolomiteModel, GPTDolomiteForCausalLM),
+    (GPTBaseConfig, GPTBaseModel, GPTBaseForCausalLM),
     (GPTCrossLayerConfig, GPTCrossLayerModel, GPTCrossLayerForCausalLM),
     (DesyncResidualConfig, DesyncResidualModel, DesyncResidualForCausalLM),
     (LadderResidualConfig, LadderResidualModel, LadderResidualForCausalLM),
@@ -54,7 +54,7 @@ def is_custom_model(model_type: str) -> bool:
 
 
 _MODEL_PARALLEL_CLASS_MAPPING = {
-    GPTDolomiteConfig.model_type: GPTDolomiteForCausalLM_TP,
+    GPTBaseConfig.model_type: GPTBaseForCausalLM_TP,
     LadderResidualConfig.model_type: LadderResidualForCausalLM_TP,
 }
 

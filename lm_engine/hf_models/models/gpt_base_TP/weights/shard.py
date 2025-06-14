@@ -7,11 +7,11 @@ import torch
 from .....utils import ProcessGroupManager, SafeTensorsWeightsManager, divide_if_divisible
 from ....modeling_utils import get_attention_head_type, is_glu
 from ....modeling_utils_TP import get_tensor_parallel_vocab_info, tensor_parallel_split_safetensor_slice
-from ...gpt_dolomite import GPTDolomiteConfig
+from ...gpt_base import GPTBaseConfig
 
 
 def get_gpt_dolomite_model_parallel_state_dict(
-    config: GPTDolomiteConfig,
+    config: GPTBaseConfig,
     safetensors_weights_manager: SafeTensorsWeightsManager,
     num_pipeline_stages: int,
     pipeline_stage_id: int,

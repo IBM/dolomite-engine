@@ -17,7 +17,7 @@ from ..test_common import TestCommons
 SEED = 1234
 
 
-class GPTDolomiteAttentionTest(TestCommons):
+class GPTBaseAttentionTest(TestCommons):
     @parameterized.expand(
         TestCommons.make_args_matrix(
             [torch.device("cuda")],

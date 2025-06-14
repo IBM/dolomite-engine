@@ -2,6 +2,8 @@
 # Copyright (c) 2025, Mayank Mishra
 # **************************************************
 
-from .base import GPTDolomiteModel
-from .config import GPTDolomiteConfig
-from .main import GPTDolomiteForCausalLM
+from ...config import CommonConfig
+
+
+class GPTBaseConfig(CommonConfig):
+    model_type = "gpt_dolomite"

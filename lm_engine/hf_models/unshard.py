@@ -5,21 +5,21 @@
 from .config import CommonConfig
 from .models import (
     DesyncResidualConfig,
-    GPTDolomiteConfig,
+    GPTBaseConfig,
     LadderResidualConfig,
-    fix_gpt_dolomite_unsharded_state_dict,
-    unshard_gpt_dolomite_tensor_parallel_state_dicts,
+    fix_gpt_base_unsharded_state_dict,
+    unshard_gpt_base_tensor_parallel_state_dicts,
 )
 
 
 _UNSHARD_STATE_DICT_FUNCTIONS = {
-    GPTDolomiteConfig.model_type: unshard_gpt_dolomite_tensor_parallel_state_dicts,
-    LadderResidualConfig.model_type: unshard_gpt_dolomite_tensor_parallel_state_dicts,
+    GPTBaseConfig.model_type: unshard_gpt_base_tensor_parallel_state_dicts,
+    LadderResidualConfig.model_type: unshard_gpt_base_tensor_parallel_state_dicts,
 }
 
 
 def unshard_tensor_parallel_state_dicts(
-    config: GPTDolomiteConfig,
+    config: GPTBaseConfig,
     tensor_parallel_state_dicts: list[dict],
     prefix: str = "",
     check_correctness: bool = True,
@@ -36,8 +36,8 @@ def unshard_tensor_parallel_state_dicts(
 
 
 _FIX_UNSHARDED_STATE_DICT_FUNCTIONS = {
-    GPTDolomiteConfig.model_type: fix_gpt_dolomite_unsharded_state_dict,
-    LadderResidualConfig.model_type: fix_gpt_dolomite_unsharded_state_dict,
+    GPTBaseConfig.model_type: fix_gpt_base_unsharded_state_dict,
+    LadderResidualConfig.model_type: fix_gpt_base_unsharded_state_dict,
 }
 
 

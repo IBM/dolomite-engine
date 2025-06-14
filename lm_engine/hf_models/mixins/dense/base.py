@@ -354,7 +354,7 @@ class BaseModelMixin(PreTrainedModelMixin):
 
         if self.use_padding_free_transformer:
             assert position_ids is not None, (
-                "GPTDolomiteModel needs position_ids from outside when using flash attention with List[List[int]] "
+                "GPTBaseModel needs position_ids from outside when using flash attention with List[List[int]] "
                 "inputs"
             )
         else:

@@ -15,7 +15,7 @@ ASSISTANT = "<|assistant|>\n"
 text = "def factorial(x):"
 prompt = SYSTEM_PROMPT + USER_PROMPT.format(value=text) + ASSISTANT
 
-model_path = "<path to dolomite hf format model>"
+model_path = "<path to lm engine hf format model>"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
