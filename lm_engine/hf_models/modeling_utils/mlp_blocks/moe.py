@@ -20,8 +20,8 @@ from .mlp import _get_std_for_linear
 
 
 if is_cute_kernels_available():
-    from cute_kernels.kernels import continuous_count_cute
-    from cute_kernels.kernels.moe import (
+    from cute_kernels import continuous_count_cute
+    from cute_kernels.modules.moe import (
         group_with_padding,
         grouped_gemm_experts_cute,
         scattered_experts,
