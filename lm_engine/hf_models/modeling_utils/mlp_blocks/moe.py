@@ -74,8 +74,8 @@ class ParameterizedExperts(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        self.register_buffer("N_array", torch.full((num_experts,), fill_value=out_features, dtype=torch.uint32))
-        self.register_buffer("K_array", torch.full((num_experts,), fill_value=in_features, dtype=torch.uint32))
+        self.register_buffer("N_array", torch.empty((num_experts,), device=device, dtype=torch.uint32))
+        self.register_buffer("K_array", torch.empty((num_experts,), device=device, dtype=torch.uint32))
 
         self.reset_parameters()
 
@@ -311,8 +311,8 @@ class MoE(nn.Module):
                 pad_to_multiple_of=8,
             )
 
-            hidden_states = hidden_states.view(T, self.top_k, -1)
             hidden_states = torch.bmm(router_weights.unsqueeze(1), hidden_states)
+            hidden_states = hidden_states.squeeze(1)
         elif is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 expert_offsets = expert_frequency.cumsum(-1)
