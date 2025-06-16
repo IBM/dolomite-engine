@@ -306,13 +306,11 @@ class MoE(nn.Module):
                 expert_padding_offset=expert_padding_offset,
                 sorted_idxs=sorted_expert_idxs,
                 scattered_idxs=sorted_scattered_idxs,
+                router_weights=router_weights,
                 top_k=self.top_k,
                 num_tokens=T,
                 pad_to_multiple_of=8,
             )
-
-            hidden_states = torch.bmm(router_weights.unsqueeze(1), hidden_states)
-            hidden_states = hidden_states.squeeze(1)
         elif is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 expert_offsets = expert_frequency.cumsum(-1)
