@@ -97,7 +97,18 @@ class ParameterizedExperts(nn.Module):
             assert self.bias is None
 
             input = grouped_gemm_experts_cute(
-                x=input, weight=self.weight, M_array=expert_frequency, N_array=self.N_array, K_array=self.K_array
+                x=input,
+                weight=self.weight,
+                M_array=expert_frequency,
+                N_array=self.N_array,
+                K_array=self.K_array,
+                expert_padding_offset=expert_offsets,
+                sorted_idxs=sorted_expert_idxs,
+                scattered_idxs=sorted_scattered_idxs,
+                top_k=num_experts_per_token,
+                pad_to_multiple_of=8,
+                grouped_in=grouped_in,
+                grouped_out=grouped_out,
             )
         elif is_kernel_allowed(Kernel.scattermoe):
             assert self.bias is None
@@ -288,29 +299,46 @@ class MoE(nn.Module):
         T = hidden_states.size(0)
 
         if is_kernel_allowed(Kernel.grouped_gemm_cute):
-            hidden_states, padded_expert_frequency, expert_padding_offset = group_with_padding(
-                x=hidden_states,
-                expert_frequency=expert_frequency,
-                sorted_idxs=sorted_expert_idxs,
-                scattered_idxs=sorted_scattered_idxs,
-                top_k=self.top_k,
-                pad_to_multiple_of=8,
+            padded_expert_frequency, expert_padding_offset = get_expert_padding_offset(
+                expert_frequency=expert_frequency, E=self.num_experts, pad_to_multiple_of=8
             )
 
-            hidden_states = self.c_fc(input=hidden_states, expert_frequency=padded_expert_frequency)
+            hidden_states = self.c_fc(
+                input=hidden_states,
+                num_experts_per_token=self.top_k,
+                expert_frequency=padded_expert_frequency,
+                sorted_expert_idxs=sorted_expert_idxs,
+                sorted_scattered_idxs=sorted_scattered_idxs,
+                expert_offsets=expert_padding_offset,
+                gates=None,
+                grouped_in=False,
+                grouped_out=True,
+            )
             hidden_states = self.act(hidden_states)
-            hidden_states = self.c_proj(input=hidden_states, expert_frequency=padded_expert_frequency)
+            hidden_states = self.c_proj(
+                input=hidden_states,
+                num_experts_per_token=self.top_k,
+                expert_frequency=padded_expert_frequency,
+                sorted_expert_idxs=sorted_expert_idxs,
+                sorted_scattered_idxs=sorted_scattered_idxs,
+                expert_offsets=expert_padding_offset,
+                gates=None,
+                grouped_in=True,
+                grouped_out=False,
+            )
 
             hidden_states = ungroup_with_padding(
                 x=hidden_states,
                 expert_padding_offset=expert_padding_offset,
                 sorted_idxs=sorted_expert_idxs,
                 scattered_idxs=sorted_scattered_idxs,
-                router_weights=router_weights,
                 top_k=self.top_k,
                 num_tokens=T,
                 pad_to_multiple_of=8,
             )
+
+            hidden_states = torch.bmm(router_weights.unsqueeze(1), hidden_states)
+            hidden_states = hidden_states.squeeze(1)
         elif is_kernel_allowed(Kernel.scattermoe):
             with torch.no_grad():
                 expert_offsets = expert_frequency.cumsum(-1)
