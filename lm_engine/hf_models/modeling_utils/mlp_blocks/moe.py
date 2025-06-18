@@ -21,7 +21,12 @@ from .mlp import _get_std_for_linear
 
 if is_cute_kernels_available():
     from cute_kernels import continuous_count_cute
-    from cute_kernels.modules.moe import grouped_gemm_experts_cute, scattered_experts, ungroup_with_padding
+    from cute_kernels.modules.moe import (
+        get_expert_padding_offset,
+        grouped_gemm_experts_cute,
+        scattered_experts,
+        ungroup_with_padding,
+    )
 
 
 # TODO add support for combileable bincount in PyTorch directly
