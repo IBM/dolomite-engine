@@ -18,9 +18,9 @@ from ..ladder_residual.layer import LadderResidualBlock
 
 if is_cute_kernels_available():
     from cute_kernels.constants import MAX_TRITON_BLOCK_SIZE
-    from cute_kernels.kernels.rmsnorm import rmsnorm_backward_triton, rmsnorm_forward_triton
-    from cute_kernels.kernels.swiglu import swiglu_backward_triton, swiglu_forward_triton
     from cute_kernels.math import ceil_divide, divide_if_divisible, get_next_power_of_2
+    from cute_kernels.ops.rmsnorm import rmsnorm_backward_triton, rmsnorm_forward_triton
+    from cute_kernels.ops.swiglu import swiglu_backward_triton, swiglu_forward_triton
     from cute_kernels.utils import ensure_contiguous, get_num_elements_and_hidden_size, get_sm_count
 
     @ensure_contiguous
