@@ -18,7 +18,8 @@ from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack
 
 
 if is_cute_kernels_available():
-    from cute_kernels import KernelBackend, rnn_cute
+    from cute_kernels import KernelBackend
+    from cute_kernels.modules.rnn import rnn_cute
 
 
 class RNN(nn.Module):

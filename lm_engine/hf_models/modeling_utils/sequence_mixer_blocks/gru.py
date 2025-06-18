@@ -18,7 +18,8 @@ from .packing import compute_cu_seqlens_and_max_seqlen_from_attention_mask, pack
 
 
 if is_cute_kernels_available():
-    from cute_kernels import KernelBackend, gru_cute
+    from cute_kernels import KernelBackend
+    from cute_kernels.modules.gru import gru_cute
 
 
 class GRU(nn.Module):
