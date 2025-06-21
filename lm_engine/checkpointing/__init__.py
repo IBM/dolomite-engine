@@ -303,10 +303,7 @@ def load_checkpoint_for_inference(
         args_from_checkpoint.mixed_precision_args = args.mixed_precision_args
 
     checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_world_size
-
-    use_meta = False
-    if allowed_meta_device:
-        use_meta = args_from_checkpoint.model_args.model_name is None
+    use_meta = args_from_checkpoint.model_args.model_name is None if allowed_meta_device else False
 
     with (
         torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
