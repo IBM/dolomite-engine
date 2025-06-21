@@ -156,6 +156,8 @@ def save_checkpoint(
             indent=4,
         )
 
+        log_rank_0(logging.INFO, f"checkpoint saved at {iteration}")
+
         if os.path.exists(os.path.join(args.save_args.save_path, _KILLSWITCH)):
             ProcessGroupManager.destroy_process_groups()
             exit()
