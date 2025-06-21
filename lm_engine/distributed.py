@@ -198,8 +198,6 @@ def wrap_model_container_for_distributed_training(
         get_module_class_from_name(model_container[0], name) for name in block_names + teacher_block_names
     ]
 
-    marker_maps = _get_parameter_marker_maps(model_container)
-
     if args.distributed_args.gradient_checkpointing_method is not None:
         assert len(block_names) == 1
 
@@ -210,6 +208,8 @@ def wrap_model_container_for_distributed_training(
                 block_name=block_names[0],
                 **args.distributed_args.gradient_checkpointing_args,
             )
+
+    marker_maps = _get_parameter_marker_maps(model_container)
 
     # for PP, we use FSDP-2 always
     use_ddp = (stage == 0 or data_parallel_sharding_world_size == 1) and num_pipeline_stages == 1
