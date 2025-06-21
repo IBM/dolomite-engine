@@ -117,7 +117,7 @@ def main() -> None:
             is_encoder_decoder=model.is_encoder_decoder,
         )
     else:
-        model, args_from_checkpoint, _ = load_checkpoint_for_inference(args, mode)
+        model, args_from_checkpoint, _ = load_checkpoint_for_inference(args, mode, allowed_meta_device=False)
 
         tuning_method = args_from_checkpoint.tuning_args.tuning_method
 
