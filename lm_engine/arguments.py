@@ -332,7 +332,7 @@ class LoggingArgs(BaseArgs):
     # logging level
     logging_level: str = "INFO"
     # log interval
-    log_interval: int = 1
+    log_interval: int = 10
     # arguments if using aim
     aim_args: AimArgs | None = None
     # arguments if using wandb
