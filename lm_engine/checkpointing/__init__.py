@@ -269,14 +269,14 @@ def load_checkpoint_for_training(
 
 
 def load_checkpoint_for_inference(
-    args: InferenceArgs | UnshardingArgs, mode: Mode, use_meta: bool = False
+    args: InferenceArgs | UnshardingArgs, mode: Mode, allowed_meta_device: bool = False
 ) -> tuple[ModelWrapper, TrainingArgs, dict]:
     """load checkpoint for inference
 
     Args:
         args (Union[InferenceArgs, UnshardingArgs]): arguments
         mode (Mode): training/inference mode
-        use_meta (bool): whether to use meta device
+        allowed_meta_device (bool): whether to use meta device
     """
 
     load_path = args.load_args.load_path
@@ -305,7 +305,7 @@ def load_checkpoint_for_inference(
     checkpoint_tp_world_size = args_from_checkpoint.distributed_args.tensor_parallel_world_size
 
     with (
-        torch.device("meta") if use_meta else torch.device(torch.cuda.current_device()),
+        torch.device("meta") if allowed_meta_device else torch.device(torch.cuda.current_device()),
         ProcessGroupManager.set_dummy_tensor_parallel_rank(0),
         ProcessGroupManager.set_dummy_tensor_parallel_world_size(1),
         ProcessGroupManager.set_dummy_pipeline_parallel_rank(0),
@@ -318,7 +318,7 @@ def load_checkpoint_for_inference(
 
         args_from_checkpoint.distributed_args.num_pipeline_stages = original_num_stages
 
-    if use_meta:
+    if allowed_meta_device:
         model = model.to_empty(device="cpu")
 
     state = {}
